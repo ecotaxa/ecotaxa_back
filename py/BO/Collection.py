@@ -269,7 +269,11 @@ class CollectionBO(object):
                     collurole.collection_id = coll_id
                     collurole.user_id = user_id
                     collurole.role = a_role
-                    collurole.display_order = self.display_order[roles[a_role]].index(str(user_id)+"_"+user_order_type)
+                    try:
+                        display_order = self.display_order[roles[a_role]].index(str(user_id)+"_"+user_order_type)
+                    except ValueError:
+                        display_order = 0
+                    collurole.display_order = display_order
                     session.add(collurole)
 
 
@@ -290,7 +294,11 @@ class CollectionBO(object):
                     collorole.collection_id = coll_id
                     collorole.organization_id = org_id
                     collorole.role = a_role
-                    collorole.display_order = self.display_order[roles[a_role]].index(str(org_id)+"_"+org_order_type)
+                    try:
+                        display_order = self.display_order[roles[a_role]].index(str(org_id)+"_"+org_order_type)
+                    except ValueError:
+                        display_order = 0
+                    collorole.display_order = display_order
                     session.add(collorole)
                     # First org is the institutionCode provider
                     if (
