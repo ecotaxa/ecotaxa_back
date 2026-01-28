@@ -91,6 +91,7 @@ ROLE_FOR_ASSOCIATE = "originator"
 def get_scientific_name_id(worms) -> str:
     return "urn:lsid:marinespecies.org:taxname:" + str(worms.aphia_id)
 
+
 class DarwinCoreExport(JobServiceBase):
     """
     EMODNet export.
@@ -392,12 +393,21 @@ class DarwinCoreExport(JobServiceBase):
         title = EMLTitle(title=the_collection.title)
 
         creators: List[EMLPerson] = []
-        creators_by_id: Dict[str,Any] = {str(a_user.id)+"_u":a_user for a_user in the_collection.creator_users}
-        creators_by_id.update({str(an_org.id)+"_o":an_org for an_org in the_collection.creator_organisations})
+        creators_by_id: Dict[str, Any] = {
+            str(a_user.id) + "_u": a_user for a_user in the_collection.creator_users
+        }
+        creators_by_id.update(
+            {
+                str(an_org.id) + "_o": an_org
+                for an_org in the_collection.creator_organisations
+            }
+        )
         for an_id in the_collection.display_order["creators"]:
-            a_creator=creators_by_id[an_id]
-            if an_id[-1]=="u":
-                person, errs = self.user_to_eml_person(a_creator, "creator '%s'" % a_creator.name)
+            a_creator = creators_by_id[an_id]
+            if an_id[-1] == "u":
+                person, errs = self.user_to_eml_person(
+                    a_creator, "creator '%s'" % a_creator.name
+                )
                 if errs:
                     self.warnings.extend(errs)
                 else:
@@ -407,11 +417,18 @@ class DarwinCoreExport(JobServiceBase):
                 creators.append(self.organisation_to_eml_person(a_creator))
 
         associates: List[EMLAssociatedPerson] = []
-        associates_by_id: Dict[str,Any] = {str(a_user.id)+"_u":a_user for a_user in the_collection.associate_users}
-        associates_by_id.update({str(an_org.id)+"_o":an_org for an_org in the_collection.associate_organisations})
+        associates_by_id: Dict[str, Any] = {
+            str(a_user.id) + "_u": a_user for a_user in the_collection.associate_users
+        }
+        associates_by_id.update(
+            {
+                str(an_org.id) + "_o": an_org
+                for an_org in the_collection.associate_organisations
+            }
+        )
         for an_id in the_collection.display_order["associates"]:
-            an_associate=associates_by_id[an_id]
-            if an_id[-1]=="u":
+            an_associate = associates_by_id[an_id]
+            if an_id[-1] == "u":
                 person, errs = self.user_to_eml_person(
                     an_associate, "associated person %d" % an_associate.id
                 )
@@ -428,7 +445,7 @@ class DarwinCoreExport(JobServiceBase):
                 if an_associate == the_collection.code_provider_org:
                     role = "custody"
                 associates.append(
-                self.eml_person_to_associated_person(person_from_org, role)
+                    self.eml_person_to_associated_person(person_from_org, role)
                 )
         # TODO if needed
         # EMLAssociatedPerson = EMLPerson + specific role
@@ -624,7 +641,6 @@ class DarwinCoreExport(JobServiceBase):
             a_sample: Sample
             events = arch.events
             for _unused, a_sample in samples.items():
-                assert a_sample.latitude is not None and a_sample.longitude is not None
                 prfx = (
                     str(a_prj_id) + "_"
                     if a_sample.orig_id in samples_in_several_prjs
@@ -636,6 +652,7 @@ class DarwinCoreExport(JobServiceBase):
                 if summ[0] is None or summ[1] is None:
                     self.empty_samples.append(self._sample_ref_for_message(a_sample))
                     continue
+                assert a_sample.latitude is not None and a_sample.longitude is not None
                 evt_date = self.event_date(summ[0], summ[1])
                 latitude = self.geo_to_txt(float(a_sample.latitude))
                 longitude = self.geo_to_txt(float(a_sample.longitude))
