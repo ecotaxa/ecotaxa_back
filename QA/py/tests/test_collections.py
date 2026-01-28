@@ -117,7 +117,7 @@ def test_collection_lifecycle(database, fastapi, caplog, who):
     url = COLLECTION_UPDATE_URL.format(collection_id=coll_id)
     the_coll[
         "abstract"
-    ] = """
+    ] = """   
     A bit less abstract...
     """
     # short_title only on second round
@@ -126,6 +126,7 @@ def test_collection_lifecycle(database, fastapi, caplog, who):
         the_coll["external_id"] = "doi1234"
     the_coll["associate_organisations"] = ["An org"]
     the_coll["creator_organisations"] = ["At least one (ONE)"]
+    del the_coll["display_order"]
     rsp = fastapi.put(url, headers=who, json=the_coll)
     assert rsp.status_code == status.HTTP_200_OK
 
