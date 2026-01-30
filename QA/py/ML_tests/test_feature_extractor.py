@@ -1,3 +1,4 @@
+import pytest
 import os
 import pandas as pd
 from typing import Any, Dict
@@ -11,52 +12,28 @@ from FS.Vault import Vault
 from FS.MachineLearningModels import SavedModels
 
 TEST_DIR = os.path.dirname(__file__)
-
-
-def notest_deep_models_shape():
-    vault = Vault(os.path.join(TEST_DIR, "vault"))
-    config = MagicMock()
-    config.get_cnf.return_value = os.path.join(TEST_DIR, "models")
-    saved_models = SavedModels(config)
-    df = DeepFeaturesExtractor(vault, saved_models)
-    for a_model in saved_models.list():
-        input_shape, my_fe, pca = df.load_model(a_model)
-        print(input_shape)  # (224, 224, 3) for all models
-
-
 THE_MODEL = "zooscan"
 
 
-def test_deep_features_extractor():
-    vault = Vault(os.path.join(TEST_DIR, "vault"))
+@pytest.fixture
+def vault():
+    return Vault(os.path.join(TEST_DIR, "vault"))
+
+
+@pytest.fixture
+def saved_models():
     config = MagicMock()
     config.get_cnf.return_value = os.path.join(TEST_DIR, "models")
-    saved_models = SavedModels(config)
-    df = DeepFeaturesExtractor(vault, saved_models)
-    assert THE_MODEL in saved_models.list()
-    objects = read_test_images()
-    res = df.run(objects, THE_MODEL)
-    # res.to_csv(os.path.join(TEST_DIR, "deep_features.csv"))
-    # Compare with expected
-    expected = pd.read_csv(os.path.join(TEST_DIR, "deep_features.csv"), index_col="id")
-    # Columns in CSV are strings "0", "1", etc.
-    res.columns = res.columns.astype(str)
-    pd.testing.assert_frame_equal(res, expected, atol=1e-3, check_dtype=False)
+    return SavedModels(config)
 
 
-def notest_missing_image():
-    vault = Vault(os.path.join(TEST_DIR, "vault"))
-    config = MagicMock()
-    config.get_cnf.return_value = os.path.join(TEST_DIR, "models")
-    saved_models = SavedModels(config)
-    df = DeepFeaturesExtractor(vault, saved_models)
-    assert THE_MODEL in saved_models.list()
-    objects = read_test_images()
-    objects[1000] = "foo" + objects[1000]
-    res = df.run(objects, THE_MODEL)
+@pytest.fixture
+def deep_extractor(vault, saved_models):
+    return DeepFeaturesExtractor(vault, saved_models)
 
 
-def read_test_images() -> Dict[Any, Any]:
+@pytest.fixture
+def test_images():
     objects = {}
     vault_path = os.path.join(TEST_DIR, "vault")
     objid = 100
@@ -71,3 +48,27 @@ def read_test_images() -> Dict[Any, Any]:
         objects[objid] = rel_path
         objid += 1
     return objects
+
+
+def test_deep_models_shape(saved_models, deep_extractor):
+    for a_model in saved_models.list():
+        input_shape, my_fe, pca = deep_extractor.load_model(a_model)
+        print(input_shape)  # (224, 224, 3) for all models
+
+
+def test_deep_features_extractor(saved_models, deep_extractor, test_images):
+    assert THE_MODEL in saved_models.list()
+    res = deep_extractor.run(test_images, THE_MODEL)
+    # res.to_csv(os.path.join(TEST_DIR, "deep_features.csv"))
+    # Compare with expected
+    expected = pd.read_csv(os.path.join(TEST_DIR, "deep_features.csv"), index_col="id")
+    # Columns in CSV are strings "0", "1", etc.
+    res.columns = res.columns.astype(str)
+    pd.testing.assert_frame_equal(res, expected, atol=1e-3, check_dtype=False)
+
+
+def test_missing_image(saved_models, deep_extractor, test_images):
+    assert THE_MODEL in saved_models.list()
+    test_images[100] = "foo" + test_images[100]  # Use a valid key from test_images
+    with pytest.raises(Exception):
+        deep_extractor.run(test_images, THE_MODEL)
