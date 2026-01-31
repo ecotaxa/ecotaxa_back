@@ -53,7 +53,7 @@ class HomeCaptcha(object):
                 "r": response,
             }
 
-            url_captcha = str(Config().get_account_request_url() or "") + str(
+            url_captcha = str(Config().get_account_validation_url() or "") + str(
                 "gui/checkcaptcha"
             )
         rsp = requests.request("GET", url=url_captcha, params=params)

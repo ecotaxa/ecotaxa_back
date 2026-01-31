@@ -6,7 +6,6 @@
 #
 import os
 import time
-import json
 from logging import INFO
 from typing import Union, Tuple, List, Dict, Any, Optional
 
@@ -100,6 +99,7 @@ from API_models.taxonomy import (
 )
 from API_operations.CRUD.Collections import CollectionsService
 from API_operations.CRUD.Constants import ConstantsService
+from API_operations.CRUD.Guests import GuestService
 from API_operations.CRUD.Image import ImageService
 from API_operations.CRUD.Instruments import InstrumentsService
 from API_operations.CRUD.Jobs import JobCRUDService
@@ -109,10 +109,10 @@ from API_operations.CRUD.ObjectParents import (
     AcquisitionsService,
     ProcessesService,
 )
+from API_operations.CRUD.Organizations import OrganizationService
 from API_operations.CRUD.Projects import ProjectsService
 from API_operations.CRUD.Users import UserService
-from API_operations.CRUD.Guests import GuestService
-from API_operations.CRUD.Organizations import OrganizationService
+from API_operations.CommonFolder import CommonFolderService
 from API_operations.Consistency import ProjectConsistencyChecker
 from API_operations.DBSyncService import DBSyncService
 from API_operations.JsonDumper import JsonDumper
@@ -126,7 +126,6 @@ from API_operations.Subset import SubsetServiceOnProject
 from API_operations.TaxoManager import TaxonomyChangeService, CentralTaxonomyService
 from API_operations.TaxonomyService import TaxonomyService
 from API_operations.UserFilesFolder import UserFilesFolderService
-from API_operations.CommonFolder import CommonFolderService
 from API_operations.admin.Database import DatabaseService
 from API_operations.admin.ImageManager import ImageManagerService
 from API_operations.admin.NightlyJob import NightlyJobService
@@ -4253,9 +4252,9 @@ JOB_INTERVAL = 5
 
 @app.on_event("startup")
 def startup_event() -> None:
-    # Small service call, to ensure the DB is OK
-    with ConstantsService():
-        pass
+    # Small service construction & check, to ensure config and the DB are OK
+    with ConstantsService() as sce:
+        sce.config.validate()
     # Clean memory every minute
     JobScheduler.todo_on_idle = regular_mem_cleanup
     # Don't run predictions, they are left to a specialized runner
