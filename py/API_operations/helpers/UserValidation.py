@@ -51,7 +51,7 @@ class UserValidation(object):
         )
         self.secret_key = str(config.get_cnf("MAILSERVICE_SECRET_KEY") or "")
         self.app_instance_id = str(config.get_cnf("INSTANCE_ID") or "EcoTaxa.01")
-        self._request_url = str(config.get_account_request_url())
+        self._request_url = str(config.get_account_validation_url())
 
     # call to request email_verification - validation method is by sending an email with a token
 
