@@ -143,7 +143,6 @@ _serializer = None
 def build_serializer() -> URLSafeTimedSerializer:
     global _serializer
     if not _serializer:
-        # Read from legacy app config
         secret_key = Config().secret_key()
         # Hardcoded in Flask
         salt = b"cookie-session"
