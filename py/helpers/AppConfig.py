@@ -126,3 +126,28 @@ class Config(object):
     def get_taxoserver_url(self) -> str:
         url = self.parser.get("TAXOSERVER_URL", "").strip()
         return url + ("/" if url[-1] != "/" else "")
+
+    def get_openid_config(self) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+        """
+        Return (client_id, client_secret, metadata_url) if all are present,
+        or (None, None, None) if none are present.
+        Raise an exception if only some are present.
+        """
+        client_id = self.parser.get("OPENID_CLIENT_ID")
+        client_secret = self.parser.get("OPENID_CLIENT_SECRET")
+        metadata_url = self.parser.get("OPENID_METADATA_URL")
+
+        configs = [client_id, client_secret, metadata_url]
+        if all(configs):
+            return client_id, client_secret, metadata_url
+        if not any(configs):
+            return None, None, None
+
+        missing = []
+        if not client_id:
+            missing.append("OPENID_CLIENT_ID")
+        if not client_secret:
+            missing.append("OPENID_CLIENT_SECRET")
+        if not metadata_url:
+            missing.append("OPENID_METADATA_URL")
+        raise ValueError(f"Inconsistent OpenID configuration. Missing: {', '.join(missing)}")

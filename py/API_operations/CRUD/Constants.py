@@ -2,8 +2,8 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2021  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from BO.DataLicense import AccessLevelEnum
 from API_models.constants import Constants, FORMULAE
+from BO.DataLicense import AccessLevelEnum
 from DB.helpers.Postgres import text
 from ..helpers.Service import Service
 
@@ -31,4 +31,6 @@ class ConstantsService(Service):
         ret.time_to_live = self.config.get_time_to_live()
         ret.all_in_one = self.config.get_all_in_one() == "on"
         ret.taxoserver_url = self.config.get_taxoserver_url()
+        client_id, _, _ = self.config.get_openid_config()
+        ret.openid_configured = client_id is not None
         return ret

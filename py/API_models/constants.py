@@ -7,13 +7,13 @@
 from typing import Dict, List, Optional
 
 from BO.DataLicense import DataLicense, AccessLevelEnum
-from DB.User import UserStatus, UserType, PeopleOrganizationDirectory
 from BO.User import (
     USER_PWD_REGEXP,
     USER_PWD_REGEXP_DESCRIPTION,
     SHORT_TOKEN_AGE,
     PROFILE_TOKEN_AGE,
 )
+from DB.User import UserStatus, UserType, PeopleOrganizationDirectory
 from helpers.pydantic import BaseModel, Field
 
 FORMULAE = """subsample_coef: 1/ssm.sub_part
@@ -135,4 +135,9 @@ class Constants(BaseModel):
         title="EcoTaxoServer URL",
         description="url of taxonomy server ecotaxoserver",
         default="https://ecotaxoserver.obs-vlfr.fr/",
+    )
+    openid_configured: bool = Field(
+        title="OpenID configured",
+        description="Whether OpenID authentication is configured.",
+        default=False,
     )

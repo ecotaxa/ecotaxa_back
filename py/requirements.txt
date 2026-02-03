@@ -37,7 +37,7 @@ httptools==0.2.0
 # Note: there was a reg. in 0.17.0 with file upload, not visible during UT. So, to test manually.
 uvicorn==0.17.4
 gunicorn==21.2.0
-httpx==0.18.1
+httpx==0.28.1
 lxml==4.6.3
 lxml-stubs==0.2.0
 requests==2.26.0
@@ -74,3 +74,5 @@ typer[all]==0.4.0
 click==8.0.4
 # More recent mypy
 mypy==1.2.0
+# OpenId lib, latest 1.6.6 Requires-Python >=3.9
+authlib==1.3.2

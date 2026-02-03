@@ -75,3 +75,7 @@ USERSFILESAREA = /eco_users_files
 MAX_UPLOAD_SIZE = 681574400
 # number of days before deleting my files directories
 TIMETOLIVE = 60
+# OpenID Connect configuration
+OPENID_CLIENT_ID =
+OPENID_CLIENT_SECRET =
+OPENID_METADATA_URL =

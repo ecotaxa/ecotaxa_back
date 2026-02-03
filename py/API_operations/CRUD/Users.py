@@ -37,7 +37,6 @@ from DB.User import (
     Person,
     Organization,
 )
-
 from helpers import DateTime
 from helpers.DynamicLogs import get_logger
 from helpers.httpexception import (
@@ -338,6 +337,13 @@ class UserService(Service):
         # TODO: Not consistent with others e.g. project.query()
         ret = self.ro_session.query(User).get(user_id)
         return ret
+
+    def find_by_email(self, email: str) -> Optional[User]:
+        """
+        Find a user by their email address.
+        """
+        qry = self.ro_session.query(User).filter(func.lower(User.email) == func.lower(email))
+        return qry.first()
 
     def get_full_by_id(
         self, current_user_id: UserIDT, user_id: UserIDT

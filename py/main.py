@@ -6,7 +6,6 @@
 #
 import os
 import time
-import json
 from logging import INFO
 from typing import Union, Tuple, List, Dict, Any, Optional
 
@@ -30,6 +29,7 @@ from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from fastapi_utils.timing import add_timing_middleware
 from sqlalchemy.sql.expression import null
+from starlette.middleware.sessions import SessionMiddleware
 
 from API_models.constants import Constants
 from API_models.crud import (
@@ -100,6 +100,7 @@ from API_models.taxonomy import (
 )
 from API_operations.CRUD.Collections import CollectionsService
 from API_operations.CRUD.Constants import ConstantsService
+from API_operations.CRUD.Guests import GuestService
 from API_operations.CRUD.Image import ImageService
 from API_operations.CRUD.Instruments import InstrumentsService
 from API_operations.CRUD.Jobs import JobCRUDService
@@ -109,15 +110,16 @@ from API_operations.CRUD.ObjectParents import (
     AcquisitionsService,
     ProcessesService,
 )
+from API_operations.CRUD.Organizations import OrganizationService
 from API_operations.CRUD.Projects import ProjectsService
 from API_operations.CRUD.Users import UserService
-from API_operations.CRUD.Guests import GuestService
-from API_operations.CRUD.Organizations import OrganizationService
+from API_operations.CommonFolder import CommonFolderService
 from API_operations.Consistency import ProjectConsistencyChecker
 from API_operations.DBSyncService import DBSyncService
 from API_operations.JsonDumper import JsonDumper
 from API_operations.Merge import MergeService
 from API_operations.ObjectManager import ObjectManager
+from API_operations.OpenID import router as openid_router, init_openid
 from API_operations.Prediction import PredictForProject, PredictionDataService
 from API_operations.SimilaritySearch import SimilaritySearchForProject
 from API_operations.Stats import ProjectStatsFetcher
@@ -126,7 +128,6 @@ from API_operations.Subset import SubsetServiceOnProject
 from API_operations.TaxoManager import TaxonomyChangeService, CentralTaxonomyService
 from API_operations.TaxonomyService import TaxonomyService
 from API_operations.UserFilesFolder import UserFilesFolderService
-from API_operations.CommonFolder import CommonFolderService
 from API_operations.admin.Database import DatabaseService
 from API_operations.admin.ImageManager import ImageManagerService
 from API_operations.admin.NightlyJob import NightlyJobService
@@ -160,6 +161,7 @@ from DB.Object import ObjectIDListT
 from DB.Project import ProjectTaxoStat, Project
 from DB.ProjectPrivilege import ProjectPrivilege
 from DB.User import User, OrganizationIDT
+from helpers.AppConfig import Config
 from helpers.Asyncio import async_bg_run, log_streamer
 from helpers.DynamicLogs import get_logger, get_api_logger, MONITOR_LOG_PATH
 from helpers.fastApiUtils import (
@@ -187,7 +189,7 @@ api_logger = get_api_logger()
 
 app = FastAPI(
     title="EcoTaxa",
-    version="0.0.42",
+    version="0.0.43",
     # openapi URL as seen from navigator, this is included when /docs is required
     # which serves swagger-ui JS app. Stay in /api sub-path.
     openapi_url="/api/openapi.json",
@@ -199,8 +201,15 @@ app = FastAPI(
     # For later: Root path is in fact _removed_ from incoming requests, so not relevant here
 )
 
+init_openid()
+
+app.include_router(openid_router)
+
 # Instrument a bit
 add_timing_middleware(app, record=logger.info, prefix="app", exclude="untimed")
+
+app.add_middleware(SessionMiddleware, session_cookie="oid_session", secret_key=Config().secret_key(),
+                   same_site="lax", https_only=False)
 
 # 'Client disconnect kills running job' problem workaround. _Must_ be the _last_ added middleware in chain.
 # Update 08/03/2024: Bad diagnostic probably, workaround disabled.
@@ -217,7 +226,7 @@ templates = Jinja2Templates(directory=os.path.dirname(__file__) + "/pages/templa
 CDNs = " ".join(["cdn.datatables.net"])
 CRSF_header = {
     "Content-Security-Policy": "default-src 'self' 'unsafe-inline' 'unsafe-eval' "
-    f"blob: data: {CDNs};frame-ancestors 'self';form-action 'self';"
+                               f"blob: data: {CDNs};frame-ancestors 'self';form-action 'self';"
 }
 
 # Establish second routes via /api to same app
@@ -264,7 +273,7 @@ def get_users(
         "",
         title="Ids",
         description="String containing the list of one or more id separated by non-num char. \n"
-        " \n **If several ids are provided**, one full info is returned per user.",
+                    " \n **If several ids are provided**, one full info is returned per user.",
         example="1",
     ),
     fields: Optional[str] = Query(
@@ -666,7 +675,7 @@ def get_organizations(
         "",
         title="Ids",
         description="String containing the list of one or more id separated by non-num char. \n"
-        " \n **If several ids are provided**, one full info is returned per user.",
+                    " \n **If several ids are provided**, one full info is returned per user.",
         example="1",
     ),
     current_user: Optional[int] = Depends(get_optional_current_user),
@@ -741,7 +750,7 @@ def get_guests(
         "",
         title="Ids",
         description="String containing the list of one or more id separated by non-num char. \n"
-        " \n **If several ids are provided**, one full info is returned per user.",
+                    " \n **If several ids are provided**, one full info is returned per user.",
         example="1",
     ),
     fields: Optional[str] = Query(
@@ -2321,7 +2330,7 @@ def instrument_query(
         ...,
         title="Projects ids",
         description="String containing the list of one or more project ids,"
-        " separated by non-num char, or 'all' for all instruments.",
+                    " separated by non-num char, or 'all' for all instruments.",
         example="1,2,3",
     )
 ) -> List[str]:
@@ -2447,7 +2456,7 @@ name, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostat
     order_field: Optional[str] = Query(
         title="Order field",
         description='Order the result using given field. If prefixed with "-" then it will be reversed. '
-        "When using *special syntax ss-Innnn*, the order is similarity with given (by its ID) object.",
+                    "When using *special syntax ss-Innnn*, the order is similarity with given (by its ID) object.",
         default=None,
         example="obj.longitude",
     ),
