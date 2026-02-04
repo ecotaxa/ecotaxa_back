@@ -3,6 +3,7 @@
 # Copyright (C) 2015-2026  Picheral, Colin, Irisson (UPMC-CNRS)
 
 import logging
+from datetime import datetime
 from urllib.parse import urlencode
 
 from authlib.integrations.starlette_client import OAuth  # type:ignore
@@ -94,17 +95,25 @@ async def openid_callback(request: Request):
         db_user = sce.find_by_email(email=email)
         if db_user is not None:
             # TODO: Anything to align here?
+            # We could align name, organization, etc. if we wanted to trust OpenID provider more than our DB
             user_id = db_user.id
         else:
             # Self-register or convert
+            # Fill missing UserModelWithRights fields with relevant data
             new_user = UserModelWithRights(
                 id=-1,
                 email=email,
                 mail_status=True,  # Trust provider
+                mail_status_date=datetime.now(),
+                status_date=datetime.now(),
+                status_admin_comment="OpenID auto-registration",
                 name=user_info.get("name", email),
-                organisation="Unknown",
-                country="Unknown",
-                usercreationreason="OpenID auto-registration",
+                organisation=user_info.get("organisation", "Unknown"),
+                country=user_info.get("country", "Unknown"),
+                usercreationreason="Please fill in",
+                orcid=user_info.get("orcid"),
+                usercreationdate=datetime.now(),
+                password=None,
             )
             user_id = sce.add_openid_user(new_user=new_user)
 

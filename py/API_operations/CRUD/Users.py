@@ -135,6 +135,10 @@ class UserService(Service):
             self.session.add(usr)
             new_user.id = usr.id
             action_type = ActivationType.convert
+        else:
+            # Existing user: just return the ID, no update
+            logger.info("OpenID User already exists : '%s'" % existing_person.email)
+            return existing_person.id
 
         cols_to_upd: List = [
             User.email,
@@ -142,6 +146,7 @@ class UserService(Service):
             User.name,
             User.organisation,
             User.country,
+            User.orcid,
             User.usercreationreason,
             User.usercreationdate,
         ]

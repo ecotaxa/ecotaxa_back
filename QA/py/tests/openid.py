@@ -113,7 +113,7 @@ async def test_login_new_user(config, database, fastapi, monkeypatch):
         db_user = sce.find_by_email(email=email)
         assert db_user is not None
         assert db_user.name == "New User"
-        assert db_user.usercreationreason == "OpenID auto-registration"
+        assert db_user.usercreationreason == "Please fill in"
 
 
 @pytest.mark.asyncio
