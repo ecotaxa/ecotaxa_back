@@ -9,6 +9,7 @@ from authlib.integrations.starlette_client import OAuth  # type:ignore
 from fastapi import APIRouter, Request, HTTPException
 from starlette.responses import RedirectResponse
 
+from API_models.crud import UserModelWithRights
 from API_operations.CRUD.Users import UserService
 from helpers.AppConfig import Config
 from helpers.fastApiUtils import build_serializer
@@ -92,18 +93,36 @@ async def openid_callback(request: Request):
         )  # TODO: This one is unique, e.g. if user changes mail it will still point at him
         db_user = sce.find_by_email(email=email)
         if db_user is not None:
-            # User exists, log in by setting session
-            front_url = Config().get_account_validation_url()
-            assert front_url is not None
-            token_for_flask = build_serializer().dumps({"user_id": db_user.id})
-            response = RedirectResponse(url=front_url)
-            response.set_cookie(key="token", value=str(token_for_flask))
-            response.set_cookie(key="id_token", value=id_token)
-            # Note: The session contains both "oid_session" and "token"
-            return response
+            # TODO: Anything to align here?
+            user_id = db_user.id
         else:
-            # TODO: Self-register?
-            pass
+            # Self-register or convert
+            new_user = UserModelWithRights(
+                id=-1,
+                email=email,
+                mail_status=True,  # Trust provider
+                name=user_info.get("name", email),
+                organisation="Unknown",
+                country="Unknown",
+                usercreationreason="OpenID auto-registration",
+            )
+            user_id = sce.add_openid_user(new_user=new_user)
+
+            if user_id == -1:
+                return {
+                    "status": "error",
+                    "message": "OpenID authentication failed: could not create user",
+                }
+
+        # User exists or was just created, log in by setting session
+        front_url = Config().get_account_validation_url()
+        assert front_url is not None
+        token_for_flask = build_serializer().dumps({"user_id": user_id})
+        response = RedirectResponse(url=front_url)
+        response.set_cookie(key="token", value=str(token_for_flask))
+        response.set_cookie(key="id_token", value=id_token)
+        # Note: The session contains both "oid_session" and our tokens
+        return response
 
 
 @router.get("/logout", operation_id="openid_logout")

@@ -258,7 +258,7 @@ MAX_UPLOAD_SIZE = 681574400
 TIMETOLIVE = {TIMETOLIVE}
 OPENID_CLIENT_ID=ecotaxa
 OPENID_CLIENT_SECRET=ugrv75rZRlVvUdk4YJE58sJulITDo0c8
-OPENID_METADATA_URL=http://localhost:8080/realms/theia/.well-known/openid-configuration
+OPENID_METADATA_URL=https://my.keycloack.com/realms/theia/.well-known/openid-configuration
 """
 
     def write_config(self):

@@ -111,6 +111,53 @@ class UserService(Service):
 
     # check context to know if the email has to be verified
 
+    def add_openid_user(self, new_user: UserModelWithRights) -> UserIDT:
+        """
+        Add or convert a user from OpenID information.
+        """
+        # Search for existing user or guest
+        existing_person: Optional[Person] = (
+            self.session.query(Person)
+            .filter(Person.email.ilike(new_user.email))
+            .one_or_none()
+        )
+
+        if existing_person is None:
+            # Create a new user
+            usr = User()
+            self.session.add(usr)
+            action_type = ActivationType.create
+        elif isinstance(existing_person, Guest):
+            # Convert guest to user
+            usr = existing_person.to_user()
+            self.session.delete(existing_person)
+            self.session.flush()
+            self.session.add(usr)
+            new_user.id = usr.id
+            action_type = ActivationType.convert
+
+        cols_to_upd: List = [
+            User.email,
+            User.mail_status,
+            User.name,
+            User.organisation,
+            User.country,
+            User.usercreationreason,
+            User.usercreationdate,
+        ]
+
+        # OpenID users are considered to have a verified email
+        new_user.mail_status = True
+
+        self._model_to_db(
+            usr,
+            new_user,
+            cols_to_upd=cols_to_upd,
+        )
+
+        logger.info("OpenID User %s : '%s'" % (action_type.name, usr.email))
+        return usr.id
+
     def create_user(
         self,
         current_user_id: Optional[UserIDT],
@@ -342,7 +389,9 @@ class UserService(Service):
         """
         Find a user by their email address.
         """
-        qry = self.ro_session.query(User).filter(func.lower(User.email) == func.lower(email))
+        qry = self.ro_session.query(User).filter(
+            func.lower(User.email) == func.lower(email)
+        )
         return qry.first()
 
     def get_full_by_id(
@@ -524,6 +573,7 @@ class UserService(Service):
             all_roles = {a_role.name: a_role for a_role in self.session.query(Role)}
             RightsBO.set_allowed_actions(user_to_update, actions, all_roles)
         self.session.commit()
+        return None
 
     def search_organizations(self, name: str) -> List[str]:
         """
