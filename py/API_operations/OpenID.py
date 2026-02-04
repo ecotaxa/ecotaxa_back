@@ -1,12 +1,11 @@
 # -*- coding: utf-8 -*-
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
-# Copyright (C) 2015-2022  Picheral, Colin, Irisson (UPMC-CNRS)
+# Copyright (C) 2015-2026  Picheral, Colin, Irisson (UPMC-CNRS)
 
 import logging
 from urllib.parse import urlencode
 
-# type: ignore
-from authlib.integrations.starlette_client import OAuth
+from authlib.integrations.starlette_client import OAuth  # type:ignore
 from fastapi import APIRouter, Request, HTTPException
 from starlette.responses import RedirectResponse
 
@@ -51,7 +50,9 @@ async def openid_login(request: Request):
     provider = getattr(oauth, THE_PROVIDER, None)
     if provider is None:
         raise HTTPException(status_code=503, detail=[DETAIL_OPENID_NOT_CONFIGURED])
-    redirect_uri = Config().get_account_request_url() + 'openid/callback'
+    front_url = Config().get_account_request_url()
+    assert front_url is not None
+    redirect_uri = front_url + 'openid/callback'
     # If we are behind a proxy, we might need to force https
     if request.headers.get("x-forwarded-proto") == "https":
         redirect_uri = str(redirect_uri).replace("http://", "https://")
@@ -81,9 +82,10 @@ async def openid_callback(request: Request):
         if db_user is not None:
             # User exists, log in by setting session
             front_url = Config().get_account_request_url()
+            assert front_url is not None
             token_for_flask = build_serializer().dumps({"user_id": db_user.id})
             response = RedirectResponse(url=front_url)
-            response.set_cookie(key="token", value=token_for_flask)
+            response.set_cookie(key="token", value=str(token_for_flask))
             response.set_cookie(key="id_token", value=id_token)
             # Note: The session contains both "oid_session" and "token"
             return response
@@ -104,6 +106,7 @@ async def openid_logout(request: Request):
     metadata = await provider.load_server_metadata()
     end_session_endpoint = metadata.get('end_session_endpoint')
     front_url = Config().get_account_request_url()
+    assert front_url is not None
     if end_session_endpoint:
         params = {
             'id_token_hint': request.cookies.get('id_token'),

@@ -254,6 +254,9 @@ DIR_MAIL_TEMPLATES = {DIR_TEMPLATES}
 SERVERURL= http://localhost:8000
 MAX_UPLOAD_SIZE = 681574400
 TIMETOLIVE = {TIMETOLIVE}
+OPENID_CLIENT_ID=ecotaxa
+OPENID_CLIENT_SECRET=ugrv75rZRlVvUdk4YJE58sJulITDo0c8
+OPENID_METADATA_URL=http://localhost:8080/realms/theia/.well-known/openid-configuration
 """
 
     def write_config(self):
