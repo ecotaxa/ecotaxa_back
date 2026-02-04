@@ -36,13 +36,14 @@ def init_openid():
         client_secret=client_secret,
         server_metadata_url=server_metadata_url,
         client_kwargs={
-            'scope': 'openid email profile', 'code_challenge_method': 'S256'
-        }
+            "scope": "openid email profile",
+            "code_challenge_method": "S256",
+        },
     )
     logging.info("OpenID provider registered.")
 
 
-@router.get("/login")
+@router.get("/login", operation_id="openid_login")
 async def openid_login(request: Request):
     """
     Initiate OpenID connection flow.
@@ -52,14 +53,17 @@ async def openid_login(request: Request):
         raise HTTPException(status_code=503, detail=[DETAIL_OPENID_NOT_CONFIGURED])
     front_url = Config().get_account_request_url()
     assert front_url is not None
-    redirect_uri = front_url + 'openid/callback'
+    redirect_uri = front_url + "openid/callback"
     # If we are behind a proxy, we might need to force https
     if request.headers.get("x-forwarded-proto") == "https":
         redirect_uri = str(redirect_uri).replace("http://", "https://")
     return await provider.authorize_redirect(request, redirect_uri)
 
 
-@router.get("/callback")
+@router.get(
+    "/callback",
+    operation_id="openid_callback",
+)
 async def openid_callback(request: Request):
     """
     Handle OpenID provider callback.
@@ -68,16 +72,24 @@ async def openid_callback(request: Request):
     if provider is None:
         raise HTTPException(status_code=503, detail=[DETAIL_OPENID_NOT_CONFIGURED])
     token = await provider.authorize_access_token(request)
-    user_info = token.get('userinfo')
+    user_info = token.get("userinfo")
     if user_info is None:
-        return {"status": "error", "message": "OpenID authentication failed: no user_info"}
-    email = user_info.get('email')
+        return {
+            "status": "error",
+            "message": "OpenID authentication failed: no user_info",
+        }
+    email = user_info.get("email")
     if email is None:
-        return {"status": "error", "message": "OpenID authentication failed: no email in user_info"}
-    id_token = token.get('id_token')
+        return {
+            "status": "error",
+            "message": "OpenID authentication failed: no email in user_info",
+        }
+    id_token = token.get("id_token")
 
     with UserService() as sce:
-        sub = user_info.get('sub')  # TODO: This one is unique, e.g. if user changes mail it will still point at him
+        sub = user_info.get(
+            "sub"
+        )  # TODO: This one is unique, e.g. if user changes mail it will still point at him
         db_user = sce.find_by_email(email=email)
         if db_user is not None:
             # User exists, log in by setting session
@@ -94,25 +106,25 @@ async def openid_callback(request: Request):
             pass
 
 
-@router.get("/logout")
+@router.get("/logout", operation_id="openid_logout")
 async def openid_logout(request: Request):
     """
     Log out from OpenID and local session.
+    Returns a redirect to openid provider, it will clear its cookies and force a fresh login next time.
     """
     provider = getattr(oauth, THE_PROVIDER, None)
     if provider is None:
         raise HTTPException(status_code=503, detail=[DETAIL_OPENID_NOT_CONFIGURED])
     client_id, _, _ = Config().get_openid_config()
     metadata = await provider.load_server_metadata()
-    end_session_endpoint = metadata.get('end_session_endpoint')
+    end_session_endpoint = metadata.get("end_session_endpoint")
     front_url = Config().get_account_request_url()
     assert front_url is not None
     if end_session_endpoint:
         params = {
-            'id_token_hint': request.cookies.get('id_token'),
-            'post_logout_redirect_uri': front_url,
-            'client_id': client_id
+            "id_token_hint": request.cookies.get("id_token"),
+            "post_logout_redirect_uri": front_url,
+            "client_id": client_id,
         }
-        return RedirectResponse(url=end_session_endpoint+"?"+urlencode(params))
+        return RedirectResponse(url=end_session_endpoint + "?" + urlencode(params))
     return RedirectResponse(url=front_url)
-
