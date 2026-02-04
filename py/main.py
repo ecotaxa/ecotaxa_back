@@ -208,8 +208,13 @@ app.include_router(openid_router)
 # Instrument a bit
 add_timing_middleware(app, record=logger.info, prefix="app", exclude="untimed")
 
-app.add_middleware(SessionMiddleware, session_cookie="oid_session", secret_key=Config().secret_key(),
-                   same_site="lax", https_only=False)
+app.add_middleware(
+    SessionMiddleware,
+    session_cookie="oid_session",
+    secret_key=Config().secret_key(),
+    same_site="lax",
+    https_only=False,
+)
 
 # 'Client disconnect kills running job' problem workaround. _Must_ be the _last_ added middleware in chain.
 # Update 08/03/2024: Bad diagnostic probably, workaround disabled.
@@ -226,7 +231,7 @@ templates = Jinja2Templates(directory=os.path.dirname(__file__) + "/pages/templa
 CDNs = " ".join(["cdn.datatables.net"])
 CRSF_header = {
     "Content-Security-Policy": "default-src 'self' 'unsafe-inline' 'unsafe-eval' "
-                               f"blob: data: {CDNs};frame-ancestors 'self';form-action 'self';"
+    f"blob: data: {CDNs};frame-ancestors 'self';form-action 'self';"
 }
 
 # Establish second routes via /api to same app
@@ -273,7 +278,7 @@ def get_users(
         "",
         title="Ids",
         description="String containing the list of one or more id separated by non-num char. \n"
-                    " \n **If several ids are provided**, one full info is returned per user.",
+        " \n **If several ids are provided**, one full info is returned per user.",
         example="1",
     ),
     fields: Optional[str] = Query(
@@ -675,7 +680,7 @@ def get_organizations(
         "",
         title="Ids",
         description="String containing the list of one or more id separated by non-num char. \n"
-                    " \n **If several ids are provided**, one full info is returned per user.",
+        " \n **If several ids are provided**, one full info is returned per user.",
         example="1",
     ),
     current_user: Optional[int] = Depends(get_optional_current_user),
@@ -750,7 +755,7 @@ def get_guests(
         "",
         title="Ids",
         description="String containing the list of one or more id separated by non-num char. \n"
-                    " \n **If several ids are provided**, one full info is returned per user.",
+        " \n **If several ids are provided**, one full info is returned per user.",
         example="1",
     ),
     fields: Optional[str] = Query(
@@ -2330,7 +2335,7 @@ def instrument_query(
         ...,
         title="Projects ids",
         description="String containing the list of one or more project ids,"
-                    " separated by non-num char, or 'all' for all instruments.",
+        " separated by non-num char, or 'all' for all instruments.",
         example="1,2,3",
     )
 ) -> List[str]:
@@ -2456,7 +2461,7 @@ name, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostat
     order_field: Optional[str] = Query(
         title="Order field",
         description='Order the result using given field. If prefixed with "-" then it will be reversed. '
-                    "When using *special syntax ss-Innnn*, the order is similarity with given (by its ID) object.",
+        "When using *special syntax ss-Innnn*, the order is similarity with given (by its ID) object.",
         default=None,
         example="obj.longitude",
     ),
@@ -4262,9 +4267,9 @@ JOB_INTERVAL = 5
 
 @app.on_event("startup")
 def startup_event() -> None:
-    # Small service call, to ensure the DB is OK
-    with ConstantsService():
-        pass
+    # Small service construction & check, to ensure config and the DB are OK
+    with ConstantsService() as sce:
+        sce.config.validate()
     # Clean memory every minute
     JobScheduler.todo_on_idle = regular_mem_cleanup
     # Don't run predictions, they are left to a specialized runner

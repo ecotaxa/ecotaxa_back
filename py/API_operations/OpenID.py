@@ -51,7 +51,7 @@ async def openid_login(request: Request):
     provider = getattr(oauth, THE_PROVIDER, None)
     if provider is None:
         raise HTTPException(status_code=503, detail=[DETAIL_OPENID_NOT_CONFIGURED])
-    front_url = Config().get_account_request_url()
+    front_url = Config().get_account_validation_url()
     assert front_url is not None
     redirect_uri = front_url + "openid/callback"
     # If we are behind a proxy, we might need to force https
@@ -93,7 +93,7 @@ async def openid_callback(request: Request):
         db_user = sce.find_by_email(email=email)
         if db_user is not None:
             # User exists, log in by setting session
-            front_url = Config().get_account_request_url()
+            front_url = Config().get_account_validation_url()
             assert front_url is not None
             token_for_flask = build_serializer().dumps({"user_id": db_user.id})
             response = RedirectResponse(url=front_url)
@@ -118,7 +118,7 @@ async def openid_logout(request: Request):
     client_id, _, _ = Config().get_openid_config()
     metadata = await provider.load_server_metadata()
     end_session_endpoint = metadata.get("end_session_endpoint")
-    front_url = Config().get_account_request_url()
+    front_url = Config().get_account_validation_url()
     assert front_url is not None
     if end_session_endpoint:
         params = {
