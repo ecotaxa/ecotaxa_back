@@ -120,12 +120,13 @@ APP_PORT=8097 python3.8 run.py uvicorn
 - Creating a virtual environment for frontend libraries  
 ```shell  
 cd ~/ecotaxa_front
-python3.8 -m venv venv --without-pip
+python3.14 -m venv venv --without-pip
 source venv/bin/activate
 ```  
-- Install libraries with a modified version of pip  : https://bootstrap.pypa.io/get-pip.py  
+- Install libraries with last version of pip  : https://bootstrap.pypa.io/get-pip.py  
 ```shell  
-wget https://bootstrap.pypa.io/get-pip.pypython3.8 get-pip.pypython3.8 -m pip install -r requirements.txt
+wget https://bootstrap.pypa.io/get-pip.py | python3.14 
+python3.14 -m pip install -r requirements.txt
 ```  
 - Create a `config.cfg` file in `~/ecotaxa_front/config/` with the following contents (update `BACKEND_URL` with the correct value of `APP_PORT` if necessary) :  
 ``` ini  
@@ -145,7 +146,7 @@ Once the installations are done, the launch script is in `runserver.py`
 ```shell  
 cd ~/ecotaxa_front
 source venv/bin/activate
-python3.8 runserver.py
+python3.14 runserver.py
 ```  
 The application can be accessed at the address given in the script logs :  
 ```  
@@ -249,7 +250,8 @@ To be able to run predictions, you need to run the `gpu_jobs_runner.py` script, 
   
 - Virtual environment creation  
 ```shell
-cd ~/ecotaxa_back/pypython3.8 -m venv gpu_venvsource gpu_venv/bin/activate
+cd ~/ecotaxa_back/py
+python3.8 -m venv gpu_venvsource gpu_venv/bin/activate
 ```  
 - Installation of the libraries required for `gpu_jobs_runner.py`.  
 ```shell
