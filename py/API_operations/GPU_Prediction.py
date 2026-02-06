@@ -26,7 +26,6 @@ from DB.helpers.Direct import text
 from ML.Deep_features_extractor import DeepFeaturesExtractor
 from ML.Random_forest_classifier import OurRandomForestClassifier
 from helpers.DynamicLogs import get_logger
-
 # TODO: Move somewhere else
 from helpers.Timer import CodeTimer
 from .ObjectManager import ObjectManager
@@ -140,6 +139,7 @@ In second step 'Choice of Learning Set categories and size', where the learning 
         features = list(req.features)
         nb_features = len(features)
         # Read DB values all into memory.
+        logger.info("Reading Learning set")
         np_learning_set, obj_ids, classif_ids = learning_set.np_read_all()
         obj_count = len(obj_ids)
         logger.info("Learning set is %s lines * %s columns", obj_count, nb_features)

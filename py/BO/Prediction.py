@@ -11,6 +11,8 @@ from typing import Any, List, Dict, ClassVar
 
 import numpy as np  # type: ignore
 from numpy import ndarray
+from sqlalchemy import bindparam
+from sqlalchemy.dialects.postgresql import ARRAY
 
 from DB.Acquisition import Acquisition
 from DB.CNNFeatureVector import (
@@ -25,6 +27,7 @@ from DB.Sample import Sample
 from DB.helpers import Session, Result
 from DB.helpers.DBWriter import DBWriter
 from DB.helpers.ORM import and_, text
+from DB.helpers.Postgres import BIGINT
 from helpers.DynamicLogs import get_logger
 
 logger = get_logger(__name__)
@@ -125,13 +128,19 @@ class DeepFeatures(object):
         Read CNN lines AKA features, in order, for given object_ids
         """
         fk_to_objid = ObjectCNNFeatureVector.objcnnid.name
-        sql = "WITH ordr (seq, objid) AS (select * from UNNEST(:seq, :oids)) "
-        sql += "SELECT " + " features "
+        sql = "SELECT features "
         sql += " FROM " + ObjectCNNFeatureVector.__tablename__
-        sql += " JOIN ordr ON " + fk_to_objid + " = ordr.objid "
+        sql += (
+            " JOIN UNNEST(:oids) WITH ORDINALITY AS ordr (objid, seq) ON "
+            + fk_to_objid
+            + " = ordr.objid "
+        )
         sql += " ORDER BY ordr.seq "
-        params = {"seq": list(range(len(oid_lst))), "oids": oid_lst}
-        res: Result = session.execute(text(sql), params=params)
+        stmt = text(sql).bindparams(
+            bindparam("oids", type_=ARRAY(BIGINT)),
+        )
+        params = {"oids": oid_lst}
+        res: Result = session.execute(stmt, params=params)
         return res
 
     @classmethod

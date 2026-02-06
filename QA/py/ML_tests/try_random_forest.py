@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+import logging
 from unittest.mock import patch
 
 # Add the parent directory to sys.path to allow importing from the 'py' directory
@@ -18,6 +19,18 @@ os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
 from API_operations.GPU_Prediction import GPUPredictForProject
 from API_models.prediction import PredictionReq
 from API_models.filters import ProjectFilters
+
+handler = logging.StreamHandler(sys.stderr)
+handler.setFormatter(
+    logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+)
+# Root logger might also be useful if some modules use it
+logging.basicConfig(level=logging.INFO, handlers=[handler], force=True)
+logger = logging.getLogger("GPU_Prediction")
+logger.setLevel(logging.INFO)
+logger.handlers = [handler]
+logger.propagate = False
+GPUPredictForProject.logger = logger
 
 
 def try_real_prediction():
@@ -183,6 +196,7 @@ def try_real_prediction():
             print("Starting prediction...")
             start_time = time.time()
             job.do_prediction()  # If you want to run it
+            print("Job results:", job.job_id)
             end_time = time.time()
             print(f"Prediction finished in {end_time - start_time:.2f} seconds")
             return job

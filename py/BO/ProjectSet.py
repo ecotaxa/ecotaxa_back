@@ -8,7 +8,7 @@
 #
 
 from dataclasses import dataclass
-from typing import List, Dict, Optional, Generator, Tuple, Final, Any
+from typing import List, Dict, Optional, Generator, Tuple, Final
 
 import numpy as np
 from numpy import ndarray
@@ -20,8 +20,8 @@ from BO.ObjectSet import DescribedObjectSet
 from BO.Rights import RightsBO, Action
 from BO.User import UserIDT
 from DB import ObjectHeader
-from DB.Project import ProjectIDListT, Project
 from DB.Object import ObjectIDListT
+from DB.Project import ProjectIDListT, Project
 from DB.helpers import Session, Result
 from DB.helpers.Direct import text
 from DB.helpers.ORM import any_
@@ -100,12 +100,13 @@ class FeatureConsistentProjectSet(object):
             from_, where, params = an_obj_set.get_sql(None, selected_cols)
             assert len(where.ands) == 0  # The condition is inside the JOIN
             assert len(params) == 1  # :projid
+            prjid = str(params["projid"])
             prj_sql = (
                 "( SELECT "
                 + selected_cols
                 + " FROM "
-                + from_.get_sql().replace(":projid", str(params["projid"]))
-                + ")"
+                + from_.get_sql().replace(":projid", prjid)
+                + f" /*PRJ{prjid}WHERE*/ )"
             )
             sels_for_prjs.append(prj_sql)
         # Final SQL
@@ -260,18 +261,25 @@ class LimitedInCategoriesProjectSet(FeatureConsistentProjectSet):
     def _add_random_limit(self, sql: str) -> str:
         prj_in_list = ",".join([str(prj_id) for prj_id in self.prj_ids])
         categ_in_list = ",".join([str(classif_id) for classif_id in self.categories])
-        sql += (
-            " WHERE flat.objid IN "
-            " ( SELECT q.objid FROM "
-            " ( SELECT obh2.objid, ROW_NUMBER() OVER (PARTITION BY obh2.classif_id "
-            "                                         ORDER BY obh2.classif_id) rrank "  # TODO obh2.random_value
+        random_view = (
+            " WITH rndm AS ( SELECT objid, projid FROM"
+            " ( SELECT sam2.projid, obh2.objid, "
+            "          ROW_NUMBER() OVER (PARTITION BY obh2.classif_id "
+            "                             ORDER BY obh2.classif_id) rrank "  # TODO predictable random?
             "     FROM %s obh2"
             "     JOIN acquisitions acq2 ON acq2.acquisid = obh2.acquisid"
-            "     JOIN samples sam2 ON sam2.sampleid = acq2.acq_sample_id AND sam2.projid IN ({0})"
+            "     JOIN samples sam2 ON sam2.sampleid = acq2.acq_sample_id "
+            "                      AND sam2.projid IN ({0})"
             "    WHERE obh2.classif_qual = 'V' AND obh2.classif_id IN ({2})) q"
-            "   WHERE rrank <= {1} )" % ObjectHeader.__tablename__
+            " WHERE rrank <= {1} )" % ObjectHeader.__tablename__
         ).format(prj_in_list, self.random_limit, categ_in_list)
-        return sql
+        sql = sql.replace("WITH flat", ", flat")
+        for prjid in self.prj_ids:
+            sql = sql.replace(
+                f"/*PRJ{prjid}WHERE*/",
+                f"WHERE obh.objid IN ( SELECT objid FROM rndm WHERE projid = {prjid} )",
+            )
+        return random_view + sql
 
     def _add_category_filter(self, sql: str) -> str:
         categ_in_list = ",".join([str(classif_id) for classif_id in self.categories])
@@ -280,6 +288,7 @@ class LimitedInCategoriesProjectSet(FeatureConsistentProjectSet):
 
     def amend_sql(self, sql: str) -> str:
         if self.random_limit is not None:
+            # Note: category filter is also used
             return self._add_random_limit(sql)
         elif len(self.categories) > 0:
             return self._add_category_filter(sql)
@@ -301,7 +310,6 @@ class PermissionConsistentProjectSet(object):
     ):
         """We just expect an Exception thrown (or not)"""
         for a_prj_id in self.prj_ids:
-
             RightsBO.user_wants(
                 self.session,
                 user_id,
