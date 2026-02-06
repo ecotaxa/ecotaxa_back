@@ -15,8 +15,9 @@ Pillow==8.1.0
 astral==2.2
 pytz==2021.1
 types-pytz==2021.1.2
-# Needed by TF EXACTLY
-numpy~=1.20.3
+# Needed by TF EXACTLY, but only in GPU back -end
+# the main back-end uses numpy for image processing, any recent version will do.
+#numpy~=1.9.2
 # Backbone of the app
 fastapi==0.73.0
 fastapi-utils==0.2.1
@@ -32,7 +33,7 @@ httptools==0.2.0
 # does not exit. Seen with 0.15.0 as well.
 # Note: there was a reg. in 0.17.0 with file upload, not visible during UT. So, to test manually.
 uvicorn==0.17.4
-gunicorn==20.1.0
+gunicorn==21.2.0
 httpx==0.18.1
 lxml==4.6.3
 lxml-stubs==0.2.0
@@ -53,6 +54,8 @@ openpyxl-stubs==0.1.21
 # Image processing libs.
 # Machine learning with no GPU
 scikit-learn==1.0
+# Intel accelerations
+scikit-learn-intelex==2024.5.0
 # Machine learning with GPU. NOT automatically regression-tested so to upgrade with caution.
 #tensorflow==2.6.0
 #tensorflow-hub==0.12.0
