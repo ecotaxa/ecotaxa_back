@@ -189,7 +189,7 @@ USED_FIELDS_FOR_CLASSIF = {  # From Import user point of view, only these can be
     ObjectHeader.classif_who.name,
     ObjectHeader.classif_score.name,
 }
-HIDDEN_FIELDS_FOR_CLASSIF = {}  # Internally managed
+HIDDEN_FIELDS_FOR_CLASSIF: Dict = {}  # Internally managed
 NON_UPDATABLE_VIA_API = USED_FIELDS_FOR_CLASSIF.union(HIDDEN_FIELDS_FOR_CLASSIF)
 
 

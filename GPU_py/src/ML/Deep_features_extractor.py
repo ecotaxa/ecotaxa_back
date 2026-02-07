@@ -25,6 +25,7 @@ from FS.Vault import Vault
 from helpers.DynamicLogs import get_logger
 from .Base_ML import MachineLearningBase
 from .helpers import generator  # type: ignore # custom data generator
+
 # Import the library, only after having tweaked it
 from .helpers.tensorflow_cfg import configured_tf  # type: ignore
 

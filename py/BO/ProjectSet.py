@@ -193,7 +193,9 @@ class FeatureConsistentProjectSet(object):
     ) -> np.ndarray:
         # Allocate memory in one go
         # TODO: float32 is a shameless attempt to save memory
-        np_table = np.ndarray(shape=(nb_lines, len(columns)), dtype=np.float32)
+        np_table: np.ndarray = np.ndarray(
+            shape=(nb_lines, len(columns)), dtype=np.float32
+        )
         nan = float("nan")
         not_known = {float("inf"), float("-inf"), nan, None}
         repl_get = replacements.get

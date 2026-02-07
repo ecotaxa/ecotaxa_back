@@ -4,7 +4,7 @@
 #
 from typing import List
 
-from pgvector.sqlalchemy import Vector
+from pgvector.sqlalchemy import Vector  # type:ignore
 
 from .Object import ObjectIDT
 from .helpers.Bean import Bean

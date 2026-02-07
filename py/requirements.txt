@@ -57,6 +57,8 @@ openpyxl-stubs==0.1.21
 # Image processing libs.
 # Machine learning with no GPU
 scikit-learn==1.0
+# Intel accelerations
+scikit-learn-intelex==2024.5.0
 # Machine learning with GPU. NOT automatically regression-tested so to upgrade with caution.
 #tensorflow==2.6.0
 #tensorflow-hub==0.12.0

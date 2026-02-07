@@ -26,6 +26,7 @@ from DB.helpers.Direct import text
 from ML.Deep_features_extractor import DeepFeaturesExtractor
 from ML.Random_forest_classifier import OurRandomForestClassifier
 from helpers.DynamicLogs import get_logger
+
 # TODO: Move somewhere else
 from helpers.Timer import CodeTimer
 from .ObjectManager import ObjectManager

@@ -148,7 +148,8 @@ class OrderClause(object):
     def __init__(self) -> None:
         self.expressions: List[str] = []
         self.columns: List[str] = []
-        self.window_start = self.window_size = None
+        self.window_start: Optional[int] = None
+        self.window_size: Optional[int] = None
 
     def add_expression(
         self,
@@ -177,8 +178,8 @@ class OrderClause(object):
             return set([a_col.split(".")[1] for a_col in self.columns])
 
     def set_window(self, start: Optional[int], size: Optional[int]) -> None:
-        self.window_start: Optional[int] = start
-        self.window_size: Optional[int] = size
+        self.window_start = start
+        self.window_size = size
 
     def get_sql(self) -> str:
         ret = (

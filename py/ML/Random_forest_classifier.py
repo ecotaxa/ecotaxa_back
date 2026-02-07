@@ -9,9 +9,13 @@
 from typing import List, Tuple
 
 import numpy as np  # type: ignore
-from sklearnex import patch_sklearn
 
-patch_sklearn()
+try:
+    from sklearnex import patch_sklearn  # type: ignore
+
+    patch_sklearn()
+except ImportError as e:
+    pass
 from sklearn.ensemble import RandomForestClassifier  # type: ignore
 
 from BO.Classification import ClassifIDListT
