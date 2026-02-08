@@ -72,3 +72,31 @@ def test_get_job_file(fastapi, database):
         rsp_p2.headers["content-range"]
         == f"bytes 1024-{len(test_content)-1}/{len(test_content)}"
     )
+
+
+def test_get_job_file_invalid_range(fastapi, database):
+    JobServiceBase.FileProducingJob = FileProducingJob
+    with FileProducingJob() as job:
+        job.run(ADMIN_USER_ID)
+        job_id = job.job_id
+    assert job_id is not None
+    job_dict = api_wait_for_stable_job(fastapi, job_id)
+    assert job_dict["state"] == "F"
+
+    download_url = JOB_DOWNLOAD_URL.format(job_id=job_id)
+
+    # Invalid format
+    rsp = fastapi.get(download_url, headers={**ADMIN_AUTH, "Range": "bytes=abc-"})
+    assert rsp.status_code == 416
+
+    # Out of bounds
+    rsp = fastapi.get(download_url, headers={**ADMIN_AUTH, "Range": "bytes=5000-"})
+    assert rsp.status_code == 416
+
+    # Start > End
+    rsp = fastapi.get(download_url, headers={**ADMIN_AUTH, "Range": "bytes=100-50"})
+    assert rsp.status_code == 416
+
+    # Multiple ranges (not supported)
+    rsp = fastapi.get(download_url, headers={**ADMIN_AUTH, "Range": "bytes=0-10,20-30"})
+    assert rsp.status_code == 416
