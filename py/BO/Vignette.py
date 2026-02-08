@@ -15,8 +15,6 @@ HERE = dirname(realpath(__file__))
 class VignetteMaker(object):
     """
     Vignette factory, from original images and using a configuration file.
-
-    AFTER ANY MODIFICATION HERE, please the corresponding UT with visual check of the output.
     """
 
     def __init__(self, cfg: ConfigParser, src_base: Path, target_filename: str):
