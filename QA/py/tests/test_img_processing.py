@@ -47,6 +47,9 @@ def test_validate_image():
         ImageBO.validate_image(str(bad_file))
     bad_file.unlink()
 
+    with pytest.raises(Exception):  # No tif allowed anymore
+        ImageBO.validate_image(str(IMAGES_DIR / "4261.tif"))
+
 
 def test_validate_image_too_large():
     # Trigger DecompressionBombError by reducing MAX_IMAGE_PIXELS
