@@ -123,7 +123,7 @@ from API_operations.SimilaritySearch import SimilaritySearchForProject
 from API_operations.Stats import ProjectStatsFetcher
 from API_operations.Status import StatusService
 from API_operations.Subset import SubsetServiceOnProject
-from API_operations.TaxoManager import TaxonomyChangeService, CentralTaxonomyService
+from API_operations.TaxoManager import CentralTaxonomyService
 from API_operations.TaxonomyService import TaxonomyService
 from API_operations.UserFilesFolder import UserFilesFolderService
 from API_operations.admin.Database import DatabaseService
@@ -3425,74 +3425,6 @@ def query_taxa_in_worms(
     # with TaxonomyService() as sce:
     #     ret: Optional[TaxonBO] = sce.query_worms(aphia_id)
     return None
-
-
-@app.get(
-    "/taxa_ref_change/refresh",
-    operation_id="refresh_taxa_db",
-    tags=["WIP"],
-    include_in_schema=False,
-    status_code=status.HTTP_200_OK,
-)
-async def refresh_taxa_db(  # async due to StreamingResponse
-    max_requests: int, current_user: int = Depends(get_current_user)
-) -> StreamingResponse:  # pragma:nocover
-    """
-    Refresh local mirror of WoRMS database.
-    """
-    with TaxonomyChangeService(max_requests) as sce:
-        with RightsThrower():
-            tsk = sce.db_refresh(current_user)
-            async_bg_run(tsk)  # Run in bg while streaming logs
-    # Below produces a chunked HTTP encoding, which is officially only HTTP 1.1 protocol
-    return StreamingResponse(
-        log_streamer(sce.temp_log, "Done,"), media_type="text/plain"
-    )
-
-
-@app.get(
-    "/taxa_ref_change/check/{aphia_id}",
-    operation_id="check_taxa_db",
-    tags=["WIP"],
-    include_in_schema=False,
-    status_code=status.HTTP_200_OK,
-)
-async def check_taxa_db(  # async due to Response
-    aphia_id: int, current_user: int = Depends(get_current_user)
-) -> Response:  # pragma:nocover
-    """
-    Check that the given aphia_id is correctly stored.
-    """
-    with TaxonomyChangeService(1) as sce:
-        with RightsThrower():
-            msg = await sce.check_id(current_user, aphia_id)
-    # Below produces a chunked HTTP encoding, which is officially only HTTP 1.1 protocol
-    return Response(msg, media_type="text/plain")
-
-
-@app.get(
-    "/taxa_ref_change/matches",
-    operation_id="matching_with_worms_nice",
-    tags=["WIP"],
-    include_in_schema=False,
-    status_code=status.HTTP_200_OK,
-)
-def matching_with_worms_nice(
-    request: Request, current_user: int = 0  # Depends(get_current_user)
-) -> Response:  # pragma:nocover
-    """
-    Show current state of matches - HTML version.
-    """
-    params = request.query_params
-    with TaxonomyChangeService(0) as sce:
-        with RightsThrower():
-            # noinspection PyProtectedMember
-            data = sce.matching(current_user, params._dict)
-        return templates.TemplateResponse(
-            "worms.html",
-            {"request": request, "matches": data, "params": params},
-            headers=CRSF_header,
-        )
 
 
 @app.get(
