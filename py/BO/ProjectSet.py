@@ -178,7 +178,7 @@ class FeatureConsistentProjectSet(object):
         res = self.read_all()
         obj_ids: List[int] = []
         classif_ids: ClassifIDListT = []
-        rc = res.rowcount  # type:ignore  # case1
+        rc = res.rowcount  # type:ignore # case1
         np_table = self.np_read(res, rc, self.column_names, obj_ids, classif_ids, {})
         return np_table, obj_ids, classif_ids
 
@@ -267,7 +267,7 @@ class LimitedInCategoriesProjectSet(FeatureConsistentProjectSet):
             " WITH rndm AS ( SELECT objid, projid FROM"
             " ( SELECT sam2.projid, obh2.objid, "
             "          ROW_NUMBER() OVER (PARTITION BY obh2.classif_id "
-            "                             ORDER BY obh2.classif_id) rrank "  # TODO predictable random?
+            "                             ORDER BY HASHTEXT(obh2.orig_id)) rrank "  # TODO predictable random?
             "     FROM %s obh2"
             "     JOIN acquisitions acq2 ON acq2.acquisid = obh2.acquisid"
             "     JOIN samples sam2 ON sam2.sampleid = acq2.acq_sample_id "

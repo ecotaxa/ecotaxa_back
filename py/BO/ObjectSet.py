@@ -50,8 +50,7 @@ from BO.Taxonomy import TaxonomyBO
 from BO.Training import TrainingBO, PredictionBO
 from BO.User import UserIDT
 from BO.helpers.MappedTable import MappedTable
-from DB import Session, Query, Process, Taxonomy, User, ObjectCNNFeatureVector
-from DB.Taxonomy import TaxoStatus
+from DB import Session, Query, Process, User, ObjectCNNFeatureVector
 from DB.Acquisition import Acquisition
 from DB.Image import Image
 from DB.Object import (
@@ -68,9 +67,10 @@ from DB.Object import (
 from DB.Prediction import (
     PSEUDO_TRAINING_SCORE,
 )
-from BO.Project import ProjectBOSet, ProjectBO
 from DB.Project import ProjectIDListT, Project
 from DB.Sample import Sample
+from DB.Taxonomy import TaxoStatus
+from DB.Taxonomy import Taxonomy
 from DB.helpers import Result
 from DB.helpers.Core import select
 from DB.helpers.Direct import func
@@ -79,7 +79,6 @@ from DB.helpers.Postgres import pg_insert, PgInsert
 from DB.helpers.SQL import WhereClause, SQLParamDict, FromClause, OrderClause
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
-from DB.Taxonomy import Taxonomy
 
 # Typings, to be clear that these are not e.g. project IDs
 # Object_id + parents + project
@@ -917,7 +916,7 @@ class EnumeratedObjectSet(MappedTable):
             ]
         ).with_for_update(key_share=True)
         qry = qry.where(ObjectHeader.objid == any_(self.object_ids))
-        logger.info("Fetch with lock: %s", qry)
+        logger.debug("Fetch with lock: %s", qry)
         res: Result = self.session.execute(qry)
         prev = {rec["objid"]: rec for rec in res.fetchall()}
         return prev
@@ -1309,7 +1308,6 @@ class DescribedObjectBOSet(object):
             order_clause = OrderClause()
         # The filters on objects
         obj_where = WhereClause()
-        import json
 
         params: SQLParamDict = {
             "projid": ",".join([str(project_id) for project_id in self.project_ids])

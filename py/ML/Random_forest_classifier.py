@@ -41,6 +41,7 @@ class OurRandomForestClassifier(object):
             n_jobs=self.WORKERS,
             class_weight=self.CLASS_WEIGHT,
             verbose=True,
+            random_state=420,
         )  # TODO: verbose sends logs we can't see :(
 
     def learn_from(self, training_samples: np.ndarray, target_values: np.ndarray):

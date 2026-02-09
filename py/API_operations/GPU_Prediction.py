@@ -26,7 +26,6 @@ from DB.helpers.Direct import text
 from ML.Deep_features_extractor import DeepFeaturesExtractor
 from ML.Random_forest_classifier import OurRandomForestClassifier
 from helpers.DynamicLogs import get_logger
-
 # TODO: Move somewhere else
 from helpers.Timer import CodeTimer
 from .ObjectManager import ObjectManager
@@ -267,6 +266,7 @@ In second step 'Choice of Learning Set categories and size', where the learning 
         total_rows = tgt_res.rowcount  # type:ignore # case1
         done_count = 0
         nb_changes = 0
+        total_real_changes: Dict[Tuple, int] = {}
         while True:
             obj_ids: ObjectIDListT = []
             unused: ClassifIDListT = []
@@ -284,8 +284,14 @@ In second step 'Choice of Learning Set categories and size', where the learning 
             nb_upd, all_changes = target_obj_set.classify_auto_mult(
                 training, list_classif_ids, list_scores
             )
+            real_changes = {
+                k: len(v)
+                for k, v in all_changes.items()
+                if k[0] != k[2] or k[1] != k[3]
+            }
             nb_changes += nb_upd
-            logger.info("Changes :%s", str(all_changes)[:1000])
+            for k, v in real_changes.items():
+                total_real_changes[k] = total_real_changes.get(k, 0) + v
             training.advance()
             self.session.commit()
             if len(obj_ids) < self.CHUNK_SIZE:
@@ -293,6 +299,15 @@ In second step 'Choice of Learning Set categories and size', where the learning 
             done_count += len(obj_ids)
             progress = 25 + (75 * done_count / total_rows)
             self.update_progress(progress, "Classified %d rows" % done_count)
+        sorted_changes = dict(
+            sorted(total_real_changes.items(), key=lambda item: item[1], reverse=True)
+        )
+        nb_real_changes = sum(total_real_changes.values())
+        logger.info(
+            "Real changes: %s",
+            str(sorted_changes),
+        )
+        logger.info("Real changes: %d objects/%d", nb_real_changes, done_count)
         # Full update of projects_taxo_stat, we don't do incremental like in the API call
         ProjectBO.update_taxo_stats(self.session, self.req.project_id)
         self.session.commit()
