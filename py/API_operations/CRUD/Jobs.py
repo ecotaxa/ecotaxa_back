@@ -3,7 +3,7 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 from pathlib import Path
-from typing import Tuple, List, Any, Dict, TextIO
+from typing import Tuple, List, Any, Dict, TextIO, Optional
 
 from BG_operations.JobScheduler import JobScheduler
 from BO.Job import JobBO
@@ -23,7 +23,13 @@ class JobCRUDService(Service):
     They share temporary space with historical jobs AKA tasks.
     """
 
-    def list(self, current_user_id: UserIDT, admin_mode: bool) -> List[JobBO]:
+    def list(
+        self,
+        current_user_id: UserIDT,
+        admin_mode: bool,
+        job_type: Optional[str] = None,
+        job_status: Optional[DBJobStateEnum] = None,
+    ) -> List[JobBO]:
         """
         List jobs, if administrator mode then list all of them (for monitoring) else only return the jobs
         owned by caller.
@@ -37,6 +43,10 @@ class JobCRUDService(Service):
         qry = self.ro_session.query(Job).filter(Job.id > 0)
         if not admin_mode:
             qry = qry.filter(Job.owner_id == current_user_id)
+        if job_type:
+            qry = qry.filter(Job.type == job_type)
+        if job_status:
+            qry = qry.filter(Job.state == job_status)
         ret = [JobBO(a_job) for a_job in qry]
         return ret
 

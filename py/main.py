@@ -155,11 +155,11 @@ from BO.Sample import SampleBO, SampleTaxoStats
 from BO.Taxonomy import TaxonBO
 from BO.User import UserIDT, GuestIDT
 from DB import Sample
+from DB.Job import DBJobStateEnum
 from DB.Object import ObjectIDListT
 from DB.Project import ProjectTaxoStat, Project
 from DB.ProjectPrivilege import ProjectPrivilege
 from DB.User import User, OrganizationIDT
-from helpers.Asyncio import async_bg_run, log_streamer
 from helpers.DynamicLogs import get_logger, get_api_logger, MONITOR_LOG_PATH
 from helpers.fastApiUtils import (
     internal_server_error_handler,
@@ -3654,6 +3654,18 @@ def list_jobs(
         description="If FALSE return the jobs for current user, else return all of them.",
         example=False,
     ),
+    job_type: Optional[str] = Query(
+        None,
+        title="Job type",
+        description="Optionally filter by job type.",
+        example="Subset",
+    ),
+    job_status: Optional[DBJobStateEnum] = Query(
+        None,
+        title="Job status",
+        description="Optionally filter by job status.",
+        example=DBJobStateEnum.Finished,
+    ),
     current_user: int = Depends(get_current_user),
 ) -> List[JobBO]:
     """
@@ -3661,7 +3673,9 @@ def list_jobs(
     """
     with JobCRUDService() as sce:
         with RightsThrower():
-            ret: List[JobBO] = sce.list(current_user, for_admin)
+            ret: List[JobBO] = sce.list(
+                current_user, for_admin, job_type=job_type, job_status=job_status
+            )
     return ret
 
 
