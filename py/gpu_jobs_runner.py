@@ -21,10 +21,18 @@ def main():
     JobScheduler.INCLUDE = [GPUPredictForProject.JOB_TYPE]
     # As soon as something is running, exit and free all resources
     # the 'exit' will wait for the thread, i.e. job, to finish.
-    while JobScheduler.the_runner is None:
+    one_shot = os.environ.get("ONE_SHOT")
+    if one_shot:
+        # Run the one supposed to be present
         with JobScheduler() as sce:
             sce._run_one()
-        time.sleep(10)
+        if JobScheduler.the_runner is None:
+            print("WARNING: Nothing to do in one shot mode")
+    else:
+        while JobScheduler.the_runner is None:
+            with JobScheduler() as sce:
+                sce._run_one()
+            time.sleep(10)
 
 
 if __name__ == "__main__":
