@@ -920,7 +920,7 @@ def list_collections(
         title="Fields",
         description="Return the default fields (typically used in conjunction with an additional field list). For users list display purpose.",
         example="*default,fieldlist",
-    ),
+    ),  # TODO: Unused param
     current_user: int = Depends(get_current_user),
 ) -> List[CollectionBO]:
     """

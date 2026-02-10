@@ -1058,6 +1058,8 @@ class ProjectBOSet(object):
         with CodeTimer("%s BO projects query:" % len(prj_ids), logger):
             for (a_proj,) in session.execute(qry):
                 projs.append(a_proj)
+            # Force the same order as parameter, as we need the 'first' occurrence somewhere
+            projs.sort(key=lambda p: prj_ids.index(p.projid))
         # Build BOs and enrich
         with CodeTimer("%s BO projects init:" % len(projs), logger):
             self_projects_append = self.projects.append

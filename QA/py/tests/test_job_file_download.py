@@ -29,9 +29,6 @@ class FileProducingJob(JobServiceBase):
 
 
 def test_get_job_file(fastapi, database):
-    # Register our test job class
-    JobServiceBase.FileProducingJob = FileProducingJob
-
     file_name = FileProducingJob.PRODUCED_FILE_NAME
     test_content = FileProducingJob.TEST_CONTENT
 
@@ -42,7 +39,7 @@ def test_get_job_file(fastapi, database):
     assert job_id is not None
 
     job_dict = api_wait_for_stable_job(fastapi, job_id)
-    assert job_dict["state"] == "F"
+    assert job_dict["state"] == "F", job_dict
 
     download_url = JOB_DOWNLOAD_URL.format(job_id=job_id)
     rsp = fastapi.get(download_url, headers=ADMIN_AUTH)
@@ -75,13 +72,13 @@ def test_get_job_file(fastapi, database):
 
 
 def test_get_job_file_invalid_range(fastapi, database):
-    JobServiceBase.FileProducingJob = FileProducingJob
     with FileProducingJob() as job:
         job.run(ADMIN_USER_ID)
         job_id = job.job_id
     assert job_id is not None
     job_dict = api_wait_for_stable_job(fastapi, job_id)
-    assert job_dict["state"] == "F"
+    print(job_dict)
+    assert job_dict["state"] == "F", job_dict
 
     download_url = JOB_DOWNLOAD_URL.format(job_id=job_id)
 
