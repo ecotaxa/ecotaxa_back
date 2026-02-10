@@ -175,7 +175,7 @@ class MailProvider(object):
     def _log_error_code(e: Exception) -> Tuple[int, str]:
         code = 500
         detail = DETAIL_UNKNOWN_ERROR + ": '%s' , '%s'" % (type(e), e.args)
-        logger.error(code, detail)
+        logger.error(str(code) + ":" + detail)
         return code, detail
 
     @staticmethod
@@ -198,7 +198,7 @@ class MailProvider(object):
         else:
             code = 500
             detail = str(type(e)) + str(e.args)
-        logger.error(e, detail)
+        logger.error(str(e) + ":" + detail)
         return code, detail
 
     def send_activation_request_mail(
@@ -497,7 +497,7 @@ class MailProvider(object):
         except imaplib.IMAP4.error as e:
             code = 422
             detail = DETAIL_IMAP4_ERROR + str(e.args)
-            logger.info(code, detail)
+            logger.info(str(code) + ":" + detail)
         except Exception as e:
             _, _ = self._log_error_code(e)
 

@@ -73,7 +73,8 @@ mypy==1.2.0
 # END OF BACK-END REQUIREMENTS
 # Testing & QA additions
 tox==3.24.3
-pytest==6.2.5
+pytest==8.0.2
+pytest-mock==3.14.1
 pytest-asyncio==0.15.1
 coverage==5.5
 flake8==3.9.2
