@@ -113,17 +113,6 @@ class TaxonomyBO(object):
         return {an_id for an_id, in res}
 
     @staticmethod
-    def keep_phylo(session: Session, classif_id_seen: ClassifIDListT):
-        """
-        Return input IDs, for the existing ones with 'P' type.
-        """
-        sql = text(
-            "SELECT id " "  FROM taxonomy " " WHERE id = ANY (:een) AND taxotype = 'P'"
-        )
-        res: Result = session.execute(sql, {"een": list(classif_id_seen)})
-        return {an_id for an_id, in res}
-
-    @staticmethod
     def resolve_taxa(
         session: Session, taxo_lookup: Dict[str, Dict[str, Any]], taxon_lower_list
     ):
