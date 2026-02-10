@@ -30,7 +30,7 @@ from tests.test_classification import (
     query_all_objects,
     copepod_id,
     crustacea_id,
-    get_classif_history,
+    get_object_classif_history,
 )
 from tests.test_fastapi import PROJECT_QUERY_URL
 from tests.test_import import (
@@ -449,7 +449,7 @@ def test_export_roundtrip_self(database, fastapi, caplog, export_method):
             curr_obj = current_object(fastapi, an_obj)
             info = {k: v for k, v in curr_obj.items() if k.startswith("classif")}
             print(info)
-            an_hist = get_classif_history(fastapi, an_obj)
+            an_hist = get_object_classif_history(fastapi, an_obj)
             for hist in sorted(
                 an_hist,
                 key=lambda x: datetime.datetime.fromisoformat(x["classif_date"]),
@@ -459,7 +459,7 @@ def test_export_roundtrip_self(database, fastapi, caplog, export_method):
             print()
 
     for an_obj in obj_ids:
-        an_hist = get_classif_history(fastapi, an_obj)
+        an_hist = get_object_classif_history(fastapi, an_obj)
         assert len(an_hist) == 4
 
     # Restore a second time the same first backup
@@ -474,7 +474,7 @@ def test_export_roundtrip_self(database, fastapi, caplog, export_method):
     assert nb_upds == 0
     # Not more history
     for an_obj in obj_ids:
-        an_hist = get_classif_history(fastapi, an_obj)
+        an_hist = get_object_classif_history(fastapi, an_obj)
         assert len(an_hist) == 4
 
     # Restore the second backup, i.e. back in time
@@ -489,7 +489,7 @@ def test_export_roundtrip_self(database, fastapi, caplog, export_method):
     assert nb_upds == 15
     # Not more history as all was historized before
     for an_obj in obj_ids:
-        an_hist = get_classif_history(fastapi, an_obj)
+        an_hist = get_object_classif_history(fastapi, an_obj)
         assert len(an_hist) == 4
 
 

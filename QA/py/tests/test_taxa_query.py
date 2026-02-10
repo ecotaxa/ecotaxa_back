@@ -7,6 +7,67 @@ TAXA_SEARCH_URL = "/taxon_set/search?query={query}&project_id={project_id}"
 TAXA_QUERY_URL = "/taxon/{taxon_id}"
 TAXA_SET_QUERY_URL = "/taxon_set/query?ids={taxa_ids}"
 WORMS_TAXA_QUERY_URL = "/worms/{aphia_id}"
+ROOT_TAXA_URL = "/taxa"
+
+
+def test_root_taxa(fastapi, caplog):
+    caplog.set_level(logging.ERROR)
+    url = ROOT_TAXA_URL
+    # Unauthenticated call
+    rsp = fastapi.get(url)
+    assert rsp.status_code == status.HTTP_200_OK
+    json = rsp.json()
+    [a_taxon["children"].sort() for a_taxon in json]
+    assert json == [
+        {
+            "aphia_id": 1,
+            "children": [2, 3, 4, 6, 2367, 2371, 85011, 85183, 99999, 100002, 100059],
+            "display_name": "Biota",
+            "id": 1,
+            "id_lineage": [1],
+            "lineage": ["Biota"],
+            "lineage_status": "A",
+            "name": "Biota",
+            "nb_children_objects": 0,
+            "nb_objects": 0,
+            "rank": "Superdomain",
+            "renm_id": None,
+            "status": "A",
+            "type": "P",
+        },
+        {
+            "aphia_id": None,
+            "children": [85012, 85013, 85014, 85015, 85016],
+            "display_name": "temporary<",
+            "id": 84959,
+            "id_lineage": [84959],
+            "lineage": ["temporary"],
+            "lineage_status": "A",
+            "name": "temporary",
+            "nb_children_objects": 0,
+            "nb_objects": 0,
+            "rank": None,
+            "renm_id": None,
+            "status": "A",
+            "type": "M",
+        },
+        {
+            "aphia_id": None,
+            "children": [84962, 84963, 85008],
+            "display_name": "not-living",
+            "id": 84960,
+            "id_lineage": [84960],
+            "lineage": ["not-living"],
+            "lineage_status": "A",
+            "name": "not-living",
+            "nb_children_objects": 0,
+            "nb_objects": 0,
+            "rank": None,
+            "renm_id": None,
+            "status": "A",
+            "type": "M",
+        },
+    ]
 
 
 def test_taxotree_query(database, fastapi, caplog):

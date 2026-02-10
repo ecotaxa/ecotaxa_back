@@ -57,7 +57,7 @@ crustacea_id = 12846
 minidiscus_id = 28234
 
 
-def get_classif_history(fastapi, object_id):
+def get_object_classif_history(fastapi, object_id):
     url = OBJECT_HISTORY_QUERY_URL.format(object_id=object_id)
     response = fastapi.get(url, headers=ADMIN_AUTH)
     assert response.status_code == status.HTTP_200_OK
@@ -520,7 +520,7 @@ def test_classif(database, fastapi, caplog, tstlogs):
     }
 
     # Check history for first object
-    classif = get_classif_history(fastapi, obj_ids[0])
+    classif = get_object_classif_history(fastapi, obj_ids[0])
     assert len(classif) == 1
     assert classif[0]["classif_date"] is not None  # e.g. 2021-09-12T09:28:03.278626
     classif[0]["classif_date"] = "now"
@@ -611,7 +611,7 @@ def test_classif(database, fastapi, caplog, tstlogs):
     assert get_predictions_stats(obj_ids) == pred_stats_after_classify_all
 
     # History stack of twice-predicted object, once rolled-back object
-    classif2 = get_classif_history(fastapi, obj_ids[1])
+    classif2 = get_object_classif_history(fastapi, obj_ids[1])
     assert classif2 is not None
     # Date is not predictable
     classif2[0]["classif_date"] = "hopefully just now"

@@ -66,7 +66,7 @@ def get_job_errors(job) -> List[str]:
     return msgs
 
 
-def api_wait_for_stable_job(fastapi, job_id, max_wait=20):
+def api_wait_for_stable_job(fastapi, job_id, max_wait=200):
     url = JOB_QUERY_URL.format(job_id=job_id)
     waited = 0
     while True:
@@ -74,7 +74,7 @@ def api_wait_for_stable_job(fastapi, job_id, max_wait=20):
         job_dict = rsp.json()
         if job_dict["state"] in JOB_STABLE_STATES:
             return job_dict
-        time.sleep(0.1)
+        time.sleep(0.01)
         waited += 1
         if waited > max_wait:
             assert False, "Waited too long, job: %s" + str(job_dict)

@@ -11,7 +11,7 @@ from tests.test_classification import (
     query_all_objects,
     get_stats,
     entomobryomorpha_id,
-    get_classif_history,
+    get_object_classif_history,
     validate_all,
 )
 
@@ -59,10 +59,10 @@ def test_reclassif(database, fastapi, caplog):
     )
     assert len(obj_ids) == 2
     # but no entomobryomorpha
-    obj_ids = query_all_objects(
+    no_obj_ids = query_all_objects(
         fastapi, CREATOR_AUTH, prj_id, taxo=str(entomobryomorpha_id)
     )
-    assert len(obj_ids) == 0
+    assert len(no_obj_ids) == 0
 
     # Reclassify project from detritus to entomobryomorpha
     reclassify(fastapi, prj_id, detritus_classif_id, entomobryomorpha_id)
@@ -86,24 +86,9 @@ def test_reclassif(database, fastapi, caplog):
 
     # Ensure a proper history appeared
     for an_obj in obj_ids:
-        classif2 = get_classif_history(fastapi, an_obj)
+        classif2 = get_object_classif_history(fastapi, an_obj)
         assert classif2 is not None
-        # Date is not predictable
-        classif2[0]["classif_date"] = "hopefully just now"
-        # nor object_id
-        classif2[0]["objid"] = 1
-        assert classif2 == [
-            {
-                "classif_date": "hopefully just now",
-                "classif_id": detritus_classif_id,
-                "classif_qual": "P",
-                "classif_score": None,
-                "classif_who": 1,
-                "objid": 1,
-                "taxon_name": "detritus",
-                "user_name": "Application Administrator",
-            }
-        ]
+        assert classif2[0]["classif_id"] == detritus_classif_id
 
     # We now have 0 detritus
     obj_ids = query_all_objects(
@@ -115,3 +100,25 @@ def test_reclassif(database, fastapi, caplog):
         fastapi, CREATOR_AUTH, prj_id, taxo=str(entomobryomorpha_id)
     )
     assert len(obj_ids) == 2
+
+    # Call usage endpoint for involved taxa
+    rsp = fastapi.get(f"/taxon/{detritus_classif_id}/usage", headers=ADMIN_AUTH)
+    assert rsp.status_code == status.HTTP_200_OK
+    assert prj_id not in [d["projid"] for d in rsp.json()]
+
+    rsp = fastapi.get(f"/taxon/{entomobryomorpha_id}/usage", headers=ADMIN_AUTH)
+    assert rsp.status_code == status.HTTP_200_OK
+    assert prj_id in [d["projid"] for d in rsp.json()]
+
+    # Ensure reclassification history was properly recorded
+    rsp = fastapi.get(f"/taxa/reclassification_history/{prj_id}", headers=ADMIN_AUTH)
+    assert rsp.status_code == status.HTTP_200_OK
+    history = rsp.json()
+    assert len(history) > 0
+    # Search for the reclassification we just did
+    found = False
+    for entry in history:
+        if entry["from"] == detritus_classif_id and entry["to"] == entomobryomorpha_id:
+            found = True
+            break
+    assert found

@@ -8,6 +8,7 @@ from tests.export_shared import get_log_file
 from tests.jobs import wait_for_stable, check_job_ok
 
 PROJECT_DIGEST_URL = "/admin/images/{project_id}/digest?max_digests=100"
+DIGEST_URL = "/admin/images/digest"
 NIGHTLY_URL = "/admin/nightly"
 
 
@@ -32,6 +33,10 @@ def test_admin_images(database, fastapi, caplog):
 
     # md5 is persisted
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
+    assert rsp.status_code == status.HTTP_200_OK
+    assert rsp.json() == "Digest for 0 images done."
+
+    rsp = fastapi.get(DIGEST_URL, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
     assert rsp.json() == "Digest for 0 images done."
 

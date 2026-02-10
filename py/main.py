@@ -3496,7 +3496,7 @@ def digest_project_images(
     tags=["WIP"],
     include_in_schema=False,
     response_model=str,
-)
+)  # TODO: Looks like a duplicate of above
 def digest_images(
     max_digests: Optional[int] = Query(
         default=100000, description="Number of images to scan."
@@ -3653,7 +3653,7 @@ def list_jobs(
         title="For admin",
         description="If FALSE return the jobs for current user, else return all of them.",
         example=False,
-    ),
+    ),  # TODO: Could be optional default False
     current_user: int = Depends(get_current_user),
 ) -> List[JobBO]:
     """
