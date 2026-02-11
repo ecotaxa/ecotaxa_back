@@ -126,6 +126,7 @@ def test_api_import_images(fastapi, title):
         srv_file_path = upload_rsp.json()
 
     url = IMPORT_IMAGES_URL.format(project_id=prj_id, dry_run=False)
+    srv_file_path = srv_file_path.replace(".zip", "")  # New MyFile unzips automatically
     req = {"source_path": srv_file_path, "values": {}}
     rsp = fastapi.post(url, headers=CREATOR_AUTH, json=req)
     assert rsp.status_code == status.HTTP_200_OK

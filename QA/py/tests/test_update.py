@@ -35,8 +35,7 @@ def upd(col, val) -> ColUpdate:
     return ret
 
 
-def test_updates(fastapi, caplog, tstlogs):
-    caplog.set_level(logging.ERROR)
+def test_updates(fastapi, tstlogs):
     prj_id = do_import_uvp6(fastapi, "Test Updates")
     check_project(tstlogs, prj_id)
 

@@ -157,9 +157,8 @@ def test_taxotree_query(fastapi):
     ]
 
 
-def test_taxo_query(fastapi, caplog):
+def test_taxo_query(fastapi):
     """This depends on the DB which has a subset of the production one"""
-    caplog.set_level(logging.ERROR)
     prj_id = do_test_import(fastapi, "Test taxo query")
 
     url = TAXA_QUERY_URL.format(taxon_id=849)
@@ -189,7 +188,7 @@ def test_taxo_query(fastapi, caplog):
     }
 
 
-def test_worms_query(fastapi, caplog):
+def test_worms_query(fastapi):
     url = WORMS_TAXA_QUERY_URL.format(aphia_id=128586)
     # Unauthenticated call
     rsp = fastapi.get(url)

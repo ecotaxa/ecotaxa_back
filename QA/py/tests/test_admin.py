@@ -14,8 +14,7 @@ DIGEST_URL = "/admin/images/digest"
 NIGHTLY_URL = "/admin/nightly"
 
 
-def test_admin_images(fastapi, caplog):
-    caplog.set_level(logging.ERROR)
+def test_admin_images(fastapi):
 
     prj_id = do_import_uvp6(fastapi, "Test Project Admin")
 

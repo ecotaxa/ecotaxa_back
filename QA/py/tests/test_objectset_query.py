@@ -36,8 +36,7 @@ def _prj_query(
     return obj_ids if fields is None else (obj_ids, details)
 
 
-def test_queries(fastapi, caplog):
-    caplog.set_level(logging.ERROR)
+def test_queries(fastapi):
 
     # Admin imports the project
 
@@ -89,9 +88,8 @@ def test_queries(fastapi, caplog):
     assert there_was_a_mini
 
 
-def test_all_fields(fastapi, caplog):
+def test_all_fields(fastapi):
     # Ensure that all API-documented fields work
-    caplog.set_level(logging.ERROR)
 
     # Admin imports the project
     prj_id = do_test_import(fastapi, "Full Queries test project")

@@ -22,8 +22,7 @@ INSTRUMENT_QUERY_URL = "/instruments/?project_ids={project_id}"
 
 
 @pytest.mark.parametrize("who", [ADMIN_AUTH, CREATOR_AUTH])
-def test_collection_lifecycle(fastapi, caplog, who):
-    caplog.set_level(logging.INFO)
+def test_collection_lifecycle(fastapi, who):
 
     # Admin (always) imports the project
     prj_id = do_test_import(

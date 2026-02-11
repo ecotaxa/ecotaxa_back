@@ -10,8 +10,7 @@ NEW_GUEST_ID = 13
 
 
 # WARNING must run after all test_user keep the test_v_guest.py name
-def test_guest_create(fastapi, caplog):
-    caplog.set_level(logging.FATAL)
+def test_guest_create(fastapi):
 
     # Create as an admin
     url = GUEST_CREATE_URL
@@ -36,8 +35,7 @@ def test_guest_create(fastapi, caplog):
     assert rsp.json() == NEW_GUEST_ID
 
 
-def test_guest_update(fastapi, caplog):
-    caplog.set_level(logging.FATAL)
+def test_guest_update(fastapi):
 
     url = GUEST_GET_URL.format(ids=ORDINARY_GUEST_GUEST_ID)
     rsp = fastapi.get(url, headers=ADMIN_AUTH)

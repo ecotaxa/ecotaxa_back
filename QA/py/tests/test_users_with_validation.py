@@ -134,8 +134,7 @@ def verify_user(fastapi, id, auth, res_user):
         return None
 
 
-def test_user_create_with_confirmation(monkeypatch, fastapi, caplog):
-    caplog.set_level(logging.FATAL)
+def test_user_create_with_confirmation(monkeypatch, fastapi):
     # modify config to have user validation "off"
     set_config_on(monkeypatch, "off")
     email = "myemail_confirm777@mailtest.provider.net"
@@ -381,8 +380,7 @@ def test_user_create_with_confirmation(monkeypatch, fastapi, caplog):
     )
 
 
-def test_user_create_with_validation(monkeypatch, fastapi, caplog):
-    caplog.set_level(logging.FATAL)
+def test_user_create_with_validation(monkeypatch, fastapi):
     # modify config to have user validation "on"v
     set_config_on(monkeypatch)
     # Create user email no bot

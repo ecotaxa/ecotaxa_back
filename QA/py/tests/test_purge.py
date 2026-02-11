@@ -14,8 +14,7 @@ from tests.test_import import ADMIN_USER_ID, do_test_import
 
 # Note: to go faster in a local dev environment, use "filled_database" instead of "database" below
 # BUT DON'T COMMIT THE CHANGE
-def test_purge_plain(fastapi, caplog):
-    caplog.set_level(logging.ERROR)
+def test_purge_plain(fastapi):
     prj_id = do_test_import(fastapi, "Test Purge")
     # Delete full
     with ProjectsService() as sce:
@@ -26,8 +25,7 @@ def test_purge_plain(fastapi, caplog):
             sce.delete(current_user_id=ADMIN_USER_ID, prj_id=prj_id, only_objects=False)
 
 
-def test_purge_partial(fastapi, caplog, tstlogs):
-    caplog.set_level(logging.ERROR)
+def test_purge_partial(fastapi, tstlogs):
     prj_id = do_test_import(fastapi, "Test Purge partial")
     # Delete using wrong object IDs
     obj_ids = [500000 + i for i in range(15)]

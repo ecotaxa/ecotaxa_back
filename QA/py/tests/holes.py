@@ -28,8 +28,7 @@ def _get_object_set_stats(fastapi, prj_id, extra, exp_status, exp_text):
     assert str(stats_rsp.text) == exp_text
 
 
-def test_status(fastapi, caplog):
-    caplog.set_level(logging.ERROR)
+def test_status(fastapi):
 
     prj_id = do_test_import(fastapi, "Hole 003")
     _get_object_set_stats(

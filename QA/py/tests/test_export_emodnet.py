@@ -75,17 +75,14 @@ all_colls = {}
 
 
 @pytest.fixture
-def exportable_collection(fastapi, caplog, admin_or_creator):
+def exportable_collection(fastapi, admin_or_creator):
     if str(admin_or_creator) in all_colls:
         yield all_colls[str(admin_or_creator)]
         return
-    caplog.set_level(logging.FATAL)
 
     coll_id, coll_title, prj_id = create_test_collection(
-        fastapi, caplog, "exp", admin_or_creator
+        fastapi, "exp", admin_or_creator
     )
-
-    caplog.set_level(logging.DEBUG)
 
     # Admin exports it
     # First attempt with LOTS of missing data
@@ -394,7 +391,7 @@ def test_permalink_query(fastapi, exportable_collection, admin_or_creator):
     assert coll_desc["title"] == coll_title
 
 
-def create_test_collection(fastapi, caplog, suffix, who=ADMIN_AUTH):
+def create_test_collection(fastapi, suffix, who=ADMIN_AUTH):
     # In these TSVs, we have: object_major, object_minor, object_area, process_pixel
     # Admin imports the project
     from tests.test_import import (

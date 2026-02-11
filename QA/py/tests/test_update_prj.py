@@ -21,10 +21,8 @@ PROJECT_SETTINGS_UPDATE_URL = (
 )
 
 
-def test_update_prj(fastapi, caplog):
+def test_update_prj(fastapi):
     from tests.test_project_vars import BODC_VARS_KEY
-
-    caplog.set_level(logging.ERROR)
 
     prj_id = do_import_uvp6(fastapi, "Test Project Updates")
     # Do like in legacy app, i.e. fetch/modify/resend
@@ -234,8 +232,7 @@ def test_update_prj(fastapi, caplog):
     )
 
 
-def test_update_prj_pred_settings(fastapi, caplog):
-    caplog.set_level(logging.ERROR)
+def test_update_prj_pred_settings(fastapi):
 
     prj_id = do_import_uvp6(fastapi, "Test Project Settings Updates")
     # Do like in legacy app, i.e. fetch/modify/resend
@@ -282,10 +279,8 @@ def test_update_prj_pred_settings(fastapi, caplog):
     assert read_json["classifsettings"] == new_settings
 
 
-def test_update_prj_bodc_vars(fastapi, caplog):
+def test_update_prj_bodc_vars(fastapi):
     from tests.test_project_vars import BODC_VARS_KEY
-
-    caplog.set_level(logging.ERROR)
 
     prj_id = do_import_uvp6(fastapi, "Test Project Variables Updates")
 

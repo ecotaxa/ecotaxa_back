@@ -1343,7 +1343,7 @@ MERGE_DIR_3 = DATA_DIR / "merge_test" / "even_more_cols"
 MERGE_DIR_4 = DATA_DIR / "merge_test" / "second_merge"
 
 
-def test_merge_remap(fastapi, caplog, tstlogs):
+def test_merge_remap(fastapi, tstlogs):
     # Project 1, usual columns
     prj_id = create_project(CREATOR_USER_ID, "Merge Dest project")
     do_import(fastapi, prj_id, MERGE_DIR_1, CREATOR_AUTH)

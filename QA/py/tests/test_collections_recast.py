@@ -12,8 +12,8 @@ COLLECTION_CREATE_URL = "/collections/create"
 COLLECTION_TAXO_RECAST_URL = "/collections/{collection_id}/taxo_recast"
 
 
-def test_collection_taxo_recast(fastapi, caplog):
-    coll_id, coll_title, prj_id = create_test_collection(fastapi, caplog, "api_ok")
+def test_collection_taxo_recast(fastapi):
+    coll_id, coll_title, prj_id = create_test_collection(fastapi, "api_ok")
     url = COLLECTION_TAXO_RECAST_URL.format(collection_id=coll_id)
     # Example write
     recast = {"from_to": {12345: None, 6789: 123}, "doc": {6789: "Bump up one level"}}
@@ -25,8 +25,8 @@ def test_collection_taxo_recast(fastapi, caplog):
     assert rsp2.json() == json.loads(json.dumps(recast))
 
 
-def test_collection_taxo_recast_endpoint(fastapi, caplog):
-    coll_id, coll_title, prj_id = create_test_collection(fastapi, caplog, "api_ko")
+def test_collection_taxo_recast_endpoint(fastapi):
+    coll_id, coll_title, prj_id = create_test_collection(fastapi, "api_ko")
     url = COLLECTION_TAXO_RECAST_URL.format(collection_id=coll_id)
     # Example wrong write
     recast = {

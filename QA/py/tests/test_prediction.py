@@ -22,15 +22,12 @@ OBJECT_SET_PREDICT_URL = "/object_set/predict"
 # from API_operations.GPU_Prediction import GPUPredictForProject
 
 
-def no_test_basic_prediction(fastapi, caplog):
-    caplog.set_level(logging.FATAL)
+def no_test_basic_prediction(fastapi):
 
     # Admin imports the project
     prj_id = do_test_import(fastapi, "TSV export project")
     # Add a sample spanning 2 days
-    test_import_a_bit_more_skipping(database, caplog, "TSV export project")
-
-    caplog.set_level(logging.DEBUG)
+    test_import_a_bit_more_skipping(database, "TSV export project")
 
     # Admin predicts
     url = OBJECT_SET_PREDICT_URL

@@ -23,6 +23,7 @@ def fastapi(config, database, tstlogs) -> Generator[TestClient, Any, None]:
     from helpers import fastApiUtils
 
     fastApiUtils.build_serializer()
+    main.logger.setLevel(logging.CRITICAL)
     sav_loads = fastApiUtils._serializer.loads
     fastApiUtils._serializer.loads = lambda s, max_age: {"user_id": s}
     main.JOB_INTERVAL = 0.01

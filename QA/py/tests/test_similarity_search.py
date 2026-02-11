@@ -20,8 +20,7 @@ def similarity_scores(distances_to_target):
     return [round(1 - d / max(distances_to_target), 4) for d in distances_to_target]
 
 
-def test_similarity_search(fastapi, caplog):
-    caplog.set_level(logging.ERROR)
+def test_similarity_search(fastapi):
 
     prj_id = do_test_import(fastapi, "Test Similarity Search")
 

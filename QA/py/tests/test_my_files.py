@@ -33,11 +33,10 @@ DIRPATH = "XXX"
 
 
 @pytest.mark.parametrize("title", ["Try my files"])
-def test_my_files(fastapi, caplog, tstlogs, title):
+def test_my_files(fastapi, tstlogs, title):
     """
     Simple import with no fixed values at all, but using the upload directory.
     """
-    caplog.set_level(logging.DEBUG)
     prj_id = create_project(CREATOR_USER_ID, title)
 
     DEST_FILE_NAME = "LOKI_46-24hours_01.zip"

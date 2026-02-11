@@ -16,8 +16,7 @@ PROJECT_FREE_COLS_STATS_URL = "/projects/{project_id}/stats"
 PROJECT_RECOMPUTE = "/projects/{project_id}/recompute_sunpos"
 
 
-def test_project_stats(fastapi, caplog):
-    caplog.set_level(logging.FATAL)
+def test_project_stats(fastapi):
 
     # Admin imports the project
 
@@ -73,8 +72,7 @@ def test_project_stats(fastapi, caplog):
     assert actual == expected
 
 
-def test_project_redo_sunpos(fastapi, caplog):
-    caplog.set_level(logging.FATAL)
+def test_project_redo_sunpos(fastapi):
 
     # Admin imports the project
     prj_id = do_test_import(fastapi, "Sunpos test project")

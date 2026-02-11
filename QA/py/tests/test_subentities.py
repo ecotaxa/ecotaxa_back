@@ -41,8 +41,7 @@ def test_check_project_via_api(prj_id: int, fastapi):
 
 # Note: to go faster in a local dev environment, use "filled_database" instead of "database" below
 # BUT DON'T COMMIT THE CHANGE
-def test_subentities(database, fastapi, caplog, tstlogs):
-    caplog.set_level(logging.ERROR)
+def test_subentities(database, fastapi, tstlogs):
 
     prj_id = do_import_uvp6(fastapi, "Test Subset Merge")
     check_project(tstlogs, prj_id)

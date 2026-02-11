@@ -10,9 +10,8 @@ from tests.credentials import USER_AUTH
 TREE_STATUS_URL = "/taxa/status"
 
 
-def test_taxotree_status(fastapi, caplog):
+def test_taxotree_status(fastapi):
     """This depends on the DB which has a subset of the production one"""
-    caplog.set_level(logging.ERROR)
 
     url = TREE_STATUS_URL
     # Unauthenticated call

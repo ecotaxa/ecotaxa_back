@@ -32,8 +32,7 @@ def reclassify(fastapi, prj_id, from_id, to_id):
 
 
 # Simulate change of taxo system, search&replace taxon ref with another
-def test_reclassif(fastapi, caplog):
-    caplog.set_level(logging.ERROR)
+def test_reclassif(fastapi):
 
     prj_id = do_test_import(fastapi, "Test Reclassify/Validate")
 
