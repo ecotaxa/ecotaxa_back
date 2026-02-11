@@ -49,7 +49,7 @@ BODC_VARS_KEY = "bodc_variables"
 
 def test_project_vars(fastapi):
     prj_id = create_project(ADMIN_USER_ID, "Stored Vars", "CPICS")
-    do_import(prj_id, BAD_FREE_DIR, ADMIN_USER_ID)
+    do_import(fastapi, prj_id, BAD_FREE_DIR, ADMIN_AUTH)
     # Do like in legacy app, i.e. fetch/modify/resend
     url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
     rsp = fastapi.get(url, headers=ADMIN_AUTH)

@@ -17,7 +17,12 @@ from deepdiff import DeepDiff
 from starlette import status
 
 from tests.test_fastapi import ADMIN_AUTH
-from tests.test_import import ADMIN_USER_ID, test_import_uvp6, dump_project
+from tests.test_import import (
+    ADMIN_USER_ID,
+    test_import_uvp6,
+    dump_project,
+    do_import_uvp6,
+)
 from tests.test_import_simple import test_import_images_only
 from tests.prj_utils import check_project
 
@@ -30,9 +35,9 @@ def upd(col, val) -> ColUpdate:
     return ret
 
 
-def test_updates(database, caplog, tstlogs):
+def test_updates(fastapi, caplog, tstlogs):
     caplog.set_level(logging.ERROR)
-    prj_id = test_import_uvp6(database, caplog, "Test Updates")
+    prj_id = do_import_uvp6(fastapi, "Test Updates")
     check_project(tstlogs, prj_id)
 
     acquis_id, process_id, sample_id = _get_ids(tstlogs, prj_id)
@@ -279,8 +284,8 @@ PROCESS_SET_UPDATE_URL = "/process_set/update"
 OBJECT_SET_UPDATE_URL = "/object_set/update"
 
 
-def test_api_updates(database, fastapi, caplog, tstlogs):
-    prj_id = test_import_images_only(database, caplog, title="API updates test")
+def test_api_updates(fastapi, caplog, tstlogs):
+    prj_id = test_import_images_only(fastapi, caplog, title="API updates test")
 
     # Recompute geo, which is a kind of update
     url = RECOMPUTE_GEO_URL.format(project_id=prj_id)

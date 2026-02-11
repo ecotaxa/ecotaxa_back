@@ -3,6 +3,8 @@ from urllib.parse import quote_plus
 
 from starlette import status
 
+from tests.test_import import do_test_import
+
 TAXA_SEARCH_URL = "/taxon_set/search?query={query}&project_id={project_id}"
 TAXA_QUERY_URL = "/taxon/{taxon_id}"
 TAXA_SET_QUERY_URL = "/taxon_set/query?ids={taxa_ids}"
@@ -10,14 +12,16 @@ WORMS_TAXA_QUERY_URL = "/worms/{aphia_id}"
 ROOT_TAXA_URL = "/taxa"
 
 
-def test_root_taxa(fastapi, caplog):
-    caplog.set_level(logging.ERROR)
+def test_root_taxa(fastapi):
     url = ROOT_TAXA_URL
     # Unauthenticated call
     rsp = fastapi.get(url)
     assert rsp.status_code == status.HTTP_200_OK
     json = rsp.json()
-    [a_taxon["children"].sort() for a_taxon in json]
+    for a_taxon in json:
+        a_taxon["nb_objects"] = 0  # Unpredictable
+        a_taxon["children"].sort()
+    json.sort(key=lambda a_taxon: a_taxon["id"])
     assert json == [
         {
             "aphia_id": 1,
@@ -70,12 +74,10 @@ def test_root_taxa(fastapi, caplog):
     ]
 
 
-def test_taxotree_query(database, fastapi, caplog):
+def test_taxotree_query(fastapi):
     """This depends on the DB which has a subset of the production one"""
-    caplog.set_level(logging.ERROR)
-    from tests.test_import import test_import
 
-    prj_id = test_import(database, caplog, "Test taxo search")
+    prj_id = do_test_import(fastapi, "Test taxo search")
 
     url = TAXA_SEARCH_URL.format(project_id=prj_id, query="")
     # Unauthenticated call
@@ -155,12 +157,10 @@ def test_taxotree_query(database, fastapi, caplog):
     ]
 
 
-def test_taxo_query(database, fastapi, caplog):
+def test_taxo_query(fastapi, caplog):
     """This depends on the DB which has a subset of the production one"""
     caplog.set_level(logging.ERROR)
-    from tests.test_import import test_import
-
-    prj_id = test_import(database, caplog, "Test taxo query")
+    prj_id = do_test_import(fastapi, "Test taxo query")
 
     url = TAXA_QUERY_URL.format(taxon_id=849)
     # Unauthenticated call

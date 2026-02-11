@@ -20,7 +20,7 @@ from tests.credentials import (
     CREATOR_USER_ID,
 )
 from tests.prj_utils import sce_check_consistency
-from tests.test_import import VARIOUS_STATES_DIR
+from tests.test_import import VARIOUS_STATES_DIR, do_test_import
 from tests.test_import import create_project, import_various
 from tests.test_objectset_query import OBJECT_SET_QUERY_URL
 from tests.test_prj_admin import PROJECT_CLASSIF_STATS_URL
@@ -263,12 +263,10 @@ def classify_auto_incorrect(fastapi, obj_ids):
 
 # Note: to go faster in a local dev environment, use "filled_database" instead of "database" below
 # BUT DON'T COMMIT THE CHANGE
-def test_classif(database, fastapi, caplog, tstlogs):
-    caplog.set_level(logging.ERROR)
-    from tests.test_import import test_import
+def test_classif(fastapi, tstlogs):
 
-    prj_id = test_import(
-        database, caplog, "Test Classify/Validate", path=str(VARIOUS_STATES_DIR)
+    prj_id = do_test_import(
+        fastapi, "Test Classify/Validate", path=str(VARIOUS_STATES_DIR)
     )
     sce_check_consistency("start")
 
@@ -866,13 +864,9 @@ def dry_run_revert(fastapi, prj_id):
     return stats
 
 
-def test_reset_fresh_import(database, fastapi, caplog):
-    caplog.set_level(logging.ERROR)
-    from tests.test_import import test_import
+def test_reset_fresh_import(fastapi):
 
-    prj_id = test_import(
-        database, caplog, "Test reset to pred", path=str(VARIOUS_STATES_DIR)
-    )
+    prj_id = do_test_import(fastapi, "Test reset to pred", path=str(VARIOUS_STATES_DIR))
 
     # Reset all to predicted
     url = OBJECT_SET_RESET_PREDICTED_URL.format(project_id=prj_id)
@@ -889,8 +883,7 @@ def test_reset_fresh_import(database, fastapi, caplog):
     }
 
 
-def test_revert_to_predicted(database, fastapi, caplog):
-    caplog.set_level(logging.ERROR)
+def test_revert_to_predicted(fastapi):
     prj_id = create_project(CREATOR_USER_ID, "Test Revert To Predicted")
 
     import_various(fastapi, prj_id)

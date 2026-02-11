@@ -11,6 +11,7 @@ from deepdiff.helper import TREE_VIEW
 # noinspection PyPackageRequirements
 from starlette import status
 
+from tests.api_wrappers import api_wait_for_stable_job, JOB_QUERY_URL
 from tests.credentials import (
     ADMIN_AUTH,
     ADMIN_USER_ID,
@@ -20,11 +21,10 @@ from tests.credentials import (
 )
 from tests.export_shared import download_and_unzip_and_check, download_and_check
 from tests.jobs import (
-    JOB_QUERY_URL,
-    wait_for_stable,
     api_check_job_ok,
     get_job_and_wait_until_ok,
 )
+from tests.logspy_feature import DBWRITER_LOG
 from tests.test_classification import (
     classify_all,
     query_all_objects,
@@ -39,8 +39,11 @@ from tests.test_import import (
     DATA_DIR,
     dump_project,
     PLUS_MORE_DIR,
+    do_import_uvp6,
+    do_test_import,
+    do_import_a_bit_more_skipping,
 )
-from tests.test_import_update import do_import_update
+from tests.test_import_update import do_import_update, IMPORT_JOB_LOG
 from tests.test_subentities import current_object
 from tests.test_update_prj import PROJECT_UPDATE_URL
 
@@ -76,15 +79,12 @@ OBJECT_SET_GENERAL_EXPORT_URL = "/object_set/export/general"
 OBJECT_SET_BACKUP_EXPORT_URL = "/object_set/export/backup"
 
 
-def test_export_tsv(database, fastapi, caplog):
-    caplog.set_level(logging.FATAL)
+def test_export_tsv(fastapi):
 
     # Admin imports the project
-    from tests.test_import import test_import, test_import_a_bit_more_skipping
-
-    prj_id = test_import(database, caplog, "TSV export project")
+    prj_id = do_test_import(fastapi, "TSV export project")
     # Add a sample spanning 2 days
-    test_import_a_bit_more_skipping(database, caplog, "TSV export project")
+    do_import_a_bit_more_skipping(fastapi, "TSV export project")
 
     # Backup export, the output is reused in another test
     req_and_filters = {
@@ -102,16 +102,12 @@ def test_export_tsv(database, fastapi, caplog):
     download_and_unzip_and_check(fastapi, job_id, "bak_all_images")
 
     # Add a complement of the new sample, for _several_ objects with composed taxon names
-    test_import_a_bit_more_skipping(
-        database, caplog, "TSV export project", str(PLUS_MORE_DIR)
-    )
+    do_import_a_bit_more_skipping(fastapi, "TSV export project", str(PLUS_MORE_DIR))
 
     # Get the project for update
     url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     _prj_json = rsp.json()
-
-    caplog.set_level(logging.DEBUG)
 
     # Admin exports it
     req_and_filters = {
@@ -182,23 +178,18 @@ def test_export_tsv(database, fastapi, caplog):
     download_and_unzip_and_check(fastapi, job_id, "tsv_by_taxon")
 
 
-def test_deprecated_export_tsv(database, fastapi, caplog):
+def test_deprecated_export_tsv(fastapi):
     """Still in /object_set/export for eventual unknown users"""
-    caplog.set_level(logging.FATAL)
 
     # Admin imports the project
-    from tests.test_import import test_import, test_import_a_bit_more_skipping
-
-    prj_id = test_import(database, caplog, "TSV deprecated export project")
+    prj_id = do_test_import(fastapi, "TSV deprecated export project")
     # Add a sample spanning 2 days
-    test_import_a_bit_more_skipping(database, caplog, "TSV deprecated export project")
+    do_import_a_bit_more_skipping(fastapi, "TSV deprecated export project")
 
     # Get the project for update
     url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     _prj_json = rsp.json()
-
-    caplog.set_level(logging.DEBUG)
 
     # Backup export without images (but their ref is still in the TSVs)
     # Deprecated (Jan 2024), backup means produce all the data needed to restore all
@@ -272,16 +263,11 @@ def test_deprecated_export_tsv(database, fastapi, caplog):
     download_and_check(fastapi, job_id, "summary_whole", only_hdr=True)
 
 
-def test_export_roundtrip(database, fastapi, caplog, tstlogs):
+def test_export_roundtrip(fastapi, tstlogs):
     """roundtrip export/import other/compare"""
-    caplog.set_level(logging.FATAL)
 
     # Admin imports the project
-    from tests.test_import import test_import_uvp6
-
-    prj_id = test_import_uvp6(
-        database, caplog, "TSV UVP6 roundtrip export source project"
-    )
+    prj_id = do_import_uvp6(fastapi, "TSV UVP6 roundtrip export source project")
 
     # Get the project for update
     url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
@@ -296,9 +282,10 @@ def test_export_roundtrip(database, fastapi, caplog, tstlogs):
         ADMIN_USER_ID, "TSV UVP6 roundtrip export clone project"
     )
     do_import(
+        fastapi,
         clone_prj_id,
         source_path=DATA_DIR / "ftp" / ("task_%d_%s" % (job_id, file_in_ftp)),
-        user_id=ADMIN_USER_ID,
+        auth=ADMIN_AUTH,
     )
     changes = diff_projects(
         prj_id, "exp_source.json", clone_prj_id, "exp_clone.json", tstlogs
@@ -352,18 +339,18 @@ def json_dump_project(prj_id, dump_file, tstlogs):
 @pytest.mark.parametrize(
     "export_method", ["full", "annots"]
 )  # Try two methods of saving annotation data
-def test_export_roundtrip_self(database, fastapi, caplog, export_method):
+def test_export_roundtrip_self(fastapi, caplog, export_method):
     """Roundtrip export/validates/import self
     Scenario: Someone saves a validated project's classifs and wants to restore it to saved state.
     The format makes it possible to import update into another project, provided object_ids are present.
     """
-    caplog.set_level(logging.FATAL)
+    caplog.set_level(logging.CRITICAL)
+    caplog.set_level(logging.INFO, DBWRITER_LOG)
 
     # Admin imports the project
-    from tests.test_import import test_import_uvp6
 
-    prj_id = test_import_uvp6(
-        database, caplog, "TSV UVP6 roundtrip classifs export source project"
+    prj_id = do_import_uvp6(
+        fastapi, "TSV UVP6 roundtrip classifs export source project"
     )
 
     # Grant rights to another annotator
@@ -397,6 +384,7 @@ def test_export_roundtrip_self(database, fastapi, caplog, export_method):
     )
 
     do_import_update(
+        fastapi,
         prj_id,
         caplog,
         "Cla",
@@ -422,19 +410,22 @@ def test_export_roundtrip_self(database, fastapi, caplog, export_method):
 
     # Oops, let's get back to saved state
     do_import_update(
+        fastapi,
         prj_id,
         caplog,
         "Cla",
         str(DATA_DIR / "ftp" / ("task_%d_%s" % (export_job_id, file_in_ftp))),
     )
+    assert len(caplog.messages) > 0, "no log messages found!"
     nb_upds = len([msg for msg in caplog.messages if msg.startswith("Updating")])
     # All changed, restored to backup state
-    assert nb_upds == 15
+    assert nb_upds == 15, caplog.messages
 
     # Re-classify different user
     classify_validate_all(USER_AUTH, False)
     # Admin wants _his_ name back
     do_import_update(
+        fastapi,
         prj_id,
         caplog,
         "Cla",
@@ -442,7 +433,7 @@ def test_export_roundtrip_self(database, fastapi, caplog, export_method):
     )
     nb_upds = len([msg for msg in caplog.messages if msg.startswith("Updating")])
     # All changed, restored to backup state
-    assert nb_upds == 15
+    assert nb_upds == 15, caplog.messages
 
     if False:
         for an_obj in sorted(obj_ids):
@@ -464,6 +455,7 @@ def test_export_roundtrip_self(database, fastapi, caplog, export_method):
 
     # Restore a second time the same first backup
     do_import_update(
+        fastapi,
         prj_id,
         caplog,
         "Cla",
@@ -479,6 +471,7 @@ def test_export_roundtrip_self(database, fastapi, caplog, export_method):
 
     # Restore the second backup, i.e. back in time
     do_import_update(
+        fastapi,
         prj_id,
         caplog,
         "Cla",
@@ -486,7 +479,7 @@ def test_export_roundtrip_self(database, fastapi, caplog, export_method):
     )
     nb_upds = len([msg for msg in caplog.messages if msg.startswith("Updating")])
     # All changed
-    assert nb_upds == 15
+    assert nb_upds == 15, caplog.messages
     # Not more history as all was historized before
     for an_obj in obj_ids:
         an_hist = get_object_classif_history(fastapi, an_obj)
@@ -510,7 +503,7 @@ def export_project_to_ftp(fastapi, prj_id, just_annots):
     )
     assert rsp.status_code == status.HTTP_200_OK
     export_job_id = rsp.json()["job_id"]
-    wait_for_stable(export_job_id)
+    api_wait_for_stable_job(fastapi, export_job_id)
     api_check_job_ok(fastapi, export_job_id)
     url = JOB_QUERY_URL.format(job_id=export_job_id)
     rsp = fastapi.get(url, headers=ADMIN_AUTH)

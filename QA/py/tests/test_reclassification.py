@@ -14,6 +14,7 @@ from tests.test_classification import (
     get_object_classif_history,
     validate_all,
 )
+from tests.test_import import do_test_import
 
 OBJECT_SET_RECLASSIFY_URL = (
     "/object_set/{project_id}/reclassify?forced_id={forced_id}&reason={reason}"
@@ -31,11 +32,10 @@ def reclassify(fastapi, prj_id, from_id, to_id):
 
 
 # Simulate change of taxo system, search&replace taxon ref with another
-def test_reclassif(database, fastapi, caplog):
+def test_reclassif(fastapi, caplog):
     caplog.set_level(logging.ERROR)
-    from tests.test_import import test_import
 
-    prj_id = test_import(database, caplog, "Test Reclassify/Validate")
+    prj_id = do_test_import(fastapi, "Test Reclassify/Validate")
 
     obj_ids = query_all_objects(fastapi, CREATOR_AUTH, prj_id)
     assert len(obj_ids) == 8

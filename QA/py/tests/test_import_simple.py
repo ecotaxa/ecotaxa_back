@@ -24,7 +24,8 @@ from starlette import status
 
 from tests.credentials import ADMIN_USER_ID, CREATOR_AUTH, CREATOR_USER_ID
 from tests.test_import import PLAIN_DIR, create_project, PLAIN_FILE_PATH
-from tests.jobs import wait_for_stable, api_wait_for_stable_job, check_job_ok
+from tests.jobs import check_job_ok
+from tests.api_wrappers import api_wait_for_stable_job
 
 IMPORT_IMAGES_URL = "/simple_import/{project_id}?dry_run={dry_run}"
 UPLOAD_FILE_URL = "/user_files/"
@@ -32,7 +33,7 @@ UPLOAD_FILE_URL = "/user_files/"
 
 # @pytest.mark.skip()
 @pytest.mark.parametrize("title", ["Test Import Images"])
-def test_import_images_only(database, caplog, title):
+def test_import_images_only(fastapi, caplog, title):
     """
     Simple import AKA image only import, with fixed values.
     """
@@ -85,10 +86,9 @@ def test_import_images_only(database, caplog, title):
     params.values = vals
     with SimpleImport(prj_id, params, dry_run=False) as sce:
         rsp: SimpleImportRsp = sce.run(ADMIN_USER_ID)
-    print("\n".join(caplog.messages))
     assert rsp.errors == []
     job_id = rsp.job_id
-    job = wait_for_stable(job_id)
+    job = api_wait_for_stable_job(fastapi, job_id)
     check_job_ok(job)
     assert job.result["nb_images"] == 8
     # Check that all went fine
@@ -101,8 +101,7 @@ def test_import_images_only(database, caplog, title):
         rsp: SimpleImportRsp = sce.run(ADMIN_USER_ID)
     job_id2 = rsp.job_id
     assert job_id2 > job_id
-    _ = wait_for_stable(job_id2)
-    print("\n:".join(caplog.messages))
+    _ = api_wait_for_stable_job(fastapi, job_id2)
     for a_msg in caplog.records:
         assert a_msg.levelno != logging.ERROR, a_msg.getMessage()
         assert "++ ID" not in a_msg.getMessage()
@@ -112,11 +111,10 @@ def test_import_images_only(database, caplog, title):
 
 # @pytest.mark.skip()
 @pytest.mark.parametrize("title", ["Simple via fastapi"])
-def test_api_import_images(fastapi, caplog, title):
+def test_api_import_images(fastapi, title):
     """
     Simple import with no fixed values at all, but using the upload directory.
     """
-    caplog.set_level(logging.DEBUG)
     prj_id = create_project(CREATOR_USER_ID, title)
     with open(PLAIN_FILE_PATH, "rb") as fin:
         upload_rsp = fastapi.post(
@@ -133,5 +131,6 @@ def test_api_import_images(fastapi, caplog, title):
     assert rsp.status_code == status.HTTP_200_OK
     job_id = rsp.json()["job_id"]
     assert job_id > 0
-    _ = api_wait_for_stable_job(fastapi, job_id)
+    job = api_wait_for_stable_job(fastapi, job_id)
+    check_job_ok(job)
     return prj_id

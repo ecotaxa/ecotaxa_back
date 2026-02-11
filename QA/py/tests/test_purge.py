@@ -8,18 +8,15 @@ import pytest
 from API_operations.CRUD.Projects import ProjectsService
 from API_operations.ObjectManager import ObjectManager
 
-from tests.test_import import ADMIN_USER_ID
-
 from tests.prj_utils import check_project
+from tests.test_import import ADMIN_USER_ID, do_test_import
 
 
 # Note: to go faster in a local dev environment, use "filled_database" instead of "database" below
 # BUT DON'T COMMIT THE CHANGE
-def test_purge_plain(database, caplog):
+def test_purge_plain(fastapi, caplog):
     caplog.set_level(logging.ERROR)
-    from tests.test_import import test_import
-
-    prj_id = test_import(database, caplog, "Test Purge")
+    prj_id = do_test_import(fastapi, "Test Purge")
     # Delete full
     with ProjectsService() as sce:
         sce.delete(current_user_id=ADMIN_USER_ID, prj_id=prj_id, only_objects=False)
@@ -29,11 +26,9 @@ def test_purge_plain(database, caplog):
             sce.delete(current_user_id=ADMIN_USER_ID, prj_id=prj_id, only_objects=False)
 
 
-def test_purge_partial(database, caplog, tstlogs):
+def test_purge_partial(fastapi, caplog, tstlogs):
     caplog.set_level(logging.ERROR)
-    from tests.test_import import test_import
-
-    prj_id = test_import(database, caplog, "Test Purge partial")
+    prj_id = do_test_import(fastapi, "Test Purge partial")
     # Delete using wrong object IDs
     obj_ids = [500000 + i for i in range(15)]
     with ObjectManager() as sce:

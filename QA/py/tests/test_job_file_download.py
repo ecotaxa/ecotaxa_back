@@ -2,7 +2,7 @@ import pytest
 from API_operations.helpers.JobService import JobServiceBase, ArgsDict
 from export_shared import JOB_DOWNLOAD_URL
 from tests.credentials import ADMIN_USER_ID, ADMIN_AUTH
-from tests.jobs import api_wait_for_stable_job
+from tests.api_wrappers import api_wait_for_stable_job
 
 
 # A job that produces a file
@@ -28,7 +28,7 @@ class FileProducingJob(JobServiceBase):
         self.set_job_result(errors=[], infos={"file_created": True})
 
 
-def test_get_job_file(fastapi, database):
+def test_get_job_file(fastapi):
     file_name = FileProducingJob.PRODUCED_FILE_NAME
     test_content = FileProducingJob.TEST_CONTENT
 
@@ -39,7 +39,7 @@ def test_get_job_file(fastapi, database):
     assert job_id is not None
 
     job_dict = api_wait_for_stable_job(fastapi, job_id)
-    assert job_dict["state"] == "F", job_dict
+    assert job_dict.state == "F", job_dict
 
     download_url = JOB_DOWNLOAD_URL.format(job_id=job_id)
     rsp = fastapi.get(download_url, headers=ADMIN_AUTH)
@@ -71,14 +71,13 @@ def test_get_job_file(fastapi, database):
     )
 
 
-def test_get_job_file_invalid_range(fastapi, database):
+def test_get_job_file_invalid_range(fastapi):
     with FileProducingJob() as job:
         job.run(ADMIN_USER_ID)
         job_id = job.job_id
     assert job_id is not None
     job_dict = api_wait_for_stable_job(fastapi, job_id)
-    print(job_dict)
-    assert job_dict["state"] == "F", job_dict
+    assert job_dict.state == "F", job_dict
 
     download_url = JOB_DOWNLOAD_URL.format(job_id=job_id)
 

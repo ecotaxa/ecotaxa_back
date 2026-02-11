@@ -2,9 +2,9 @@ import logging
 from copy import deepcopy
 from urllib.parse import quote
 
+from BO.DataLicense import AccessLevelEnum
 from starlette import status
 
-from BO.DataLicense import AccessLevelEnum
 from tests.credentials import (
     ADMIN_AUTH,
     ORDINARY_USER_USER_ID,
@@ -12,6 +12,7 @@ from tests.credentials import (
     USER_AUTH,
 )
 from tests.test_fastapi import PROJECT_QUERY_URL
+from tests.test_import import do_import_uvp6
 
 PROJECT_UPDATE_URL = "/projects/{project_id}"
 
@@ -20,13 +21,12 @@ PROJECT_SETTINGS_UPDATE_URL = (
 )
 
 
-def test_update_prj(database, fastapi, caplog):
+def test_update_prj(fastapi, caplog):
     from tests.test_project_vars import BODC_VARS_KEY
 
     caplog.set_level(logging.ERROR)
-    from tests.test_import import test_import_uvp6
 
-    prj_id = test_import_uvp6(database, caplog, "Test Project Updates")
+    prj_id = do_import_uvp6(fastapi, "Test Project Updates")
     # Do like in legacy app, i.e. fetch/modify/resend
     url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
@@ -234,11 +234,10 @@ def test_update_prj(database, fastapi, caplog):
     )
 
 
-def test_update_prj_pred_settings(database, fastapi, caplog):
+def test_update_prj_pred_settings(fastapi, caplog):
     caplog.set_level(logging.ERROR)
-    from tests.test_import import test_import_uvp6
 
-    prj_id = test_import_uvp6(database, caplog, "Test Project Settings Updates")
+    prj_id = do_import_uvp6(fastapi, "Test Project Settings Updates")
     # Do like in legacy app, i.e. fetch/modify/resend
     qry_url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
     rsp = fastapi.get(qry_url, headers=ADMIN_AUTH)
@@ -283,13 +282,12 @@ def test_update_prj_pred_settings(database, fastapi, caplog):
     assert read_json["classifsettings"] == new_settings
 
 
-def test_update_prj_bodc_vars(database, fastapi, caplog):
+def test_update_prj_bodc_vars(fastapi, caplog):
     from tests.test_project_vars import BODC_VARS_KEY
 
     caplog.set_level(logging.ERROR)
-    from tests.test_import import test_import_uvp6
 
-    prj_id = test_import_uvp6(database, caplog, "Test Project Variables Updates")
+    prj_id = do_import_uvp6(fastapi, "Test Project Variables Updates")
 
     # Do like in legacy app, i.e. fetch/modify/resend
     qry_url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)

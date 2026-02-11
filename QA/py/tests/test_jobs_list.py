@@ -1,7 +1,8 @@
 import pytest
 from API_operations.helpers.JobService import JobServiceBase, ArgsDict
 from tests.credentials import ADMIN_USER_ID, ADMIN_AUTH, CREATOR_USER_ID, CREATOR_AUTH
-from tests.jobs import api_wait_for_stable_job, clear_all_jobs
+from tests.jobs import clear_all_jobs
+from tests.api_wrappers import api_wait_for_stable_job
 from DB.Job import DBJobStateEnum
 
 
@@ -33,7 +34,7 @@ class TypeBJob(JobServiceBase):
         raise Exception("Simulated error")
 
 
-def test_list_jobs(fastapi, database):
+def test_list_jobs(fastapi):
     # Register our test job classes if needed, though JobServiceBase.create_job works anyway
 
     # 0. Cleanup
@@ -81,7 +82,7 @@ def test_list_jobs(fastapi, database):
 
 
 @pytest.mark.skip(reason="No code yet")
-def test_list_jobs_filtering(fastapi, database):
+def test_list_jobs_filtering(fastapi):
     # Register our test job classes if needed, though JobServiceBase.create_job works anyway
 
     # 0. Cleanup

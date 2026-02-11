@@ -14,12 +14,10 @@ from tests.test_collections import COLLECTION_QUERY_URL
 from tests.test_objectset_query import _prj_query
 
 
-def test_project_set(database, fastapi, caplog):
+def test_project_set(fastapi, caplog):
     # Functions used during prediction
     # Reuse the collection functions, as there are 2 projects there
-    coll_id, coll_title, prj_id = create_test_collection(
-        database, fastapi, caplog, "prj_set_tst"
-    )
+    coll_id, coll_title, prj_id = create_test_collection(fastapi, caplog, "prj_set_tst")
     url = COLLECTION_QUERY_URL.format(collection_id=coll_id)
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     ids = rsp.json()["project_ids"]

@@ -8,11 +8,15 @@ from zipfile import ZipFile
 import pytest
 from starlette import status
 
+from tests.api_wrappers import (
+    api_wait_for_stable_job,
+    api_check_job_failed,
+    api_check_job_ok,
+)
 from tests.credentials import (
     ADMIN_AUTH,
     REAL_USER_ID,
     CREATOR_AUTH,
-    ADMIN_USER_ID,
     ORDINARY_USER3_USER_ID,
 )
 from tests.emodnet_ref import (
@@ -24,7 +28,6 @@ from tests.emodnet_ref import (
 )
 from tests.export_shared import JOB_DOWNLOAD_URL
 from tests.formulae import uvp_formulae
-from tests.jobs import wait_for_stable, api_check_job_ok, api_check_job_failed
 from tests.test_classification import query_all_objects, OBJECT_SET_CLASSIFY_URL
 from tests.test_collections import (
     COLLECTION_CREATE_URL,
@@ -33,6 +36,7 @@ from tests.test_collections import (
     regrant_if_needed,
 )
 from tests.test_fastapi import PROJECT_QUERY_URL
+from tests.test_import import do_test_import, do_import_a_bit_more_skipping
 from tests.test_update import ACQUISITION_SET_UPDATE_URL, SAMPLE_SET_UPDATE_URL
 from tests.test_update_prj import PROJECT_UPDATE_URL
 
@@ -71,14 +75,14 @@ all_colls = {}
 
 
 @pytest.fixture
-def exportable_collection(database, fastapi, caplog, admin_or_creator):
+def exportable_collection(fastapi, caplog, admin_or_creator):
     if str(admin_or_creator) in all_colls:
         yield all_colls[str(admin_or_creator)]
         return
     caplog.set_level(logging.FATAL)
 
     coll_id, coll_title, prj_id = create_test_collection(
-        database, fastapi, caplog, "exp", admin_or_creator
+        fastapi, caplog, "exp", admin_or_creator
     )
 
     caplog.set_level(logging.DEBUG)
@@ -98,7 +102,7 @@ def exportable_collection(database, fastapi, caplog, admin_or_creator):
     )
     assert rsp.status_code == status.HTTP_200_OK
     job_id = rsp.json()["job_id"]
-    wait_for_stable(job_id)
+    api_wait_for_stable_job(fastapi, job_id)
     rsp = api_check_job_failed(fastapi, job_id, "5 error(s) during run")
     json = rsp.json()
     assert json["errors"] == [
@@ -215,9 +219,10 @@ def test_emodnet_export(fastapi, exportable_collection, admin_or_creator, fixed_
     )
     assert rsp.status_code == status.HTTP_200_OK
     job_id = rsp.json()["job_id"]
-    wait_for_stable(job_id)
+    api_wait_for_stable_job(fastapi, job_id)
     job_status = api_check_job_ok(fastapi, job_id)
 
+    assert "wrns" in job_status["result"], job_status
     warns = job_status["result"]["wrns"]
     ref_warns = [
         "Could not extract sampling net name and features from sample 'm106_mn01_n1_sml' (in #%d): at least one of ['net_type', 'net_mesh', 'net_surf'] free column is absent."
@@ -293,7 +298,7 @@ def test_emodnet_export_with_absent(
     rsp = fastapi.post(COLLECTION_EXPORT_EMODNET_URL, headers=ADMIN_AUTH, json=req)
     assert rsp.status_code == status.HTTP_200_OK
     job_id = rsp.json()["job_id"]
-    wait_for_stable(job_id)
+    api_wait_for_stable_job(fastapi, job_id)
     api_check_job_ok(fastapi, job_id)
     dl_url = JOB_DOWNLOAD_URL.format(job_id=job_id)
     rsp = fastapi.get(dl_url, headers=ADMIN_AUTH)
@@ -310,7 +315,7 @@ def test_emodnet_export_no_comp(
     rsp = fastapi.post(COLLECTION_EXPORT_EMODNET_URL, headers=ADMIN_AUTH, json=req)
     assert rsp.status_code == status.HTTP_200_OK
     job_id = rsp.json()["job_id"]
-    wait_for_stable(job_id)
+    api_wait_for_stable_job(fastapi, job_id)
     api_check_job_ok(fastapi, job_id)
     dl_url = JOB_DOWNLOAD_URL.format(job_id=job_id)
     rsp = fastapi.get(dl_url, headers=ADMIN_AUTH)
@@ -339,11 +344,11 @@ def test_emodnet_export_recast1(
     rsp = fastapi.post(COLLECTION_EXPORT_EMODNET_URL, headers=ADMIN_AUTH, json=req)
     assert rsp.status_code == status.HTTP_200_OK
     job_id = rsp.json()["job_id"]
-    wait_for_stable(job_id)
+    api_wait_for_stable_job(fastapi, job_id)
     job_status = api_check_job_ok(fastapi, job_id)
+    assert "wrns" in job_status["result"], job_status
     warns = job_status["result"]["wrns"]
     assert "Not produced due to non-match" not in str(warns)
-    api_check_job_ok(fastapi, job_id)
     dl_url = JOB_DOWNLOAD_URL.format(job_id=job_id)
     rsp = fastapi.get(dl_url, headers=ADMIN_AUTH)
     unzip_and_check(rsp.content, with_recast_zip(prj_id, prj_id2), admin_or_creator)
@@ -371,11 +376,10 @@ def test_emodnet_export_recast2(
     rsp = fastapi.post(COLLECTION_EXPORT_EMODNET_URL, headers=ADMIN_AUTH, json=req)
     assert rsp.status_code == status.HTTP_200_OK
     job_id = rsp.json()["job_id"]
-    wait_for_stable(job_id)
+    api_wait_for_stable_job(fastapi, job_id)
     job_status = api_check_job_ok(fastapi, job_id)
     warns = job_status["result"]["wrns"]
     assert "Not produced due to non-match" not in str(warns)
-    api_check_job_ok(fastapi, job_id)
     dl_url = JOB_DOWNLOAD_URL.format(job_id=job_id)
     rsp = fastapi.get(dl_url, headers=ADMIN_AUTH)
     unzip_and_check(rsp.content, with_recast_zip2(prj_id, prj_id2), admin_or_creator)
@@ -390,7 +394,7 @@ def test_permalink_query(fastapi, exportable_collection, admin_or_creator):
     assert coll_desc["title"] == coll_title
 
 
-def create_test_collection(database, fastapi, caplog, suffix, who=ADMIN_AUTH):
+def create_test_collection(fastapi, caplog, suffix, who=ADMIN_AUTH):
     # In these TSVs, we have: object_major, object_minor, object_area, process_pixel
     # Admin imports the project
     from tests.test_import import (
@@ -398,28 +402,26 @@ def create_test_collection(database, fastapi, caplog, suffix, who=ADMIN_AUTH):
         JUST_PREDICTED_DIR,
         MIX_OF_STATES,
         PLAIN_FILE,
-        test_import,
         do_import,
-        test_import_a_bit_more_skipping,
     )
 
     suffix += "" if who == ADMIN_AUTH else who["Authorization"][-1:]
 
     prj_title = "EMODNET project " + suffix
-    prj_id = test_import(database, caplog, prj_title, str(PLAIN_FILE), "UVP6")
+    prj_id = do_test_import(fastapi, prj_title, str(PLAIN_FILE), "UVP6")
     # Add a sample spanning 2 days (m106_mn01_n3_sml) for testing date ranges in event.txt
     # this sample contains 2 'detritus' at load time and 1 small<egg (92731) which resolves to nearest Phylo Actinopterygii (56693)
-    test_import_a_bit_more_skipping(database, caplog, prj_title)
+    do_import_a_bit_more_skipping(fastapi, prj_title)
     # Add a similar but predicted object into same sample m106_mn01_n3_sml
-    test_import_a_bit_more_skipping(database, caplog, prj_title, str(MIX_OF_STATES))
+    do_import_a_bit_more_skipping(fastapi, prj_title, str(MIX_OF_STATES))
     # Add a sample with corrupted or absent needed free columns, for provoking calculation warnings
-    do_import(prj_id, BAD_FREE_DIR, ADMIN_USER_ID)
+    do_import(fastapi, prj_id, BAD_FREE_DIR, ADMIN_AUTH)
 
     regrant_if_needed(fastapi, prj_id, who)
 
     # Add another project with same data, only a "temporary" object there.
     prj_title2 = "EMODNET project2 " + suffix
-    prj_id2 = test_import(database, caplog, prj_title2, str(JUST_PREDICTED_DIR), "UVP6")
+    prj_id2 = do_test_import(fastapi, prj_title2, str(JUST_PREDICTED_DIR), "UVP6")
     make_project_exportable(prj_id2, fastapi, ADMIN_AUTH)
     add_concentration_data(fastapi, prj_id2)
 

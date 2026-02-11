@@ -3,9 +3,10 @@ import logging
 # noinspection PyPackageRequirements
 import pytest
 from starlette import status
-from fastapi import HTTPException
-from tests.credentials import ADMIN_AUTH, USER_AUTH, CREATOR_AUTH
+
+from tests.credentials import ADMIN_AUTH, CREATOR_AUTH
 from tests.test_fastapi import PROJECT_QUERY_URL, USER_ME_URL
+from tests.test_import import do_test_import
 from tests.test_update_prj import PROJECT_UPDATE_URL
 
 PROJECT_EXPORT_EMODNET_URL = "/export/darwin_core?dry_run=False"
@@ -21,14 +22,14 @@ INSTRUMENT_QUERY_URL = "/instruments/?project_ids={project_id}"
 
 
 @pytest.mark.parametrize("who", [ADMIN_AUTH, CREATOR_AUTH])
-def test_collection_lifecycle(database, fastapi, caplog, who):
-    caplog.set_level(logging.FATAL)
+def test_collection_lifecycle(fastapi, caplog, who):
+    caplog.set_level(logging.INFO)
 
     # Admin (always) imports the project
-    from tests.test_import import test_import
-
-    prj_id = test_import(
-        database, caplog, "Collection project 1", instrument="Other scanner"
+    prj_id = do_test_import(
+        fastapi,
+        "Collection project 1 " + who["Authorization"],
+        instrument="Other scanner",
     )
 
     # Small instrument 'list' test
@@ -110,7 +111,7 @@ def test_collection_lifecycle(database, fastapi, caplog, who):
         "provider_user": None,
         "title": "Test collection",
         "short_title": None,
-        'display_order': {'associates': [], 'creators': []}
+        "display_order": {"associates": [], "creators": []},
     }
 
     # Update the abstract
@@ -147,10 +148,9 @@ def test_collection_lifecycle(database, fastapi, caplog, who):
     else:
         short_title = None
         external_id = "?"
-    print('rsp===', rsp.json())
     assert rsp.json() == [
         {
-          "abstract": """   
+            "abstract": """   
     A bit less abstract...
     """,
             "associate_organisations": [
@@ -172,7 +172,7 @@ def test_collection_lifecycle(database, fastapi, caplog, who):
             "provider_user": None,
             "title": "Test collection",
             "short_title": short_title,
-            'display_order': {'creators': ['7_o'], 'associates': ['8_o']}
+            "display_order": {"creators": ["7_o"], "associates": ["8_o"]},
         }
     ]
 

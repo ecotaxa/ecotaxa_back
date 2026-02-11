@@ -13,6 +13,8 @@ from BO.Prediction import DeepFeatures
 
 from API_operations.CRUD.ObjectParents import SamplesService
 
+from tests.test_import import do_test_import
+
 OBJECT_SET_PREDICT_URL = "/object_set/predict"
 
 
@@ -20,13 +22,11 @@ OBJECT_SET_PREDICT_URL = "/object_set/predict"
 # from API_operations.GPU_Prediction import GPUPredictForProject
 
 
-def no_test_basic_prediction(database, fastapi, caplog):
+def no_test_basic_prediction(fastapi, caplog):
     caplog.set_level(logging.FATAL)
 
     # Admin imports the project
-    from tests.test_import import test_import, test_import_a_bit_more_skipping
-
-    prj_id = test_import(database, caplog, "TSV export project")
+    prj_id = do_test_import(fastapi, "TSV export project")
     # Add a sample spanning 2 days
     test_import_a_bit_more_skipping(database, caplog, "TSV export project")
 
@@ -51,11 +51,9 @@ def no_test_basic_prediction(database, fastapi, caplog):
     job_id = get_job_and_wait_until_ok(fastapi, rsp)
 
 
-def test_prediction_functions(database, fastapi, caplog):
-    caplog.set_level(logging.ERROR)
-    from tests.test_import import test_import
+def test_prediction_functions(fastapi):
 
-    prj_id = test_import(database, caplog, "Test Prediction")
+    prj_id = do_test_import(fastapi, "Test Prediction")
 
     obj_ids = query_all_objects(fastapi, CREATOR_AUTH, prj_id)
     assert len(obj_ids) == 8

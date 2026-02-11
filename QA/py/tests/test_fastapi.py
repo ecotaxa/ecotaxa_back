@@ -1,8 +1,7 @@
 import logging
 
-from fastapi.testclient import TestClient
 from fastapi import status
-
+from fastapi.testclient import TestClient
 from main import app
 
 from tests.credentials import (
@@ -12,6 +11,7 @@ from tests.credentials import (
     ADMIN_USER_ID,
     USER2_AUTH,
 )
+from tests.test_import import do_test_import
 
 
 def test_users(fastapi):
@@ -38,8 +38,7 @@ def test_user_me(fastapi):
     assert response.json()["name"] == "Application Administrator"
 
 
-def test_create_project(fastapi, caplog):
-    caplog.set_level(logging.DEBUG)
+def test_create_project(fastapi):
     url = "/projects/create"
     # Check that we cannot do without auth
     response = fastapi.post(url, json={"title": "Oh no"})
@@ -57,12 +56,8 @@ def test_create_project(fastapi, caplog):
     assert int(response.json()) > 0
 
 
-def test_clone_project(database, fastapi, caplog):
-    caplog.set_level(logging.CRITICAL)
-    from tests.test_import import test_import
-
-    prj_id = test_import(database, caplog, "Clone source")
-    caplog.set_level(logging.DEBUG)
+def test_clone_project(fastapi):
+    prj_id = do_test_import(fastapi, "Clone source")
     url = "/projects/create"
     # Failing attempt
     response = fastapi.post(
@@ -82,7 +77,7 @@ def test_clone_project(database, fastapi, caplog):
 PROJECT_QUERY_URL = "/projects/{project_id}?for_managing={manage}"
 
 
-def test_query_project(fastapi, caplog):
+def test_query_project(fastapi):
     url = PROJECT_QUERY_URL.format(project_id=88888888, manage=True)
     response = fastapi.get(url)
     assert response.status_code == status.HTTP_403_FORBIDDEN
@@ -93,7 +88,7 @@ def test_query_project(fastapi, caplog):
     assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
-def test_user_search(fastapi, caplog):
+def test_user_search(fastapi):
     url = "/users/search?by_name=%s"
     response = fastapi.get(url % "jo")
     assert response.status_code == status.HTTP_403_FORBIDDEN
@@ -103,7 +98,7 @@ def test_user_search(fastapi, caplog):
     assert len(rsp) == 1
 
 
-def test_user_get(fastapi, caplog):
+def test_user_get(fastapi):
     url = "/users/%d"
     response = fastapi.get(url % 1)
     assert response.status_code == status.HTTP_403_FORBIDDEN
@@ -115,11 +110,10 @@ def test_user_get(fastapi, caplog):
     assert rsp["name"] == "Application Administrator"
 
 
-def test_project_search(database, caplog, fastapi):
+def test_project_search(fastapi):
     url = "/projects/search"
-    from tests.test_import import test_import
 
-    test_import(database, caplog, "Project Search", instrument="UVP6")
+    do_test_import(fastapi, "Project Search", instrument="UVP6")
     # Ordinary user looking at own projects
     response = fastapi.get(
         url,
@@ -203,7 +197,7 @@ def test_status(fastapi):
 PRJ_CREATE_URL = "/projects/create"
 
 
-def test_user_prefs(fastapi, caplog):
+def test_user_prefs(fastapi):
     # Create an empty project
     url1 = PRJ_CREATE_URL
     response = fastapi.post(url1, headers=ADMIN_AUTH, json={"title": "Prefs test"})

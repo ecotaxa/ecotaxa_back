@@ -8,6 +8,7 @@ from starlette import status
 
 from tests.credentials import ADMIN_AUTH
 from tests.test_classification import classify_all
+from tests.test_import import do_test_import
 from tests.test_objectset_query import _prj_query, OBJECT_SET_QUERY_URL
 
 copepod_id = 25828
@@ -19,11 +20,10 @@ def similarity_scores(distances_to_target):
     return [round(1 - d / max(distances_to_target), 4) for d in distances_to_target]
 
 
-def test_similarity_search(database, fastapi, caplog):
+def test_similarity_search(fastapi, caplog):
     caplog.set_level(logging.ERROR)
-    from tests.test_import import test_import
 
-    prj_id = test_import(database, caplog, "Test Similarity Search")
+    prj_id = do_test_import(fastapi, "Test Similarity Search")
 
     obj_ids = _prj_query(fastapi, ADMIN_AUTH, prj_id)
     assert len(obj_ids) == 8

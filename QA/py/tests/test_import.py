@@ -7,37 +7,33 @@ from os.path import dirname, realpath
 from pathlib import Path
 
 import pytest
-from starlette import status
-
 from API_models.crud import *
 
 # noinspection PyPackageRequirements
-from API_models.imports import *
-
-# noinspection PyPackageRequirements
 from API_operations.AsciiDump import AsciiDumper
-
-# noinspection PyPackageRequirements
-from API_operations.CRUD.Jobs import JobCRUDService
 
 # Import services
 # noinspection PyPackageRequirements
 from API_operations.CRUD.Projects import ProjectsService
 from API_operations.JsonDumper import JsonDumper
 
+
 # noinspection PyPackageRequirements
-from API_operations.imports.Import import FileImport
 from DB.Job import DBJobStateEnum
-from tests.credentials import ADMIN_AUTH, ADMIN_USER_ID
-from tests.jobs import (
-    wait_for_stable,
-    check_job_ok,
-    check_job_errors,
-    get_job_errors,
+from starlette import status
+
+from tests.api_wrappers import (
+    api_file_import,
     api_wait_for_stable_job,
     api_check_job_questions,
+)
+from tests.credentials import ADMIN_AUTH, ADMIN_USER_ID
+from tests.jobs import (
+    check_job_ok,
+    check_job_errors,
     api_reply_to_waiting_job,
 )
+from tests.logspy_feature import DBWRITER_LOG
 from tests.prj_utils import check_project
 
 # All files paths are now relative to root shared directory
@@ -77,8 +73,6 @@ IMPORT_TOT_VOL = DATA_DIR / "import_test_tot_vol"
 IMPORT_TOT_VOL_UPDATE = DATA_DIR / "import_test_tot_vol_update"
 IMPORT_TOT_VOL_BAD_UPDATE = DATA_DIR / "import_test_tot_vol_bad_update"
 
-FILE_IMPORT_URL = "/file_import/{project_id}"
-
 
 def create_project(owner, title, instrument=None, access="1"):
     with ProjectsService() as sce:
@@ -97,7 +91,9 @@ def search_unique_project(asker, title):
         srch = sce.search(current_user_id=asker, title_filter=title)
         if len(srch) != 1:
             logging.error(msg="No unique project named '" + title + "'")
-        assert len(srch) == 1
+        assert len(srch) == 1, f"Projects with title '{title}':" + str(
+            [a_prj.projid for a_prj in srch]
+        )
         return srch[0]
 
 
@@ -106,19 +102,17 @@ def dump_project(asker: int, prj_id: int, fd: Any):
         sce.run(fd)
 
 
-def do_import(prj_id: int, source_path: str, user_id: int):
+def do_import(fastapi, prj_id: int, source_path: str, auth: dict):
     """Import helper for tests"""
-    # Do preparation, preparation
-    params = ImportReq(source_path=str(source_path))
-    with FileImport(prj_id, params) as sce:
-        rsp: ImportRsp = sce.run(user_id)
-    job = wait_for_stable(rsp.job_id)
-    job = fill_in_if_missing(job)
+    params = dict(source_path=str(source_path))
+    rsp = api_file_import(fastapi, prj_id, params, auth)
+    job = api_wait_for_stable_job(fastapi, rsp.json()["job_id"])
+    job = fill_in_if_missing(fastapi, job)
     check_job_ok(job)
     return prj_id
 
 
-def fill_in_if_missing(job):
+def fill_in_if_missing(fastapi, job):
     if job.state == DBJobStateEnum.Asking:
         job_id = job.id
         # Missing user or taxa -> should proceed to step 2 for filling missing
@@ -127,57 +121,64 @@ def fill_in_if_missing(job):
             == "Some users or taxonomic references could not be matched"
         )
         # Simulate a missing user and map him to admin
-        with JobCRUDService() as sce:
-            sce.reply(
-                ADMIN_USER_ID,
-                job_id,
-                {
-                    "users": {
-                        "admin4test": 1,
-                        "elizandro rodriguez": 1,
-                        "taxo finder": 1,
-                    },
-                    "taxa": {},
-                },
-            )
-        return wait_for_stable(job_id)
+        reply = {
+            "users": {
+                "admin4test": 1,
+                "elizandro rodriguez": 1,
+                "taxo finder": 1,
+            },
+            "taxa": {},
+        }
+        api_reply_to_waiting_job(fastapi, job_id, reply)
+        return api_wait_for_stable_job(fastapi, job_id)
     else:
         return job
 
 
-@pytest.mark.parametrize("title", ["Test Create Update"])
-def test_import(database, caplog, title, path=str(PLAIN_FILE), instrument=None):
-    caplog.set_level(logging.DEBUG)
+ONE_WITH_TITLE = "Test Create Update"
+
+
+@pytest.mark.parametrize("title", [ONE_WITH_TITLE])
+def test_import(fastapi, title, path=str(PLAIN_FILE), instrument=None):
+    do_test_import(fastapi, title, path, instrument)
+
+
+def do_test_import(fastapi, title, path=str(PLAIN_FILE), instrument=None):
     # Create a dest project
     prj_id = create_project(ADMIN_USER_ID, title, instrument)
+    # Ensure a single one
+    if title == ONE_WITH_TITLE:
+        search_unique_project(
+            ADMIN_USER_ID, title
+        )  # If this fails it means you imported the test in another module so it was executed twice
     # Prepare import request
-    params = ImportReq(source_path=path)
-    with FileImport(prj_id, params) as sce:
-        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
-    job = wait_for_stable(rsp.job_id)
-    job = fill_in_if_missing(job)
-    # assert (job.state, job.progress_pct, job.progress_msg) == (DBJobStateEnum.Finished, 100, "Done")
+    params = dict(source_path=path)
+    rsp = api_file_import(fastapi, prj_id, params, ADMIN_AUTH)
+    job = api_wait_for_stable_job(fastapi, rsp.json()["job_id"])
+    job = fill_in_if_missing(fastapi, job)
+    assert (job.state, job.progress_pct, job.progress_msg) == (
+        DBJobStateEnum.Finished,
+        100,
+        "Done",
+    ), job
     # assert job.result["rowcount"] == 8
     return prj_id
 
 
 # @pytest.mark.skip()
-def test_import_again_skipping(database, ccheck, caplog):
+def test_import_again_skipping(fastapi, ccheck):
     """Re-import similar files into same project
     CANNOT RUN BY ITSELF"""
-    caplog.set_level(logging.DEBUG)
-    srch = search_unique_project(ADMIN_USER_ID, "Test Create Update")
+    srch = search_unique_project(ADMIN_USER_ID, ONE_WITH_TITLE)
     prj_id = srch.projid  # <- need the project from first test
     # Do preparation
-    params = ImportReq(
+    params = dict(
         source_path=str(PLAIN_FILE), skip_loaded_files=True, skip_existing_objects=True
     )
-    with FileImport(prj_id, params) as sce:
-        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
-    job = wait_for_stable(rsp.job_id)
-    job = fill_in_if_missing(job)
-    check_job_errors(job)
-    errs = get_job_errors(job)
+    rsp = api_file_import(fastapi, prj_id, params, ADMIN_AUTH)
+    job = api_wait_for_stable_job(fastapi, rsp.json()["job_id"])
+    job = fill_in_if_missing(fastapi, job)
+    errs = check_job_errors(job)
     found_err = False
     for an_err in errs:
         if "all TSV files were imported before" in an_err:
@@ -186,23 +187,20 @@ def test_import_again_skipping(database, ccheck, caplog):
 
 
 # @pytest.mark.skip()
-def test_import_again_irrelevant_skipping(database, ccheck, caplog):
+def test_import_again_irrelevant_skipping(fastapi, ccheck):
     """Re-import similar files into same project
     CANNOT RUN BY ITSELF"""
-    caplog.set_level(logging.DEBUG)
-    srch = search_unique_project(ADMIN_USER_ID, "Test Create Update")
+    srch = search_unique_project(ADMIN_USER_ID, ONE_WITH_TITLE)
     prj_id = srch.projid  # <- need the project from first test
     # Do preparation
-    params = ImportReq(
+    params = dict(
         source_path=str(EMPTY_TSV_IN_UPD_DIR),
         skip_loaded_files=True,
         skip_existing_objects=True,
     )
-    with FileImport(prj_id, params) as sce:
-        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
-    job = wait_for_stable(rsp.job_id)
-    check_job_errors(job)
-    errs = get_job_errors(job)
+    rsp = api_file_import(fastapi, prj_id, params, ADMIN_AUTH)
+    job = api_wait_for_stable_job(fastapi, rsp.json()["job_id"])
+    errs = check_job_errors(job)
     found_err = False
     for an_err in errs:
         if "new TSV file(s) are not compliant" in an_err:
@@ -211,22 +209,22 @@ def test_import_again_irrelevant_skipping(database, ccheck, caplog):
 
 
 # @pytest.mark.skip()
-@pytest.mark.parametrize("title", ["Test Create Update"])
-def test_import_a_bit_more_skipping(database, caplog, title, path=str(PLUS_DIR)):
+@pytest.mark.parametrize("title", [ONE_WITH_TITLE])
+def test_import_a_bit_more_skipping(fastapi, title, path=str(PLUS_DIR)):
     """Re-import similar files into same project, with an extra one.
     The extra one has missing values in the TSV.
     CANNOT RUN BY ITSELF"""
-    caplog.set_level(logging.DEBUG)
+    do_import_a_bit_more_skipping(fastapi, title, path)
+
+
+def do_import_a_bit_more_skipping(fastapi, title, path=str(PLUS_DIR)):
     srch = search_unique_project(ADMIN_USER_ID, title)
     prj_id = srch.projid  # <- need the project from first test
     # Do preparation
-    params = ImportReq(
-        source_path=path, skip_loaded_files=True, skip_existing_objects=True
-    )
-    with FileImport(prj_id, params) as sce:
-        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
-    job = wait_for_stable(rsp.job_id)
-    job = fill_in_if_missing(job)
+    params = dict(source_path=path, skip_loaded_files=True, skip_existing_objects=True)
+    rsp = api_file_import(fastapi, prj_id, params, ADMIN_AUTH)
+    job = api_wait_for_stable_job(fastapi, rsp.json()["job_id"])
+    job = fill_in_if_missing(fastapi, job)
     check_job_ok(job)
     # warns = preparation_out["wrn"]
     # found_imps = 0
@@ -245,14 +243,14 @@ def test_import_a_bit_more_skipping(database, caplog, title, path=str(PLUS_DIR))
     # TODO: Assert the extra "object_extra" in TSV in data/import_test_plus/m106_mn01_n3_sml
 
 
-def test_import_again_not_skipping_tsv_skipping_imgs(database, fastapi, ccheck, caplog):
+def test_import_again_not_skipping_tsv_skipping_imgs(fastapi, ccheck, caplog):
     """Re-import into same project, not skipping TSVs
     CANNOT RUN BY ITSELF"""
     # time.sleep(
     #     0.5
     # )  # TODO: There is a race condition writing invalid rows in obj_header
     caplog.set_level(logging.DEBUG)
-    srch = search_unique_project(ADMIN_USER_ID, "Test Create Update")
+    srch = search_unique_project(ADMIN_USER_ID, ONE_WITH_TITLE)
     prj_id = srch.projid  # <- need the project from first test
     # Do preparation
     import_plain(fastapi, prj_id)
@@ -264,10 +262,9 @@ def test_import_again_not_skipping_tsv_skipping_imgs(database, fastapi, ccheck, 
 
 
 def import_plain(fastapi, prj_id):
-    params = ImportReq(source_path=str(PLAIN_DIR), skip_existing_objects=True)
-    with FileImport(prj_id, params) as sce:
-        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
-    job = wait_for_stable(rsp.job_id)
+    params = dict(source_path=str(PLAIN_DIR), skip_existing_objects=True)
+    rsp = api_file_import(fastapi, prj_id, params, ADMIN_AUTH)
+    job = api_wait_for_stable_job(fastapi, rsp.json()["job_id"])
 
     assert job.state == DBJobStateEnum.Asking
     assert job.question == {
@@ -279,18 +276,15 @@ def import_plain(fastapi, prj_id):
         "users": {"admin4test": 1, "elizandro rodriguez": 1},  # Map to admin
         "taxa": {"other": 99999, "ozzeur": 85011},  # 'other<dead'  # 'other<living'
     }
-    # with JobCRUDService() as sce:
-    #     sce.reply(ADMIN_USER_ID, rsp.job_id, reply)
-    api_reply_to_waiting_job(fastapi, rsp.job_id, reply)
-    job = wait_for_stable(rsp.job_id)
+    api_reply_to_waiting_job(fastapi, rsp.json()["job_id"], reply)
+    job = api_wait_for_stable_job(fastapi, rsp.json()["job_id"])
     check_job_ok(job)
 
 
 def import_various(fastapi, prj_id):
-    params = ImportReq(source_path=str(VARIOUS_STATES_DIR), skip_existing_objects=True)
-    with FileImport(prj_id, params) as sce:
-        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
-    job = wait_for_stable(rsp.job_id)
+    params = dict(source_path=str(VARIOUS_STATES_DIR), skip_existing_objects=True)
+    rsp = api_file_import(fastapi, prj_id, params, ADMIN_AUTH)
+    job = api_wait_for_stable_job(fastapi, rsp.json()["job_id"])
 
     assert job.state == DBJobStateEnum.Asking
     assert job.question == {
@@ -302,34 +296,27 @@ def import_various(fastapi, prj_id):
         "users": {"elizandro rodriguez": 1},  # Map to admin
         "taxa": {},  # 'other<dead'  # 'other<living'
     }
-    # with JobCRUDService() as sce:
-    #     sce.reply(ADMIN_USER_ID, rsp.job_id, reply)
-    api_reply_to_waiting_job(fastapi, rsp.job_id, reply)
-    job = wait_for_stable(rsp.job_id)
+    api_reply_to_waiting_job(fastapi, rsp.json()["job_id"], reply)
+    job = api_wait_for_stable_job(fastapi, rsp.json()["job_id"])
     check_job_ok(job)
 
 
 # @pytest.mark.skip()
-def test_import_again_not_skipping_nor_imgs(database, ccheck, caplog):
+def test_import_again_not_skipping_nor_imgs(fastapi, ccheck):
     """Re-import into same project, not skipping TSVs or images
     CANNOT RUN BY ITSELF"""
-    caplog.set_level(logging.DEBUG)
-    srch = search_unique_project(ADMIN_USER_ID, "Test Create Update")
+    srch = search_unique_project(ADMIN_USER_ID, ONE_WITH_TITLE)
     prj_id = srch.projid  # <- need the project from first test
-    params = ImportReq(source_path=str(PLAIN_DIR))
-    with FileImport(prj_id, params) as sce:
-        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
-    job = wait_for_stable(rsp.job_id)
-    check_job_errors(job)
-    nb_errs = len(
-        [an_err for an_err in get_job_errors(job) if "already in EcoTaxa" in an_err]
-    )
+    params = dict(source_path=str(PLAIN_DIR))
+    rsp = api_file_import(fastapi, prj_id, params, ADMIN_AUTH)
+    job = api_wait_for_stable_job(fastapi, rsp.json()["job_id"])
+    errors = check_job_errors(job)
+    nb_errs = len([an_err for an_err in errors if "already in EcoTaxa" in an_err])
     assert nb_errs == 11
 
 
 # @pytest.mark.skip()
-def test_equal_dump_prj1(database, ccheck, caplog, tstlogs):
-    caplog.set_level(logging.DEBUG)
+def test_equal_dump_prj1(fastapi, ccheck, tstlogs):
     out_dump = "prj1.txt"
     with AsciiDumper() as sce:
         sce.run(projid=1, out=tstlogs / out_dump)
@@ -338,81 +325,75 @@ def test_equal_dump_prj1(database, ccheck, caplog, tstlogs):
 # @pytest.mark.skip()
 # noinspection DuplicatedCode,PyUnusedLocal
 @pytest.mark.parametrize("title", ["Test LS 2"])
-def test_import_uvp6(database, caplog, title):
-    caplog.set_level(logging.DEBUG)
-    prj_id = create_project(ADMIN_USER_ID, title, "UVP6", "2")
-    params = ImportReq(source_path=str(V6_FILE))
-    with FileImport(prj_id, params) as sce:
-        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
-    job = wait_for_stable(rsp.job_id)
-    check_job_ok(job)
+def test_import_uvp6(fastapi, caplog, title):
+    caplog.set_level(logging.INFO)
+    caplog.set_level(logging.INFO, DBWRITER_LOG)
+    do_import_uvp6(fastapi, title)
     # Check that all went fine
     for a_msg in caplog.records:
         assert a_msg.levelno != logging.ERROR, a_msg.getMessage()
+
+
+def do_import_uvp6(fastapi, title):
+    prj_id = create_project(ADMIN_USER_ID, title, "UVP6", "2")
+    params = {"source_path": str(V6_FILE)}
+    rsp = api_file_import(fastapi, prj_id, params, ADMIN_AUTH)
+    job = api_wait_for_stable_job(fastapi, rsp.json()["job_id"])
+    check_job_ok(job)
     return prj_id
 
 
 # @pytest.mark.skip()
-def test_equal_dump_prj2(database, caplog, tstlogs):
-    caplog.set_level(logging.DEBUG)
+def test_equal_dump_prj2(fastapi, tstlogs):
     out_dump = "prj2.txt"
     with AsciiDumper() as sce:
         sce.run(projid=2, out=tstlogs / out_dump)
 
 
 # @pytest.mark.skip()
-def test_import_empty(database, ccheck, caplog):
+def test_import_empty(fastapi, ccheck):
     """Nothing relevant to import"""
-    caplog.set_level(logging.DEBUG)
     prj_id = create_project(ADMIN_USER_ID, "Test LS 3")
 
-    params = ImportReq(source_path=str(EMPTY_DIR))
-    with FileImport(prj_id, params) as sce:
-        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
-    job = wait_for_stable(rsp.job_id)
+    params = dict(source_path=str(EMPTY_DIR))
+    rsp = api_file_import(fastapi, prj_id, params, ADMIN_AUTH)
+    job = api_wait_for_stable_job(fastapi, rsp.json()["job_id"])
     errors = check_job_errors(job)
     assert len(errors) == 1
 
 
 # @pytest.mark.skip()
-def test_import_empty_tsv(database, ccheck, caplog):
+def test_import_empty_tsv(fastapi, ccheck):
     """a TSV with header but no data"""
-    caplog.set_level(logging.DEBUG)
     prj_id = create_project(ADMIN_USER_ID, "Test LS 3")
 
-    params = ImportReq(source_path=str(EMPTY_TSV_DIR))
-    with FileImport(prj_id, params) as sce:
-        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
-    job = wait_for_stable(rsp.job_id)
-    check_job_errors(job)
-    assert len(get_job_errors(job)) == 1
+    params = dict(source_path=str(EMPTY_TSV_DIR))
+    rsp = api_file_import(fastapi, prj_id, params, ADMIN_AUTH)
+    job = api_wait_for_stable_job(fastapi, rsp.json()["job_id"])
+    errors = check_job_errors(job)
+    assert len(errors) == 1
 
 
-def test_import_empty_tsv2(database, ccheck, caplog):
+def test_import_empty_tsv2(fastapi, ccheck):
     """a TSV with nothing at all"""
-    caplog.set_level(logging.DEBUG)
     prj_id = create_project(ADMIN_USER_ID, "Test LS 2.6.3")
 
-    params = ImportReq(source_path=str(EMPTY_TSV_DIR2))
-    with FileImport(prj_id, params) as sce:
-        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
-    job = wait_for_stable(rsp.job_id)
-    check_job_errors(job)
-    assert len(get_job_errors(job)) == 1
+    params = dict(source_path=str(EMPTY_TSV_DIR2))
+    rsp = api_file_import(fastapi, prj_id, params, ADMIN_AUTH)
+    job = api_wait_for_stable_job(fastapi, rsp.json()["job_id"])
+    errors = check_job_errors(job)
+    assert len(errors) == 1
 
 
 # @pytest.mark.skip()
-def test_import_issues(database, ccheck, caplog):
+def test_import_issues(fastapi, ccheck):
     """The TSV contains loads of problems"""
-    caplog.set_level(logging.DEBUG)
     prj_id = create_project(ADMIN_USER_ID, "Test LS 4")
 
-    params = ImportReq(source_path=str(ISSUES_DIR))
-    with FileImport(prj_id, params) as sce:
-        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
-    job = wait_for_stable(rsp.job_id)
-    check_job_errors(job)
-    errors = get_job_errors(job)
+    params = dict(source_path=str(ISSUES_DIR))
+    rsp = api_file_import(fastapi, prj_id, params, ADMIN_AUTH)
+    job = api_wait_for_stable_job(fastapi, rsp.json()["job_id"])
+    errors = check_job_errors(job)
     assert errors == [
         "In [base]/ecotaxa_m106_mn01_n3_sml.tsv:",
         " - Invalid Header 'nounderscorecol'. Format must be Table_Field.",
@@ -433,33 +414,27 @@ def test_import_issues(database, ccheck, caplog):
     ]
 
 
-def test_import_no_valid_category(database, ccheck, caplog):
+def test_import_no_valid_category(fastapi, ccheck):
     """The TSV contains an unknown classification id"""
-    caplog.set_level(logging.DEBUG)
     prj_id = create_project(ADMIN_USER_ID, "Test LS 5")
 
-    params = ImportReq(source_path=str(ISSUES_DIR2))
-    with FileImport(prj_id, params) as sce:
-        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
-    job = wait_for_stable(rsp.job_id)
-    check_job_errors(job)
-    errors = get_job_errors(job)
+    params = dict(source_path=str(ISSUES_DIR2))
+    rsp = api_file_import(fastapi, prj_id, params, ADMIN_AUTH)
+    job = api_wait_for_stable_job(fastapi, rsp.json()["job_id"])
+    errors = check_job_errors(job)
     assert errors == [
         "Some specified classif_id don't exist, correct them prior to reload: 99999999"
     ]
 
 
-def test_import_no_valid_state_and_others(database, ccheck, caplog, tstlogs):
+def test_import_no_valid_state_and_others(fastapi, ccheck, tstlogs):
     """Some states need complementary information that cannot be defaulted"""
-    caplog.set_level(logging.DEBUG)
     prj_id = create_project(ADMIN_USER_ID, "Test LS 10")
 
-    params = ImportReq(source_path=str(ISSUES_DIR5))
-    with FileImport(prj_id, params) as sce:
-        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
-    job = wait_for_stable(rsp.job_id)
-    check_job_errors(job)
-    errors = get_job_errors(job)
+    params = dict(source_path=str(ISSUES_DIR5))
+    rsp = api_file_import(fastapi, prj_id, params, ADMIN_AUTH)
+    job = api_wait_for_stable_job(fastapi, rsp.json()["job_id"])
+    errors = check_job_errors(job)
     assert errors == [
         "In [base]/m106_mn01_n3_sml/ecotaxa_m106_mn01_n3_sml_pls.tsv:",
         " - line 3: When annotation status 'predicted' is provided there has to be a category.",
@@ -467,17 +442,14 @@ def test_import_no_valid_state_and_others(database, ccheck, caplog, tstlogs):
     check_project(tstlogs, prj_id)
 
 
-def test_import_classif_without_state(database, ccheck, caplog, tstlogs):
+def test_import_classif_without_state(fastapi, ccheck, tstlogs):
     """Importing a classification implies having a state"""
-    caplog.set_level(logging.DEBUG)
     prj_id = create_project(ADMIN_USER_ID, "Test import problem 11")
 
-    params = ImportReq(source_path=str(ISSUES_DIR6))
-    with FileImport(prj_id, params) as sce:
-        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
-    job = wait_for_stable(rsp.job_id)
-    check_job_errors(job)
-    errors = get_job_errors(job)
+    params = dict(source_path=str(ISSUES_DIR6))
+    rsp = api_file_import(fastapi, prj_id, params, ADMIN_AUTH)
+    job = api_wait_for_stable_job(fastapi, rsp.json()["job_id"])
+    errors = check_job_errors(job)
     assert errors == [
         "In [base]/m106_mn01_n3_sml/ecotaxa_m106_mn01_n3_sml_pls.tsv:",
         " - line 3: When a category (84963) is provided it has to be with a status.",
@@ -485,17 +457,14 @@ def test_import_classif_without_state(database, ccheck, caplog, tstlogs):
     check_project(tstlogs, prj_id)
 
 
-def test_import_data_without_header(database, ccheck, caplog, tstlogs):
+def test_import_data_without_header(fastapi, ccheck, tstlogs):
     """Mistake, no header but some data in a column"""
-    caplog.set_level(logging.DEBUG)
     prj_id = create_project(ADMIN_USER_ID, "Test import problem 12")
 
-    params = ImportReq(source_path=str(ISSUES_DIR7))
-    with FileImport(prj_id, params) as sce:
-        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
-    job = wait_for_stable(rsp.job_id)
-    check_job_errors(job)
-    errors = get_job_errors(job)
+    params = dict(source_path=str(ISSUES_DIR7))
+    rsp = api_file_import(fastapi, prj_id, params, ADMIN_AUTH)
+    job = api_wait_for_stable_job(fastapi, rsp.json()["job_id"])
+    errors = check_job_errors(job)
     assert errors == [
         "In [base]/ecotaxa_m106_mn04_n1_sml.tsv:",
         " - line 3: Value(s) ['Extra', 'Extra2'] must not be in a header-less column.",
@@ -503,35 +472,28 @@ def test_import_data_without_header(database, ccheck, caplog, tstlogs):
     check_project(tstlogs, prj_id)
 
 
-def test_import_state_without_related(database, ccheck, caplog, tstlogs):
+def test_import_state_without_related(fastapi, ccheck, tstlogs):
     """Importing just 'V' or 'D' is OK, we provide reasonable defaults"""
-    caplog.set_level(logging.DEBUG)
     prj_id = create_project(ADMIN_USER_ID, "Test import case 12")
 
-    params = ImportReq(source_path=str(V_OR_D_ONLY_DIR))
-    with FileImport(prj_id, params) as sce:
-        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
-    job = wait_for_stable(rsp.job_id)
+    params = dict(source_path=str(V_OR_D_ONLY_DIR))
+    rsp = api_file_import(fastapi, prj_id, params, ADMIN_AUTH)
+    job = api_wait_for_stable_job(fastapi, rsp.json()["job_id"])
     check_job_ok(job)
-    errors = get_job_errors(job)
-    assert errors == []
     check_project(tstlogs, prj_id)
 
 
 # @pytest.mark.skip()
-def test_import_too_many_custom_columns(database, ccheck, caplog):
+def test_import_too_many_custom_columns(fastapi, ccheck):
     """The TSV contains too many custom columns.
     Not a realistic case, but it simulates what happens if importing into a project with
      mappings"""
-    caplog.set_level(logging.DEBUG)
     prj_id = create_project(ADMIN_USER_ID, "Test LS 6")
 
-    params = ImportReq(source_path=str(ISSUES_DIR3))
-    with FileImport(prj_id, params) as sce:
-        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
-    job = wait_for_stable(rsp.job_id)
-    check_job_errors(job)
-    errors = get_job_errors(job)
+    params = dict(source_path=str(ISSUES_DIR3))
+    rsp = api_file_import(fastapi, prj_id, params, ADMIN_AUTH)
+    job = api_wait_for_stable_job(fastapi, rsp.json()["job_id"])
+    errors = check_job_errors(job)
     from DB.Sample import SAMPLE_FREE_COLUMNS
     from DB.Acquisition import ACQUISITION_FREE_COLUMNS
     from DB.Process import PROCESS_FREE_COLUMNS
@@ -556,11 +518,10 @@ def test_import_too_many_custom_columns(database, ccheck, caplog):
     assert errors == compare_errors
 
 
-def test_import_dups_in_tsv(database, ccheck, caplog):
+def test_import_dups_in_tsv(fastapi, ccheck):
     """The TSV contains duplicated lines.
     Either without _or without_ 'skip_existing_objects' option, it must not pass preliminary validation,
     as such duplicate is against referential integrity."""
-    caplog.set_level(logging.DEBUG)
     prj_id = create_project(ADMIN_USER_ID, "Test LS 9")
 
     expected_errors = [
@@ -568,33 +529,27 @@ def test_import_dups_in_tsv(database, ccheck, caplog):
         " - line 4: (Object 'm106_mn01_n3_sml_1120', Image 'm106_mn01_n3_sml_1111.jpg') is already in this TSV line 3.",
     ]
     # No skip, should fail
-    params = ImportReq(source_path=str(ISSUES_DIR4), skip_existing_objects=False)
-    with FileImport(prj_id, params) as sce:
-        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
-    job = wait_for_stable(rsp.job_id)
-    check_job_errors(job)
-    errors = get_job_errors(job)
+    params = dict(source_path=str(ISSUES_DIR4), skip_existing_objects=False)
+    rsp = api_file_import(fastapi, prj_id, params, ADMIN_AUTH)
+    job = api_wait_for_stable_job(fastapi, rsp.json()["job_id"])
+    errors = check_job_errors(job)
     assert errors == expected_errors
     # Skip existing, should fail as well
-    params = ImportReq(source_path=str(ISSUES_DIR4), skip_existing_objects=True)
-    with FileImport(prj_id, params) as sce:
-        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
-    job = wait_for_stable(rsp.job_id)
-    check_job_errors(job)
-    errors = get_job_errors(job)
+    params = dict(source_path=str(ISSUES_DIR4), skip_existing_objects=True)
+    rsp = api_file_import(fastapi, prj_id, params, ADMIN_AUTH)
+    job = api_wait_for_stable_job(fastapi, rsp.json()["job_id"])
+    errors = check_job_errors(job)
     assert errors == expected_errors
 
 
 # @pytest.mark.skip()
-def test_import_ambiguous_classification(fastapi, caplog):
+def test_import_ambiguous_classification(fastapi):
     """See https://github.com/oceanomics/ecotaxa_dev/issues/87
     Do it via API"""
-    caplog.set_level(logging.DEBUG)
     prj_id = create_project(ADMIN_USER_ID, "Test LS 7")
 
-    url = FILE_IMPORT_URL.format(project_id=prj_id)
     req = {"source_path": str(AMBIG_DIR)}
-    rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req)
+    rsp = api_file_import(fastapi, prj_id, req, ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
     job_id = rsp.json()["job_id"]
     api_wait_for_stable_job(fastapi, job_id)
@@ -603,22 +558,24 @@ def test_import_ambiguous_classification(fastapi, caplog):
         "missing_users": [],
         "missing_taxa": ["part (annelida)", "part"],
     }
-    api_reply_to_waiting_job(fastapi, job_id, {})
-    api_wait_for_stable_job(fastapi, job_id)
+    api_reply_to_waiting_job(
+        fastapi, job_id, {"users": {}, "taxa": {"part (annelida)": 1, "part": 2}}
+    )
+    job = api_wait_for_stable_job(fastapi, job_id)
+    check_job_ok(job)
 
 
 # @pytest.mark.skip()
-def test_import_uvp6_zip_in_dir(database, caplog):
+def test_import_uvp6_zip_in_dir(fastapi, caplog):
     """
     An *Images.zip inside a directory.
     """
     caplog.set_level(logging.DEBUG)
     prj_id = create_project(ADMIN_USER_ID, "Test LS 8")
 
-    params = ImportReq(source_path=str(V6_DIR))
-    with FileImport(prj_id, params) as sce:
-        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
-    job = wait_for_stable(rsp.job_id)
+    params = dict(source_path=str(V6_DIR))
+    rsp = api_file_import(fastapi, prj_id, params, ADMIN_AUTH)
+    job = api_wait_for_stable_job(fastapi, rsp.json()["job_id"])
     check_job_ok(job)
     # Check that all went fine
     for a_msg in caplog.records:
@@ -626,52 +583,49 @@ def test_import_uvp6_zip_in_dir(database, caplog):
 
 
 # @pytest.mark.skip()
-def test_import_sparse(database, caplog, tstlogs):
+def test_import_sparse(fastapi, caplog, tstlogs):
     """
     Import a sparse file, some columns are missing.
     """
     caplog.set_level(logging.DEBUG)
     prj_id = create_project(ADMIN_USER_ID, "Test Sparse")
 
-    params = ImportReq(source_path=str(SPARSE_DIR))
-    with FileImport(prj_id, params) as sce:
-        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
-    job = wait_for_stable(rsp.job_id)
+    params = dict(source_path=str(SPARSE_DIR))
+    rsp = api_file_import(fastapi, prj_id, params, ADMIN_AUTH)
+    assert rsp.status_code == status.HTTP_200_OK
+    job = api_wait_for_stable_job(fastapi, rsp.json()["job_id"])
     errors = check_job_errors(job)
     assert errors == [
         "In [base]/ecotaxa_20160719B-163000ish-HealyVPR08-2016_d200_h18_roi.tsv:",
         " - Field acq_id is mandatory as there are some acq columns: ['acq_hardware', 'acq_imgtype', 'acq_instrument'].",
         " - Field sample_id is mandatory as there are some sample columns: ['sample_program', 'sample_ship', 'sample_stationid'].",
     ]
-    print("\n".join(caplog.messages))
     with AsciiDumper() as sce:
         sce.run(projid=prj_id, out=tstlogs / "chk.dmp")
 
 
-def test_import_broken_TSV(database, caplog, tstlogs):
+def test_import_broken_TSV(fastapi, caplog, tstlogs):
     """
     Import a TSV with 0 byte.
     """
     caplog.set_level(logging.DEBUG)
     prj_id = create_project(ADMIN_USER_ID, "Test Sparse")
 
-    params = ImportReq(source_path=str(SPARSE_DIR))
-    with FileImport(prj_id, params) as sce:
-        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
-    job = wait_for_stable(rsp.job_id)
+    params = dict(source_path=str(SPARSE_DIR))
+    rsp = api_file_import(fastapi, prj_id, params, ADMIN_AUTH)
+    job = api_wait_for_stable_job(fastapi, rsp.json()["job_id"])
     errors = check_job_errors(job)
     assert errors == [
         "In [base]/ecotaxa_20160719B-163000ish-HealyVPR08-2016_d200_h18_roi.tsv:",
         " - Field acq_id is mandatory as there are some acq columns: ['acq_hardware', 'acq_imgtype', 'acq_instrument'].",
         " - Field sample_id is mandatory as there are some sample columns: ['sample_program', 'sample_ship', 'sample_stationid'].",
     ]
-    print("\n".join(caplog.messages))
     with AsciiDumper() as sce:
         sce.run(projid=prj_id, out=tstlogs / "chk.dmp")
 
 
 # @pytest.mark.skip()
-def test_import_breaking_unicity(database, caplog):
+def test_import_breaking_unicity(fastapi):
     """
     Sample orig_id is unique per project
     Acquisition orig_id is unique per project and belongs to a single Sample
@@ -682,37 +636,16 @@ def test_import_breaking_unicity(database, caplog):
         S("a2") -> A("b") is illegal
     Message should be like 'Acquisition 'b' already belongs to sample 'a' so it cannot be created under 'a2'
     """
-    caplog.set_level(logging.DEBUG)
-    srch = search_unique_project(ADMIN_USER_ID, "Test Create Update")
+    srch = search_unique_project(ADMIN_USER_ID, ONE_WITH_TITLE)
     prj_id = srch.projid  # <- need the project from first test
     # Do preparation
-    params = ImportReq(source_path=str(BREAKING_HIERARCHY_DIR))
+    params = dict(source_path=str(BREAKING_HIERARCHY_DIR))
 
-    with FileImport(prj_id, params) as sce:
-        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
-    job = wait_for_stable(rsp.job_id)
+    rsp = api_file_import(fastapi, prj_id, params, ADMIN_AUTH)
+    job = api_wait_for_stable_job(fastapi, rsp.json()["job_id"])
     errors = check_job_errors(job)
     assert errors == [
         "Acquisition 'generic_m106_mn01_n1_sml' is already associated with sample "
         "'{'m106_mn01_n1_sml'}', it cannot be associated as well with "
         "'m106_mn01_n1_sml_brk"
     ]
-
-
-# @pytest.mark.skip()
-def test_issue_483(database, ccheck, caplog):
-    """
-    Too large image.
-    """
-    # Inject a very small maximum size inside the library, so basically any image
-    # will raise a Decompression bomb
-    from PIL import Image
-
-    sav = Image.MAX_IMAGE_PIXELS
-    Image.MAX_IMAGE_PIXELS = 512
-    try:
-        # This should show as a nice error
-        test_import(database, caplog, title="Too large import")
-    finally:
-        # Restore the lib
-        Image.MAX_IMAGE_PIXELS = sav

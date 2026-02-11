@@ -7,6 +7,7 @@ import logging
 from starlette import status
 
 from tests.credentials import CREATOR_AUTH
+from tests.test_import import do_test_import, do_import_a_bit_more_skipping
 
 OBJECT_SET_QUERY_URL = "/object_set/{project_id}/query"  # ?order_field={order}&window_start={start}&window_size={size}"
 
@@ -35,15 +36,14 @@ def _prj_query(
     return obj_ids if fields is None else (obj_ids, details)
 
 
-def test_queries(database, fastapi, caplog):
+def test_queries(fastapi, caplog):
     caplog.set_level(logging.ERROR)
 
     # Admin imports the project
-    from tests.test_import import test_import, test_import_a_bit_more_skipping
 
-    prj_id = test_import(database, caplog, "Queries test project")
+    prj_id = do_test_import(fastapi, "Queries test project")
     # Add a sample spanning 2 days
-    test_import_a_bit_more_skipping(database, caplog, "Queries test project")
+    do_import_a_bit_more_skipping(fastapi, "Queries test project")
 
     ref = [6, 7, 8, 11, 12, 13, 1, 2, 3, 4, 5]
     all = _prj_query(fastapi, CREATOR_AUTH, prj_id, order="obj.depth_min")
@@ -89,16 +89,14 @@ def test_queries(database, fastapi, caplog):
     assert there_was_a_mini
 
 
-def test_all_fields(database, fastapi, caplog):
+def test_all_fields(fastapi, caplog):
     # Ensure that all API-documented fields work
     caplog.set_level(logging.ERROR)
 
     # Admin imports the project
-    from tests.test_import import test_import, test_import_a_bit_more_skipping
-
-    prj_id = test_import(database, caplog, "Full Queries test project")
+    prj_id = do_test_import(fastapi, "Full Queries test project")
     # Add a sample spanning 2 days
-    test_import_a_bit_more_skipping(database, caplog, "Full Queries test project")
+    do_import_a_bit_more_skipping(fastapi, "Full Queries test project")
 
     # Copy/paste from redoc API
     obj_fields = "classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id, classif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min, latitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos"

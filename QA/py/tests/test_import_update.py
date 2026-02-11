@@ -1,13 +1,16 @@
+import asyncio
 import logging
+import time
+from types import SimpleNamespace
 
-from API_models.imports import ImportReq, ImportRsp
+import pytest
 from API_operations.AsciiDump import AsciiDumper
-from API_operations.CRUD.Jobs import JobCRUDService
-from API_operations.imports.Import import FileImport
 from DB.Job import DBJobStateEnum
 
-from tests.credentials import ADMIN_USER_ID
-from tests.jobs import wait_for_stable, check_job_ok
+from tests.api_wrappers import api_wait_for_stable_job, api_file_import
+from tests.credentials import ADMIN_USER_ID, ADMIN_AUTH
+from tests.logspy_feature import IMPORT_JOB_LOG, DBWRITER_LOG
+from tests.jobs import check_job_ok, api_reply_to_waiting_job
 from tests.test_import import (
     create_project,
     UPDATE_DIR,
@@ -22,25 +25,37 @@ from tests.test_import import (
 )
 
 
+# @pytest.mark.asyncio
 def test_import_update(fastapi, caplog, tstlogs):
     """Update TSVs"""
-    caplog.set_level(logging.DEBUG)
     prj_id = create_project(ADMIN_USER_ID, "Test Import update")
 
     # Plain import first
     import_plain(fastapi, prj_id)
+    # await asyncio.sleep(0.05)
     with AsciiDumper() as dump_sce:
         dump_sce.run(projid=prj_id, out=tstlogs / "before_upd.txt")
 
     # Update using initial import data, should do nothing
-    do_import_update(prj_id, caplog, "Yes", str(PLAIN_DIR))
-    print("Import update 0:" + "\n".join(caplog.messages))
+    do_import_update(fastapi, prj_id, caplog, "Yes", str(PLAIN_DIR))
+    # await asyncio.sleep(0.05)
+    # print("Import update 0:" + "\n".join(caplog.messages))
     upds = [msg for msg in caplog.messages if msg.startswith("Updating")]
     assert upds == []
 
     # Update without classif, 10 cells
-    do_import_update(prj_id, caplog, "Yes", str(UPDATE_DIR))
-    print("Import update 1:" + "\n".join(caplog.messages))
+    do_import_update(fastapi, prj_id, caplog, "Yes", str(UPDATE_DIR))
+    [
+        print(f"DEBUG: {r.name} | {r.message} | Diff: {time.time() - r.created:.4f}s")
+        for r in [SimpleNamespace(**rec.__dict__) for rec in caplog.records]
+    ]
+    [
+        print(f"Handler: {type(h).__name__}")
+        for h in logging.getLogger(IMPORT_JOB_LOG).handlers
+    ]
+    # print(f"Logging Lock State: {logging._lock._owner}")
+    # await asyncio.sleep(0.05)
+    # print("Import update 1:" + "\n".join(caplog.messages))
     nb_upds = len([msg for msg in caplog.messages if msg.startswith("Updating")])
     # 9 fields + 7 derived sun positions
     assert nb_upds == 16
@@ -48,9 +63,18 @@ def test_import_update(fastapi, caplog, tstlogs):
     assert saves == ["Batch save objects of 0/0/0/0/0/0"] * 4
 
     # Update classif, 2 cells, one classif ID and one classif quality
-    do_import_update(prj_id, caplog, "Cla", str(UPDATE_DIR))
+    do_import_update(fastapi, prj_id, caplog, "Cla", str(UPDATE_DIR))
     nb_upds = len([msg for msg in caplog.messages if msg.startswith("Updating")])
-    print("Import update 2:" + "\n".join(caplog.messages))
+    # print("Import update 2:" + "\n".join(caplog.messages))
+    [
+        print(f"DEBUG2: {r.name} | {r.message} | Diff: {time.time() - r.created:.4f}s")
+        for r in [SimpleNamespace(**rec.__dict__) for rec in caplog.records]
+    ]
+    [
+        print(f"Handler: {type(h).__name__}")
+        for h in logging.getLogger(IMPORT_JOB_LOG).handlers
+    ]
+    # print(f"Logging Lock State: {logging._lock._owner}")
     assert nb_upds == 2
     # 1 line corresponds to nothing, on purpose
     nb_notfound = len(
@@ -67,8 +91,8 @@ def test_import_update(fastapi, caplog, tstlogs):
     assert saves == ["Batch save objects of 0/0/0/0/0/0"] * 4
 
     # Update classif, no change -> No log line
-    do_import_update(prj_id, caplog, "Yes", str(UPDATE_DIR))
-    print("Import update 3:" + "\n".join(caplog.messages))
+    do_import_update(fastapi, prj_id, caplog, "Yes", str(UPDATE_DIR))
+    # print("Import update 3:" + "\n".join(caplog.messages))
     assert len(caplog.messages) > 0
     upds = [msg for msg in caplog.messages if msg.startswith("Updating")]
     assert upds == []
@@ -76,23 +100,23 @@ def test_import_update(fastapi, caplog, tstlogs):
         dump_sce.run(projid=prj_id, out=tstlogs / "after_upd_3.txt")
 
 
+@pytest.mark.asyncio
 def test_import_update_sample_meta(fastapi, caplog, tstlogs):
     """Update TSV has a != free col sample_tot_vol"""
-    caplog.set_level(logging.DEBUG)
     prj_id = create_project(ADMIN_USER_ID, "Test Import update sample meta")
 
     # Plain import first
-    do_import(prj_id, IMPORT_TOT_VOL, ADMIN_USER_ID)
+    do_import(fastapi, prj_id, IMPORT_TOT_VOL, ADMIN_AUTH)
     with AsciiDumper() as dump_sce:
         dump_sce.run(projid=prj_id, out=tstlogs / "before_upd_tot_vol.txt")
 
     # Update using initial import data, should do nothing
-    do_import_update(prj_id, caplog, "Yes", str(IMPORT_TOT_VOL))
+    do_import_update(fastapi, prj_id, caplog, "Yes", str(IMPORT_TOT_VOL))
     print("Import update 0:" + "\n".join(caplog.messages))
     upds = [msg for msg in caplog.messages if msg.startswith("Updating")]
     assert upds == []
 
-    do_import_update(prj_id, caplog, "Yes", str(IMPORT_TOT_VOL_UPDATE))
+    do_import_update(fastapi, prj_id, caplog, "Yes", str(IMPORT_TOT_VOL_UPDATE))
     print("Import update 1:" + "\n".join(caplog.messages))
     upds = [msg for msg in caplog.messages if msg.startswith("Updating")]
     assert upds == [
@@ -100,7 +124,12 @@ def test_import_update_sample_meta(fastapi, caplog, tstlogs):
     ]
 
     do_import_update(
-        prj_id, caplog, "Yes", str(IMPORT_TOT_VOL_BAD_UPDATE), expected_errors=True
+        fastapi,
+        prj_id,
+        caplog,
+        "Yes",
+        str(IMPORT_TOT_VOL_BAD_UPDATE),
+        expected_errors=True,
     )
     print("Import update 2:" + "\n".join(caplog.messages))
     upds = [msg for msg in caplog.messages if msg.startswith("Updating")]
@@ -120,9 +149,9 @@ def test_import_update_sample_meta(fastapi, caplog, tstlogs):
     ]
 
 
+@pytest.mark.asyncio
 def test_import_update_various(fastapi, caplog, tstlogs):
     """Update TSVs"""
-    caplog.set_level(logging.DEBUG)
     prj_id = create_project(ADMIN_USER_ID, "Test Import update various")
 
     # Plain import first
@@ -131,13 +160,13 @@ def test_import_update_various(fastapi, caplog, tstlogs):
         dump_sce.run(projid=prj_id, out=tstlogs / "before_upd.txt")
 
     # Update using initial import data, should do nothing
-    do_import_update(prj_id, caplog, "Yes", str(VARIOUS_STATES_DIR))
+    do_import_update(fastapi, prj_id, caplog, "Yes", str(VARIOUS_STATES_DIR))
     print("Import update 0:" + "\n".join(caplog.messages))
     upds = [msg for msg in caplog.messages if msg.startswith("Updating")]
     assert upds == []
 
     # Update without classif, 10 cells
-    do_import_update(prj_id, caplog, "Yes", str(UPDATE_DIR))
+    do_import_update(fastapi, prj_id, caplog, "Yes", str(UPDATE_DIR))
     print("Import update various 1:" + "\n".join(caplog.messages))
     nb_upds = len([msg for msg in caplog.messages if msg.startswith("Updating")])
     # 9 fields + 7 derived sun positions - 3 different objects
@@ -146,7 +175,7 @@ def test_import_update_various(fastapi, caplog, tstlogs):
     assert saves == ["Batch save objects of 0/0/0/0/0/0"] * 4
 
     # Update classif, 2 cells, one classif ID and one classif quality + one fresh object to predicted
-    do_import_update(prj_id, caplog, "Cla", str(UPDATE_DIR))
+    do_import_update(fastapi, prj_id, caplog, "Cla", str(UPDATE_DIR))
     nb_upds = len([msg for msg in caplog.messages if msg.startswith("Updating")])
     print("Import update various 2:" + "\n".join(caplog.messages))
     assert nb_upds == 5
@@ -164,7 +193,7 @@ def test_import_update_various(fastapi, caplog, tstlogs):
     assert saves == ["Batch save objects of 0/0/0/0/0/0"] * 4
 
     # Update classif, no change -> No log line
-    do_import_update(prj_id, caplog, "Yes", str(UPDATE_DIR))
+    do_import_update(fastapi, prj_id, caplog, "Yes", str(UPDATE_DIR))
     print("Import update 3:" + "\n".join(caplog.messages))
     assert len(caplog.messages) > 0
     upds = [msg for msg in caplog.messages if msg.startswith("Updating")]
@@ -173,12 +202,14 @@ def test_import_update_various(fastapi, caplog, tstlogs):
         dump_sce.run(projid=prj_id, out=tstlogs / "after_upd_3.txt")
 
 
-def do_import_update(prj_id, caplog, mode, source, expected_errors=False):
-    params = ImportReq(skip_existing_objects=True, update_mode=mode, source_path=source)
+def do_import_update(fastapi, prj_id, caplog, mode, source, expected_errors=False):
+    params = dict(skip_existing_objects=True, update_mode=mode, source_path=source)
     caplog.clear()
-    with FileImport(prj_id, params) as sce:
-        rsp: ImportRsp = sce.run(ADMIN_USER_ID)
-    job = wait_for_stable(rsp.job_id)
+    caplog.set_level(logging.INFO)
+    caplog.set_level(logging.INFO, DBWRITER_LOG)
+    rsp = api_file_import(fastapi, prj_id, params, ADMIN_AUTH)
+    job_id = rsp.json()["job_id"]
+    job = api_wait_for_stable_job(fastapi, job_id)
 
     if job.state == DBJobStateEnum.Asking:
         usr_label_to_id = {"admin4test": 1, "elizandro rodriguez": 1}  # Map to admin
@@ -191,11 +222,11 @@ def do_import_update(prj_id, caplog, mode, source, expected_errors=False):
             reply["users"][usr] = usr_label_to_id[usr]
         for txo in job.question["missing_taxa"]:
             reply["taxa"][txo] = taxa_label_to_id[txo]
-        with JobCRUDService() as sce:
-            sce.reply(ADMIN_USER_ID, rsp.job_id, reply)
-        job = wait_for_stable(rsp.job_id)
+        api_reply_to_waiting_job(fastapi, job_id, reply)
+        job = api_wait_for_stable_job(fastapi, job_id)
     check_job_ok(job)
     # Check that all went fine
+    assert len(caplog.records) > 0, "no log captured!"
     if not expected_errors:
         for a_msg in caplog.records:
             assert a_msg.levelno != logging.ERROR, a_msg.getMessage()

@@ -36,12 +36,10 @@ from starlette import status
 
 from tests.credentials import CREATOR_AUTH, CREATOR_USER_ID
 from tests.jobs import (
-    wait_for_stable,
     check_job_ok,
     check_job_errors,
-    api_wait_for_stable_job,
-    api_check_job_errors,
 )
+from tests.api_wrappers import api_wait_for_stable_job, api_check_job_errors
 from tests.prj_utils import check_project
 from tests.test_classification import validate_all, query_all_objects
 from tests.test_fastapi import PRJ_CREATE_URL, ADMIN_AUTH, PROJECT_QUERY_URL
@@ -52,6 +50,7 @@ from tests.test_import import (
     do_import,
     create_project,
     dump_project,
+    do_import_uvp6,
 )
 from tests.tstlogs_fixture import pushd
 
@@ -78,15 +77,12 @@ def test_check_project_via_api(prj_id: int, fastapi):
 
 # Note: to go faster in a local dev environment, use "filled_database" instead of "database" below
 # BUT DON'T COMMIT THE CHANGE
-def test_subset_merge_uvp6(database, fastapi, caplog, tstlogs):
-    caplog.set_level(logging.ERROR)
-    prj_id = test_import_uvp6(database, caplog, "Test Subset Merge")
+def test_subset_merge_uvp6(fastapi, tstlogs):
+    prj_id = do_import_uvp6(fastapi, "Test Subset Merge")
     check_project(tstlogs, prj_id)
     # Dump the project
-    caplog.set_level(logging.DEBUG)
     with open(tstlogs / OUT_JSON, "w") as fd:
         dump_project(ADMIN_USER_ID, prj_id, fd)
-    print("\n".join(caplog.messages))
 
     # Subset in full, i.e. clone
     subset_prj_id = create_project(ADMIN_USER_ID, "Subset of UVP6", "UVP6")
@@ -101,7 +97,7 @@ def test_subset_merge_uvp6(database, fastapi, caplog, tstlogs):
     )
     with SubsetServiceOnProject(prj_id=prj_id, req=params) as sce:
         rsp: SubsetRsp = sce.run(ADMIN_USER_ID)
-    job = wait_for_stable(rsp.job_id)
+    job = api_wait_for_stable_job(fastapi, rsp.job_id)
     check_job_ok(job)
 
     # Dump the subset
@@ -1350,7 +1346,7 @@ MERGE_DIR_4 = DATA_DIR / "merge_test" / "second_merge"
 def test_merge_remap(fastapi, caplog, tstlogs):
     # Project 1, usual columns
     prj_id = create_project(CREATOR_USER_ID, "Merge Dest project")
-    do_import(prj_id, MERGE_DIR_1, CREATOR_USER_ID)
+    do_import(fastapi, prj_id, MERGE_DIR_1, CREATOR_AUTH)
     check_project(tstlogs, prj_id)
     # Project 2, same columns but different order
     # acq: remove acq_magnification and swap the 2 others
@@ -1358,7 +1354,7 @@ def test_merge_remap(fastapi, caplog, tstlogs):
     # sample: rename sample_volconc to sample_volconc2 and move it in last
     # object: remove object_link object_cv and object_sr, move lat & lon near the end
     prj_id2 = create_project(CREATOR_USER_ID, "Merge Src project")
-    do_import(prj_id2, MERGE_DIR_2, CREATOR_USER_ID)
+    do_import(fastapi, prj_id2, MERGE_DIR_2, CREATOR_AUTH)
     check_project(tstlogs, prj_id2)
     # Merge
     url = PROJECT_MERGE_URL.format(
@@ -1382,7 +1378,7 @@ def test_merge_remap(fastapi, caplog, tstlogs):
     assert all_lats == expected
     # Project 3 mistake as it has nothing to do with the 2 first ones
     prj_id3 = create_project(CREATOR_USER_ID, "Merge Src Big project")
-    do_import(prj_id3, MERGE_DIR_3, CREATOR_USER_ID)
+    do_import(fastapi, prj_id3, MERGE_DIR_3, CREATOR_AUTH)
     check_project(tstlogs, prj_id3)
     url = PROJECT_MERGE_URL.format(
         project_id=prj_id, source_project_id=prj_id3, dry_run=False
@@ -1396,7 +1392,7 @@ def test_merge_remap(fastapi, caplog, tstlogs):
     # Project 4 is different but compatible
     # It has a new acquisition for an existing sample
     prj_id4 = create_project(CREATOR_USER_ID, "Merge Src small project")
-    do_import(prj_id4, MERGE_DIR_4, CREATOR_USER_ID)
+    do_import(fastapi, prj_id4, MERGE_DIR_4, CREATOR_AUTH)
     check_project(tstlogs, prj_id4)
     url = PROJECT_MERGE_URL.format(
         project_id=prj_id, source_project_id=prj_id4, dry_run=False
@@ -1409,7 +1405,7 @@ def test_merge_remap(fastapi, caplog, tstlogs):
 
 def test_empty_subset_uvp6(database, fastapi, caplog):
     with caplog.at_level(logging.ERROR):
-        prj_id = test_import_uvp6(database, caplog, "Test empty Subset")
+        prj_id = do_import_uvp6(fastapi, "Test empty Subset")
 
     subset_prj_id = create_project(ADMIN_USER_ID, "Empty subset")
     # OK this test is just for covering the code in filters
@@ -1451,7 +1447,7 @@ def test_empty_subset_uvp6(database, fastapi, caplog):
     )
     with SubsetServiceOnProject(prj_id=prj_id, req=params) as sce:
         rsp: SubsetRsp = sce.run(ADMIN_USER_ID)
-    job = wait_for_stable(rsp.job_id)
+    job = api_wait_for_stable_job(fastapi, rsp.job_id)
     errors = check_job_errors(job)
     assert errors == ["No object found to clone into subset."]
     # A bit of fastapi testing
@@ -1461,9 +1457,9 @@ def test_empty_subset_uvp6(database, fastapi, caplog):
     assert response.status_code == status.HTTP_200_OK
 
 
-def test_empty_subset_uvp6_other(database, fastapi, caplog):
+def test_empty_subset_uvp6_other(fastapi, caplog):
     with caplog.at_level(logging.ERROR):
-        prj_id = test_import_uvp6(database, caplog, "Test empty Subset")
+        prj_id = do_import_uvp6(fastapi, "Test empty Subset")
 
     subset_prj_id = create_project(ADMIN_USER_ID, "Empty subset")
     # OK this test is just for covering (more) the code in filters
@@ -1505,7 +1501,7 @@ def test_empty_subset_uvp6_other(database, fastapi, caplog):
     )
     with SubsetServiceOnProject(prj_id=prj_id, req=params) as sce:
         rsp: SubsetRsp = sce.run(ADMIN_USER_ID)
-    job = wait_for_stable(rsp.job_id)
+    job = api_wait_for_stable_job(fastapi, rsp.job_id)
     errors = check_job_errors(job)
     assert errors == ["No object found to clone into subset."]
     # A bit of fastapi testing
@@ -1518,7 +1514,7 @@ def test_empty_subset_uvp6_other(database, fastapi, caplog):
 SUBSET_URL = "/projects/{project_id}/subset"
 
 
-def test_api_subset(fastapi, caplog):
+def test_api_subset(fastapi):
     # Subset a fresh project, why not?
     # Create an empty project
     url1 = PRJ_CREATE_URL
@@ -1544,7 +1540,7 @@ def test_api_subset(fastapi, caplog):
     test_check_project_via_api(tgt_prj_id, fastapi)
 
 
-def test_subset_of_no_visible_issue_484(fastapi, caplog):
+def test_subset_of_no_visible_issue_484(fastapi):
     # https://github.com/oceanomics/ecotaxa_dev/issues/484
     # First found as a subset of subset failed
     url1 = PRJ_CREATE_URL
@@ -1578,11 +1574,9 @@ def test_subset_of_no_visible_issue_484(fastapi, caplog):
     test_check_project_via_api(tgt_prj_id, fastapi)
 
 
-def test_subset_consistency(database, fastapi, caplog, tstlogs):
-    caplog.set_level(logging.ERROR)
+def test_subset_consistency(fastapi, tstlogs):
     from tests.test_import import import_plain
 
-    caplog.set_level(logging.DEBUG)
     prj_id = create_project(ADMIN_USER_ID, "Test Import update")
     # Plain import first
     import_plain(fastapi, prj_id)
@@ -1591,10 +1585,8 @@ def test_subset_consistency(database, fastapi, caplog, tstlogs):
     obj_ids = query_all_objects(fastapi, CREATOR_AUTH, prj_id)
     validate_all(fastapi, obj_ids[: int(len(obj_ids) / 2)], ADMIN_AUTH)
     # Dump the project
-    caplog.set_level(logging.DEBUG)
     with open(tstlogs / OUT_JSON, "w") as fd:
         dump_project(ADMIN_USER_ID, prj_id, fd)
-    print("\n".join(caplog.messages))
 
     # Subset in full, i.e. clone
     subset_prj_id = create_project(ADMIN_USER_ID, "Subset of")
@@ -1609,6 +1601,6 @@ def test_subset_consistency(database, fastapi, caplog, tstlogs):
     )
     with SubsetServiceOnProject(prj_id=prj_id, req=params) as sce:
         rsp: SubsetRsp = sce.run(ADMIN_USER_ID)
-    job = wait_for_stable(rsp.job_id)
+    job = api_wait_for_stable_job(fastapi, rsp.job_id)
     check_job_ok(job)
     check_project(tstlogs, subset_prj_id)

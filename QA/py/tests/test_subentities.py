@@ -9,7 +9,7 @@ from API_operations.ObjectManager import ObjectManager
 from starlette import status
 
 from tests.test_fastapi import ADMIN_AUTH
-from tests.test_import import ADMIN_USER_ID
+from tests.test_import import ADMIN_USER_ID, do_import_uvp6
 from tests.prj_utils import check_project
 
 PROJECT_CHECK_URL = "/projects/{project_id}/check"
@@ -43,9 +43,8 @@ def test_check_project_via_api(prj_id: int, fastapi):
 # BUT DON'T COMMIT THE CHANGE
 def test_subentities(database, fastapi, caplog, tstlogs):
     caplog.set_level(logging.ERROR)
-    from tests.test_import import test_import_uvp6
 
-    prj_id = test_import_uvp6(database, caplog, "Test Subset Merge")
+    prj_id = do_import_uvp6(fastapi, "Test Subset Merge")
     check_project(tstlogs, prj_id)
 
     # Pick the first object
