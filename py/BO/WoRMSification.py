@@ -12,6 +12,9 @@ from BO.Classification import ClassifIDT, ClassifIDListT
 from BO.ObjectSetQueryPlus import TaxoRemappingT
 from BO.Taxonomy import TaxonBOSet, TaxonBO
 from DB.Taxonomy import TaxonomyIDT, TaxoType
+from helpers.DynamicLogs import get_logger
+
+logger = get_logger(__name__)
 
 
 class WoRMSBO(TaxonBO):
@@ -135,15 +138,15 @@ class WoRMSifier(object):
                     renamed_taxon = renamed_taxon_set.get_by_id(a_taxon.renm_id)
                     self.phylo2worms[a_taxon.id] = create_worms_bo(renamed_taxon)
                 else:
-                    print("No solution for Phylo", a_taxon)
+                    logger.warning("No solution for Phylo %s", a_taxon)
             else:
                 if a_taxon.renm_id is not None:
                     self.morpho2phylo[a_taxon.id] = a_taxon.renm_id
                 else:
-                    print("No solution for Morpho", a_taxon)
+                    logger.warning("No solution for Morpho %s", a_taxon)
                 # No solution, excluded taxon, will be signaled during export
-        print("Mapping phylo2worms: ", self.phylo2worms)
-        print("Mapping morpho2phylo: ", self.morpho2phylo)
+        logger.info("Mapping phylo2worms: %s", self.phylo2worms)
+        logger.info("Mapping morpho2phylo: %s", self.morpho2phylo)
 
     def get_worms_targets(self) -> List[WoRMSBO]:
         return list(self.phylo2worms.values())

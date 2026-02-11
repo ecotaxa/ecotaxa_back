@@ -3,10 +3,10 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 import typing
-from enum import Enum
 from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import datetime
+from enum import Enum
 from typing import (
     List,
     Dict,
@@ -22,6 +22,8 @@ from typing import (
 )
 
 from BO.Classification import ClassifIDListT
+from BO.Collection import MinimalCollectionBO
+from BO.DataLicense import AccessLevelEnum
 from BO.Mappings import (
     RemapOp,
     MappedTableTypeT,
@@ -31,7 +33,6 @@ from BO.Mappings import (
 )
 from BO.Prediction import DeepFeatures
 from BO.ProjectPrivilege import ProjectPrivilegeBO
-from BO.DataLicense import AccessLevelEnum
 from BO.ProjectVars import ProjectVar
 from BO.Rights import RightsBO, Action
 from BO.SpaceTime import USED_FIELDS_FOR_SUNPOS, compute_sun_position
@@ -42,7 +43,9 @@ from BO.User import (
     MinimalUserBOListT,
     UserActivityListT,
 )
+from BO.User import UserIDT, UserIDListT, ContactUserBO
 from DB.Acquisition import Acquisition
+from DB.Collection import CollectionProject, Collection
 from DB.Object import (
     VALIDATED_CLASSIF_QUAL,
     PREDICTED_CLASSIF_QUAL,
@@ -60,9 +63,6 @@ from DB.Project import (
     ANNOTATE_NO_PREDICTION,
     EXPLORE_ONLY,
 )
-from DB.Collection import CollectionProject, Collection
-from BO.Collection import MinimalCollectionBO
-from BO.User import UserIDT, UserIDListT, ContactUserBO
 from DB.ProjectPrivilege import ProjectPrivilege
 from DB.ProjectVariables import KNOWN_PROJECT_VARS
 from DB.ProjectVariables import ProjectVariables
@@ -83,8 +83,8 @@ from DB.helpers.ORM import (
     func,
 )
 from helpers.DynamicLogs import get_logger
-from helpers.Timer import CodeTimer
 from helpers.FieldListType import FieldListType
+from helpers.Timer import CodeTimer
 
 logger = get_logger(__name__)
 
@@ -1221,11 +1221,9 @@ class CollectionProjectBOSet(ProjectBOSet):
                 keys[ProjectPrivilegeBO.MANAGE],
             ]:
                 if u in privileges[k]:
-                    print("remlove u " + k, u.name)
                     privileges[k].remove(u)
         for u in privileges[keys[ProjectPrivilegeBO.ANNOTATE]]:
             if u in privileges[keys[ProjectPrivilegeBO.MANAGE]]:
-                print("remlove u " + keys[ProjectPrivilegeBO.MANAGE], u.name)
                 privileges[keys[ProjectPrivilegeBO.MANAGE]].remove(u)
         return privileges
 
