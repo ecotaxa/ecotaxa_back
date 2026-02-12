@@ -9,8 +9,11 @@ sqlalchemy_views==0.3.1
 # When SQLAlchemy moves to 2.0 we'll be able to use psycopg3
 #psycopg[binary]==3.0.8
 psycopg2-binary==2.9.3
-# Pillow needs manual testing
+# pgvector for similarity search
+pgvector==0.2.4
+# Image processing during import
 Pillow==8.1.0
+#Pillow==10.4.0 # Last with python3.8
 # astral needs pytz
 astral==2.2
 pytz==2021.1
@@ -72,11 +75,11 @@ click==8.0.4
 mypy==1.2.0
 # END OF BACK-END REQUIREMENTS
 # Testing & QA additions
-tox==3.24.3
+tox==4.25.0
 pytest==8.3.5
 pytest-mock==3.14.1
 pytest-asyncio==0.24.0
-coverage==5.5
+coverage==7.6.1
 flake8==3.9.2
 radon==5.1.0
 deepdiff==5.5.0
@@ -88,5 +91,3 @@ stringcase==1.2.0
 # For python API client generated classes
 # Fails to build on GH due to obscure compilation issue. Nevermind for the moment.
 #backports-datetime-fromisoformat==1.0.0
-# pgvector for similarity search
-pgvector==0.2.4
