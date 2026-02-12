@@ -55,7 +55,7 @@ jobs:
     # Checkout.
     - uses: actions/checkout@v4
     # Run both tests and coverage
-    - run: PATH=/venv/bin:$PATH pip3 install tox==3.24.3
+    - run: PATH=/venv/bin:$PATH pip3 install tox==4.25.0
     - name: Run tox in QA
       working-directory: ./QA/py
       run: |
