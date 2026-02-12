@@ -177,9 +177,9 @@ def test_collection_lifecycle(fastapi, who):
 
     # update the project_ids
     url = COLLECTION_UPDATE_URL.format(collection_id=coll_id)
-    the_coll = {"project_ids": [6, prj_id]}
+    the_coll = {"project_ids": [-1, prj_id]}
     rsp = fastapi.patch(url, headers=who, json=the_coll)
-    assert rsp.status_code == status.HTTP_200_OK
+    assert rsp.status_code == status.HTTP_404_NOT_FOUND
     # reset to previous for compatibility with other tests
     url = COLLECTION_UPDATE_URL.format(collection_id=coll_id)
     the_coll = {"project_ids": [prj_id]}
@@ -202,7 +202,7 @@ def test_collection_lifecycle(fastapi, who):
     assert rsp.status_code == status.HTTP_200_OK
     assert rsp.json() == []
 
-    # Delete the collection
+    # Delete the collection. Note: It will cascade errors if a problem prevents it
     url = COLLECTION_DELETE_URL.format(collection_id=coll_id)
     rsp = fastapi.delete(url, headers=who)
     if who == CREATOR_AUTH:

@@ -159,7 +159,6 @@ from DB.Object import ObjectIDListT
 from DB.Project import ProjectTaxoStat, Project
 from DB.ProjectPrivilege import ProjectPrivilege
 from DB.User import User, OrganizationIDT
-from helpers.Asyncio import async_bg_run, log_streamer
 from helpers.DynamicLogs import get_logger, get_api_logger, MONITOR_LOG_PATH
 from helpers.fastApiUtils import (
     internal_server_error_handler,
@@ -3487,33 +3486,6 @@ def digest_project_images(
     with ImageManagerService() as sce:
         with RightsThrower():
             ret: str = sce.do_digests(current_user, project_id, max_digests)
-    return ret
-
-
-@app.get(
-    "/admin/images/digest",
-    operation_id="digest_images",
-    tags=["WIP"],
-    include_in_schema=False,
-    response_model=str,
-)  # TODO: Looks like a duplicate of above
-def digest_images(
-    max_digests: Optional[int] = Query(
-        default=100000, description="Number of images to scan."
-    ),
-    project_id: Optional[int] = Query(
-        default=None, description="Internal, numeric id of the project."
-    ),
-    current_user: int = Depends(get_current_user),
-) -> str:
-    """
-    Compute digests if they are not.
-    """
-    with ImageManagerService() as sce:
-        with RightsThrower():
-            ret: str = sce.do_digests(
-                current_user, prj_id=project_id, max_digests=max_digests
-            )
     return ret
 
 

@@ -10,7 +10,6 @@ from tests.jobs import check_job_ok
 from tests.test_import import do_import_uvp6
 
 PROJECT_DIGEST_URL = "/admin/images/{project_id}/digest?max_digests=100"
-DIGEST_URL = "/admin/images/digest"
 NIGHTLY_URL = "/admin/nightly"
 
 
@@ -33,10 +32,6 @@ def test_admin_images(fastapi):
 
     # md5 is persisted
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
-    assert rsp.status_code == status.HTTP_200_OK
-    assert rsp.json() == "Digest for 0 images done."
-
-    rsp = fastapi.get(DIGEST_URL, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
     assert rsp.json() == "Digest for 0 images done."
 
