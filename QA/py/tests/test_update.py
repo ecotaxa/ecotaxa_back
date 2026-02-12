@@ -23,7 +23,10 @@ from tests.test_import import (
     dump_project,
     do_import_uvp6,
 )
-from tests.test_import_simple import test_import_images_only
+from tests.test_import_simple import (
+    test_import_images_only,
+    do_import_images_via_service,
+)
 from tests.prj_utils import check_project
 
 OUT_JSON_REF = "out_upd_tst.json"
@@ -284,7 +287,7 @@ OBJECT_SET_UPDATE_URL = "/object_set/update"
 
 
 def test_api_updates(fastapi, caplog, tstlogs):
-    prj_id = test_import_images_only(fastapi, caplog, title="API updates test")
+    prj_id = do_import_images_via_service(fastapi, caplog, title="API updates test")
 
     # Recompute geo, which is a kind of update
     url = RECOMPUTE_GEO_URL.format(project_id=prj_id)

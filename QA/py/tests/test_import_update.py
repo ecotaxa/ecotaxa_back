@@ -100,7 +100,6 @@ def test_import_update(fastapi, caplog, tstlogs):
         dump_sce.run(projid=prj_id, out=tstlogs / "after_upd_3.txt")
 
 
-@pytest.mark.asyncio
 def test_import_update_sample_meta(fastapi, caplog, tstlogs):
     """Update TSV has a != free col sample_tot_vol"""
     prj_id = create_project(ADMIN_USER_ID, "Test Import update sample meta")
@@ -149,7 +148,6 @@ def test_import_update_sample_meta(fastapi, caplog, tstlogs):
     ]
 
 
-@pytest.mark.asyncio
 def test_import_update_various(fastapi, caplog, tstlogs):
     """Update TSVs"""
     prj_id = create_project(ADMIN_USER_ID, "Test Import update various")

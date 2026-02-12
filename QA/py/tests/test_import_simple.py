@@ -37,6 +37,10 @@ def test_import_images_only(fastapi, caplog, title):
     """
     Simple import AKA image only import, with fixed values.
     """
+    do_import_images_via_service(fastapi, caplog, title)
+
+
+def do_import_images_via_service(fastapi, caplog, title):
     caplog.set_level(logging.DEBUG)
     prj_id = create_project(ADMIN_USER_ID, title)
 
@@ -111,10 +115,14 @@ def test_import_images_only(fastapi, caplog, title):
 
 # @pytest.mark.skip()
 @pytest.mark.parametrize("title", ["Simple via fastapi"])
-def test_api_import_images(fastapi, title):
+def test_api_simple_import_images(fastapi, title):
     """
     Simple import with no fixed values at all, but using the upload directory.
     """
+    do_simple_import_images(fastapi, title)
+
+
+def do_simple_import_images(fastapi, title):
     prj_id = create_project(CREATOR_USER_ID, title)
     with open(PLAIN_FILE_PATH, "rb") as fin:
         upload_rsp = fastapi.post(
