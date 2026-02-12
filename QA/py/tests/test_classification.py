@@ -278,7 +278,12 @@ def test_classif(fastapi, tstlogs):
         TAXA_SET_QUERY_URL.format(taxa_ids="%d+%d" % (copepod_id, entomobryomorpha_id))
     )
     # Note: There is no real lineage in test DB
-    assert rsp.json() == [
+    json = rsp.json()
+    for a_taxon in json:
+        a_taxon["nb_objects"] = 0  # Unpredictable
+        a_taxon["children"].sort()
+    json.sort(key=lambda a_taxon: a_taxon["id"])
+    assert json == [
         {
             "aphia_id": 1080,
             "children": [84964, 94879],
