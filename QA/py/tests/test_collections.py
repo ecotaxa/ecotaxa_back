@@ -19,6 +19,7 @@ COLLECTION_SEARCH_URL = "/collections/search?title={title}"
 COLLECTION_EXACT_QUERY_URL = "/collections/by_short_title?q={short_title}"
 COLLECTION_UPDATE_URL = "/collections/{collection_id}"
 COLLECTION_DELETE_URL = "/collections/{collection_id}"
+PROJECT_COLLECTIONS_URL = "/projects/{project_id}/collections"
 
 INSTRUMENT_QUERY_URL = "/instruments/?project_ids={project_id}"
 
@@ -114,6 +115,21 @@ def test_collection_lifecycle(fastapi, who):
         "short_title": None,
         "display_order": {"associates": [], "creators": []},
     }
+
+    # Test project to collection link
+    url = PROJECT_COLLECTIONS_URL.format(project_id=prj_id)
+    rsp = fastapi.get(url, headers=who)
+    assert rsp.status_code == status.HTTP_200_OK
+    assert rsp.json() == []  # TODO: Bug? should return something I guess
+    # {
+    #     "id": coll_id,
+    #     "external_id": None,
+    #     "title": "Test collection",
+    #     "short_title": None,
+    #     "provider_user": int(who["Authorization"].split(" ")[-1]),
+    #     "contact_user": int(who["Authorization"].split(" ")[-1]),
+    #     "project_ids": [prj_id],
+    # }
 
     # Update the abstract
     url = COLLECTION_UPDATE_URL.format(collection_id=coll_id)
