@@ -18,15 +18,15 @@ from DB.Project import Project
 from DB.Sample import Sample
 from DB.helpers.ORM import orm_equals, any_, all_, func
 from DB.helpers.Postgres import values_cte
-from helpers.DynamicLogs import get_logger, LogsSwitcher, LogEmitter
+from helpers.DynamicLogs import get_logger
 from .helpers.Service import Service
 
 logger = get_logger(__name__)
 
 
-class MergeService(Service, LogEmitter):
+class MergeService(Service):
     """
-    Merge operation, move everything from source into destination project.
+    Merge operation, move everything from source into a destination project.
     """
 
     def __init__(self, prj_id: int, src_prj_id: int, dry_run: bool):
@@ -39,12 +39,8 @@ class MergeService(Service, LogEmitter):
         self.remap_operations: Dict[MappedTableTypeT, List[RemapOp]] = {}
         self.dest_augmented_mappings = ProjectMapping()
 
-    def log_file_path(self) -> str:
-        return "merge_%d_in_%d.log" % (self.prj_id, self.src_prj_id)
-
     def run(self, current_user_id: int) -> MergeRsp:
-        with LogsSwitcher(self):
-            return self.do_run(current_user_id)
+        return self.do_run(current_user_id)
 
     def do_run(self, current_user_id: int) -> MergeRsp:
         """
