@@ -20,7 +20,13 @@ import BO.ProjectVarsDefault as DefaultVars
 from API_models.exports import ExportRsp, SciExportTypeEnum
 from BO.Acquisition import AcquisitionIDT
 from BO.Classification import ClassifIDT, ClassifIDSetT
-from BO.Collection import CollectionIDT, CollectionBO, creators_key,associates_key, user_order_type
+from BO.Collection import (
+    CollectionIDT,
+    CollectionBO,
+    creators_key,
+    associates_key,
+    user_order_type,
+)
 from BO.CommonObjectSets import CommonObjectSets
 from BO.DataLicense import LicenseEnum, DataLicense
 from BO.ObjectSet import DescribedObjectSet
@@ -33,7 +39,6 @@ from BO.ObjectSetQueryPlus import (
 from BO.Project import ProjectBO, ProjectTaxoStats, ProjectIDListT
 from BO.ProjectSet import PermissionConsistentProjectSet
 from BO.Sample import SampleBO, SampleAggregForTaxon
-from BO.Taxonomy import TaxonBO
 from BO.Vocabulary import Vocabulary, Units
 from BO.WoRMSification import WoRMSifier, WoRMSBO
 from DB.Collection import Collection
@@ -90,6 +95,7 @@ ROLE_FOR_ASSOCIATE = "originator"
 
 def get_scientific_name_id(worms) -> str:
     return "urn:lsid:marinespecies.org:taxname:" + str(worms.aphia_id)
+
 
 class DarwinCoreExport(JobServiceBase):
     """
@@ -263,7 +269,6 @@ class DarwinCoreExport(JobServiceBase):
                 occ = DwC_Occurrence(
                     eventID=an_event_id,
                     occurrenceID=occurrence_id,
-                    individualCount=0,
                     scientificName=worms.name,  # ETS stores scientificname as name,
                     scientificNameID=get_scientific_name_id(worms),
                     kingdom=worms.kingdom,
@@ -391,12 +396,22 @@ class DarwinCoreExport(JobServiceBase):
         title = EMLTitle(title=self.the_collection.title)
 
         creators: List[EMLPerson] = []
-        creators_by_id: Dict[str,Any] = {str(a_user.id)+"_u":a_user for a_user in self.the_collection.creator_users}
-        creators_by_id.update({str(an_org.id)+"_o":an_org for an_org in self.the_collection.creator_organisations})
+        creators_by_id: Dict[str, Any] = {
+            str(a_user.id) + "_u": a_user
+            for a_user in self.the_collection.creator_users
+        }
+        creators_by_id.update(
+            {
+                str(an_org.id) + "_o": an_org
+                for an_org in self.the_collection.creator_organisations
+            }
+        )
         for an_id in self.the_collection.display_order[creators_key]:
-            a_creator=creators_by_id[an_id]
-            if an_id[-1]==user_order_type:
-                person, errs = self.user_to_eml_person(a_creator, "creator '%s'" % a_creator.name)
+            a_creator = creators_by_id[an_id]
+            if an_id[-1] == user_order_type:
+                person, errs = self.user_to_eml_person(
+                    a_creator, "creator '%s'" % a_creator.name
+                )
                 if errs:
                     self.warnings.extend(errs)
                 else:
@@ -406,11 +421,19 @@ class DarwinCoreExport(JobServiceBase):
                 creators.append(self.organisation_to_eml_person(a_creator))
 
         associates: List[EMLAssociatedPerson] = []
-        associates_by_id: Dict[str,Any] = {str(a_user.id)+"_u":a_user for a_user in self.the_collection.associate_users}
-        associates_by_id.update({str(an_org.id)+"_o":an_org for an_org in self.the_collection.associate_organisations})
+        associates_by_id: Dict[str, Any] = {
+            str(a_user.id) + "_u": a_user
+            for a_user in self.the_collection.associate_users
+        }
+        associates_by_id.update(
+            {
+                str(an_org.id) + "_o": an_org
+                for an_org in self.the_collection.associate_organisations
+            }
+        )
         for an_id in self.the_collection.display_order[associates_key]:
-            an_associate=associates_by_id[an_id]
-            if an_id[-1]==user_order_type:
+            an_associate = associates_by_id[an_id]
+            if an_id[-1] == user_order_type:
                 person, errs = self.user_to_eml_person(
                     an_associate, "associated person %d" % an_associate.id
                 )
@@ -426,7 +449,8 @@ class DarwinCoreExport(JobServiceBase):
                 role = ROLE_FOR_ASSOCIATE
                 if an_associate == self.the_collection.code_provider_org:
                     role = "custody"
-                associates.append(self.eml_person_to_associated_person(person_from_org, role)
+                associates.append(
+                    self.eml_person_to_associated_person(person_from_org, role)
                 )
         # TODO if needed
         # EMLAssociatedPerson = EMLPerson + specific role
@@ -434,7 +458,9 @@ class DarwinCoreExport(JobServiceBase):
             self.errors.append(
                 "No valid data creator (user or organisation) found for EML metadata."
             )
-        contact, errs = self.user_to_eml_person(self.the_collection.contact_user, "contact")
+        contact, errs = self.user_to_eml_person(
+            self.the_collection.contact_user, "contact"
+        )
         if contact is None:
             self.errors.append("No valid contact user found for EML metadata.")
             self.warnings.extend(errs)
@@ -654,12 +680,18 @@ class DarwinCoreExport(JobServiceBase):
                 added_occurences = self.add_occurrences_for_sample(
                     sample=a_sample, arch=arch, event_id=event_id, predicted=False
                 )
+                taxa_per_sample[event_id] = {
+                    val[1].taxo_id for val in added_occurences.values()
+                }
                 nb_added = len(added_occurences)
                 if self.include_predicted:
                     by_ml_added_occurences = self.add_occurrences_for_sample(
                         sample=a_sample, arch=arch, event_id=event_id, predicted=True
                     )
                     nb_added += len(by_ml_added_occurences)
+                    taxa_per_sample[event_id].update(
+                        {val[1].taxo_id for val in by_ml_added_occurences.values()}
+                    )
                 if nb_added == 0:
                     self.warnings.append(
                         "No occurrence added for sample %s"
@@ -873,7 +905,7 @@ class DarwinCoreExport(JobServiceBase):
         )
         for a_count in counts:
             txo_id, count = a_count["txo_id"], a_count["count"]
-            ret[txo_id] = SampleAggregForTaxon(count, None, None)
+            ret[txo_id] = SampleAggregForTaxon(txo_id, count, None, None)
 
         if SciExportTypeEnum.concentrations in with_computations:
             # Enrich with concentrations

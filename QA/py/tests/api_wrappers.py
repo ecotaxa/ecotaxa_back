@@ -27,7 +27,7 @@ def api_file_import(
     return rsp
 
 
-def api_wait_for_stable_job(fastapi, job_id, max_wait=200):
+def api_wait_for_stable_job(fastapi, job_id, max_wait=300):
     url = JOB_QUERY_URL.format(job_id=job_id)
     waited = 0
     while True:

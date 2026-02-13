@@ -3,10 +3,12 @@ import logging
 
 # noinspection PyPackageRequirements
 from io import BytesIO
+from typing import Any, Dict, List, Union
 from zipfile import ZipFile
 
 import pytest
 from starlette import status
+from starlette.testclient import TestClient
 
 from tests.api_wrappers import (
     api_wait_for_stable_job,
@@ -94,12 +96,7 @@ def exportable_collection(fastapi, admin_or_creator):
             "with_computations": ["ABO", "CNC", "BIV"],
         }
     )
-    rsp = fastapi.post(
-        COLLECTION_EXPORT_EMODNET_URL, headers=admin_or_creator, json=req
-    )
-    assert rsp.status_code == status.HTTP_200_OK
-    job_id = rsp.json()["job_id"]
-    api_wait_for_stable_job(fastapi, job_id)
+    job_id = export_collection(fastapi, req, admin_or_creator)
     rsp = api_check_job_failed(fastapi, job_id, "5 error(s) during run")
     json = rsp.json()
     assert json["errors"] == [
@@ -139,58 +136,84 @@ def exportable_collection(fastapi, admin_or_creator):
     add_concentration_data(fastapi, prj_id, "mn04")
 
     # Update the collection to fill in missing data
-    url = COLLECTION_QUERY_URL.format(collection_id=coll_id)
-    rsp = fastapi.get(url, headers=admin_or_creator)
-    assert rsp.status_code == status.HTTP_200_OK
-    the_coll = rsp.json()
-    url = COLLECTION_UPDATE_URL.format(collection_id=coll_id)
-    the_coll[
-        "abstract"
-    ] = """
+    def update_cb(the_coll):
+        the_coll[
+            "abstract"
+        ] = """
 This series is part of the long term planktonic monitoring of
     # Villefranche-sur-mer, which is one of the oldest and richest in the world.
     # The data collection and processing has been funded by several projects
     # over its lifetime. It is currently supported directly by the Institut de la Mer
     # de Villefranche (IMEV), as part of its long term monitoring effort.
     """
-    the_coll["license"] = (
-        "CC BY 4.0"  # Would do nothing as the license comes from the underlying project
-    )
-    user_doing_all = {
-        "id": REAL_USER_ID,
-        # TODO: below is redundant with ID and ignored, but fails validation (http 422) if not set
-        "email": "creator",
-        "name": "User Creating Projects",
-        "organisation": "OrgTest",
-    }
-    the_coll["creator_users"] = [user_doing_all]
-    the_coll["creator_organisations"] = ["Institut de la Mer de Villefranche (IMEV)"]
-    the_coll["contact_user"] = {
-        "id": ORDINARY_USER3_USER_ID,
-        # TODO: below is redundant with ID and ignored, but fails validation (http 422) if not set
-        "email": "?",
-        "name": ".",
-        "organisation": "OrgTest",
-    }
-    the_coll["provider_user"] = user_doing_all
-    rsp = fastapi.put(url, headers=admin_or_creator, json=the_coll)
-    assert rsp.status_code == status.HTTP_200_OK
+        the_coll["license"] = (
+            "CC BY 4.0"  # Would do nothing as the license comes from the underlying project
+        )
+        user_doing_all = {
+            "id": REAL_USER_ID,
+            # TODO: below is redundant with ID and ignored, but fails validation (http 422) if not set
+            "email": "creator",
+            "name": "User Creating Projects",
+            "organisation": "OrgTest",
+        }
+        the_coll["creator_users"] = [user_doing_all]
+        the_coll["creator_organisations"] = [
+            "Institut de la Mer de Villefranche (IMEV)"
+        ]
+        the_coll["contact_user"] = {
+            "id": ORDINARY_USER3_USER_ID,
+            # TODO: below is redundant with ID and ignored, but fails validation (http 422) if not set
+            "email": "?",
+            "name": ".",
+            "organisation": "OrgTest",
+        }
+        the_coll["provider_user"] = user_doing_all
+
+    the_coll = update_collection(fastapi, coll_id, admin_or_creator, update_cb)
+
     # Read-back for org Ids, we cannot fix creators order without them
-    url = COLLECTION_QUERY_URL.format(collection_id=coll_id)
-    rsp = fastapi.get(url, headers=admin_or_creator)
-    assert rsp.status_code == status.HTTP_200_OK
-    read = rsp.json()
-    station_id = read["creator_organisations"][0]["id"]
-    real_user_id = read["creator_users"][0]["id"]
-    url = COLLECTION_UPDATE_URL.format(collection_id=coll_id)
-    read["display_order"] = {  # This is EML order
-        "creators": [f"{real_user_id}_u", f"{station_id}_o"],
-    }
-    rsp = fastapi.put(url, headers=admin_or_creator, json=read)
-    assert rsp.status_code == status.HTTP_200_OK
+    def update_cb2(read):
+        station_id = read["creator_organisations"][0]["id"]
+        real_user_id = read["creator_users"][0]["id"]
+        read["display_order"] = {  # This is EML order
+            "creators": [f"{real_user_id}_u", f"{station_id}_o"],
+        }
+
+    update_collection(fastapi, coll_id, admin_or_creator, update_cb2)
+
     # Store in ref
     all_colls[str(admin_or_creator)] = the_coll
     yield the_coll
+
+
+def export_collection(
+    fastapi: TestClient,
+    req: Dict[str, Union[None, bool, List[Any], Dict[str, str], List[str]]],
+    admin_or_creator,
+) -> Any:
+    rsp = fastapi.post(
+        COLLECTION_EXPORT_EMODNET_URL, headers=admin_or_creator, json=req
+    )
+    assert rsp.status_code == status.HTTP_200_OK
+    job_id = rsp.json()["job_id"]
+    assert rsp.json()["errors"] == []
+    api_wait_for_stable_job(fastapi, job_id)
+    return job_id
+
+
+def update_collection(fastapi, coll_id, who, callback):
+    # Query
+    url = COLLECTION_QUERY_URL.format(collection_id=coll_id)
+    rsp = fastapi.get(url, headers=who)
+    assert rsp.status_code == status.HTTP_200_OK
+    the_coll = rsp.json()
+    # Update
+    callback(the_coll)
+    # Put
+    url = COLLECTION_UPDATE_URL.format(collection_id=coll_id)
+    rsp = fastapi.put(url, headers=who, json=the_coll)
+    assert rsp.status_code == status.HTTP_200_OK
+    return the_coll
 
 
 def make_project_exportable(prj_id, fastapi, who):
@@ -211,11 +234,7 @@ def test_emodnet_export(fastapi, exportable_collection, admin_or_creator, fixed_
     prj_id, prj_id2 = sorted(exportable_collection["project_ids"])
     req = _req_tmpl.copy()
     req.update({"collection_id": coll_id, "with_computations": ["ABO", "CNC", "BIV"]})
-    rsp = fastapi.post(
-        COLLECTION_EXPORT_EMODNET_URL, headers=admin_or_creator, json=req
-    )
-    assert rsp.status_code == status.HTTP_200_OK
-    job_id = rsp.json()["job_id"]
+    job_id = export_collection(fastapi, req, admin_or_creator)
     api_wait_for_stable_job(fastapi, job_id)
     job_status = api_check_job_ok(fastapi, job_id)
 
@@ -261,17 +280,12 @@ def test_emodnet_export(fastapi, exportable_collection, admin_or_creator, fixed_
         "Stats: predicted:2 validated:19 produced to zip:21 not produced (M):0 not produced (P):0",
     ]
     assert warns == ref_warns
-    assert rsp.json()["errors"] == []
-    # job_id = rsp.json()["job_id"]
 
     # Download the result zip
     url = JOB_DOWNLOAD_URL.format(job_id=job_id)
     # Ensure it's not public
     rsp = fastapi.get(url)
     assert rsp.status_code == status.HTTP_403_FORBIDDEN
-    # But the creator can get it
-    # rsp = fastapi.get(url, headers=REAL_USER_AUTH)
-    # assert rsp.status_code == status.HTTP_200_OK
 
     # Admin/owner can get it
     rsp = fastapi.get(url, headers=admin_or_creator)
@@ -292,10 +306,7 @@ def test_emodnet_export_with_absent(
             "with_computations": ["ABO", "CNC", "BIV"],
         }
     )
-    rsp = fastapi.post(COLLECTION_EXPORT_EMODNET_URL, headers=ADMIN_AUTH, json=req)
-    assert rsp.status_code == status.HTTP_200_OK
-    job_id = rsp.json()["job_id"]
-    api_wait_for_stable_job(fastapi, job_id)
+    job_id = export_collection(fastapi, req, ADMIN_AUTH)
     api_check_job_ok(fastapi, job_id)
     dl_url = JOB_DOWNLOAD_URL.format(job_id=job_id)
     rsp = fastapi.get(dl_url, headers=ADMIN_AUTH)
@@ -309,10 +320,7 @@ def test_emodnet_export_no_comp(
     prj_id, prj_id2 = sorted(exportable_collection["project_ids"])
     req = _req_tmpl.copy()
     req.update({"collection_id": coll_id})
-    rsp = fastapi.post(COLLECTION_EXPORT_EMODNET_URL, headers=ADMIN_AUTH, json=req)
-    assert rsp.status_code == status.HTTP_200_OK
-    job_id = rsp.json()["job_id"]
-    api_wait_for_stable_job(fastapi, job_id)
+    job_id = export_collection(fastapi, req, ADMIN_AUTH)
     api_check_job_ok(fastapi, job_id)
     dl_url = JOB_DOWNLOAD_URL.format(job_id=job_id)
     rsp = fastapi.get(dl_url, headers=ADMIN_AUTH)
@@ -338,10 +346,7 @@ def test_emodnet_export_recast1(
             },
         }
     )
-    rsp = fastapi.post(COLLECTION_EXPORT_EMODNET_URL, headers=ADMIN_AUTH, json=req)
-    assert rsp.status_code == status.HTTP_200_OK
-    job_id = rsp.json()["job_id"]
-    api_wait_for_stable_job(fastapi, job_id)
+    job_id = export_collection(fastapi, req, ADMIN_AUTH)
     job_status = api_check_job_ok(fastapi, job_id)
     assert "wrns" in job_status["result"], job_status
     warns = job_status["result"]["wrns"]
@@ -370,10 +375,7 @@ def test_emodnet_export_recast2(
             },
         }
     )
-    rsp = fastapi.post(COLLECTION_EXPORT_EMODNET_URL, headers=ADMIN_AUTH, json=req)
-    assert rsp.status_code == status.HTTP_200_OK
-    job_id = rsp.json()["job_id"]
-    api_wait_for_stable_job(fastapi, job_id)
+    job_id = export_collection(fastapi, req, ADMIN_AUTH)
     job_status = api_check_job_ok(fastapi, job_id)
     warns = job_status["result"]["wrns"]
     assert "Not produced due to non-match" not in str(warns)
