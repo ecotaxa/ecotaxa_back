@@ -5,7 +5,9 @@ import pytest
 from starlette import status
 
 from tests.credentials import ADMIN_AUTH, CREATOR_AUTH
+from tests.test_export import OBJECT_SET_GENERAL_EXPORT_URL
 from tests.test_fastapi import PROJECT_QUERY_URL, USER_ME_URL
+from tests.jobs import get_job_and_wait_until_ok
 from tests.test_import import do_test_import
 from tests.test_update_prj import PROJECT_UPDATE_URL
 
@@ -190,6 +192,15 @@ def test_collection_lifecycle(fastapi, who):
         url = COLLECTION_EXACT_QUERY_URL.format(short_title="my-tiny-title")
         rsp = fastapi.get(url, headers=who)
         assert rsp.status_code == status.HTTP_200_OK
+
+    # Test export
+    req_and_filters = {
+        "filters": {},
+        "request": {"collection_id": coll_id, "project_id": str(prj_id)},
+    }
+    rsp = fastapi.post(OBJECT_SET_GENERAL_EXPORT_URL, headers=who, json=req_and_filters)
+    assert rsp.status_code == status.HTTP_200_OK
+    get_job_and_wait_until_ok(fastapi, rsp)
 
     # Wrong search by short title
     url = COLLECTION_EXACT_QUERY_URL.format(short_title="my-absent-title")
