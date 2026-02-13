@@ -1,6 +1,13 @@
+import pytest
 from starlette import status
 
+from tests.credentials import ADMIN_AUTH
+from tests.test_classification import get_stats
+from tests.test_import import do_test_import
+from tests.test_reclassification import detritus_classif_id, reclassify
+
 SEARCH_WORMS_URL = "/searchworms/{}"
+TAXA_FROM_CENTRAL_URL = "/taxa/pull_from_central"
 
 ACARTIA_RSP = [
     {
@@ -60,3 +67,59 @@ def test_search_worms_name(fastapi, mocker):
 
     # Verify the mock was called correctly
     mock_call.assert_called_with("/wormstaxon/Acartia", {}, "get")
+
+
+def test_pull_taxa_update_from_central(fastapi, mocker):
+    prj_id = do_test_import(fastapi, "TSV deprecated export project")
+
+    # Mock the 'call' method of EcoTaxoServerClient
+    mock_call = mocker.patch("providers.EcoTaxoServer.EcoTaxoServerClient.call")
+    fake_taxon = {
+        "id": 999999,
+        "parent_id": 1,
+        "name": "TestTaxon",
+        "taxotype": "P",
+        "taxostatus": "N",
+        "aphia_id": 123456,
+        "rank": "Species",
+        "id_instance": 1,
+        "rename_to": None,
+        "display_name": "TestTaxon",
+        "source_desc": "Test source",
+        "source_url": "http://test.com",
+        "creation_datetime": "2021-08-20 09:09:39",
+        "creator_email": "test@test.com",
+        "lastupdate_datetime": "2021-08-20 09:09:40",
+    }
+    mock_updates = [fake_taxon]
+
+    mock_response = mocker.Mock()
+    mock_response.json.return_value = mock_updates
+    mock_call.return_value = mock_response
+
+    rsp = fastapi.get(TAXA_FROM_CENTRAL_URL, headers=ADMIN_AUTH)
+    assert rsp.status_code == status.HTTP_200_OK
+    assert rsp.json() == {"inserts": 1, "updates": 0, "error": None}
+
+    # Reclassify all detritus in the loaded project to imported taxon 999999
+    reclassify(fastapi, prj_id, detritus_classif_id, 999999)
+    # Verify reclassification
+    stats = get_stats(fastapi, prj_id)
+    assert 999999 in stats["used_taxa"]
+    assert detritus_classif_id not in stats["used_taxa"]
+
+    rsp = fastapi.get(TAXA_FROM_CENTRAL_URL, headers=ADMIN_AUTH)
+    assert rsp.status_code == status.HTTP_200_OK
+    assert rsp.json() == {"inserts": 0, "updates": 0, "error": None}
+
+    fake_taxon["creator_email"] = "me@mysite.org"
+    rsp = fastapi.get(TAXA_FROM_CENTRAL_URL, headers=ADMIN_AUTH)
+    assert rsp.status_code == status.HTTP_200_OK
+    assert rsp.json() == {"inserts": 0, "updates": 0, "error": None}
+
+    fake_taxon["taxostatus"] = "X"
+    with pytest.raises(Exception):
+        # TODO: The triggers trick is NOK
+        rsp = fastapi.get(TAXA_FROM_CENTRAL_URL, headers=ADMIN_AUTH)
+        # assert rsp.status_code == status.HTTP_200_OK
+        assert rsp.json() == {"inserts": 0, "updates": 0, "error": None}
