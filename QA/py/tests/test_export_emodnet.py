@@ -509,6 +509,20 @@ def add_concentration_data(fastapi, prj_id, but_not="XXXXXX"):
     assert rsp.json() == len(acquis_ids)
 
 
+@pytest.fixture(autouse=True)
+def mock_nerc(mocker):
+    lookup = {
+        "http://vocab.nerc.ac.uk/collection/L22/current/TOOL1578/": "Hydroptic Underwater Vision Profiler 6 LP {UVP6} imaging sensor",
+    }
+
+    def side_effect(vocab_url: str) -> str:
+        return lookup.get(vocab_url, "Unknown " + vocab_url)
+
+    mocker.patch(
+        "providers.NERC.NERCFetcher.get_preferred_name", side_effect=side_effect
+    )
+
+
 def test_names():
     from API_operations.exports.DarwinCore import DarwinCoreExport
 
