@@ -4,21 +4,23 @@
 #
 
 from typing import Optional, List
-from API_models.crud import OrganizationModel
+
 from fastapi import HTTPException
+
+from API_models.crud import OrganizationModel
+from BO.Collection import CollectionBO, CollectionIDListT
 from BO.Rights import RightsBO, NOT_AUTHORIZED, NOT_FOUND
 from BO.User import UserIDT
 from DB.Collection import CollectionUserRole
 from DB.User import User, Organization, OrganizationIDT, OrganizationIDListT
-from BO.Collection import CollectionBO, CollectionIDListT
 from helpers.DynamicLogs import get_logger
 from helpers.httpexception import (
     DETAIL_NOT_FOUND,
     DETAIL_ALREADY_EXISTS,
     DETAIL_CANT_CHECK_VALIDITY,
 )
-from ..helpers.UserValidation import ActivationType
 from ..helpers.Service import Service
+from ..helpers.UserValidation import ActivationType
 
 logger = get_logger(__name__)
 
@@ -193,7 +195,7 @@ class OrganizationService(Service):
         logger.info("Organization %s :  '%s'" % (action, update_src.name))
 
     def _is_valid_org_throw(self, mod_src: OrganizationModel, _id: int):
-        # check if it's a valid email - check should be done before exists but has to be compatible with data history
+        # check if it's a valid name
         if mod_src.name.strip() == "":
             raise HTTPException(
                 status_code=422,
