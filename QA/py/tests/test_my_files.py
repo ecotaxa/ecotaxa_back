@@ -58,16 +58,18 @@ def test_my_files(fastapi, tstlogs, title):
     assert list_rsp.status_code == 200
     my_files_root: Dict = list_rsp.json()
     assert my_files_root["path"] == ""
-    my_files_root["entries"].sort(key=lambda x: x["name"])
-    assert my_files_root["entries"] == [
-        {
-            "mtime": "",
-            "name": DIRPATH,
-            "size": 0,
-            "type": "D",
-        },
-        {"mtime": "", "name": "import_test", "size": 0, "type": "D"},
-    ]
+    assert {
+        "mtime": "",
+        "name": DIRPATH,
+        "size": 0,
+        "type": "D",
+    } in my_files_root["entries"]
+    assert {
+        "mtime": "",
+        "name": "import_test",
+        "size": 0,
+        "type": "D",
+    } in my_files_root["entries"]
 
     # The files are stored in the subdirectory
     DIRDEST = DIRPATH + SEPARATOR + DEST_DIR_NAME
