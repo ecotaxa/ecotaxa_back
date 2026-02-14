@@ -86,4 +86,5 @@ def api_check_job_failed(fastapi, job_id, expected_message):
     return rsp
 
 
+REMOVE_FILE_URL = "/user_files/rm/"
 UPLOAD_FILE_URL = "/user_files/"

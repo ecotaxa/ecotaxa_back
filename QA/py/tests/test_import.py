@@ -26,6 +26,7 @@ from tests.api_wrappers import (
     api_wait_for_stable_job,
     api_check_job_questions,
     UPLOAD_FILE_URL,
+    REMOVE_FILE_URL,
 )
 from tests.credentials import ADMIN_AUTH, ADMIN_USER_ID, CREATOR_USER_ID, CREATOR_AUTH
 from tests.jobs import (
@@ -649,3 +650,33 @@ def test_import_breaking_unicity(fastapi):
         "'{'m106_mn01_n1_sml'}', it cannot be associated as well with "
         "'m106_mn01_n1_sml_brk"
     ]
+
+
+def test_uvp6_via_myfile(fastapi, caplog):
+    prj_id = create_project(CREATOR_USER_ID, "UVP6 via MyFiles")
+    local_file = SHARED_DIR / V6_FILE
+    with open(local_file, "rb") as fin:
+        upload_rsp = fastapi.post(
+            UPLOAD_FILE_URL,
+            headers=CREATOR_AUTH,
+            files={"file": fin},
+        )
+        assert upload_rsp.status_code == 200
+    no_zip = local_file.name.replace(".zip", "")
+
+    list_rsp = fastapi.get(f"{UPLOAD_FILE_URL}", headers=CREATOR_AUTH)
+    assert list_rsp.status_code == 200
+    user_files = list_rsp.json()
+    assert no_zip in [a_file["name"] for a_file in user_files["entries"]]
+
+    do_import(fastapi, prj_id, no_zip, CREATOR_AUTH)
+    # Check that objects were imported
+    rsp = fastapi.post(
+        f"/object_set/{prj_id}/summary",
+        headers=CREATOR_AUTH,
+        params={"only_total": False},
+        json={},
+    )
+    assert rsp.json()["total_objects"] == 15
+
+    assert f"Importing UVP6 file [base]/b_da_19_Images" in caplog.messages

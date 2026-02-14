@@ -7,7 +7,6 @@ import random
 import shutil
 import zipfile
 from pathlib import Path
-
 # noinspection PyPackageRequirements
 from typing import Callable, List, Dict, Tuple, Generator, Set
 
@@ -41,6 +40,7 @@ class InBundle(object):
 
     TSV_FILTERS = ("**/ecotaxa*.txt", "**/ecotaxa*.tsv")
     UVP6_FILTER = "**/*Images.zip"
+    UVP6_DIRS_FILTER = "**/*Images"
     MAX_FILES = 2000
 
     def __init__(self, path: str, user_loc: str, temp_dir: Path):
@@ -67,8 +67,17 @@ class InBundle(object):
                 self.possible_files.append(a_file)
                 one_more()
         self.possible_files.sort()
+        bundles = list(self.path.glob(self.UVP6_FILTER))
+        for bundle_dir in self.path.glob(self.UVP6_DIRS_FILTER):
+            if not bundle_dir.is_dir():
+                continue
+            tsv_file = bundle_dir / ("ecotaxa_" + bundle_dir.name[:-7] + ".tsv")
+            if not tsv_file.exists():
+                continue
+            self.possible_files.remove(tsv_file)
+            bundles.append(bundle_dir)
         self.sub_bundles: List[UVP6Bundle] = []
-        for a_bundle in self.path.glob(self.UVP6_FILTER):
+        for a_bundle in bundles:
             bundle_loc = str(a_bundle.relative_to(self.path))
             self.sub_bundles.append(
                 UVP6Bundle(a_bundle, user_loc + "/" + bundle_loc, temp_dir)
@@ -136,7 +145,7 @@ class InBundle(object):
             )
 
         for sub_bundle in self.sub_bundles:
-            logger.info("Importing UVP6 file %s" % self.user_loc)
+            logger.info("Importing UVP6 file %s" % sub_bundle.user_loc)
             sub_bundle.before_import(how)
             _rows_for_bundle = sub_bundle.import_each_file(where, how, stats)
             # Already counted in recursive call
@@ -366,16 +375,19 @@ class InBundle(object):
 class UVP6Bundle(InBundle):
     """
     An UVP6 bundle, i.e. an *Images.zip inside a enclosing .zip or directory.
-    We have e.g. b_da_19_Images.zip.
-    The zip contains:
+    We have e.g. b_da_19_Images.zip or b_da_19_Images
+    The container has:
         - At root, an optional vignette generation config (compute_vignette.txt)
-        - At root, the index TSV file, with name derived from the zip, e.g. ecotaxa_b_da_19.tsv
+        - At root, the index TSV file, with name derived from the container, e.g. ecotaxa_b_da_19.tsv
     """
 
     VIGNETTE_CONFIG = "compute_vignette.txt"
     TEMP_VIGNETTE = "tempvignette.png"
 
     def __init__(self, path: Path, user_loc: str, temp_dir: Path):
+        if path.is_dir():
+            super().__init__(path.as_posix(), user_loc, temp_dir)
+            return
         assert path.suffix.lower() == ".zip"
         # Extract the zip file, in order to fall back to a directory like base InBundle
         name_no_zip = path.stem  # e.g. b_da_19_Images
