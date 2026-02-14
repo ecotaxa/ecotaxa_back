@@ -1136,7 +1136,12 @@ class ObjectSetFilter(object):
             else:
                 where_clause *= "obh.classif_qual = '" + self.status_filter[:3] + "'"
 
-        if self.MapN and self.MapW and self.MapE and self.MapS:
+        if (
+            self.MapN is not None
+            and self.MapW is not None
+            and self.MapE is not None
+            and self.MapS is not None
+        ):
             where_clause *= "obh.latitude BETWEEN :MapS AND :MapN"
             where_clause *= "obh.longitude BETWEEN :MapW AND :MapE"
             params["MapN"] = self.MapN
@@ -1144,7 +1149,7 @@ class ObjectSetFilter(object):
             params["MapE"] = self.MapE
             params["MapS"] = self.MapS
 
-        if self.depth_min and self.depth_max:
+        if self.depth_min is not None and self.depth_max is not None:
             where_clause *= "obh.depth_min BETWEEN :depthmin AND :depthmax"
             where_clause *= "obh.depth_max BETWEEN :depthmin AND :depthmax"
             params["depthmin"] = self.depth_min
@@ -1198,13 +1203,13 @@ class ObjectSetFilter(object):
             params["validtodate"] = self.validated_to
 
         if self.free_num and (
-            self.free_num_start or self.free_num_end
+            self.free_num_start is not None or self.free_num_end is not None
         ):  # e.g. "on02" for object numeric Column #2 (1-based)
-            if self.free_num_start:
+            if self.free_num_start is not None:
                 comp_op = " >= "
                 bound = self.free_num_start
             else:
-                assert self.free_num_end
+                assert self.free_num_end is not None
                 comp_op = " <= "
                 bound = self.free_num_end
             try:

@@ -3,8 +3,10 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 from typing import List, Union, Tuple, Optional, Dict
+
 from API_models.crud import CreateProjectReq
 from BO.Classification import ClassifIDListT, ClassifIDT
+from BO.Collection import MinimalCollectionBO
 from BO.ObjectSet import EnumeratedObjectSet
 from BO.Project import (
     ProjectBO,
@@ -13,7 +15,6 @@ from BO.Project import (
     ProjectUserStats,
     ProjectColumns,
 )
-from BO.Collection import MinimalCollectionBO
 from BO.ProjectSet import ProjectSetColumnStats, LimitedInCategoriesProjectSet
 from BO.Rights import RightsBO, Action, NOT_FOUND
 from BO.User import UserIDT
@@ -23,8 +24,8 @@ from DB.User import User
 from DB.helpers.ORM import clone_of
 from FS.VaultRemover import VaultRemover
 from helpers.DynamicLogs import get_logger
-from ..helpers.Service import Service
 from helpers.FieldListType import FieldListType
+from ..helpers.Service import Service
 
 logger = get_logger(__name__)
 
@@ -304,19 +305,20 @@ class ProjectsService(Service):
             fields[0 : len(FieldListType.default)] == FieldListType.default.value
             and len(fields) > 1
         ):
-            project_columns: Dict = {}
-            project_columns[FieldListType.default] = [
-                Project.projid,
-                Project.title,
-                Project.instrument,
-                Project.comments,
-                Project.initclassiflist,
-                Project.classiffieldlist,
-                Project.cnn_network_id,
-                Project.status,
-                Project.access,
-                Project.formulae,
-            ]
+            project_columns: Dict = {
+                FieldListType.default: [
+                    Project.projid,
+                    Project.title,
+                    Project.instrument,
+                    Project.comments,
+                    Project.initclassiflist,
+                    Project.classiffieldlist,
+                    Project.cnn_network_id,
+                    Project.status,
+                    Project.access,
+                    Project.formulae,
+                ]
+            }
 
             project_columns[FieldListType.all] = project_columns[
                 FieldListType.default
@@ -333,15 +335,15 @@ class ProjectsService(Service):
             if typelist != FieldListType.all and len(lfields):
                 lfields = lfields[0].split(",")
                 for col in project_columns[FieldListType.all]:
-                    if col.name in lfields:
+                    if col.key in lfields:
                         columnplus.append(col)
                 columns.extend(columnplus)
 
         for project in projects.as_list():
             values = []
             for column in columns:
-                if hasattr(project, column.name):
-                    values.append(getattr(project, column.name))
+                if hasattr(project, column.key):
+                    values.append(getattr(project, column.key))
                 elif column == "userstats":
                     annotators = ProjectBO.read_user_stats(self.session, project_ids)
                     creators = []
@@ -350,5 +352,6 @@ class ProjectsService(Service):
                     values.append(creators)
                 else:
                     values.append(NOT_FOUND)
-            ret.append(ProjectColumns(project.projid, columns, values))
+            cols = [col.key for col in columns]
+            ret.append(ProjectColumns(project.projid, cols, values))
         return ret

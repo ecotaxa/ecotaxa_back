@@ -14,6 +14,9 @@ from tests.test_collections import COLLECTION_QUERY_URL
 from tests.test_objectset_query import _prj_query
 
 
+PROJECT_SET_PROJECTS_URL = "/project_set/projects?ids={prj_ids}"
+
+
 def test_project_set(fastapi):
     # Functions used during prediction
     # Reuse the collection functions, as there are 2 projects there
@@ -105,3 +108,145 @@ def test_project_set(fastapi):
         )
         stats = prj_set2.read_columns_stats()
         assert stats.counts == (2, 2, 2, 2, 2, 2)
+
+
+def test_project_set_get_projects(fastapi):
+    coll_id, coll_title, prj_id = create_test_collection(fastapi, "prj_set_get_prj")
+    url = COLLECTION_QUERY_URL.format(collection_id=coll_id)
+    rsp = fastapi.get(url, headers=ADMIN_AUTH)
+    ids = rsp.json()["project_ids"]
+    prj_ids_str = ",".join([str(i) for i in ids])
+
+    url = PROJECT_SET_PROJECTS_URL.format(prj_ids=prj_ids_str)
+    # No auth
+    rsp = fastapi.get(url)
+    assert (
+        rsp.status_code == status.HTTP_200_OK
+    )  # Endpoint uses get_optional_current_user
+
+    # With auth &default list
+    rsp = fastapi.get(url, headers=ADMIN_AUTH)
+    assert rsp.status_code == status.HTTP_200_OK
+    data = rsp.json()
+    assert data == [
+        {
+            "columns": [
+                "projid",
+                "title",
+                "instrument",
+                "comments",
+                "initclassiflist",
+                "classiffieldlist",
+                "cnn_network_id",
+                "status",
+                "access",
+                "formulae",
+            ],
+            "projid": ids[0],
+            "values": [
+                ids[0],
+                "EMODNET project prj_set_get_prj",
+                "UVP6",
+                None,
+                None,
+                None,
+                None,
+                "Annotate",
+                "1",
+                None,
+            ],
+        },
+        {
+            "columns": [
+                "projid",
+                "title",
+                "instrument",
+                "comments",
+                "initclassiflist",
+                "classiffieldlist",
+                "cnn_network_id",
+                "status",
+                "access",
+                "formulae",
+            ],
+            "projid": ids[1],
+            "values": [
+                ids[1],
+                "EMODNET project2 prj_set_get_prj",
+                "UVP6",
+                None,
+                "",
+                None,
+                None,
+                "Annotate",
+                "1",
+                None,
+            ],
+        },
+    ]
+
+    # With fields
+    url_fields = url + "&fields=*default,title,status"
+    rsp = fastapi.get(url_fields, headers=ADMIN_AUTH)
+    assert rsp.status_code == status.HTTP_200_OK
+    data = rsp.json()
+    assert data == [
+        {
+            "columns": [
+                "projid",
+                "title",
+                "instrument",
+                "comments",
+                "initclassiflist",
+                "classiffieldlist",
+                "cnn_network_id",
+                "status",
+                "access",
+                "formulae",
+                "title",
+            ],
+            "projid": ids[0],
+            "values": [
+                ids[0],
+                "EMODNET project prj_set_get_prj",
+                "UVP6",
+                None,
+                None,
+                None,
+                None,
+                "Annotate",
+                "1",
+                None,
+                "EMODNET project prj_set_get_prj",
+            ],
+        },
+        {
+            "columns": [
+                "projid",
+                "title",
+                "instrument",
+                "comments",
+                "initclassiflist",
+                "classiffieldlist",
+                "cnn_network_id",
+                "status",
+                "access",
+                "formulae",
+                "title",
+            ],
+            "projid": ids[1],
+            "values": [
+                ids[1],
+                "EMODNET project2 prj_set_get_prj",
+                "UVP6",
+                None,
+                "",
+                None,
+                None,
+                "Annotate",
+                "1",
+                None,
+                "EMODNET project2 prj_set_get_prj",
+            ],
+        },
+    ]

@@ -22,7 +22,6 @@ from .helpers.Direct import func
 from .helpers.ORM import Model, relationship, Insert
 from .helpers.Postgres import TIMESTAMP, INTEGER
 
-
 if TYPE_CHECKING:
     from .ProjectPrivilege import ProjectPrivilege
 
@@ -126,17 +125,6 @@ class User(Person):
     __mapper_args__ = {
         "polymorphic_identity": "user",
     }
-
-    def to_guest(self) -> Guest:
-        guest = Guest()
-        guest.id = self.id
-        guest.name = self.name
-        guest.email = self.email
-        guest.country = self.country
-        guest.orcid = self.orcid
-        guest.usercreationdate = self.usercreationdate
-        guest.organization_id = self.organization_id
-        return guest
 
     def has_role(self, role: str) -> bool:
         # TODO: Cache a bit. All roles are just python objects due to SQLAlchemy magic.

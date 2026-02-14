@@ -149,7 +149,7 @@ from BO.ColumnUpdate import ColUpdateList
 from BO.Job import JobBO
 from BO.Object import ObjectBO
 from BO.Process import ProcessBO
-from BO.Project import ProjectBO, ProjectUserStats
+from BO.Project import ProjectBO, ProjectUserStats, ProjectColumns
 from BO.ProjectSet import ProjectSetColumnStats
 from BO.Sample import SampleBO, SampleTaxoStats
 from BO.Taxonomy import TaxonBO
@@ -1260,6 +1260,7 @@ MyORJSONResponse.register(ObjectSetQueryRsp, ObjectSetQueryRsp)
 MyORJSONResponse.register(CollectionBO, CollectionModel)
 MyORJSONResponse.register(CollectionAggregatedRsp, CollectionAggregatedRsp)
 MyORJSONResponse.register(Sample, SampleModel)
+MyORJSONResponse.register(ProjectColumns, ProjectColumnsModel)
 project_model_columns = plain_columns(ProjectModel)
 
 
