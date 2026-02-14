@@ -10,7 +10,7 @@ from starlette import status
 from tests.credentials import USER_AUTH, CREATOR_AUTH
 from tests.test_classification import OBJECT_SET_SUMMARY_URL
 from tests.test_import import PLAIN_FILE_PATH, do_test_import
-from tests.test_import_simple import UPLOAD_FILE_URL
+from tests.api_wrappers import UPLOAD_FILE_URL
 
 MYFILES_URL = "/my_files/{sub_path}"
 COMMON_FILES_URL = "/common_files/?path={sub_path}"

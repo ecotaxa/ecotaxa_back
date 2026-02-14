@@ -25,10 +25,9 @@ from starlette import status
 from tests.credentials import ADMIN_USER_ID, CREATOR_AUTH, CREATOR_USER_ID
 from tests.test_import import PLAIN_DIR, create_project, PLAIN_FILE_PATH
 from tests.jobs import check_job_ok
-from tests.api_wrappers import api_wait_for_stable_job
+from tests.api_wrappers import api_wait_for_stable_job, UPLOAD_FILE_URL
 
 IMPORT_IMAGES_URL = "/simple_import/{project_id}?dry_run={dry_run}"
-UPLOAD_FILE_URL = "/user_files/"
 
 
 # @pytest.mark.skip()

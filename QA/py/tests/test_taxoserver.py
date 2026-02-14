@@ -8,6 +8,7 @@ from tests.test_reclassification import detritus_classif_id, reclassify
 
 SEARCH_WORMS_URL = "/searchworms/{}"
 TAXA_FROM_CENTRAL_URL = "/taxa/pull_from_central"
+TAXON_PUT = "/taxon/central"
 
 ACARTIA_RSP = [
     {
@@ -123,3 +124,56 @@ def test_pull_taxa_update_from_central(fastapi, mocker):
         rsp = fastapi.get(TAXA_FROM_CENTRAL_URL, headers=ADMIN_AUTH)
         # assert rsp.status_code == status.HTTP_200_OK
         assert rsp.json() == {"inserts": 0, "updates": 0, "error": None}
+
+
+def test_add_taxon_in_central(fastapi, mocker):
+    # Mock the 'call' method of EcoTaxoServerClient
+    mock_call = mocker.patch("providers.EcoTaxoServer.EcoTaxoServerClient.call")
+    mock_response = mocker.Mock()
+    mock_response.json.return_value = {"msg": "ok", "id": 789999}
+    mock_call.return_value = mock_response
+
+    params = {
+        "name": "NewTaxon",
+        "parent_id": 1,
+        "taxotype": "P",
+        "creator_email": "creator@test.com",
+        "source_desc": "Test source",
+        "source_url": "http://test.com",
+    }
+
+    rsp = fastapi.put(TAXON_PUT, params=params, headers=ADMIN_AUTH)
+
+    assert rsp.status_code == status.HTTP_200_OK
+    assert rsp.json()["msg"] == "ok"
+
+    # Verify the mock was called correctly
+    # The service adds 'creation_datetime' and 'taxostatus'
+    called_args = mock_call.call_args
+    assert called_args[0][0] == "/settaxon/"
+    sent_params = called_args[0][1]
+    assert sent_params["name"] == "NewTaxon"
+    assert (
+        sent_params["parent_id"] == "1"
+    )  # FastAPI Query params are strings in request.query_params
+    assert sent_params["taxotype"] == "P"
+    assert sent_params["creator_email"] == "creator@test.com"
+    assert sent_params["taxostatus"] == "N"
+    assert "creation_datetime" in sent_params
+
+
+def test_add_taxon_in_central_unauthorized(fastapi, mocker):
+    # Mock the 'call' method of EcoTaxoServerClient
+    mock_call = mocker.patch("providers.EcoTaxoServer.EcoTaxoServerClient.call")
+
+    params = {
+        "name": "NewTaxonUnauthorized",
+        "parent_id": 1,
+        "taxotype": "P",
+        "creator_email": "creator@test.com",
+    }
+
+    # Unauthenticated call
+    rsp = fastapi.put(TAXON_PUT, params=params)
+    assert rsp.status_code == status.HTTP_403_FORBIDDEN
+    assert mock_call.call_count == 0

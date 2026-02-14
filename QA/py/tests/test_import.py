@@ -7,6 +7,8 @@ from os.path import dirname, realpath
 from pathlib import Path
 
 import pytest
+from starlette import status
+
 from API_models.crud import *
 
 # noinspection PyPackageRequirements
@@ -17,17 +19,15 @@ from API_operations.AsciiDump import AsciiDumper
 from API_operations.CRUD.Projects import ProjectsService
 from API_operations.JsonDumper import JsonDumper
 
-
 # noinspection PyPackageRequirements
 from DB.Job import DBJobStateEnum
-from starlette import status
-
 from tests.api_wrappers import (
     api_file_import,
     api_wait_for_stable_job,
     api_check_job_questions,
+    UPLOAD_FILE_URL,
 )
-from tests.credentials import ADMIN_AUTH, ADMIN_USER_ID
+from tests.credentials import ADMIN_AUTH, ADMIN_USER_ID, CREATOR_USER_ID, CREATOR_AUTH
 from tests.jobs import (
     check_job_ok,
     check_job_errors,

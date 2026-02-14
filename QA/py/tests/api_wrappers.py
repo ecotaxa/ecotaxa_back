@@ -84,3 +84,6 @@ def api_check_job_failed(fastapi, job_id, expected_message):
         expected_message,
     ), job_dict
     return rsp
+
+
+UPLOAD_FILE_URL = "/user_files/"

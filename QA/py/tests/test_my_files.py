@@ -20,13 +20,13 @@ from tests.api_wrappers import (
     api_file_import,
     api_wait_for_stable_job,
     api_check_job_errors,
+    UPLOAD_FILE_URL,
 )
 from tests.test_import import (
     SHARED_DIR,
     V6_FILE,
     create_project,
 )
-from tests.test_import_simple import UPLOAD_FILE_URL
 
 SEPARATOR = "/"
 DIRPATH = "XXX"
