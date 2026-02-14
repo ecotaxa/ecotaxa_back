@@ -4,7 +4,7 @@ import logging
 import pytest
 from starlette import status
 
-from tests.credentials import ADMIN_AUTH, CREATOR_AUTH
+from tests.credentials import ADMIN_AUTH, CREATOR_AUTH, ORDINARY_USER3_USER_ID
 from tests.test_export import OBJECT_SET_GENERAL_EXPORT_URL
 from tests.test_fastapi import PROJECT_QUERY_URL, USER_ME_URL
 from tests.jobs import get_job_and_wait_until_ok
@@ -116,21 +116,6 @@ def test_collection_lifecycle(fastapi, who):
         "display_order": {"associates": [], "creators": []},
     }
 
-    # Test project to collection link
-    url = PROJECT_COLLECTIONS_URL.format(project_id=prj_id)
-    rsp = fastapi.get(url, headers=who)
-    assert rsp.status_code == status.HTTP_200_OK
-    assert rsp.json() == []  # TODO: Bug? should return something I guess
-    # {
-    #     "id": coll_id,
-    #     "external_id": None,
-    #     "title": "Test collection",
-    #     "short_title": None,
-    #     "provider_user": int(who["Authorization"].split(" ")[-1]),
-    #     "contact_user": int(who["Authorization"].split(" ")[-1]),
-    #     "project_ids": [prj_id],
-    # }
-
     # Update the abstract
     url = COLLECTION_UPDATE_URL.format(collection_id=coll_id)
     the_coll[
@@ -144,6 +129,8 @@ def test_collection_lifecycle(fastapi, who):
         the_coll["external_id"] = "doi1234"
     the_coll["associate_organisations"] = ["An org"]
     the_coll["creator_organisations"] = ["At least one (ONE)"]
+    the_coll["contact_user"] = ORDINARY_USER3_USER_ID
+    the_coll["provider_user"] = ORDINARY_USER3_USER_ID
     del the_coll["display_order"]
     rsp = fastapi.put(url, headers=who, json=the_coll)
     assert rsp.status_code == status.HTTP_200_OK
@@ -177,7 +164,12 @@ def test_collection_lifecycle(fastapi, who):
             "external_id": external_id,
             "external_id_system": "?",
             "citation": None,
-            "contact_user": None,
+            "contact_user": {
+                "email": "real2@users.com",
+                "id": ORDINARY_USER3_USER_ID,
+                "name": "Real User 3",
+                "organisation": "Double Dash - Institute - DDORG",
+            },
             "creator_organisations": [
                 {"id": 7, "name": "At least one (ONE)", "directories": None}
             ],
@@ -186,10 +178,31 @@ def test_collection_lifecycle(fastapi, who):
             "id": coll_id,
             "license": "",
             "project_ids": [prj_id],
-            "provider_user": None,
+            "provider_user": {
+                "email": "real2@users.com",
+                "id": ORDINARY_USER3_USER_ID,
+                "name": "Real User 3",
+                "organisation": "Double Dash - Institute - DDORG",
+            },
             "title": "Test collection",
             "short_title": short_title,
             "display_order": {"creators": ["7_o"], "associates": ["8_o"]},
+        }
+    ]
+
+    # Test project to collection link
+    url = PROJECT_COLLECTIONS_URL.format(project_id=prj_id)
+    rsp = fastapi.get(url, headers=who)
+    assert rsp.status_code == status.HTTP_200_OK
+    assert rsp.json() == [
+        {
+            "contact_user": ORDINARY_USER3_USER_ID,
+            "external_id": "doi1234" if who == CREATOR_AUTH else "?",
+            "id": coll_id,
+            "project_ids": [prj_id],
+            "provider_user": ORDINARY_USER3_USER_ID,
+            "short_title": "my-tiny-title" if who == CREATOR_AUTH else None,
+            "title": "Test collection",
         }
     ]
 

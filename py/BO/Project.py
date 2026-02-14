@@ -3,7 +3,6 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 import typing
-from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
@@ -14,8 +13,6 @@ from typing import (
     Iterable,
     Optional,
     Union,
-    OrderedDict as OrderedDictT,
-    Set,
     Tuple,
     cast,
     Final,
@@ -28,13 +25,11 @@ from BO.Mappings import (
     RemapOp,
     MappedTableTypeT,
     ProjectMapping,
-    TableMapping,
     ProjectSetMapping,
 )
 from BO.Prediction import DeepFeatures
 from BO.ProjectPrivilege import ProjectPrivilegeBO
 from BO.ProjectVars import ProjectVar
-from BO.Rights import RightsBO, Action
 from BO.SpaceTime import USED_FIELDS_FOR_SUNPOS, compute_sun_position
 from BO.User import (
     MinimalUserBO,
@@ -43,7 +38,7 @@ from BO.User import (
     MinimalUserBOListT,
     UserActivityListT,
 )
-from BO.User import UserIDT, UserIDListT, ContactUserBO
+from BO.User import UserIDT, UserIDListT
 from DB.Acquisition import Acquisition
 from DB.Collection import CollectionProject, Collection
 from DB.Object import (
@@ -451,44 +446,6 @@ class ProjectBO(object):
         return ret
 
     @staticmethod
-    def validated_categories_ids(
-        session: Session, prj_ids: ProjectIDListT
-    ) -> ClassifIDListT:
-        """Return display_name for all categories with at least one validated object,
-        in provided project list."""
-        qry = session.query(ObjectHeader.classif_id).distinct(ObjectHeader.classif_id)
-        qry = qry.join(Acquisition).join(Sample).join(Project)
-        qry = qry.filter(Project.projid == any_(prj_ids))
-        qry = qry.filter(ObjectHeader.classif_qual == VALIDATED_CLASSIF_QUAL)
-        with CodeTimer(
-            "Validated category IDs for %s, qry: %s " % (len(prj_ids), str(qry)), logger
-        ):
-            return [an_id for an_id, in qry]
-
-    @staticmethod
-    def all_samples_orig_id(session: Session, prj_ids: ProjectIDListT) -> Set[Tuple]:
-        """Return orig_id (i.e. users' sample_id) for all projects.
-        If several projects, it is assumed that project ids come from a Collection, so no naming conflict.
-        """
-        # TODO: Test that there is indeed no collision, count(project_id) should be 1
-        qry = session.query(Sample.orig_id).distinct(Sample.orig_id)
-        qry = qry.join(Project)
-        qry = qry.filter(Project.projid == any_(prj_ids))
-        return set([(an_id,) for an_id, in qry])
-
-    @staticmethod
-    def all_subsamples_orig_id(session: Session, prj_ids: ProjectIDListT) -> Set[Tuple]:
-        """Return Sample orig_id (i.e. users' sample_id) and Acquisition orig_id (i.e. users' acq_id) pairs
-        for all projects. If several projects, it is assumed that project ids come from a Collection,
-        so no naming conflict."""
-        # TODO: Test that there is indeed no collision, count(project_id) should be 1
-        qry = session.query(Sample.orig_id, Acquisition.orig_id).distinct()
-        qry = qry.join(Project)
-        qry = qry.filter(Sample.sampleid == Acquisition.acq_sample_id)
-        qry = qry.filter(Project.projid == any_(prj_ids))
-        return set([(sam_id, acq_id) for sam_id, acq_id in qry])
-
-    @staticmethod
     def read_user_stats(
         session: Session, prj_ids: ProjectIDListT
     ) -> List[ProjectUserStats]:
@@ -702,7 +659,7 @@ class ProjectBO(object):
         """
         :param session:
         :param projid:
-        :return: The collection IDs the project belongs to.
+        :return: The collection the project belongs to.
         """
         qry = (
             session.query(
@@ -712,11 +669,7 @@ class ProjectBO(object):
                 Collection.short_title,
                 Collection.provider_user_id,
                 Collection.contact_user_id,
-                User.name,
-                User.email,
-                User.orcid,
             )
-            .join(Collection.contact_user)
             .join(CollectionProject)
             .where(CollectionProject.project_id == projid)
         )
@@ -733,7 +686,7 @@ class ProjectBO(object):
                     external_id=r.external_id or None,
                     title=r.title,
                     short_title=r.short_title or None,
-                    provider_user=r.provider_user_id,
+                    provider_user=r.provider_user_id or None,
                     contact_user=r.contact_user_id or None,
                     project_ids=project_ids,
                 )
@@ -957,39 +910,6 @@ class ProjectBO(object):
             session.execute(text(ts_sql), sqlparam)
 
     @classmethod
-    def get_sort_fields(cls, project: Project) -> OrderedDictT[str, str]:
-        """
-        Return the content of 'Fields available for sorting & Display In the manual classification page'
-        """
-        # e.g. area=area [pixel]
-        #      meangreyobjet=mean [0-255]
-        #      fractal_box=fractal
-        ret: OrderedDictT[str, str] = OrderedDict()
-        list_as_str = project.classiffieldlist
-        if list_as_str is None:
-            return ret
-        for a_pair in list_as_str.splitlines():
-            try:
-                free_col, alias = a_pair.split("=")
-            except ValueError:
-                continue
-            ret[free_col.strip()] = alias.strip()
-        return ret
-
-    @classmethod
-    def get_sort_db_columns(
-        cls, project: Project, mapping: Optional[TableMapping]
-    ) -> List[str]:
-        """
-        Get sort list as DB columns, e.g. typically t03, n34
-        """
-        sort_list = cls.get_sort_fields(project)
-        if mapping is None:
-            return []
-        mpg = mapping.find_tsv_cols(list(sort_list.keys()))
-        return list(mpg.values())
-
-    @classmethod
     def recompute_sunpos(cls, session: Session, prj_id: ProjectIDT) -> int:
         """
         Recompute sun position for all objects.
@@ -1098,21 +1018,6 @@ class CollectionProjectBOSet(ProjectBOSet):
     ):
         super().__init__(session=session, prj_ids=prj_ids, public=public, fields=fields)
 
-    def can_be_administered_by(self, session: Session, user_id: UserIDT):
-        """We just expect an Exception thrown (or not)"""
-        try:
-            for project in self.projects:
-                RightsBO.user_wants(
-                    session,
-                    user_id,
-                    Action.ADMINISTRATE,
-                    project.projid,
-                    update_preference=False,
-                )
-            return True
-        except AssertionError:
-            return False
-
     def get_access_from_projects(self) -> Tuple[AccessLevelEnum, ProjectIDListT]:
         """
         return list of projects id validating the restricted_access.
@@ -1177,22 +1082,6 @@ class CollectionProjectBOSet(ProjectBOSet):
                 ret = ret + initclassif.split(sep)
         ret = list(set(ret))
         return sep.join(ret)
-
-    @staticmethod
-    def _check_user_privilege(
-        user: User, privlist: ContactUserListT
-    ) -> ContactUserListT:
-        if user.status == UserStatus.active.value:
-            u: ContactUserBO = ContactUserBO(
-                user.id,
-                user.email,
-                user.name,
-                user.orcid or "None",
-                user.organisation or "(Independent)",
-            )
-            if u not in privlist:
-                privlist.append(u)
-        return privlist
 
     def get_privileges_from_projects(
         self,

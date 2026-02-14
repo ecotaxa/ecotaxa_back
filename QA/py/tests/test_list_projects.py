@@ -4,6 +4,7 @@ from starlette import status
 from tests.credentials import ADMIN_AUTH, USER_AUTH
 
 PROJECTS_URL = "/projects"
+PROJECTS_SEARCH_URL = "/projects/search"
 
 # TODO: Create some projects first
 
@@ -23,6 +24,22 @@ def test_list_projects_basic(fastapi):
 def test_list_projects_admin(fastapi):
     # Test as admin
     rsp = fastapi.get(PROJECTS_URL, headers=ADMIN_AUTH)
+    assert rsp.status_code == status.HTTP_200_OK
+    results = rsp.json()
+    assert isinstance(results, list)
+
+
+def test_list_projects_public(fastapi):
+    # Public variation
+    rsp = fastapi.get(PROJECTS_URL)
+    assert rsp.status_code == status.HTTP_200_OK
+    results = rsp.json()
+    assert isinstance(results, list)
+
+
+def test_search_projects_public(fastapi):
+    # Public variation
+    rsp = fastapi.get(PROJECTS_SEARCH_URL)
     assert rsp.status_code == status.HTTP_200_OK
     results = rsp.json()
     assert isinstance(results, list)

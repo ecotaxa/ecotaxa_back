@@ -4,8 +4,13 @@
 #
 import re
 from typing import List, Any, Optional, Set, Dict, Union
+
+from pydantic import BaseModel
+
 from BO.DataLicense import LicenseEnum
+from BO.ProjectPrivilege import ProjectPrivilegeBO
 from BO.Sample import SampleOrigIDT
+from BO.User import UserIDT, GuestIDT, PersonBO
 from DB import Session
 from DB.Collection import (
     COLLECTION_ROLE_DATA_CREATOR,
@@ -16,16 +21,13 @@ from DB.Collection import (
     CollectionUserRole,
     COLLECTION_ROLE_INSTITUTION_CODE_PROVIDER,
 )
-from DB.Project import ProjectIDListT, Project
 from DB.Object import ObjectHeader
+from DB.Project import ProjectIDListT, Project
+from DB.ProjectPrivilege import ProjectPrivilege
 from DB.Sample import Sample
 from DB.User import User, Person, Organization, OrganizationIDT
-from DB.ProjectPrivilege import ProjectPrivilege
-from BO.User import UserIDT, GuestIDT, PersonBO
-from BO.ProjectPrivilege import ProjectPrivilegeBO
 from DB.helpers.ORM import contains_eager, func, any_
 from helpers.DynamicLogs import get_logger
-from pydantic import BaseModel
 
 logger = get_logger(__name__)
 
@@ -34,19 +36,21 @@ CollectionIDT = int
 CollectionIDListT = List[int]
 
 by_role_schema = {
-            "user": {
-                "creator_users": COLLECTION_ROLE_DATA_CREATOR,
-                "associate_users": COLLECTION_ROLE_ASSOCIATED_PERSON,
-            },
-            "org": {
-                "creator_organisations": COLLECTION_ROLE_DATA_CREATOR,
-                "associate_organisations": COLLECTION_ROLE_ASSOCIATED_PERSON,
-            },
-        }
+    "user": {
+        "creator_users": COLLECTION_ROLE_DATA_CREATOR,
+        "associate_users": COLLECTION_ROLE_ASSOCIATED_PERSON,
+    },
+    "org": {
+        "creator_organisations": COLLECTION_ROLE_DATA_CREATOR,
+        "associate_organisations": COLLECTION_ROLE_ASSOCIATED_PERSON,
+    },
+}
 creators_key = "creators"
 associates_key = "associates"
 user_order_type = "u"
 org_order_type = "o"
+
+
 class CollectionBO(object):
     """
     A Collection business object, i.e. as seen from users.
@@ -67,7 +71,7 @@ class CollectionBO(object):
         self.creator_organisations: List[Organization] = []
         self.associate_organisations: List[Organization] = []
         self.code_provider_org: Optional[str] = None
-        self.display_order: Dict[str,Any] = {creators_key:[],associates_key:[]}
+        self.display_order: Dict[str, Any] = {creators_key: [], associates_key: []}
 
     def enrich(self) -> "CollectionBO":
         """
@@ -117,17 +121,18 @@ class CollectionBO(object):
             return "\n".join(problems)
         return None
 
-    def _get_by_role(self)->Dict[str,Any]:
+    def _get_by_role(self) -> Dict[str, Any]:
         # Order members by role
-        by_role_usr:Dict[str,Any] = { COLLECTION_ROLE_DATA_CREATOR: self.creator_users,
+        by_role_usr: Dict[str, Any] = {
+            COLLECTION_ROLE_DATA_CREATOR: self.creator_users,
             COLLECTION_ROLE_ASSOCIATED_PERSON: self.associate_users,
         }
 
-        display_order: Dict[str,Any]= {creators_key:[],associates_key:[]}
-        display_order_creator: Dict[str,Any] = {}
-        display_order_associated: Dict[str,Any] = {}
-        ord_creator: Dict[str,Any] = {}
-        ord_assoc: Dict[str,Any] = {}
+        display_order: Dict[str, Any] = {creators_key: [], associates_key: []}
+        display_order_creator: Dict[str, Any] = {}
+        display_order_associated: Dict[str, Any] = {}
+        ord_creator: Dict[str, Any] = {}
+        ord_assoc: Dict[str, Any] = {}
         a_user_and_role: CollectionUserRole
         for a_user_and_role in self._collection.users_by_role:
 
@@ -141,16 +146,24 @@ class CollectionBO(object):
                 ord_assoc[str(o)] = []
             if a_user_and_role.user is not None:
                 by_role_usr[a_user_and_role.role].append(a_user_and_role.user)
-                if a_user_and_role.role==COLLECTION_ROLE_DATA_CREATOR:
-                    ord_creator[str(o)].append(str(a_user_and_role.user.id)+"_"+user_order_type)
+                if a_user_and_role.role == COLLECTION_ROLE_DATA_CREATOR:
+                    ord_creator[str(o)].append(
+                        str(a_user_and_role.user.id) + "_" + user_order_type
+                    )
                 else:
-                    ord_assoc[str(o)].append(str(a_user_and_role.user.id)+"_"+user_order_type)
+                    ord_assoc[str(o)].append(
+                        str(a_user_and_role.user.id) + "_" + user_order_type
+                    )
             else:
                 by_role_usr[a_user_and_role.role].append(a_user_and_role.guest)
-                if a_user_and_role.role==COLLECTION_ROLE_DATA_CREATOR:
-                    ord_creator[str(o)].append(str(a_user_and_role.guest.id)+"_"+user_order_type)
-                elif a_user_and_role==COLLECTION_ROLE_ASSOCIATED_PERSON:
-                    ord_assoc[str(o)].append(str(a_user_and_role.guest.id)+"_"+user_order_type)
+                if a_user_and_role.role == COLLECTION_ROLE_DATA_CREATOR:
+                    ord_creator[str(o)].append(
+                        str(a_user_and_role.guest.id) + "_" + user_order_type
+                    )
+                elif a_user_and_role == COLLECTION_ROLE_ASSOCIATED_PERSON:
+                    ord_assoc[str(o)].append(
+                        str(a_user_and_role.guest.id) + "_" + user_order_type
+                    )
 
         display_order_creator.update(ord_creator)
         display_order_associated.update(ord_assoc)
@@ -167,13 +180,17 @@ class CollectionBO(object):
             else:
                 o = an_org_and_role.display_order
             if str(o) not in ord_creator.keys():
-                ord_creator[str(o)]=[]
+                ord_creator[str(o)] = []
             if str(o) not in ord_assoc.keys():
-                ord_assoc[str(o)]=[]
-            if an_org_and_role.role==COLLECTION_ROLE_DATA_CREATOR:
-                ord_creator[str(o)].append(str(an_org_and_role.organization.id)+"_"+org_order_type)
-            elif an_org_and_role.role==COLLECTION_ROLE_ASSOCIATED_PERSON:
-                ord_assoc[str(o)].append(str(an_org_and_role.organization.id)+"_"+org_order_type)
+                ord_assoc[str(o)] = []
+            if an_org_and_role.role == COLLECTION_ROLE_DATA_CREATOR:
+                ord_creator[str(o)].append(
+                    str(an_org_and_role.organization.id) + "_" + org_order_type
+                )
+            elif an_org_and_role.role == COLLECTION_ROLE_ASSOCIATED_PERSON:
+                ord_assoc[str(o)].append(
+                    str(an_org_and_role.organization.id) + "_" + org_order_type
+                )
             if an_org_and_role.role == provider:
                 self.code_provider_org = an_org_and_role.organization.name
             else:
@@ -181,12 +198,16 @@ class CollectionBO(object):
 
         display_order_creator.update(ord_creator)
         display_order_associated.update(ord_assoc)
-        by_role:Dict[str,Any] = {"user":by_role_usr, "org":by_role_org}
-        for k, c in sorted(display_order_creator.items(), key=lambda creator: int(creator[0]) ):
+        by_role: Dict[str, Any] = {"user": by_role_usr, "org": by_role_org}
+        for k, c in sorted(
+            display_order_creator.items(), key=lambda creator: int(creator[0])
+        ):
             display_order[creators_key].extend(list(set(c)))
-        for k, v in sorted(display_order_associated.items(), key=lambda associate: int(associate[0])):
+        for k, v in sorted(
+            display_order_associated.items(), key=lambda associate: int(associate[0])
+        ):
             display_order[associates_key].extend(list(set(v)))
-        self.display_order=display_order
+        self.display_order = display_order
         return by_role
 
     @staticmethod
@@ -223,7 +244,7 @@ class CollectionBO(object):
                 if res is not None:
                     return res
             # Simple fields update
-            display_order:Dict[str,Any]= {creators_key: [],associates_key: []}
+            display_order: Dict[str, Any] = {creators_key: [], associates_key: []}
             if key in self.modif:
                 setattr(self._collection, key, value)
             elif key in self.no_modif:
@@ -241,7 +262,7 @@ class CollectionBO(object):
                             by_role[k] = {}
                         v = val[key]
                         by_role[k][v] = value
-        if len(by_role) > 0 :
+        if len(by_role) > 0:
             self.display_order = collection_update["display_order"]
             self.add_collection_users(session, by_role)
         session.commit()
@@ -254,7 +275,10 @@ class CollectionBO(object):
     ):
         coll_id = self._collection.id
         #  diff-ing
-        roles= {COLLECTION_ROLE_DATA_CREATOR : creators_key, COLLECTION_ROLE_ASSOCIATED_PERSON : associates_key}
+        roles = {
+            COLLECTION_ROLE_DATA_CREATOR: creators_key,
+            COLLECTION_ROLE_ASSOCIATED_PERSON: associates_key,
+        }
         if "user" in by_role:
             _ = (
                 session.query(CollectionUserRole)
@@ -270,12 +294,13 @@ class CollectionBO(object):
                     collurole.user_id = user_id
                     collurole.role = a_role
                     try:
-                        display_order = self.display_order[roles[a_role]].index(str(user_id)+"_"+user_order_type)
+                        display_order = self.display_order[roles[a_role]].index(
+                            str(user_id) + "_" + user_order_type
+                        )
                     except ValueError:
                         display_order = 0
                     collurole.display_order = display_order
                     session.add(collurole)
-
 
         # Dispatch orgs by role
         if "org" in by_role:
@@ -295,7 +320,9 @@ class CollectionBO(object):
                     collorole.organization_id = org_id
                     collorole.role = a_role
                     try:
-                        display_order = self.display_order[roles[a_role]].index(str(org_id)+"_"+org_order_type)
+                        display_order = self.display_order[roles[a_role]].index(
+                            str(org_id) + "_" + org_order_type
+                        )
                     except ValueError:
                         display_order = 0
                     collorole.display_order = display_order
@@ -536,6 +563,6 @@ class MinimalCollectionBO(BaseModel):
     external_id: Union[str, None] = None
     title: str
     short_title: Union[str, None] = None
-    provider_user: UserIDT
+    provider_user: Union[UserIDT, None] = None
     contact_user: Union[UserIDT, None] = None
     project_ids: ProjectIDListT

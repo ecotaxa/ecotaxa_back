@@ -31,8 +31,55 @@ def reclassify(fastapi, prj_id, from_id, to_id):
     assert rsp.status_code == status.HTTP_200_OK
 
 
+def test_reclassify_invalid_filters(fastapi):
+    prj_id = do_test_import(fastapi, "Test Reclassify Invalid Filters")
+    url = OBJECT_SET_RECLASSIFY_URL.format(
+        project_id=prj_id, forced_id=entomobryomorpha_id, reason="W"
+    )
+
+    invalid_filters = [
+        # Multiple taxa
+        {"taxo": f"{detritus_classif_id},{entomobryomorpha_id}"},
+        # No taxo filter
+        {},
+        # taxo + other filters
+        {"taxo": str(detritus_classif_id), "statusfilter": "V"},
+        {"taxo": str(detritus_classif_id), "samples": "123"},
+        {"taxo": str(detritus_classif_id), "taxochild": "Y"},
+        {"taxo": str(detritus_classif_id), "MapN": "45"},
+        {"taxo": str(detritus_classif_id), "MapW": "5"},
+        {"taxo": str(detritus_classif_id), "MapE": "10"},
+        {"taxo": str(detritus_classif_id), "MapS": "40"},
+        {"taxo": str(detritus_classif_id), "depthmin": "0"},
+        {"taxo": str(detritus_classif_id), "depthmax": "100"},
+        {"taxo": str(detritus_classif_id), "instrum": "uvp5"},
+        {"taxo": str(detritus_classif_id), "daytime": "D"},
+        {"taxo": str(detritus_classif_id), "month": "1"},
+        {"taxo": str(detritus_classif_id), "fromdate": "2020-01-01"},
+        {"taxo": str(detritus_classif_id), "todate": "2020-12-31"},
+        {"taxo": str(detritus_classif_id), "fromtime": "10:00:00"},
+        {"taxo": str(detritus_classif_id), "totime": "12:00:00"},
+        {"taxo": str(detritus_classif_id), "inverttime": "1"},
+        {"taxo": str(detritus_classif_id), "validfromdate": "2020-01-01 10:00"},
+        {"taxo": str(detritus_classif_id), "validtodate": "2020-01-01 12:00"},
+        {"taxo": str(detritus_classif_id), "freenum": "n01"},
+        {"taxo": str(detritus_classif_id), "freenumst": "0"},
+        {"taxo": str(detritus_classif_id), "freenumend": "100"},
+        {"taxo": str(detritus_classif_id), "freetxt": "o01"},
+        {"taxo": str(detritus_classif_id), "freetxtval": "foo"},
+        {"taxo": str(detritus_classif_id), "filt_annot": "1"},
+        {"taxo": str(detritus_classif_id), "filt_last_annot": "1"},
+    ]
+
+    for filters in invalid_filters:
+        rsp = fastapi.post(url, headers=ADMIN_AUTH, json=filters)
+        assert (
+            rsp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        ), f"Filters {filters} should have been rejected"
+
+
 # Simulate change of taxo system, search&replace taxon ref with another
-def test_reclassif(fastapi):
+def test_reclassify(fastapi):
 
     prj_id = do_test_import(fastapi, "Test Reclassify/Validate")
 

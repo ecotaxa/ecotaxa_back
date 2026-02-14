@@ -2644,7 +2644,7 @@ def reclassify_object_set(
     **Returns the number of affected objects.**
     """
     with ObjectManager() as sce:
-        with RightsThrower():
+        with ValidityThrower(), RightsThrower():
             nb_impacted = sce.reclassify(
                 current_user, project_id, filters.base(), forced_id, reason
             )
