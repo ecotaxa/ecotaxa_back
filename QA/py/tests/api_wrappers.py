@@ -86,11 +86,13 @@ def api_check_job_failed(fastapi, job_id, expected_message):
     return rsp
 
 
-REMOVE_FILE_URL = "/user_files/rm/"
 MY_FILES_URL = "/user_files/"
+REMOVE_FILE_URL = "/user_files/rm/"
+MOVE_FILE_URL = "/user_files/mv/"
+CREATE_FILE_URL = "/user_files/create/"
 
 
-def upload_file(fastapi, local_file, dest_path, auth):
+def api_upload_file(fastapi: TestClient, local_file: str, dest_path: str, auth: dict):
     with open(local_file, "rb") as fin:
         upload_rsp = fastapi.post(
             MY_FILES_URL,
@@ -103,3 +105,24 @@ def upload_file(fastapi, local_file, dest_path, auth):
         assert upload_rsp.status_code == 200
         srv_file_path = upload_rsp.json()
         return srv_file_path
+
+
+def api_move_user_file(
+    fastapi: TestClient, source_path: str, dest_path: str, auth: dict
+) -> Response:
+    rsp = fastapi.post(
+        MOVE_FILE_URL,
+        headers=auth,
+        data={"source_path": source_path, "dest_path": dest_path},
+    )
+    return rsp
+
+
+def api_remove_user_file(fastapi: TestClient, source_path: str, auth: dict) -> Response:
+    rsp = fastapi.post(REMOVE_FILE_URL, headers=auth, data={"source_path": source_path})
+    return rsp
+
+
+def api_create_user_file(fastapi: TestClient, source_path: str, auth: dict) -> Response:
+    rsp = fastapi.post(CREATE_FILE_URL, headers=auth, data={"source_path": source_path})
+    return rsp
