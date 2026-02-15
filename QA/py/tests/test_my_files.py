@@ -5,7 +5,6 @@
 # Exhibit some not-so-intuitive behavior of /my_files and associated upload
 #
 
-import logging
 import shutil
 from typing import Dict
 
@@ -13,14 +12,13 @@ import pytest
 from starlette import status
 
 from tests.credentials import CREATOR_AUTH, CREATOR_USER_ID
-from tests.jobs import (
-    api_check_job_ok,
-)
 from tests.api_wrappers import (
     api_file_import,
     api_wait_for_stable_job,
     api_check_job_errors,
-    UPLOAD_FILE_URL,
+    MY_FILES_URL,
+    upload_file,
+    api_check_job_ok,
 )
 from tests.test_import import (
     SHARED_DIR,
@@ -41,20 +39,33 @@ def test_my_files(fastapi, tstlogs, title):
 
     DEST_FILE_NAME = "LOKI_46-24hours_01.zip"
     DEST_DIR_NAME = "LOKI_46-24hours_01"
+
     # Copy an existing test file into current dir, simulating client side
     shutil.copyfile(SHARED_DIR / V6_FILE, tstlogs / DEST_FILE_NAME)
     # Upload this file
-    upload_file(fastapi, DEST_FILE_NAME, DIRPATH + "/" + DEST_FILE_NAME, tstlogs)
+    remote_path = upload_file(
+        fastapi,
+        tstlogs / DEST_FILE_NAME,
+        DIRPATH + SEPARATOR + DEST_FILE_NAME,
+        CREATOR_AUTH,
+    )
+    assert DIRPATH in remote_path  # The subdirectory was created
 
     # And another
     DEST_FILE_NAME2 = "readme.txt"
     # Copy an existing test file into current dir, simulating client side
     shutil.copyfile(SHARED_DIR / "HOWTO.txt", tstlogs / DEST_FILE_NAME2)
     # Upload this file
-    upload_file(fastapi, DEST_FILE_NAME2, DIRPATH + "/" + DEST_FILE_NAME2, tstlogs)
+    upload_file(
+        fastapi,
+        tstlogs / DEST_FILE_NAME2,
+        DIRPATH + SEPARATOR + DEST_FILE_NAME2,
+        CREATOR_AUTH,
+    )
+    assert DIRPATH in remote_path  # The subdirectory was created
 
     # The pathparam becomes a top-level directory
-    list_rsp = fastapi.get(UPLOAD_FILE_URL + SEPARATOR, headers=CREATOR_AUTH)
+    list_rsp = fastapi.get(MY_FILES_URL + SEPARATOR, headers=CREATOR_AUTH)
     assert list_rsp.status_code == 200
     my_files_root: Dict = list_rsp.json()
     assert my_files_root["path"] == ""
@@ -73,17 +84,13 @@ def test_my_files(fastapi, tstlogs, title):
 
     # The files are stored in the subdirectory
     DIRDEST = DIRPATH + SEPARATOR + DEST_DIR_NAME
-    list_rsp = fastapi.get(UPLOAD_FILE_URL + SEPARATOR + DIRDEST, headers=CREATOR_AUTH)
+    list_rsp = fastapi.get(MY_FILES_URL + SEPARATOR + DIRDEST, headers=CREATOR_AUTH)
     assert list_rsp.status_code == 200
     my_files_subdir: Dict = list_rsp.json()
     assert my_files_subdir["path"] == DIRDEST
     assert (
         len(my_files_subdir["entries"]) == 1
     )  # The second file being .txt will have size 0 on re-read
-    # test no longer valid as the zip is deleted after successful unzip
-    # the_file = [fil for fil in my_files_subdir["entries"] if fil["size"] == 22654][0]
-    # del the_file["mtime"]  # Unpredictable
-    # assert the_file == {"name": DEST_FILE_NAME, "size": 22654, "type": "F"}
 
     # Import the file without the right path -> Error
     req = {"source_path": DEST_FILE_NAME}
@@ -94,33 +101,9 @@ def test_my_files(fastapi, tstlogs, title):
     errors = api_check_job_errors(fastapi, job_id)
     assert "FileNotFoundError" in "".join(errors)
 
-    # Import the file with the right path
-    # The below (unfortunately) hard-coded path is valid on the current configuration of EcoTaxa
-    file_path = "/tmp/ecotaxa_user.{}/{}/{}".format(
-        CREATOR_USER_ID,  # Should come from /api/users/me
-        DIRPATH,  # existing tag, created the on the first file creation with it
-        DEST_FILE_NAME,  # can come from an entry in GET /my_files/DIRPATH
-    )
-    req = {"source_path": file_path}
+    req = {"source_path": DIRDEST}
     rsp = api_file_import(fastapi, prj_id, req, auth=CREATOR_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
-    job_id = rsp.json()["job_id"]
-    api_wait_for_stable_job(fastapi, job_id)
-    # api_check_job_ok(fastapi, job_id) # TODO: It's _not_ anymore the right path
-
-
-def upload_file(fastapi, dest_file_name, pathparam, tstlogs):
-    print("uploadfile----------" + str(dest_file_name), pathparam)
-    with open(tstlogs / dest_file_name, "rb") as fin:
-        upload_rsp = fastapi.post(
-            UPLOAD_FILE_URL,
-            headers=CREATOR_AUTH,
-            data={
-                "path": pathparam
-            },  # /!\ If no pathparam error-> random use-once directory!
-            files={"file": fin},
-        )
-        assert upload_rsp.status_code == 200
-        srv_file_path = upload_rsp.json()
-        print("srv_file", srv_file_path)
-        assert DIRPATH in srv_file_path
+    job = api_wait_for_stable_job(fastapi, rsp.json()["job_id"])
+    api_wait_for_stable_job(fastapi, job.id)
+    api_check_job_ok(fastapi, job.id)

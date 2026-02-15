@@ -87,4 +87,19 @@ def api_check_job_failed(fastapi, job_id, expected_message):
 
 
 REMOVE_FILE_URL = "/user_files/rm/"
-UPLOAD_FILE_URL = "/user_files/"
+MY_FILES_URL = "/user_files/"
+
+
+def upload_file(fastapi, local_file, dest_path, auth):
+    with open(local_file, "rb") as fin:
+        upload_rsp = fastapi.post(
+            MY_FILES_URL,
+            headers=auth,
+            data={
+                "path": dest_path
+            },  # /!\ If no pathparam error-> random use-once directory!
+            files={"file": fin},
+        )
+        assert upload_rsp.status_code == 200
+        srv_file_path = upload_rsp.json()
+        return srv_file_path

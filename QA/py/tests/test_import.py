@@ -25,8 +25,9 @@ from tests.api_wrappers import (
     api_file_import,
     api_wait_for_stable_job,
     api_check_job_questions,
-    UPLOAD_FILE_URL,
+    MY_FILES_URL,
     REMOVE_FILE_URL,
+    upload_file,
 )
 from tests.credentials import ADMIN_AUTH, ADMIN_USER_ID, CREATOR_USER_ID, CREATOR_AUTH
 from tests.jobs import (
@@ -655,16 +656,10 @@ def test_import_breaking_unicity(fastapi):
 def test_uvp6_via_myfile(fastapi, caplog):
     prj_id = create_project(CREATOR_USER_ID, "UVP6 via MyFiles")
     local_file = SHARED_DIR / V6_FILE
-    with open(local_file, "rb") as fin:
-        upload_rsp = fastapi.post(
-            UPLOAD_FILE_URL,
-            headers=CREATOR_AUTH,
-            files={"file": fin},
-        )
-        assert upload_rsp.status_code == 200
+    upload_file(fastapi, local_file, local_file.name, CREATOR_AUTH)
     no_zip = local_file.name.replace(".zip", "")
 
-    list_rsp = fastapi.get(f"{UPLOAD_FILE_URL}", headers=CREATOR_AUTH)
+    list_rsp = fastapi.get(f"{MY_FILES_URL}", headers=CREATOR_AUTH)
     assert list_rsp.status_code == 200
     user_files = list_rsp.json()
     assert no_zip in [a_file["name"] for a_file in user_files["entries"]]

@@ -25,7 +25,7 @@ from starlette import status
 from tests.credentials import ADMIN_USER_ID, CREATOR_AUTH, CREATOR_USER_ID
 from tests.test_import import PLAIN_DIR, create_project, PLAIN_FILE_PATH
 from tests.jobs import check_job_ok
-from tests.api_wrappers import api_wait_for_stable_job, UPLOAD_FILE_URL
+from tests.api_wrappers import api_wait_for_stable_job, MY_FILES_URL
 
 IMPORT_IMAGES_URL = "/simple_import/{project_id}?dry_run={dry_run}"
 
@@ -125,7 +125,7 @@ def do_simple_import_images(fastapi, title):
     prj_id = create_project(CREATOR_USER_ID, title)
     with open(PLAIN_FILE_PATH, "rb") as fin:
         upload_rsp = fastapi.post(
-            UPLOAD_FILE_URL,
+            MY_FILES_URL,
             headers=CREATOR_AUTH,
             files={"file": fin},
         )
