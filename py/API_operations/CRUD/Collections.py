@@ -5,7 +5,6 @@
 from typing import List, Union, Optional, Dict, Any
 from fastapi import HTTPException
 from API_models.crud import CreateCollectionReq, CollectionAggregatedRsp
-from API_models.exports import TaxonomyRecast
 from BO.Collection import CollectionBO, CollectionIDT
 from BO.ProjectSet import PermissionConsistentProjectSet
 from BO.Rights import NOT_FOUND
@@ -13,8 +12,6 @@ from BO.User import UserIDT
 from BO.Project import CollectionProjectBOSet
 from DB.Project import ProjectIDListT
 from DB.Collection import Collection
-from DB.TaxoRecast import DWCA_EXPORT_OPERATION
-from DB.TaxoRecast import TaxoRecast
 from helpers.DynamicLogs import get_logger
 from ..helpers.Service import Service
 
@@ -133,41 +130,6 @@ class CollectionsService(Service):
             return coll_id
         else:
             raise HTTPException(status_code=409, detail=DETAIL_COLLECTION_PUBLISHED)
-
-    def update_taxo_recast(
-        self, current_user_id: UserIDT, coll_id: CollectionIDT, recast: TaxonomyRecast
-    ):
-        collection = self.query(current_user_id, coll_id, for_update=True)
-        assert collection is not None, NOT_FOUND
-        # Just remove and re-add
-        self._query_recast_for_coll(coll_id).delete()
-        new_recast = TaxoRecast()
-        new_recast.collection_id = coll_id
-        new_recast.operation = DWCA_EXPORT_OPERATION
-        new_recast.transforms = recast.from_to
-        new_recast.documentation = recast.doc if recast.doc else {}
-        self.session.add(new_recast)
-        self.session.commit()
-
-    def read_taxo_recast(
-        self, current_user_id: UserIDT, coll_id: CollectionIDT
-    ) -> TaxonomyRecast:
-        collection = self.query(current_user_id, coll_id, for_update=False)
-        assert collection is not None, NOT_FOUND
-        qry = self._query_recast_for_coll(coll_id)
-        res = list(qry)
-        assert len(res) == 1, NOT_FOUND
-        the_one: TaxoRecast = res[0]
-        ret = TaxonomyRecast(from_to=the_one.transforms, doc=the_one.documentation)
-        return ret
-
-    def _query_recast_for_coll(self, coll_id: CollectionIDT):
-        qry = (
-            self.session.query(TaxoRecast)
-            .filter(TaxoRecast.collection_id == coll_id)
-            .filter(TaxoRecast.operation == DWCA_EXPORT_OPERATION)
-        )
-        return qry
 
     def _check_access(
         self, user_id: UserIDT, project_ids: ProjectIDListT

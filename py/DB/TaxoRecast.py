@@ -4,24 +4,27 @@
 #
 
 from __future__ import annotations
-
+from enum import Enum
 from sqlalchemy import Identity
 
 from DB.helpers.ORM import Model
 from .helpers.DDL import Column, ForeignKey
 from .helpers.Postgres import VARCHAR, INTEGER, JSONB
 
-# Taxa are recast during Project prediction input phase, from reference dataset
-# TODO: Migrate from project settings
-PREDICTION_INPUT = "pre_predict"
-# Taxa are recast during Project prediction output phase (unused)
-PREDICTION_OUTPUT = "post_predict"
-# Taxa are recast during Collection DWCA export
-DWCA_EXPORT_OPERATION = "dwca_export"
-# Taxa are recast during Project summary export
-SUMM_EXPORT_OPERATION = "summary_export"
-# Taxa recast during WoRMs move (unused)
-TO_WORMS_OPERATION = "worms_migration"
+
+class RecastOperation(str, Enum):
+    # Taxa are recast during Project prediction input phase, from reference dataset
+    prediction_input = "pre_predict"
+    # Taxa are recast during Project prediction output phase (unused)
+    prediction_output = "post_predict"
+    # Taxa are recast to be used in Collection DWCA export
+    dwca_export = "dwca_export"
+    # Taxa are recast during Project summary export
+    summary_export = "summary_export"
+    # Taxa recast overwrite automatic worms recast
+    overwrite_auto = "overwrite_auto"
+    # Taxa recast in settings
+    settings = "settings"
 
 
 class TaxoRecast(Model):

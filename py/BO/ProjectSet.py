@@ -297,7 +297,10 @@ class PermissionConsistentProjectSet(object):
         self.prj_ids = prj_ids
 
     def can_be_administered_by(
-        self, user_id: UserIDT, update_preference: Optional[bool] = True
+        self,
+        user_id: UserIDT,
+        update_preference: Optional[bool] = True,
+        action: Action = Action.ADMINISTRATE,
     ):
         """We just expect an Exception thrown (or not)"""
         for a_prj_id in self.prj_ids:
@@ -305,7 +308,7 @@ class PermissionConsistentProjectSet(object):
             RightsBO.user_wants(
                 self.session,
                 user_id,
-                Action.ADMINISTRATE,
+                action,
                 a_prj_id,
                 update_preference=update_preference,
             )

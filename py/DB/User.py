@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Iterable, TYPE_CHECKING, Final, Optional, List
+from typing import Iterable, TYPE_CHECKING, Optional, List
 
 from sqlalchemy import event, SmallInteger
 
@@ -27,15 +27,15 @@ if TYPE_CHECKING:
 
 
 class UserStatus(int, Enum):
-    blocked: Final = -1
-    inactive: Final = 0
-    active: Final = 1
-    pending: Final = 2
+    blocked = -1
+    inactive = 0
+    active = 1
+    pending = 2
 
 
 class UserType(str, Enum):
-    guest: Final = "guest"
-    user: Final = "user"
+    guest = "guest"
+    user = "user"
 
 
 NO_ORGANIZATION_ADDED = "Error adding organization name"
@@ -44,8 +44,8 @@ OrganizationIDListT = List[int]
 
 
 class PeopleOrganizationDirectory(str, Enum):
-    orcid: Final = "https://orcid.org/"
-    edmo: Final = "https://edmo.seadatanet.org/"
+    orcid = "https://orcid.org/"
+    edmo = "https://edmo.seadatanet.org/"
 
 
 class Organization(Model):

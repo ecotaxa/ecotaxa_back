@@ -4,14 +4,21 @@
 #
 # A description of transformation to the WoRMS taxonomic system.
 #
-from typing import Dict, Iterable, List, Optional, Set
-
+from typing import Dict, Iterable, List, Optional, Set, Union
+import json
 from sqlalchemy.orm import Session
 
 from BO.Classification import ClassifIDT, ClassifIDListT
 from BO.ObjectSetQueryPlus import TaxoRemappingT
 from BO.Taxonomy import TaxonBOSet, TaxonBO
 from DB.Taxonomy import TaxonomyIDT, TaxoType
+from BO.ProjectSet import PermissionConsistentProjectSet
+from DB.Collection import CollectionProject
+from DB.Project import ProjectIDT
+from DB.TaxoRecast import TaxoRecast, RecastOperation
+from BO.User import UserIDT
+from BO.Collection import CollectionIDT
+from BO.Rights import NOT_FOUND, Action
 from helpers.DynamicLogs import get_logger
 
 logger = get_logger(__name__)
@@ -91,8 +98,7 @@ class WoRMSifier(object):
     """
 
     def __init__(self) -> None:
-        # A dict with Phylo taxo ids->WoRMS entry. The taxa might be Morpho ones,
-        #                         as the XLSX data source contains such mappings.
+        # A dict with Phylo taxo ids->WoRMS entry.
         self.phylo2worms: Dict[ClassifIDT, WoRMSBO] = {}
         # A dict with Morpho -> nearest_phylo mapping. None value means that there
         # is no "solution" for the "problem" of mapping this taxon, or that it was
@@ -151,6 +157,33 @@ class WoRMSifier(object):
     def get_worms_targets(self) -> List[WoRMSBO]:
         return list(self.phylo2worms.values())
 
+    def get_taxo_mapping_targets(
+        self,
+        session: Session,
+        current_user_id: UserIDT,
+        target_id: Union[CollectionIDT, ProjectIDT],
+        operation: RecastOperation,
+        is_collection: bool,
+    ) -> Optional[Dict[ClassifIDT, WoRMSBO]]:
+        res = self.query_recast(
+            session,
+            current_user_id,
+            target_id,
+            operation,
+            is_collection,
+            for_update=False,
+        ).all()
+        if res is None or len(res) != 1:
+            return None
+        the_one: TaxoRecast = res[0]
+        taxa_ids = json.loads(str(the_one.transforms)).values()
+        ret = TaxonBOSet(session, taxa_ids)
+        taxons = {str(t.id): create_worms_bo(t) for t in ret.as_list()}
+        taxo_mapping_targets: Dict[ClassifIDT, WoRMSBO] = {
+            int(_from): taxons[str(_to)] for _from, _to in taxons.items()
+        }
+        return taxo_mapping_targets
+
     def apply_recast(self, recast: TaxoRemappingT) -> None:
         recast = recast.copy()  # We destroy it, protect the arg
 
@@ -188,3 +221,40 @@ class WoRMSifier(object):
             for an_id in ids
             if an_id not in self.phylo2worms and an_id not in self.morpho2phylo
         ]
+
+    @staticmethod
+    def query_recast(
+        session: Session,
+        current_user_id: UserIDT,
+        target_id: Union[ProjectIDT, CollectionIDT],
+        operation: RecastOperation,
+        is_collection: bool = False,
+        for_update: bool = True,
+    ):
+        if is_collection:
+            ret = (
+                session.query(CollectionProject.project_id)
+                .filter(CollectionProject.collection_id == target_id)
+                .all()
+            )
+            assert len(ret) > 0, NOT_FOUND
+            project_ids = ret
+        else:
+            project_ids = [target_id]
+        if for_update:
+            action = Action.ADMINISTRATE
+        else:
+            action = Action.READ
+        PermissionConsistentProjectSet(
+            session,
+            project_ids,
+        ).can_be_administered_by(
+            current_user_id, update_preference=False, action=action
+        )
+        qry = session.query(TaxoRecast)
+        qry = qry.filter(TaxoRecast.operation == operation)
+        if is_collection:
+            qry = qry.filter(TaxoRecast.collection_id == target_id)
+        else:
+            qry = qry.filter(TaxoRecast.project_id == target_id)
+        return qry
