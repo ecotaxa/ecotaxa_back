@@ -180,13 +180,16 @@ class ExportReq(ProjectIdReq):
         example="A",
         default=SummaryExportGroupingEnum.just_by_taxon,
     )
-    pre_mapping: Dict[int, Optional[int]] = Field(
+    pre_mapping: Dict[str, Dict[str, Optional[int]]] = Field(
         title="Categories mapping",
         description="For 'ABO', 'CNC' and 'BIV' types types, mapping "
         "from present taxon (key) to output replacement one (value)."
         " Use a null replacement to _discard_ the present taxon.",
-        example={456: 956, 2456: 213},
-        default={},
+        example={
+            "occurrence": {"456": 956, "2456": 213},
+            "concentration": {"456": 956, "2456": 21},
+        },
+        default={"occurrence": {}, "concentration": {}},
     )
     formulae: Dict[str, str] = Field(
         title="Computation formulas",
@@ -255,27 +258,12 @@ class GeneralExportReq(ProjectIdReq):
         default=False,
         example=False,
     )
-    # taxo_mapping: Dict[int, Optional[int]] = Field(
-    #     title="Categories mapping",
-    #     description="Mapping from present taxon (key) to output replacement one (value)."
-    #     " Use a null replacement to _discard_ the present taxon.",
-    #     example={456: 956, 2456: 213, 734: None},
-    #     default={},
-    # )
     out_to_ftp: bool = Field(
         title="Out to ftp",
         description="Copy result file to FTP area. Original file is still available.",
         default=False,
         example=False,
     )
-
-    # noinspection PyMethodParameters
-    # @validator("taxo_mapping")
-    # def ensure_sane_remap(cls, v):
-    #     assert set(v.keys()).isdisjoint(
-    #         set(v.values())
-    #     ), "inconsistent taxo_mapping, can't do remap chains or loops"
-    #     return v
 
     class Config:
         schema_extra = {"title": "General Export request Model"}
@@ -298,13 +286,16 @@ class SummaryExportReq(ProjectIdReq):
         example=SummaryExportSumOptionsEnum.acquisition,
         default=SummaryExportSumOptionsEnum.sample,
     )
-    taxo_mapping: Dict[int, Optional[int]] = Field(
+    taxo_mapping: Dict[str, Dict[str, Optional[int]]] = Field(
         title="Categories mapping",
-        description="Mapping "
+        description="For 'ABO', 'CNC' and 'BIV' types types, mapping "
         "from present taxon (key) to output replacement one (value)."
-        " Use a 0 replacement to _discard_ the present taxon.",
-        example={456: 956, 2456: 213, 7153: 0},
-        default={},
+        " Use a null replacement to _discard_ the present taxon.",
+        example={
+            "occurrence": {"456": 956, "2456": 213},
+            "concentration": {"456": 956, "2456": 21},
+        },
+        default={"occurrence": {}, "concentration": {}},
     )
     formulae: Dict[str, str] = Field(
         title="Computation formulas",
@@ -395,13 +386,16 @@ class DarwinCoreExportReq(BaseModel):
         default=[],
     )
     # TODO: Is same as TaxonomyRecast below, should get type TaxoRemappingT (or define it here)
-    computations_pre_mapping: Dict[int, int] = Field(
-        title="Computation mapping",
-        description="Mapping from present taxon (key) to output replacement one (value), during computations."
-        " Use a 0 replacement to _discard_ the objects with present taxon."
-        " Note: These are EcoTaxa categories, WoRMS mapping happens after, whatever.",
-        example={456: 956, 2456: 213, 93672: 0},
-        default={},
+    computations_pre_mapping: Dict[str, Dict[str, Optional[int]]] = Field(
+        title="Categories mapping",
+        description="For 'ABO', 'CNC' and 'BIV' types types, mapping "
+        "from present taxon (key) to output replacement one (value)."
+        " Use a null replacement to _discard_ the present taxon.",
+        example={
+            "occurrence": {"456": 956, "2456": 213},
+            "concentration": {"456": 956, "2456": 21},
+        },
+        default={"occurrence": {}, "concentration": {}},
     )
     formulae: Dict[str, str] = Field(
         title="Computation formulas",
@@ -472,6 +466,3 @@ class ExportRsp(BaseModel):
         example=12376,
         default=0,
     )
-
-
-

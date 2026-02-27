@@ -1157,6 +1157,7 @@ def darwin_core_format_export(
 
     Note: Only manageable collections can be exported.
     """
+    print("------------premapping", request.computations_pre_mapping)
     with DarwinCoreExport(
         request.collection_id,
         request.dry_run,
@@ -3451,10 +3452,6 @@ def update_taxonomy_recast(
     **Create or Update the collection or project taxonomy recast**.
      Note: The recast is updated only if manageable.
     """
-    print("recast  ----", recast.operation)
-    print("recast ---------", recast.recast)
-    print("reacst target", recast.target_id)
-    print("iscoll", recast.is_collection)
     with TaxonomyService() as sce:
         with RightsThrower():
             sce.update_taxonomy_recast(current_user, recast)
@@ -3497,6 +3494,33 @@ def get_taxonomy_recast(
                 operation=operation,
                 is_collection=is_collection,
             )
+    return ret
+
+
+@app.get(
+    "/taxo_worms",
+    operation_id="get_taxonomy_worms",
+    tags=["Taxonomy Tree"],
+    response_model=Any,
+)
+def get_taxonomy_worms(
+    taxa_ids: str = Query(
+        title="Taxa Ids",
+        description="taxon id separated by ,",
+        default="",
+        example="all",
+    ),
+    current_user: int = Depends(get_current_user),
+) -> Dict[str, int]:
+    """
+    **Read the collection or project taxonomy recast**.
+     Note: The data is returned only if manageable.
+    """
+    taxaids = _split_num_list(taxa_ids)
+    with TaxonomyService() as sce:
+        ret = sce.get_taxonomy_worms(
+            taxa_ids=taxaids,
+        )
     return ret
 
 

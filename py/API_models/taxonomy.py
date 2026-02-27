@@ -5,13 +5,19 @@
 #  Models used in Taxonomy API operations.
 #
 from typing import List, Optional, Any, Dict
-
+from enum import Enum
 from API_models.crud import ProjectSummaryModel
 from API_models.helpers.DBtoModel import OrmConfig, combine_models
+from BO.ObjectSetQueryPlus import TaxoRemappingT
 from DB.Taxonomy import Taxonomy
 from DB.TaxoRecast import RecastOperation
 from helpers.pydantic import BaseModel, Field
 from pydantic import Extra
+
+
+class TaxoGroupingEnum(str, Enum):
+    occurrence = "occurrence"
+    concentration = "concentration"
 
 
 class TaxoRecastRsp(BaseModel):

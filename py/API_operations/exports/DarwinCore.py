@@ -11,6 +11,7 @@
 #      https://github.com/EMODnet/EMODnetBiocheck
 import datetime
 import re
+import json
 from collections import OrderedDict
 from functools import lru_cache
 from typing import Dict, List, Optional, Tuple, cast, Set, Any
@@ -18,6 +19,7 @@ from urllib.parse import quote_plus
 
 import BO.ProjectVarsDefault as DefaultVars
 from API_models.exports import ExportRsp, SciExportTypeEnum
+from API_models.taxonomy import TaxoGroupingEnum
 from BO.Acquisition import AcquisitionIDT
 from BO.Classification import ClassifIDT, ClassifIDSetT
 from BO.Collection import (
@@ -34,16 +36,17 @@ from BO.ObjectSetQueryPlus import (
     ResultGrouping,
     TaxoRemappingT,
     ObjectSetQueryPlus,
-    TaxoRemappingWith0AsNoneT,
 )
 from BO.Project import ProjectBO, ProjectTaxoStats, ProjectIDListT
 from BO.ProjectSet import PermissionConsistentProjectSet
 from BO.Sample import SampleBO, SampleAggregForTaxon
 from BO.Vocabulary import Vocabulary, Units
 from BO.WoRMSification import WoRMSifier, WoRMSBO
+from BO.User import UserIDT
 from DB.Collection import Collection
 from DB.Project import ProjectTaxoStat, Project
 from DB.Sample import Sample
+from DB.TaxoRecast import RecastOperation
 from DB.Taxonomy import Taxonomy
 from DB.User import User, Organization
 from DB.helpers import Session
@@ -119,7 +122,10 @@ class DarwinCoreExport(JobServiceBase):
             {
                 "collection_id": self.collection.id,
                 "dry_run": self.dry_run,
-                "taxo_recast": self.computations_taxo_recast,
+                "recasts": {
+                    TaxoGroupingEnum.occurrence: self.recast_occurrence,
+                    TaxoGroupingEnum.concentration: self.recast_concentration,
+                },
                 "include_predicted": self.include_predicted,
                 "with_absent": self.with_absent,
                 "with_computations": self.with_computations,
@@ -133,7 +139,7 @@ class DarwinCoreExport(JobServiceBase):
         self,
         collection_id: CollectionIDT,
         dry_run: bool,
-        taxo_recast: TaxoRemappingWith0AsNoneT,
+        recasts: Dict[str, TaxoRemappingT],
         include_predicted: bool,
         with_absent: bool,
         with_computations: List[SciExportTypeEnum],
@@ -148,10 +154,13 @@ class DarwinCoreExport(JobServiceBase):
         self.the_collection: CollectionBO = CollectionBO(self.collection).enrich()
         self.dry_run: bool = dry_run
         self.include_predicted: bool = include_predicted
-        # Args are serialized in JSON -> keys have become str and 0 val becomes None
-        self.computations_taxo_recast: TaxoRemappingT = {
-            int(k): v if v != 0 else None for k, v in taxo_recast.items()
-        }
+        self.worms_ifier: WoRMSifier = WoRMSifier()
+        self.recast_occurrence = WoRMSifier.validate_remapping(
+            recasts[TaxoGroupingEnum.occurrence]
+        )
+        self.recast_concentration = WoRMSifier.validate_remapping(
+            recasts[TaxoGroupingEnum.concentration]
+        )
         # Output params
         self.with_absent: bool = with_absent
         self.with_computations: List[SciExportTypeEnum] = with_computations
@@ -164,9 +173,6 @@ class DarwinCoreExport(JobServiceBase):
         #
         # During processing
         #
-        # The taxa to their WoRMS counterpart...
-        self.worms_ifier: WoRMSifier = WoRMSifier()  # ...straight from project data...
-        self.recast_worms_ifier: WoRMSifier = WoRMSifier()  # ...with applied recast
         # Output
         self.errors: List[str] = []
         self.warnings: List[str] = []
@@ -185,7 +191,7 @@ class DarwinCoreExport(JobServiceBase):
     DWC_ZIP_NAME = "dwca.zip"
     PRODUCED_FILE_NAME = DWC_ZIP_NAME
 
-    def run(self, current_user_id: int) -> ExportRsp:
+    def run(self, current_user_id: UserIDT) -> ExportRsp:
         """
         Initial run, basically just create the job, after permission check.
         """
@@ -193,6 +199,35 @@ class DarwinCoreExport(JobServiceBase):
         PermissionConsistentProjectSet(
             self.session, project_ids
         ).can_be_administered_by(current_user_id)
+
+        if len(self.recast_occurrence.keys()) == 0:
+            res = self.worms_ifier.query_taxo_mapping(
+                self.ro_session,
+                current_user_id,
+                self.collection.id,
+                RecastOperation.overwrite_auto,
+                True,
+            ).scalar()
+            if res is not None:
+                self.recast_occurrence: TaxoRemappingT = json.loads(res.transforms)
+        # Args are serialized in JSON -> keys have become str and 0 val becomes None
+        self.computations_taxo_worms: TaxoRemappingT = {
+            int(k): v if v != 0 else None for k, v in self.recast_occurrence.items()
+        }
+        if len(self.recast_concentration.keys()) == 0:
+            res = self.worms_ifier.query_recast(
+                self.ro_session,
+                current_user_id,
+                self.collection.id,
+                RecastOperation.settings,
+                True,
+            ).scalar()
+            if res is not None:
+                self.recast_concentration = json.loads(res.transforms)
+        self.computations_recast_concentration: TaxoRemappingT = {
+            int(k): v if v != 0 else None for k, v in self.recast_concentration.items()
+        }
+
         # Security OK, create pending job
         self.create_job(self.JOB_TYPE, current_user_id)
         ret = ExportRsp(job_id=self.job_id)

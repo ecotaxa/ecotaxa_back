@@ -161,6 +161,17 @@ class TaxonomyService(Service):
                     worms_targets.update({taxonid: toworms})
         return worms_targets
 
+    def get_taxonomy_worms(self, taxa_ids: ClassifIDListT) -> Dict[str, int]:
+        wormsifier: WoRMSifier = WoRMSifier()
+        wormsifier.do_match(self.ro_session, taxa_ids)
+        taxo_worms_auto = wormsifier.phylo2worms.copy()
+        for taxonid, to in wormsifier.morpho2phylo.items():
+            if to is not None and taxonid > 0:
+                toworms = wormsifier.phylo2worms[int(to)]
+                if isinstance(toworms, WoRMSBO):
+                    taxo_worms_auto.update({str(taxonid): toworms.id})
+        return taxo_worms_auto
+
     def update_taxonomy_recast(
         self, current_user_id: UserIDT, recast: TaxonomyRecastReq
     ):
@@ -183,7 +194,15 @@ class TaxonomyService(Service):
         else:
             new_recast.project_id = recast.target_id
         new_recast.operation = recast.operation
-        new_recast.transforms = json.dumps(recast.recast.from_to)
+        from_to = {}
+        for k, val in recast.recast.from_to.items():
+            if val is None:
+                v = 0
+            else:
+                v = int(val)
+            from_to.update({str(k): v})
+        transforms = WoRMSifier.validate_remapping(from_to)
+        new_recast.transforms = json.dumps(transforms)
         new_recast.documentation = (
             json.dumps(recast.recast.doc) if recast.recast.doc else {}
         )

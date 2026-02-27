@@ -154,17 +154,27 @@ class WoRMSifier(object):
         logger.info("Mapping phylo2worms: %s", self.phylo2worms)
         logger.info("Mapping morpho2phylo: %s", self.morpho2phylo)
 
+    def do_mapping(
+        self, session: Session, taxa_ids: List[TaxonomyIDT]
+    ) -> Dict[ClassifIDT, WoRMSBO]:
+        ret = TaxonBOSet(session, taxa_ids)
+        taxons = {str(t.id): create_worms_bo(t) for t in ret.as_list()}
+        taxa_mapping: Dict[ClassifIDT, WoRMSBO] = {
+            int(_from): taxons[str(_to)] for _from, _to in taxons.items()
+        }
+        return taxa_mapping
+
     def get_worms_targets(self) -> List[WoRMSBO]:
         return list(self.phylo2worms.values())
 
-    def get_taxo_mapping_targets(
+    def query_taxo_mapping(
         self,
         session: Session,
         current_user_id: UserIDT,
         target_id: Union[CollectionIDT, ProjectIDT],
         operation: RecastOperation,
         is_collection: bool,
-    ) -> Optional[Dict[ClassifIDT, WoRMSBO]]:
+    ) -> Optional[List[ClassifIDT]]:
         res = self.query_recast(
             session,
             current_user_id,
@@ -177,12 +187,7 @@ class WoRMSifier(object):
             return None
         the_one: TaxoRecast = res[0]
         taxa_ids = json.loads(str(the_one.transforms)).values()
-        ret = TaxonBOSet(session, taxa_ids)
-        taxons = {str(t.id): create_worms_bo(t) for t in ret.as_list()}
-        taxo_mapping_targets: Dict[ClassifIDT, WoRMSBO] = {
-            int(_from): taxons[str(_to)] for _from, _to in taxons.items()
-        }
-        return taxo_mapping_targets
+        return list(taxa_ids)
 
     def apply_recast(self, recast: TaxoRemappingT) -> None:
         recast = recast.copy()  # We destroy it, protect the arg
@@ -213,6 +218,23 @@ class WoRMSifier(object):
             del recast[from_]
         present_morpho2phylo.update(recast)
         self.morpho2phylo = present_morpho2phylo
+
+    @staticmethod
+    def validate_remapping(remapping: TaxoRemappingT) -> TaxoRemappingT:
+        keys = remapping.keys()
+
+        def end_of_chain(remap: ClassifIDT, start: ClassifIDT) -> Optional[ClassifIDT]:
+            ret = remapping[remap]
+            if ret != remap:
+                assert ret != start, " error in  loop" + str(ret) + " --- " + str(start)
+                if ret in keys:
+                    ret = end_of_chain(ret, start)
+            return ret
+
+        validremap: Dict[ClassifIDT, ClassifIDT] = {}
+        for from_ in remapping.keys():
+            validremap[from_] = end_of_chain(from_, from_)
+        return validremap
 
     def unreferenced_ids(self, ids: Iterable[ClassifIDT]) -> ClassifIDListT:
         """Return the taxa from ids, not known in self"""
