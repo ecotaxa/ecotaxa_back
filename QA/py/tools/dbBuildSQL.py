@@ -23,7 +23,7 @@ PG_PORT = environ.get("POSTGRES_PORT")
 if PG_HOST and PG_PORT:
     PG_PORT = int(PG_PORT)
 else:
-    pg_lib = "/usr/lib/postgresql/14/bin/"  # ============ 124 passed, 1 skipped, 4 warnings in 221.91s (0:03:41) ============
+    pg_lib = "/usr/lib/postgresql/18/bin/"  # ============ 124 passed, 1 skipped, 4 warnings in 221.91s (0:03:41) ============
     pgctl_bin = join(pg_lib, "pg_ctl")
     initdb_bin = join(pg_lib, "initdb")
     mustExist = [pgctl_bin, initdb_bin]

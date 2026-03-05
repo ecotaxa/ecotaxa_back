@@ -6,12 +6,13 @@
 #
 from typing import List, Optional, Any, Dict
 
+from pydantic import Extra
+
 from API_models.crud import ProjectSummaryModel
 from API_models.helpers.DBtoModel import OrmConfig, combine_models
-from DB.Taxonomy import Taxonomy
 from DB.TaxoRecast import RecastOperation
+from DB.Taxonomy import Taxonomy
 from helpers.pydantic import BaseModel, Field
-from pydantic import Extra
 
 
 class TaxoRecastRsp(BaseModel):
@@ -198,7 +199,7 @@ class TaxonomyRecastReq(BaseModel):
     recast: TaxoRecastRsp = Field(
         title="Recast mapping and react doc",
         description="Recast taxonomy from key to value.",
-        defaut={},
+        # defaut={},
         example={
             "from_to": {"234": 12, "124": 7},
             "doc": {"234": "up to the nearest non morpho"},
