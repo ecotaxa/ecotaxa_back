@@ -29,7 +29,7 @@ class UnauthorizedException(BaseAppException):
 
 
 class UnprocessableEntityException(BaseAppException):
-    """Raised when user is not authorized"""
+    """Raised when received data is invalid"""
 
     def __init__(self, message: str):
         super().__init__(message, status_code=422)

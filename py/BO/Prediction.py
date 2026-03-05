@@ -89,8 +89,7 @@ class DeepFeatures(object):
             # We don't need the whole list to check that some are missing
             qry = qry.limit(10)
         ret = {}
-        for a_res in session.execute(qry):
-            objid, imgid, orig_file_name = a_res
+        for objid, imgid, orig_file_name in qry:
             assert imgid is not None, "Object %d has no image in DB" % objid
             if not objid in ret:
                 ret[objid] = Image.img_from_id_and_orig(imgid, orig_file_name)

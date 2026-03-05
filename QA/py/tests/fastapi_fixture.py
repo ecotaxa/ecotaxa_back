@@ -1,5 +1,6 @@
 # Fixture for monkey-patching fastapi
 # So that no token validation occurs, user ID is in security token
+import logging
 from typing import Any, Generator
 
 import pytest
@@ -21,11 +22,12 @@ def fastapi(config, database, tstlogs) -> Generator[TestClient, Any, None]:
     from helpers import fastApiUtils
 
     fastApiUtils.build_serializer()
+    main.logger.setLevel(logging.CRITICAL)
     sav_loads = fastApiUtils._serializer.loads
     fastApiUtils._serializer.loads = lambda s, max_age: {"user_id": s}
     import main
     client = TestClient(main.app)
-    main.JOB_INTERVAL = 0.05
+    main.JOB_INTERVAL = 0.01
     with client:  # Trigger the fastapi 'startup' event -> launches the JobScheduler
         yield client
     # Teardown, once per module

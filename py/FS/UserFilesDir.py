@@ -7,17 +7,17 @@ import os
 import shutil
 import tarfile
 import zipfile
-from magic_rs import from_path, CantMatchTypeError
 from pathlib import Path
 from typing import Optional, List, NamedTuple, Dict, Tuple
 
+from magic_rs import from_path, CantMatchTypeError
 from starlette.datastructures import UploadFile
 
 from BO.User import UserIDT
 from FS.CommonDir import CommonFolder, DirEntryT
 from helpers.AppConfig import Config
-from helpers.DynamicLogs import get_logger
 from helpers.CustomException import UnprocessableEntityException
+from helpers.DynamicLogs import get_logger
 from helpers.httpexception import (
     DETAIL_INVALID_ZIP_FILE,
     DETAIL_INVALID_LARGE_ZIP_FILE,
@@ -110,12 +110,10 @@ class UserFilesDirectory(object):
         return ret
 
     @staticmethod
-    def _is_gz(filepath):
+    def _is_gz(filepath: str) -> bool:
         with open(filepath, "rb") as f:
-            b1 = f.read(1)
-            b2 = f.read(1)
-            f.close()
-        return b1 == b"\x1f" and b2 == b"\x8b"
+            signature = f.read(2)
+        return signature == b"\x1f\x8b"
 
     def _is_trash_dir_throw(self, path: str):
         if self._root_path.joinpath(
@@ -153,7 +151,7 @@ class UserFilesDirectory(object):
                 path = ""
             else:
                 pathtoremove = self._root_path.joinpath(path)
-                path = path + os.path.sep
+                path += os.path.sep
             for item in os.listdir(pathtoremove):
                 if (
                     pathtoremove.joinpath(item).is_file()
@@ -310,7 +308,6 @@ class UserFilesDirectory(object):
             with open(compressed_file, "rb") as archive:
                 with open(decompressed_file, "wb") as decompressed:
                     decompressed.write(gzip.decompress(archive.read()))
-                    decompressed.close()
             name = str(decompressed_file).split(os.path.sep)[-1]
             self.dispatch_unpack(path.joinpath(name), path)
             os.remove(compressed_file)

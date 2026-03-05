@@ -10,7 +10,7 @@ from BG_operations.JobScheduler import JobScheduler
 from helpers.DynamicLogs import get_logger, LogsSwitcher, logger_nullify_after_fork
 
 from tests.credentials import ADMIN_USER_ID
-from tests.jobs import api_wait_for_stable_job
+from tests.api_wrappers import api_wait_for_stable_job
 
 logger = get_logger(__name__)
 

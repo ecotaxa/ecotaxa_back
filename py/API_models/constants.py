@@ -7,6 +7,8 @@
 from typing import Dict, List, Optional
 
 from BO.DataLicense import DataLicense, AccessLevelEnum
+from DB.TaxoRecast import RecastOperation
+from DB.User import UserStatus, UserType, PeopleOrganizationDirectory
 from BO.User import (
     USER_PWD_REGEXP,
     USER_PWD_REGEXP_DESCRIPTION,
@@ -140,4 +142,10 @@ class Constants(BaseModel):
         title="OpenID configured",
         description="Whether OpenID authentication is configured.",
         default=False,
+    )
+    recast_operation: Dict[str, str] = Field(
+        title="Recast operation",
+        description="Taxonomy recast operation name",
+        default={st.name: st.value for st in RecastOperation},
+        example={"prediction_input": "pre_predict", "settings": "settings","dwca_export":"dwca_export"},
     )

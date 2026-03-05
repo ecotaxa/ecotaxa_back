@@ -6,50 +6,19 @@
 #
 import datetime
 import json
-import random
-import tempfile
-from collections import deque
-from typing import Dict, Set, List, Tuple, Any, Optional, Final, Deque
-
-from httpx import ReadTimeout, HTTPError
+from typing import Dict, List, Any, Final
 
 from BO.Classification import ClassifIDT
 from BO.Rights import RightsBO
 from BO.Taxonomy import TaxonomyBO
 from BO.User import UserIDT
 from DB.Taxonomy import Taxonomy
-from DB.User import User
 from helpers import DateTime
 from helpers.DynamicLogs import get_logger
 from providers.EcoTaxoServer import EcoTaxoServerClient
 from .helpers.Service import Service
 
 logger = get_logger(__name__)
-
-
-class TaxonomyChangeService(Service):  # pragma:nocover
-    """
-    A service dedicated to the move from UniEUK taxonomy referential to WoRMS one.
-    Not exposed to any category of user in the app.
-    """
-
-    MAX_QUERIES = 500
-
-    def __init__(self, max_requests: int):
-        super().__init__()
-        self.temp_log = ""
-        # aphia_id -> all_fetched
-        self.existing_id: Dict[int, bool] = {}
-        self.to_fetch: Deque[int] = deque()
-        self.nb_queries = 0
-        if max_requests is not None:
-            self.max_queries = max_requests
-        else:
-            self.max_queries = self.MAX_QUERIES
-
-    def log_file_path(self) -> str:
-        self.temp_log = tempfile.NamedTemporaryFile(suffix=".log", delete=True).name
-        return self.temp_log
 
 
 class CentralTaxonomyService(Service):
@@ -90,7 +59,7 @@ class CentralTaxonomyService(Service):
         return ret.json()
 
     def search_worms_name(self, name: str) -> List[Dict]:
-        ret = self.client.call("/wormstaxon/%s" % name, {},'get')
+        ret = self.client.call("/wormstaxon/%s" % name, {}, "get")
         ret = ret.json()
         return ret
 

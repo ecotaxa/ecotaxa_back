@@ -4,12 +4,14 @@
 #
 
 import configparser
-from os.path import dirname, realpath
-from pathlib import Path
+
+import numpy as np
+from PIL import Image
 
 from BO.Vignette import VignetteMaker
+from test_import import SHARED_DIR
 
-VIGNETTE_DIR = Path(dirname(realpath(__file__))) / ".." / "data" / "vignette"
+IMAGES_DIR = SHARED_DIR / "images"
 
 CONFIG = """
 [vignette]
@@ -36,12 +38,20 @@ Pixel_Size=73
 
 def test_vignette1():
     """
-    Just a check that the code does not error out.
+    Check that the generated vignette is equal to an expected one.
     """
     conf = configparser.ConfigParser()
     conf.read_string(CONFIG)
     vignette = "0128_vig.png"
-    maker = VignetteMaker(conf, VIGNETTE_DIR, vignette)
+    maker = VignetteMaker(conf, IMAGES_DIR, vignette)
     assert maker.must_keep_original()
     original = "0128.png"
-    maker.make_vignette(original)
+    target_file = maker.make_vignette(original)
+
+    # Compare with expected
+    expected_file = IMAGES_DIR / "vignette" / "0128_vig_expected.png"
+
+    img_target = np.array(Image.open(target_file))
+    img_expected = np.array(Image.open(expected_file))
+
+    assert np.array_equal(img_target, img_expected)

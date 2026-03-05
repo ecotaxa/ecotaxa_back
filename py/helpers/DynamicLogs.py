@@ -88,8 +88,7 @@ class LogEmitter(ABC):
     """
 
     @abc.abstractmethod
-    def log_file_path(self) -> str:
-        ...
+    def log_file_path(self) -> str: ...
 
     def __init__(self):
         self.switcher = None

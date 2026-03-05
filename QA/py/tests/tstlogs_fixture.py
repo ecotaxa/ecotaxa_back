@@ -1,7 +1,6 @@
 #
 # A log directory for tests, not the app ones
 #
-import os
 import shutil
 from os.path import dirname, realpath
 from pathlib import Path

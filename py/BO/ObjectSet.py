@@ -50,8 +50,7 @@ from BO.Taxonomy import TaxonomyBO
 from BO.Training import TrainingBO, PredictionBO
 from BO.User import UserIDT
 from BO.helpers.MappedTable import MappedTable
-from DB import Session, Query, Process, Taxonomy, User, ObjectCNNFeatureVector
-from DB.Taxonomy import TaxoStatus
+from DB import Session, Query, Process, User, ObjectCNNFeatureVector
 from DB.Acquisition import Acquisition
 from DB.Image import Image
 from DB.Object import (
@@ -68,9 +67,10 @@ from DB.Object import (
 from DB.Prediction import (
     PSEUDO_TRAINING_SCORE,
 )
-from BO.Project import ProjectBOSet, ProjectBO
 from DB.Project import ProjectIDListT, Project
 from DB.Sample import Sample
+from DB.Taxonomy import TaxoStatus
+from DB.Taxonomy import Taxonomy
 from DB.helpers import Result
 from DB.helpers.Core import select
 from DB.helpers.Direct import func
@@ -79,7 +79,6 @@ from DB.helpers.Postgres import pg_insert, PgInsert
 from DB.helpers.SQL import WhereClause, SQLParamDict, FromClause, OrderClause
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
-from DB.Taxonomy import Taxonomy
 
 # Typings, to be clear that these are not e.g. project IDs
 # Object_id + parents + project
@@ -999,10 +998,15 @@ class ObjectSetFilter(object):
         if self.samples:
             return None
 
-        if self.MapN or self.MapW or self.MapE or self.MapS:
+        if (
+            self.MapN is not None
+            or self.MapW is not None
+            or self.MapE is not None
+            or self.MapS is not None
+        ):
             return None
 
-        if self.depth_min or self.depth_max:
+        if self.depth_min is not None or self.depth_max is not None:
             return None
 
         if self.instrument:
@@ -1029,10 +1033,10 @@ class ObjectSetFilter(object):
         if self.validated_to:
             return None
 
-        if self.free_num or self.free_num_start:
+        if self.free_num or self.free_num_start is not None:
             return None
 
-        if self.free_num or self.free_num_end:
+        if self.free_num or self.free_num_end is not None:
             return None
 
         if self.free_text or self.free_text_val:
@@ -1132,7 +1136,12 @@ class ObjectSetFilter(object):
             else:
                 where_clause *= "obh.classif_qual = '" + self.status_filter[:3] + "'"
 
-        if self.MapN and self.MapW and self.MapE and self.MapS:
+        if (
+            self.MapN is not None
+            and self.MapW is not None
+            and self.MapE is not None
+            and self.MapS is not None
+        ):
             where_clause *= "obh.latitude BETWEEN :MapS AND :MapN"
             where_clause *= "obh.longitude BETWEEN :MapW AND :MapE"
             params["MapN"] = self.MapN
@@ -1140,7 +1149,7 @@ class ObjectSetFilter(object):
             params["MapE"] = self.MapE
             params["MapS"] = self.MapS
 
-        if self.depth_min and self.depth_max:
+        if self.depth_min is not None and self.depth_max is not None:
             where_clause *= "obh.depth_min BETWEEN :depthmin AND :depthmax"
             where_clause *= "obh.depth_max BETWEEN :depthmin AND :depthmax"
             params["depthmin"] = self.depth_min
@@ -1194,13 +1203,13 @@ class ObjectSetFilter(object):
             params["validtodate"] = self.validated_to
 
         if self.free_num and (
-            self.free_num_start or self.free_num_end
+            self.free_num_start is not None or self.free_num_end is not None
         ):  # e.g. "on02" for object numeric Column #2 (1-based)
-            if self.free_num_start:
+            if self.free_num_start is not None:
                 comp_op = " >= "
                 bound = self.free_num_start
             else:
-                assert self.free_num_end
+                assert self.free_num_end is not None
                 comp_op = " <= "
                 bound = self.free_num_end
             try:
@@ -1309,7 +1318,6 @@ class DescribedObjectBOSet(object):
             order_clause = OrderClause()
         # The filters on objects
         obj_where = WhereClause()
-        import json
 
         params: SQLParamDict = {
             "projid": ",".join([str(project_id) for project_id in self.project_ids])

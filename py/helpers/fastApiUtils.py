@@ -324,7 +324,7 @@ def _get_range_header(range_header: str, file_size: int) -> Tuple[int, int]:
 
     if start > end or start < 0 or end > file_size:
         raise _invalid_range()
-    return start, end
+    return start, end - 1 if end == file_size else end
 
 
 class AutoCloseBinaryIO(object):
@@ -389,7 +389,7 @@ def adjust_if_ranged(
     if range_hdr is not None:
         file_size = content.size()
         start, end = _get_range_header(range_hdr, file_size)
-        left_size = end - start
+        left_size = end - start + 1
         headers["content-length"] = str(left_size)
         headers["content-range"] = f"bytes {start}-{end}/{file_size}"
         content.seek(start)

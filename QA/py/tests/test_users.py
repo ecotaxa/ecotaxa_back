@@ -43,8 +43,7 @@ def config_captcha(monkeypatch):
     monkeypatch.setattr(HomeCaptcha, "verify_captcha", mock_verify_captcha)
 
 
-def test_prefs_set_get(database, caplog):
-    caplog.set_level(logging.ERROR)
+def test_prefs_set_get(database):
     # Create a dest project
     prj_id = create_project(ADMIN_USER_ID, "Preferences test")
     prefs_for_test = "foo bar boo"
@@ -75,8 +74,7 @@ def test_prefs_set_get(database, caplog):
 
 
 # test with verif email off  new user
-def test_user_create_ordinary(monkeypatch, fastapi, caplog):
-    caplog.set_level(logging.FATAL)
+def test_user_create_ordinary(monkeypatch, fastapi):
     import urllib.parse
 
     config_captcha(monkeypatch)
