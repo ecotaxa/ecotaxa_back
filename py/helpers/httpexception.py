@@ -30,3 +30,4 @@ DETAIL_SAME_NAME_IN_TRASH = (
 )
 DETAIL_ALREADY_EXISTS = "Already exists"
 DETAIL_OPENID_NOT_CONFIGURED = "OpenID provider not configured"
+DETAIL_OPENID_PROVIDER_ERROR = "OpenID provider error"

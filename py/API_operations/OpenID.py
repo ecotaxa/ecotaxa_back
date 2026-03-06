@@ -14,7 +14,10 @@ from API_models.crud import UserModelWithRights
 from API_operations.CRUD.Users import UserService
 from helpers.AppConfig import Config
 from helpers.fastApiUtils import build_serializer
-from helpers.httpexception import DETAIL_OPENID_NOT_CONFIGURED
+from helpers.httpexception import (
+    DETAIL_OPENID_NOT_CONFIGURED,
+    DETAIL_OPENID_PROVIDER_ERROR,
+)
 
 oauth = OAuth()
 
@@ -59,7 +62,11 @@ async def openid_login(request: Request):
     # If we are behind a proxy, we might need to force https
     if request.headers.get("x-forwarded-proto") == "https":
         redirect_uri = str(redirect_uri).replace("http://", "https://")
-    return await provider.authorize_redirect(request, redirect_uri)
+    try:
+        return await provider.authorize_redirect(request, redirect_uri)
+    except Exception as e:
+        logging.error(f"OpenID login redirect error: {e}")
+        raise HTTPException(status_code=502, detail=[DETAIL_OPENID_PROVIDER_ERROR])
 
 
 @router.get(
@@ -73,7 +80,11 @@ async def openid_callback(request: Request):
     provider = getattr(oauth, THE_PROVIDER, None)
     if provider is None:
         raise HTTPException(status_code=503, detail=[DETAIL_OPENID_NOT_CONFIGURED])
-    token = await provider.authorize_access_token(request)
+    try:
+        token = await provider.authorize_access_token(request)
+    except Exception as e:
+        logging.error(f"OpenID callback access token error: {e}")
+        raise HTTPException(status_code=502, detail=[DETAIL_OPENID_PROVIDER_ERROR])
     user_info = token.get("userinfo")
     if user_info is None:
         return {
@@ -144,7 +155,11 @@ async def openid_logout(request: Request):
     if provider is None:
         raise HTTPException(status_code=503, detail=[DETAIL_OPENID_NOT_CONFIGURED])
     client_id, _, _ = Config().get_openid_config()
-    metadata = await provider.load_server_metadata()
+    try:
+        metadata = await provider.load_server_metadata()
+    except Exception as e:
+        logging.error(f"OpenID logout metadata error: {e}")
+        raise HTTPException(status_code=502, detail=[DETAIL_OPENID_PROVIDER_ERROR])
     end_session_endpoint = metadata.get("end_session_endpoint")
     front_url = Config().get_account_validation_url()
     assert front_url is not None
