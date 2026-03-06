@@ -63,7 +63,7 @@ from API_models.exports import (
     SummaryExportReq,
     BackupExportReq,
 )
-from API_models.taxonomy import TaxoRecastRsp, TaxonomyRecastReq
+from API_models.taxonomy import TaxoRecastRsp, TaxonomyRecastReq, TaxoGroupingEnum
 from API_models.filesystem import DirectoryModel
 from API_models.filters import ProjectFilters
 from API_models.helpers.Introspect import plain_columns
@@ -148,6 +148,7 @@ from BO.Collection import (
 from BO.ColumnUpdate import ColUpdateList
 from BO.Job import JobBO
 from BO.Object import ObjectBO
+from BO.ObjectSetQueryPlus import TaxoRemappingT
 from BO.Process import ProcessBO
 from BO.Project import ProjectBO, ProjectUserStats, ProjectColumns
 from BO.ProjectSet import ProjectSetColumnStats
@@ -1157,11 +1158,14 @@ def darwin_core_format_export(
 
     Note: Only manageable collections can be exported.
     """
-    print("------------premapping", request.computations_pre_mapping)
+    renames: Dict[str, TaxoRemappingT] = {
+        TaxoGroupingEnum.occurrence: request.rename_occurrence,
+        TaxoGroupingEnum.emof: request.rename_emof,
+    }
     with DarwinCoreExport(
         request.collection_id,
         request.dry_run,
-        request.computations_pre_mapping,
+        renames,
         request.include_predicted,
         request.with_absent,
         request.with_computations,
@@ -3473,7 +3477,7 @@ def get_taxonomy_recast(
         default=None,
         title="Operation name",
         description="One of RecastOperation enum value",
-        example="settings",
+        example="dwca_export_occurrence",
     ),
     is_collection: bool = Query(
         default=False,

@@ -154,18 +154,21 @@ class WoRMSifier(object):
         logger.info("Mapping phylo2worms: %s", self.phylo2worms)
         logger.info("Mapping morpho2phylo: %s", self.morpho2phylo)
 
+    @staticmethod
     def do_mapping(
-        self, session: Session, taxa_ids: List[TaxonomyIDT]
+        session: Session, taxa_ids: List[TaxonomyIDT]
     ) -> Dict[ClassifIDT, WoRMSBO]:
         ret = TaxonBOSet(session, taxa_ids)
-        taxons = {str(t.id): create_worms_bo(t) for t in ret.as_list()}
         taxa_mapping: Dict[ClassifIDT, WoRMSBO] = {
-            int(_from): taxons[str(_to)] for _from, _to in taxons.items()
+            str(t.id): create_worms_bo(t) for t in ret.as_list()
         }
         return taxa_mapping
 
-    def get_worms_targets(self) -> List[WoRMSBO]:
-        return list(self.phylo2worms.values())
+    @staticmethod
+    def get_worms_targets(session: Session, recastids: List[int]) -> List[WoRMSBO]:
+        taxa = TaxonBOSet(session, recastids)
+        targets: List[WoRMSBO] = [create_worms_bo(taxon) for taxon in taxa.as_list()]
+        return targets
 
     def query_taxo_mapping(
         self,
@@ -174,7 +177,7 @@ class WoRMSifier(object):
         target_id: Union[CollectionIDT, ProjectIDT],
         operation: RecastOperation,
         is_collection: bool,
-    ) -> Optional[List[ClassifIDT]]:
+    ) -> Optional[Dict[str, Optional[ClassifIDT]]]:
         res = self.query_recast(
             session,
             current_user_id,
@@ -186,6 +189,7 @@ class WoRMSifier(object):
         if res is None or len(res) != 1:
             return None
         the_one: TaxoRecast = res[0]
+        return the_one.transforms
         taxa_ids = json.loads(str(the_one.transforms)).values()
         return list(taxa_ids)
 
@@ -236,13 +240,12 @@ class WoRMSifier(object):
             validremap[from_] = end_of_chain(from_, from_)
         return validremap
 
-    def unreferenced_ids(self, ids: Iterable[ClassifIDT]) -> ClassifIDListT:
+    @staticmethod
+    def unreferenced_ids(
+        ids: Iterable[ClassifIDT], refids: Iterable[ClassifIDT]
+    ) -> ClassifIDListT:
         """Return the taxa from ids, not known in self"""
-        return [
-            an_id
-            for an_id in ids
-            if an_id not in self.phylo2worms and an_id not in self.morpho2phylo
-        ]
+        return [an_id for an_id in ids if an_id not in refids]
 
     @staticmethod
     def query_recast(

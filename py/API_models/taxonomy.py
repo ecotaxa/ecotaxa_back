@@ -17,7 +17,7 @@ from pydantic import Extra
 
 class TaxoGroupingEnum(str, Enum):
     occurrence = "occurrence"
-    concentration = "concentration"
+    emof = "emof"
 
 
 class TaxoRecastRsp(BaseModel):
@@ -193,8 +193,8 @@ class TaxonomyRecastReq(BaseModel):
     operation: RecastOperation = Field(
         title="Recast operation",
         description="Recast operation name.",
-        example="overwrite_auto",
-        default=RecastOperation.settings,
+        example=RecastOperation.dwca_export_emof,
+        default=None,
     )
     is_collection: bool = Field(
         title="Is collection",

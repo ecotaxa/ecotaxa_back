@@ -164,7 +164,10 @@ class TaxonomyService(Service):
     def get_taxonomy_worms(self, taxa_ids: ClassifIDListT) -> Dict[str, int]:
         wormsifier: WoRMSifier = WoRMSifier()
         wormsifier.do_match(self.ro_session, taxa_ids)
-        taxo_worms_auto = wormsifier.phylo2worms.copy()
+        taxo_worms_auto = {
+            str(k): v.id for k, v in wormsifier.phylo2worms.copy().items()
+        }
+
         for taxonid, to in wormsifier.morpho2phylo.items():
             if to is not None and taxonid > 0:
                 toworms = wormsifier.phylo2worms[int(to)]
@@ -217,6 +220,7 @@ class TaxonomyService(Service):
         is_collection: bool = False,
     ) -> Optional[TaxoRecastRsp]:
         assert operation in RecastOperation.__members__, HTTP_422_UNPROCESSABLE_ENTITY
+        print("---operation not4", operation)
         qry = WoRMSifier.query_recast(
             self.ro_session,
             current_user_id,

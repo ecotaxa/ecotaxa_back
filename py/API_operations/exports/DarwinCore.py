@@ -122,9 +122,9 @@ class DarwinCoreExport(JobServiceBase):
             {
                 "collection_id": self.collection.id,
                 "dry_run": self.dry_run,
-                "recasts": {
-                    TaxoGroupingEnum.occurrence: self.recast_occurrence,
-                    TaxoGroupingEnum.concentration: self.recast_concentration,
+                "renames": {
+                    TaxoGroupingEnum.occurrence: self.renames_occurrence,
+                    TaxoGroupingEnum.emof: self.renames_emof,
                 },
                 "include_predicted": self.include_predicted,
                 "with_absent": self.with_absent,
@@ -139,7 +139,7 @@ class DarwinCoreExport(JobServiceBase):
         self,
         collection_id: CollectionIDT,
         dry_run: bool,
-        recasts: Dict[str, TaxoRemappingT],
+        renames: Dict[str, TaxoRemappingT],
         include_predicted: bool,
         with_absent: bool,
         with_computations: List[SciExportTypeEnum],
@@ -155,12 +155,18 @@ class DarwinCoreExport(JobServiceBase):
         self.dry_run: bool = dry_run
         self.include_predicted: bool = include_predicted
         self.worms_ifier: WoRMSifier = WoRMSifier()
-        self.recast_occurrence = WoRMSifier.validate_remapping(
-            recasts[TaxoGroupingEnum.occurrence]
+        self.renames_occurrence = WoRMSifier.validate_remapping(
+            renames[TaxoGroupingEnum.occurrence]
         )
-        self.recast_concentration = WoRMSifier.validate_remapping(
-            recasts[TaxoGroupingEnum.concentration]
+        self.computations_occurrence: TaxoRemappingT = {
+            int(k): v if v != 0 else None for k, v in self.renames_occurrence.items()
+        }
+        self.renames_emof = WoRMSifier.validate_remapping(
+            renames[TaxoGroupingEnum.emof]
         )
+        self.computations_emof: TaxoRemappingT = {
+            int(k): v if v != 0 else None for k, v in self.renames_emof.items()
+        }
         # Output params
         self.with_absent: bool = with_absent
         self.with_computations: List[SciExportTypeEnum] = with_computations
@@ -200,32 +206,32 @@ class DarwinCoreExport(JobServiceBase):
             self.session, project_ids
         ).can_be_administered_by(current_user_id)
 
-        if len(self.recast_occurrence.keys()) == 0:
+        if len(self.renames_occurrence.keys()) == 0:
             res = self.worms_ifier.query_taxo_mapping(
                 self.ro_session,
                 current_user_id,
                 self.collection.id,
-                RecastOperation.overwrite_auto,
+                RecastOperation.dwca_export_occurrence,
                 True,
-            ).scalar()
+            )
             if res is not None:
-                self.recast_occurrence: TaxoRemappingT = json.loads(res.transforms)
+                self.renames_occurrence: TaxoRemappingT = json.loads(res)
         # Args are serialized in JSON -> keys have become str and 0 val becomes None
-        self.computations_taxo_worms: TaxoRemappingT = {
-            int(k): v if v != 0 else None for k, v in self.recast_occurrence.items()
+        self.computations_occurrence: TaxoRemappingT = {
+            int(k): v if v != 0 else None for k, v in self.renames_occurrence.items()
         }
-        if len(self.recast_concentration.keys()) == 0:
-            res = self.worms_ifier.query_recast(
+        if len(self.renames_emof.keys()) == 0:
+            res = self.worms_ifier.query_taxo_mapping(
                 self.ro_session,
                 current_user_id,
                 self.collection.id,
-                RecastOperation.settings,
+                RecastOperation.dwca_export_emof,
                 True,
-            ).scalar()
+            )
             if res is not None:
-                self.recast_concentration = json.loads(res.transforms)
-        self.computations_recast_concentration: TaxoRemappingT = {
-            int(k): v if v != 0 else None for k, v in self.recast_concentration.items()
+                self.renames_emof = json.loads(res)
+        self.computations_emof: TaxoRemappingT = {
+            int(k): v if v != 0 else None for k, v in self.renames_emof.items()
         }
 
         # Security OK, create pending job
@@ -630,7 +636,9 @@ class DarwinCoreExport(JobServiceBase):
         ret: List[EMLTaxonomicClassification] = []
 
         # Coverage is from recast "space", the biggest one
-        worms_targets = self.recast_worms_ifier.get_worms_targets()
+        worms_targets = WoRMSifier.get_worms_targets(
+            self.ro_session, list(self.computations_occurrence.values())
+        )
         # Error out if nothing at all
         if len(worms_targets) == 0:
             self.errors.append(
@@ -903,7 +911,7 @@ class DarwinCoreExport(JobServiceBase):
         cls,
         ro_session: Session,
         sample: Sample,
-        morpho2phylo: TaxoRemappingT,
+        recast_occurrences: TaxoRemappingT,
         with_computations: List[SciExportTypeEnum],
         formulae: Dict[str, str],
         predicted: bool,
@@ -936,8 +944,9 @@ class DarwinCoreExport(JobServiceBase):
 
         # Abundances, 'simple' count but eventually with remapping
         counts = cls.abundances_for_sample(
-            ro_session, object_set, morpho2phylo, warnings
+            ro_session, object_set, recast_occurrences, warnings
         )
+
         for a_count in counts:
             txo_id, count = a_count["txo_id"], a_count["count"]
             ret[txo_id] = SampleAggregForTaxon(txo_id, count, None, None)
@@ -945,11 +954,16 @@ class DarwinCoreExport(JobServiceBase):
         if SciExportTypeEnum.concentrations in with_computations:
             # Enrich with concentrations
             concentrations = cls.concentrations_for_sample(
-                ro_session, formulae, object_set, morpho2phylo, warnings
+                ro_session,
+                formulae,
+                object_set,
+                recast_occurrences,
+                warnings,
             )
             conc_wrn_txos = []
             for a_conc in concentrations:
                 txo_id, conc = a_conc["txo_id"], a_conc["conc"]
+                print("----txo_id__" + str(txo_id), ret)
                 if conc == conc:  # not-a-NaN test
                     ret[txo_id].concentration = conc
                 else:
@@ -962,7 +976,11 @@ class DarwinCoreExport(JobServiceBase):
         if SciExportTypeEnum.biovols in with_computations:
             # Enrich with biovolumes, note that we need previous formulae for scaling
             biovolumes = cls.biovolumes_for_sample(
-                ro_session, formulae, object_set, morpho2phylo, warnings
+                ro_session,
+                formulae,
+                object_set,
+                recast_occurrences,
+                warnings,
             )
             biovol_wrn_txos = []
             for a_biovol in biovolumes:
@@ -1065,16 +1083,18 @@ class DarwinCoreExport(JobServiceBase):
         aggregs = self._aggregate_for_sample(
             ro_session=self.ro_session,
             sample=sample,
-            morpho2phylo=self.worms_ifier.morpho2phylo,
+            recast_occurrences=self.computations_occurrence,
             with_computations=[SciExportTypeEnum.abundances],
             # SciExportTypeEnum.abundances is needed for production of per aphia_id in present def.
             formulae=dict(),  # Nothing to compute
             predicted=predicted,
             warnings=self.warnings,
         )
-
+        mapping = WoRMSifier.do_mapping(
+            self.ro_session, list(self.computations_occurrence.values())
+        )
         by_abundance_desc, not_found = self._occurrences_from_aggregations(
-            aggregs, self.worms_ifier.phylo2worms, event_id, predicted, self.warnings
+            aggregs, mapping, event_id, predicted, self.warnings
         )
         for an_id in not_found:
             # Mapping failed, count how many of them
@@ -1188,16 +1208,19 @@ class DarwinCoreExport(JobServiceBase):
         aggregs = self._aggregate_for_sample(
             ro_session=self.ro_session,
             sample=sample,
-            morpho2phylo=self.recast_worms_ifier.morpho2phylo,
+            recast_occurrences=self.computations_occurrence,
             with_computations=self.with_computations,
             formulae=self.formulae,
             predicted=predicted,
             warnings=self.warnings,
         )
-
+        mapping = WoRMSifier.do_mapping(
+            self.ro_session, list(self.computations_occurrence.values())
+        )
+        print("mappings ----", mapping)
         by_abundance_desc, not_found = self._occurrences_from_aggregations(
             aggregs,
-            self.recast_worms_ifier.phylo2worms,
+            mapping,
             event_id,
             predicted,
             self.warnings,
@@ -1367,27 +1390,32 @@ class DarwinCoreExport(JobServiceBase):
         taxo_qry = taxo_qry.filter(ProjectTaxoStat.projid.in_(project_ids))
         used_taxa = {an_id for an_id, in taxo_qry}
 
-        # Note: _All_ used taxa will appear in occurrences, recast does not
+        # Note: Not _All_ used taxa will appear in occurrences, recast does not
         #     impact occurrences output, @see def add_occurrences_for_sample.
         # OTOH, the recast target taxa will (likely) appear in coverage as it comes
         # from computed quantities.
+        computation_taxa = self.computations_occurrence.copy()
+        computation_taxa.update(self.computations_emof.copy())
         used_and_recasted_taxa = used_taxa.copy()
-        for from_, to_ in self.computations_taxo_recast.items():
+        for from_, to_ in computation_taxa.items():
             if from_ in used_taxa and to_ is not None:
                 used_and_recasted_taxa.add(to_)
 
         # Map all to WoRMS, the ones from projects and the recast target ones
         # Note: It should now (Jan 2026) be straightforward as recast targets are all WoRMS
-        self.recast_worms_ifier.do_match(self.ro_session, list(used_and_recasted_taxa))
+        # self.recast_worms_ifier.do_match(self.ro_session, list(used_and_recasted_taxa))
 
         # Update recast to apply during calculations
-        self.recast_worms_ifier.apply_recast(self.computations_taxo_recast)
+        # self.recast_worms_ifier.apply_recast(self.computations_taxo_recast)
 
         # Also prepare the recast-free version
-        self.worms_ifier.do_match(self.ro_session, list(used_taxa))
+        # self.worms_ifier.do_match(self.ro_session, list(used_taxa))
 
         # Prepare warnings for non-matches
-        for an_id in self.recast_worms_ifier.unreferenced_ids(used_and_recasted_taxa):
+
+        for an_id in WoRMSifier.unreferenced_ids(
+            used_and_recasted_taxa, list(set(computation_taxa.keys()))
+        ):
             taxon = self.session.get(Taxonomy, an_id)
             assert taxon is not None
             self.ignored_taxa[an_id] = (an_id, taxon.name)

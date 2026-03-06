@@ -17,14 +17,12 @@ class RecastOperation(str, Enum):
     prediction_input = "pre_predict"
     # Taxa are recast during Project prediction output phase (unused)
     prediction_output = "post_predict"
-    # Taxa are recast to be used in Collection DWCA export
-    dwca_export = "dwca_export"
     # Taxa are recast during Project summary export
     summary_export = "summary_export"
     # Taxa recast overwrite automatic worms recast
-    overwrite_auto = "overwrite_auto"
+    dwca_export_occurrence = "dwca_export_occurrence"
     # Taxa recast in settings
-    settings = "settings"
+    dwca_export_emof = "dwca_export_emof"
 
 
 class TaxoRecast(Model):
