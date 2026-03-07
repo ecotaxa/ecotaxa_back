@@ -4,16 +4,16 @@
 #
 # Maintenance operations on the DB.
 #
-import os
-import time
-import shutil
 import datetime
-from glob import glob
+import os
+import shutil
+import time
 from dataclasses import dataclass
+from glob import glob
+from pathlib import Path
 from typing import Tuple, Any, List, Optional
 
 from API_operations.helpers.JobService import JobServiceBase, ArgsDict
-from FS.UserFilesDir import UserFilesDirectory
 from BO.Job import JobBO
 from BO.Project import ProjectBO
 from BO.Rights import RightsBO
@@ -25,8 +25,8 @@ from DB.helpers import Result
 from DB.helpers import Session
 from DB.helpers.Direct import text
 from FS.TempDirForTasks import TempDirForTasks
+from FS.UserFilesDir import UserFilesDirectory
 from helpers.DynamicLogs import get_logger, LogsSwitcher
-from pathlib import Path
 
 logger = get_logger(__name__)
 
@@ -81,6 +81,8 @@ class NightlyJobService(JobServiceBase):
         self.update_progress(0, "Starting")
         all_prj_ids = [proj_id for proj_id, in self.ro_session.query(Project.projid)]
         all_prj_ids.sort()
+        # Release transaction, otherwise (if idle_in_transaction_session_timeout is set) the connection could expire
+        self.ro_session.commit()
         self.compute_all_projects_taxo_stats(all_prj_ids, 0, 30)
         self.compute_all_projects_stats(all_prj_ids, 30, 60)
         self.refresh_taxo_tree_stats(60)
