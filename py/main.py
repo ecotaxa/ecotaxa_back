@@ -29,6 +29,7 @@ from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from fastapi_utils.timing import add_timing_middleware
 from sqlalchemy.sql.expression import null
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from API_models.constants import Constants
 from API_models.crud import (
@@ -63,7 +64,6 @@ from API_models.exports import (
     SummaryExportReq,
     BackupExportReq,
 )
-from API_models.taxonomy import TaxoRecastRsp, TaxonomyRecastReq
 from API_models.filesystem import DirectoryModel
 from API_models.filters import ProjectFilters
 from API_models.helpers.Introspect import plain_columns
@@ -97,6 +97,8 @@ from API_models.taxonomy import (
     TaxonCentral,
     AddWormsTaxonModel,
 )
+from API_models.taxonomy import TaxoRecastRsp, TaxonomyRecastReq
+from API_operations.BigFiles import create_big_files_router
 from API_operations.CRUD.Collections import CollectionsService
 from API_operations.CRUD.Constants import ConstantsService
 from API_operations.CRUD.Guests import GuestService
@@ -153,8 +155,8 @@ from BO.Project import ProjectBO, ProjectUserStats, ProjectColumns
 from BO.ProjectSet import ProjectSetColumnStats
 from BO.Sample import SampleBO, SampleTaxoStats
 from BO.Taxonomy import TaxonBO
-from BO.WoRMSification import WoRMSBO
 from BO.User import UserIDT, GuestIDT
+from BO.WoRMSification import WoRMSBO
 from DB import Sample
 from DB.Object import ObjectIDListT
 from DB.Project import ProjectTaxoStat, Project
@@ -208,6 +210,10 @@ add_timing_middleware(app, record=logger.info, prefix="app", exclude="untimed")
 # Optimize large responses -> Let's leave this task to some proxy coded in C
 # app.add_middleware(GZipMiddleware, minimum_size=1024)
 
+# This tells FastAPI to trust the headers from your proxy
+# 'trusted_hosts=["*"]' allows any proxy; in production,
+# limit this to your proxy's specific IP/range.
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
 
 # HTML stuff
 # app.mount("/styles", StaticFiles(directory="pages/styles"), name="styles")
@@ -221,6 +227,8 @@ CRSF_header = {
 
 # Establish second routes via /api to same app
 app.mount("/api", app)
+
+app.include_router(create_big_files_router())
 
 
 # noinspection PyUnusedLocal
@@ -3298,43 +3306,13 @@ def get_taxon_in_central(
 # noinspection PyUnusedLocal
 @app.put("/taxon/central", operation_id="add_taxon_in_central", tags=["Taxonomy Tree"])
 def add_taxon_in_central(
-    name: str = Query(
-        ...,
-        title="Name",
-        description="The taxon/category verbatim name.",
-        example="Echinodermata",
-    ),
-    parent_id: int = Query(
-        ...,
-        title="Parent Id",
-        description="It's not possible to create a root taxon.",
-        example=2367,
-    ),
-    taxotype: str = Query(
-        ...,
-        title="Taxo Type",
-        description="The taxon type, 'M' for Morpho or 'P' for Phylo.",
-        example="P",
-    ),
-    creator_email: str = Query(
-        ...,
-        title="Creator email",
-        description="The email of the taxo creator.",
-        example="user.creator@email.com",
-    ),
-    request: Request = Query(..., title="Request", description=""),
-    source_desc: Optional[str] = Query(
-        default=None,
-        title="Source desc",
-        description="The source description.",
-        example="null",
-    ),
-    source_url: Optional[str] = Query(
-        default=None,
-        title="Source url",
-        description="The source url.",
-        example="http://www.google.fr/",
-    ),
+    name: str,
+    parent_id: int,
+    taxotype: str,
+    creator_email: str,
+    request: Request,
+    source_desc: Optional[str] = None,
+    source_url: Optional[str] = None,
     current_user: int = Depends(get_current_user),
 ) -> str:
     """
