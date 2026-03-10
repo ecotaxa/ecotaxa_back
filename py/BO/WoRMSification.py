@@ -5,7 +5,6 @@
 # A description of transformation to the WoRMS taxonomic system.
 #
 from typing import Dict, Iterable, List, Optional, Set, Union
-import json
 from sqlalchemy.orm import Session
 
 from BO.Classification import ClassifIDT, ClassifIDListT
@@ -160,7 +159,7 @@ class WoRMSifier(object):
     ) -> Dict[ClassifIDT, WoRMSBO]:
         ret = TaxonBOSet(session, taxa_ids)
         taxa_mapping: Dict[ClassifIDT, WoRMSBO] = {
-            str(t.id): create_worms_bo(t) for t in ret.as_list()
+            t.id: create_worms_bo(t) for t in ret.as_list()
         }
         return taxa_mapping
 
@@ -190,8 +189,6 @@ class WoRMSifier(object):
             return None
         the_one: TaxoRecast = res[0]
         return the_one.transforms
-        taxa_ids = json.loads(str(the_one.transforms)).values()
-        return list(taxa_ids)
 
     def apply_recast(self, recast: TaxoRemappingT) -> None:
         recast = recast.copy()  # We destroy it, protect the arg

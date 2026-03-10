@@ -5,19 +5,12 @@
 #  Models used in Taxonomy API operations.
 #
 from typing import List, Optional, Any, Dict
-from enum import Enum
 from API_models.crud import ProjectSummaryModel
 from API_models.helpers.DBtoModel import OrmConfig, combine_models
-from BO.ObjectSetQueryPlus import TaxoRemappingT
 from DB.Taxonomy import Taxonomy
 from DB.TaxoRecast import RecastOperation
 from helpers.pydantic import BaseModel, Field
-from pydantic import Extra
-
-
-class TaxoGroupingEnum(str, Enum):
-    occurrence = "occurrence"
-    emof = "emof"
+from pydantic import Extra, validator
 
 
 class TaxoRecastRsp(BaseModel):
@@ -40,6 +33,19 @@ class TaxoRecastRsp(BaseModel):
             "9134": "Detritus",
         },
     )
+
+    # noinspection PyMethodParameters
+    @validator("from_to")
+    def ensure_consistent_renaming(cls, v):
+        vals_but_0 = set(v.values()).difference({0})
+        assert set(v.keys()).isdisjoint(
+            vals_but_0
+        ), "inconsistent taxonomy renaming, can't do remap chains or loops: common part is %s" % set(
+            v.keys()
+        ).intersection(
+            set(v.values())
+        )
+        return v
 
     class Config:
         extra = Extra.forbid

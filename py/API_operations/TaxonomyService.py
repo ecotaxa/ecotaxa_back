@@ -220,7 +220,6 @@ class TaxonomyService(Service):
         is_collection: bool = False,
     ) -> Optional[TaxoRecastRsp]:
         assert operation in RecastOperation.__members__, HTTP_422_UNPROCESSABLE_ENTITY
-        print("---operation not4", operation)
         qry = WoRMSifier.query_recast(
             self.ro_session,
             current_user_id,

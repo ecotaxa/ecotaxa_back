@@ -180,14 +180,6 @@ class ExportReq(ProjectIdReq):
         example="A",
         default=SummaryExportGroupingEnum.just_by_taxon,
     )
-    pre_mapping: Dict[str, Optional[int]] = Field(
-        title="Categories renaming",
-        description="For 'ABO', 'CNC' and 'BIV' types types, grouping "
-        "from present taxon (key) to output replacement one (value)."
-        " Use a null replacement to _discard_ the present taxon.",
-        example={"456": 956, "2456": 213},
-        default={},
-    )
     formulae: Dict[str, str] = Field(
         title="Computation formulas",
         description="Transitory: For 'CNC' and 'BIV' type, how to get values from DB "
@@ -207,14 +199,6 @@ class ExportReq(ProjectIdReq):
         example=False,
         default=False,
     )
-
-    # noinspection PyMethodParameters
-    @validator("pre_mapping")
-    def username_alphanumeric(cls, v):
-        assert set(v.keys()).isdisjoint(
-            set(v.values())
-        ), "inconsistent taxonomy renaming, can't do remap chains or loops"
-        return v
 
     class Config:
         schema_extra = {"title": "Export request Model"}
@@ -283,14 +267,6 @@ class SummaryExportReq(ProjectIdReq):
         example=SummaryExportSumOptionsEnum.acquisition,
         default=SummaryExportSumOptionsEnum.sample,
     )
-    taxo_rename: Dict[str, Optional[int]] = Field(
-        title="Categories renaming",
-        description="For 'ABO', 'CNC' and 'BIV' types types, renaming "
-        "from present taxon (key) to output replacement one (value)."
-        " Use a null replacement to _discard_ the present taxon.",
-        example={"456": 956, "2456": 213},
-        default={},
-    )
     formulae: Dict[str, str] = Field(
         title="Computation formulas",
         description="Transitory: How to get values from DB "
@@ -310,17 +286,6 @@ class SummaryExportReq(ProjectIdReq):
         default=False,
         example=False,
     )
-
-    # noinspection PyMethodParameters
-    @validator("taxo_rename")
-    def ensure_sane_remap(cls, v):
-        assert set(v.keys()).isdisjoint(
-            set(v.values())
-        ), "inconsistent taxonmy renaming, can't do remap chains or loops"
-        return v
-
-    class Config:
-        schema_extra = {"title": "Summary Export request Model"}
 
 
 class BackupExportReq(ProjectIdReq):
@@ -379,23 +344,6 @@ class DarwinCoreExportReq(BaseModel):
         example=["ABO"],
         default=[],
     )
-    # TODO: Is same as TaxonomyRecast below, should get type TaxoRemappingT (or define it here)
-    rename_occurrence: Dict[str, Optional[int]] = Field(
-        title="Categories renaming",
-        description="Taxonomy renaming  for occurrences"
-        "from present taxon (key) to output replacement one (value)."
-        " Use a null replacement to _discard_ the present taxon.",
-        example={"456": 956, "2456": 213},
-        default={},
-    )
-    rename_emof: Dict[str, Optional[int]] = Field(
-        title="Categories renaming for EMOF",
-        description="For  'ABO', 'CNC' and 'BIV' types, grouping "
-        "from present taxon (key) to output replacement one (value)."
-        " Use a null replacement to _discard_ the present taxon.",
-        example={"456": 956, "2456": 213},
-        default={},
-    )
     formulae: Dict[str, str] = Field(
         title="Computation formulas",
         description="Transitory: How to get values from DB free columns. "
@@ -421,19 +369,6 @@ class DarwinCoreExportReq(BaseModel):
         },
         default=[],
     )
-
-    # noinspection PyMethodParameters
-    @validator("rename_occurrence", "rename_emof")
-    def ensure_consistent_renaming(cls, v):
-        vals_but_0 = set(v.values()).difference({0})
-        assert set(v.keys()).isdisjoint(
-            vals_but_0
-        ), "inconsistent taxonomy renaming, can't do remap chains or loops: common part is %s" % set(
-            v.keys()
-        ).intersection(
-            set(v.values())
-        )
-        return v
 
     class Config:
         extra = Extra.forbid

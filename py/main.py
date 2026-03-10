@@ -63,7 +63,7 @@ from API_models.exports import (
     SummaryExportReq,
     BackupExportReq,
 )
-from API_models.taxonomy import TaxoRecastRsp, TaxonomyRecastReq, TaxoGroupingEnum
+from API_models.taxonomy import TaxoRecastRsp, TaxonomyRecastReq
 from API_models.filesystem import DirectoryModel
 from API_models.filters import ProjectFilters
 from API_models.helpers.Introspect import plain_columns
@@ -148,7 +148,6 @@ from BO.Collection import (
 from BO.ColumnUpdate import ColUpdateList
 from BO.Job import JobBO
 from BO.Object import ObjectBO
-from BO.ObjectSetQueryPlus import TaxoRemappingT
 from BO.Process import ProcessBO
 from BO.Project import ProjectBO, ProjectUserStats, ProjectColumns
 from BO.ProjectSet import ProjectSetColumnStats
@@ -161,6 +160,7 @@ from DB.Object import ObjectIDListT
 from DB.Project import ProjectTaxoStat, Project
 from DB.ProjectPrivilege import ProjectPrivilege
 from DB.User import User, OrganizationIDT
+from DB.TaxoRecast import RecastOperation
 from helpers.DynamicLogs import get_logger, get_api_logger, MONITOR_LOG_PATH
 from helpers.fastApiUtils import (
     internal_server_error_handler,
@@ -1158,22 +1158,19 @@ def darwin_core_format_export(
 
     Note: Only manageable collections can be exported.
     """
-    renames: Dict[str, TaxoRemappingT] = {
-        TaxoGroupingEnum.occurrence: request.rename_occurrence,
-        TaxoGroupingEnum.emof: request.rename_emof,
-    }
+
     with DarwinCoreExport(
         request.collection_id,
         request.dry_run,
-        renames,
         request.include_predicted,
         request.with_absent,
         request.with_computations,
         request.formulae,
         request.extra_xml,
+        current_user,
     ) as sce:
         with RightsThrower():
-            return sce.run(current_user)
+            return sce.run()
 
 
 @app.delete(
@@ -3473,7 +3470,7 @@ def get_taxonomy_recast(
         description="Internal, the unique numeric id of this collection.",
         example=1,
     ),
-    operation: str = Query(
+    operation: RecastOperation = Query(
         default=None,
         title="Operation name",
         description="One of RecastOperation enum value",

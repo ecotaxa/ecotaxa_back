@@ -32,6 +32,8 @@ from BO.ObjectSet import DescribedObjectSet, DescribedObjectBOSet
 from BO.ObjectSetQueryPlus import ResultGrouping, IterableRowsT, ObjectSetQueryPlus
 from BO.Rights import RightsBO, Action
 from BO.Taxonomy import TaxonomyBO
+from BO.Classification import ClassifIDT
+from BO.Collection import CollectionIDT
 from BO.Vocabulary import Vocabulary, Units
 from DB import Image
 from DB.Object import (
@@ -39,7 +41,8 @@ from DB.Object import (
     DUBIOUS_CLASSIF_QUAL,
     PREDICTED_CLASSIF_QUAL,
 )
-from DB.Project import Project, ProjectIDListT
+from DB.Project import Project, ProjectIDListT, ProjectIDT
+from DB.TaxoRecast import TaxoRecast, RecastOperation
 from DB.ProjectVariables import ProjectVariables
 from DB.helpers.Direct import text
 from DB.helpers.SQL import OrderClause
@@ -68,6 +71,7 @@ class ProjectExport(JobServiceBase):
         self.out_file_name: str = ""
         self.out_path: Path = Path("")
         self.backup_with_just_image_refs = False
+        self.req.pre_mapping = {}
 
     def run(self, current_user_id: int) -> ExportRsp:
         """
@@ -86,6 +90,27 @@ class ProjectExport(JobServiceBase):
             )
 
         # Security OK, create pending job
+        # get pre_mapping
+        if self.JOB_TYPE == "SummaryExport" or self.JOB_TYPE == "GeneralExport":
+            if self.req.collection_id is not None:
+                is_collection = True
+                target_id = self.req.collection_id
+                operation = RecastOperation.collection_export
+            else:
+                is_collection = False
+                target_id = self.req.project_id
+                operation = RecastOperation.project_export
+            pre_mapping: Optional[Dict[str, Optional[ClassifIDT]]] = (
+                self.query_taxo_recast(
+                    target_id=target_id,
+                    operation=operation,
+                    is_collection=is_collection,
+                )
+            )
+            if pre_mapping is not None:
+                self.req.pre_mapping = pre_mapping
+
+            print(self.req.pre_mapping)
         self.create_job(self.JOB_TYPE, current_user_id)
         ret = ExportRsp(job_id=self.job_id)
         return ret
@@ -978,7 +1003,7 @@ class ProjectExport(JobServiceBase):
         )
         # The specialized SQL builder operates from the object set
         aug_qry = ObjectSetQueryPlus(object_set)
-        aug_qry.remap_categories(req.pre_mapping)
+        aug_qry.remap_categories(self.req.pre_mapping)
         # Formulae default from the project but are overriden by the query
         formulae: Dict[str, str] = {}
         for project_id in project_ids:
@@ -1031,6 +1056,31 @@ class ProjectExport(JobServiceBase):
         self.update_progress(90, msg)
 
         return 0
+
+    def query_taxo_recast(
+        self,
+        target_id: Union[ProjectIDT, CollectionIDT],
+        operation: RecastOperation,
+        is_collection: bool = False,
+    ) -> Optional[Dict[ClassifIDT, Optional[ClassifIDT]]]:
+        qry = self.ro_session.query(TaxoRecast)
+        qry = qry.filter(TaxoRecast.operation == operation)
+        if is_collection:
+            qry = qry.filter(TaxoRecast.collection_id == target_id)
+        else:
+            qry = qry.filter(TaxoRecast.project_id == target_id)
+        res = qry.all()
+        if res is None or len(res) != 1:
+            return None
+        the_one: TaxoRecast = res[0]
+        transforms: Dict[ClassifIDT, Optional[ClassifIDT]] = {}
+        for k, v in the_one.transforms.items():
+            if v == "":
+                val = 0
+            else:
+                val = int(v)
+            transforms.update({int[k]: val})
+        return transforms
 
 
 class SpecializedProjectExport(ProjectExport):
@@ -1105,7 +1155,6 @@ class SummaryProjectExport(SpecializedProjectExport):
             project_id=req.project_id,
             exp_type=new_type_to_old[req.quantity],
             sum_subtotal=new_level_to_old[req.summarise_by],
-            pre_mapping=req.taxo_mapping,
             formulae=req.formulae,
             out_to_ftp=req.out_to_ftp,
         )
