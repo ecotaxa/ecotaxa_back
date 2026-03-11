@@ -200,7 +200,6 @@ class TaxonomyRecastReq(BaseModel):
         title="Recast operation",
         description="Recast operation name.",
         example=RecastOperation.dwca_export_emof,
-        default=None,
     )
     is_collection: bool = Field(
         title="Is collection",

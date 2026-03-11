@@ -9,6 +9,7 @@ import csv
 import os
 import re
 import zipfile
+import json
 from pathlib import Path
 from typing import Optional, Tuple, TextIO, Dict, List, Set, Any, Union
 from zipfile import ZipFile
@@ -71,7 +72,7 @@ class ProjectExport(JobServiceBase):
         self.out_file_name: str = ""
         self.out_path: Path = Path("")
         self.backup_with_just_image_refs = False
-        self.req.pre_mapping = {}
+        self.pre_mapping: Dict[ClassifIDT, Optional[ClassifIDT]] = {}
 
     def run(self, current_user_id: int) -> ExportRsp:
         """
@@ -94,13 +95,13 @@ class ProjectExport(JobServiceBase):
         if self.JOB_TYPE == "SummaryExport" or self.JOB_TYPE == "GeneralExport":
             if self.req.collection_id is not None:
                 is_collection = True
-                target_id = self.req.collection_id
+                target_id = int(self.req.collection_id)
                 operation = RecastOperation.collection_export
             else:
                 is_collection = False
-                target_id = self.req.project_id
+                target_id = int(self.req.project_id)
                 operation = RecastOperation.project_export
-            pre_mapping: Optional[Dict[str, Optional[ClassifIDT]]] = (
+            pre_mapping: Optional[Dict[int, Optional[ClassifIDT]]] = (
                 self.query_taxo_recast(
                     target_id=target_id,
                     operation=operation,
@@ -108,9 +109,9 @@ class ProjectExport(JobServiceBase):
                 )
             )
             if pre_mapping is not None:
-                self.req.pre_mapping = pre_mapping
+                self.pre_mapping = pre_mapping
 
-            print(self.req.pre_mapping)
+            print(self.pre_mapping)
         self.create_job(self.JOB_TYPE, current_user_id)
         ret = ExportRsp(job_id=self.job_id)
         return ret
@@ -274,6 +275,8 @@ class ProjectExport(JobServiceBase):
         if out_file_name is not None and "out_file" not in done_infos:
             self.out_file_name = out_file_name
             done_infos.update({"out_file": self.out_file_name})
+            # pre_mapping
+            done_infos.update({"re_mapping": self.pre_mapping})
         self.set_job_result(errors=[], infos=done_infos)
 
     def append_log_to_zip(self) -> None:
@@ -944,7 +947,7 @@ class ProjectExport(JobServiceBase):
         # Get possible taxa names
         txo_qry = (
             ObjectSetQueryPlus(object_set)
-            .remap_categories(self.req.pre_mapping)
+            .remap_categories(self.pre_mapping)
             .add_selects(["txo.display_name"])
             .set_aliases({"txo.display_name": "txo"})
             .set_grouping(ResultGrouping.BY_TAXO)
@@ -1003,7 +1006,7 @@ class ProjectExport(JobServiceBase):
         )
         # The specialized SQL builder operates from the object set
         aug_qry = ObjectSetQueryPlus(object_set)
-        aug_qry.remap_categories(self.req.pre_mapping)
+        aug_qry.remap_categories(self.pre_mapping)
         # Formulae default from the project but are overriden by the query
         formulae: Dict[str, str] = {}
         for project_id in project_ids:
@@ -1072,14 +1075,14 @@ class ProjectExport(JobServiceBase):
         res = qry.all()
         if res is None or len(res) != 1:
             return None
-        the_one: TaxoRecast = res[0]
+        the_one = json.loads(res[0].transforms)
         transforms: Dict[ClassifIDT, Optional[ClassifIDT]] = {}
-        for k, v in the_one.transforms.items():
+        for k, v in the_one.items():
             if v == "":
                 val = 0
             else:
                 val = int(v)
-            transforms.update({int[k]: val})
+            transforms.update({int(k): val})
         return transforms
 
 

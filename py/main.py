@@ -3502,7 +3502,7 @@ def get_taxonomy_recast(
     "/taxo_worms",
     operation_id="get_taxonomy_worms",
     tags=["Taxonomy Tree"],
-    response_model=Any,
+    response_model=Dict[str, int],
 )
 def get_taxonomy_worms(
     taxa_ids: str = Query(
