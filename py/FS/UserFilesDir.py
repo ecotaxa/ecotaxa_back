@@ -85,10 +85,10 @@ class UserFilesDirectory(object):
         source_path = base_path.absolute().joinpath(name.lstrip(os.path.sep))
         # Copy data from the stream into dest_path
         with open(source_path, "wb") as file:
-            buff = await stream.read(1024)
+            buff = await stream.read(65536)
             while len(buff) != 0:
                 file.write(buff)  # type:ignore # Mypy is unaware of async read result
-                buff = await stream.read(1024)
+                buff = await stream.read(65536)
         file_ext, compressed_path, mime_type = self._get_file_info(
             name.lstrip(os.path.sep), base_path.absolute()
         )
