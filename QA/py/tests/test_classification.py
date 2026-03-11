@@ -9,6 +9,11 @@ import pytest
 from API_models.filters import ProjectFiltersDict
 from API_operations.helpers.Service import Service
 from DB.Prediction import Prediction, PredictionHisto
+from DB.Object import PREDICTED_CLASSIF_QUAL
+from BO.Training import PredictionBO, TrainingBO
+from BO.Classification import HistoricalLastClassif
+from DB.Training import Training
+from datetime import datetime
 from DB.helpers import Result
 from DB.helpers.Core import select
 from DB.helpers.ORM import any_
@@ -1010,3 +1015,94 @@ def test_revert_to_predicted(fastapi):
             },
         ],
     }
+
+
+def test_reconstruct_predictions_mock(mocker):
+    # Setup
+    mock_session = mocker.MagicMock()
+    # Mocking PredictionBO constructor needs a list of object IDs
+    pbo = PredictionBO(mock_session, [1, 2])
+
+    # 1. Mock finding matching training
+    # self.session.query(Training.training_id).filter(...).first()
+    mock_query = mock_session.query.return_value
+    mock_filter = mock_query.filter.return_value
+
+    # Case 1: Matching training exists for obj 1
+    # Case 2: No matching training for obj 2 -> should call TrainingBO.create_one
+
+    matching_training = mocker.MagicMock()
+    matching_training.training_id = 100
+
+    # Side effect to return different results for different calls
+    mock_filter.first.side_effect = [matching_training, None]
+
+    histo = [
+        HistoricalLastClassif(
+            objid=1,
+            classif_id=10,
+            histo_classif_date=datetime(2023, 1, 1),
+            histo_classif_id=11,
+            histo_classif_type="A",
+            histo_classif_qual=PREDICTED_CLASSIF_QUAL,
+            histo_classif_who=1,
+            histo_classif_score=0.9,
+        ),
+        HistoricalLastClassif(
+            objid=2,
+            classif_id=10,
+            histo_classif_date=datetime(2023, 2, 1),
+            histo_classif_id=12,
+            histo_classif_type="A",
+            histo_classif_qual=PREDICTED_CLASSIF_QUAL,
+            histo_classif_who=1,
+            histo_classif_score=0.8,
+        ),
+        HistoricalLastClassif(  # Should be skipped because not PREDICTED_CLASSIF_QUAL
+            objid=3,
+            classif_id=10,
+            histo_classif_date=datetime(2023, 3, 1),
+            histo_classif_id=13,
+            histo_classif_type="M",
+            histo_classif_qual="V",
+            histo_classif_who=1,
+            histo_classif_score=None,
+        ),
+    ]
+
+    new_training_bo = mocker.MagicMock()
+    new_training_bo.training_id = 200
+
+    mock_create_one = mocker.patch(
+        "BO.Training.TrainingBO.create_one", return_value=new_training_bo
+    )
+    pbo.reconstruct_predictions(histo)
+
+    # Verification
+    assert mock_session.query.call_count == 2
+
+    # Verify TrainingBO.create_one called for the second object
+    mock_create_one.assert_called_once()
+    assert mock_create_one.call_args[1]["training_start"] == datetime(2023, 2, 1)
+
+    # Verify advance() called on new training
+    new_training_bo.advance.assert_called_once()
+
+    # Verify bulk_insert_mappings called with correct data
+    mock_session.bulk_insert_mappings.assert_called_once()
+    args, kwargs = mock_session.bulk_insert_mappings.call_args
+    assert args[0] == Prediction
+    inserted_data = args[1]
+    assert len(inserted_data) == 2
+
+    # Check first prediction (matched training)
+    assert inserted_data[0][Prediction.training_id.name] == 100
+    assert inserted_data[0][Prediction.object_id.name] == 1
+    assert inserted_data[0][Prediction.classif_id.name] == 11
+    assert inserted_data[0][Prediction.score.name] == 0.9
+
+    # Check second prediction (new training)
+    assert inserted_data[1][Prediction.training_id.name] == 200
+    assert inserted_data[1][Prediction.object_id.name] == 2
+    assert inserted_data[1][Prediction.classif_id.name] == 12
+    assert inserted_data[1][Prediction.score.name] == 0.8
