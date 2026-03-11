@@ -3,14 +3,19 @@ from typing import Dict, List
 
 from starlette import status
 
-from tests.credentials import CREATOR_AUTH, ADMIN_AUTH, ADMIN_USER_ID
+from tests.credentials import CREATOR_AUTH, ADMIN_AUTH
 from tests.export_shared import download_and_check
 from tests.formulae import uvp_formulae
 from tests.jobs import get_job_and_wait_until_ok
 from tests.test_classification import OBJECT_SET_CLASSIFY_URL
 from tests.test_export_emodnet import add_concentration_data, PROJECT_SEARCH_SAMPLES_URL
 from tests.test_fastapi import PROJECT_QUERY_URL
-from tests.test_import import DATA_DIR, do_import
+from tests.test_import import (
+    DATA_DIR,
+    do_import,
+    do_test_import,
+    do_import_a_bit_more_skipping,
+)
 from tests.test_objectset_query import _prj_query
 from tests.test_update_prj import PROJECT_UPDATE_URL
 
@@ -30,14 +35,11 @@ def set_formulae_in_project(fastapi, prj_id: int, prj_formulae: Dict):
     assert rsp.status_code == status.HTTP_200_OK
 
 
-def test_export_abundances(database, fastapi, caplog):
-    caplog.set_level(logging.FATAL)
+def test_export_abundances(fastapi):
 
     # Admin imports the project, which is an export expected result
-    from tests.test_import import test_import
-
     path = str(DATA_DIR / "ref_exports" / "bak_all_images")
-    prj_id = test_import(database, caplog, "TSV sci export", path=path)
+    prj_id = do_test_import(fastapi, "TSV sci export", path=path)
     set_formulae_in_project(
         fastapi, prj_id, uvp_formulae
     )  # Note: This is _not_ needed for abundances
@@ -120,18 +122,16 @@ def test_export_abundances(database, fastapi, caplog):
     # log = get_log_file(fastapi, job_id)
 
 
-def test_export_conc_biovol(database, fastapi, caplog):
+def test_export_conc_biovol(fastapi):
     """Specific test for concentrations and biovolume"""
     # Admin imports the project
     from tests.test_import import (
-        test_import,
-        test_import_a_bit_more_skipping,
         WEIRD_DIR,
     )
 
-    prj_id = test_import(database, caplog, "SCISUM project")
+    prj_id = do_test_import(fastapi, "SCISUM project")
     # Add a sample spanning 2 days
-    test_import_a_bit_more_skipping(database, caplog, "SCISUM project")
+    do_import_a_bit_more_skipping(fastapi, "SCISUM project")
     # Store computation variables
     set_formulae_in_project(fastapi, prj_id, uvp_formulae)
     # Add some data for calculations
@@ -139,7 +139,7 @@ def test_export_conc_biovol(database, fastapi, caplog):
     # Add a sample with weird data in free columns:
     # rightmost column acq_sub_part in TSV has unusual values
     # date format is mixed
-    do_import(prj_id, WEIRD_DIR, ADMIN_USER_ID)
+    do_import(fastapi, prj_id, WEIRD_DIR, ADMIN_AUTH)
     # Get the project for update
     url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
@@ -224,16 +224,14 @@ def test_export_conc_biovol(database, fastapi, caplog):
     # log = get_log_file(fastapi, job_id)
 
 
-def test_export_abundances_filtered_by_taxo(database, fastapi, caplog):
+def test_export_abundances_filtered_by_taxo(fastapi):
     """Simulate calls to export with an active filter"""
-    caplog.set_level(logging.FATAL)
 
     # TODO: Dup code for the data load
     # Admin imports the project, which is an export expected result
-    from tests.test_import import test_import
 
     path = str(DATA_DIR / "ref_exports" / "bak_all_images")
-    prj_id = test_import(database, caplog, "TSV sci export filtered", path=path)
+    prj_id = do_test_import(fastapi, "TSV sci export filtered by taxo", path=path)
     set_formulae_in_project(fastapi, prj_id, uvp_formulae)  # Not needed
 
     # Validate all, otherwise empty report
@@ -270,16 +268,13 @@ def test_export_abundances_filtered_by_taxo(database, fastapi, caplog):
     )
 
 
-def test_export_abundances_filtered_by_sample(database, fastapi, caplog):
+def test_export_abundances_filtered_by_sample(fastapi):
     """Simulate calls to export with an active filter"""
-    caplog.set_level(logging.FATAL)
 
     # TODO: Dup code for the data load
     # Admin imports the project, which is an export expected result
-    from tests.test_import import test_import
-
     path = str(DATA_DIR / "ref_exports" / "bak_all_images")
-    prj_id = test_import(database, caplog, "TSV sci export filtered", path=path)
+    prj_id = do_test_import(fastapi, "TSV sci export filtered by sample", path=path)
     set_formulae_in_project(fastapi, prj_id, uvp_formulae)
 
     # Validate all, otherwise empty report

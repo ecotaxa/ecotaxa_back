@@ -127,9 +127,9 @@ class ImageManagerService(Service):
             logger.exception(e)
             img_file.state = ImageFileStateEnum.ERROR.value
 
-    def do_cleanup_dup_same_obj(  # TODO: Not working and not tested anyway
+    def do_cleanup_dup_same_obj(
         self, current_user_id: UserIDT, prj_id: ProjectIDT, max_deletes: int
-    ) -> str:
+    ) -> str:  #
         """
         Simplest duplication pattern. Inside the same object there are several identical images.
         """
@@ -139,7 +139,7 @@ class ImageManagerService(Service):
         orig_img = aliased(Image, name="orig")
         orig_file = aliased(ImageFile, name="orig_file")
         qry = self.session.query(
-            orig_img.file_name, orig_img.imgid, Image, ImageFile
+            orig_img.orig_file_name, orig_img.imgid, Image, ImageFile
         )  # Select what to delete
         qry = (
             qry.join(ObjectHeader, ObjectHeader.objid == Image.objid)
@@ -164,13 +164,6 @@ class ImageManagerService(Service):
             and_(
                 ImageFile.imgid == Image.imgid,
                 ImageFile.state == ImageFileStateEnum.OK.value,
-            ),
-        )
-        qry = qry.join(
-            orig_file,
-            and_(
-                orig_file.path == orig_img.file_name,
-                orig_file.state == ImageFileStateEnum.OK.value,
             ),
         )
         # and the same value of course
@@ -202,7 +195,10 @@ class ImageManagerService(Service):
                 continue
             # Even if MD5s match, be paranoid and compare files
             orig_path = self.vault.image_path(orig_file_name)
-            dup_path = self.vault.image_path(an_image.file_name)
+            img_file_name = Image.img_from_id_and_orig(
+                an_image.imgid, an_image.orig_file_name
+            )
+            dup_path = self.vault.image_path(img_file_name)
             assert orig_path != dup_path
             orig_exists = exists(orig_path)
             dup_exists = exists(dup_path)
@@ -232,7 +228,7 @@ class ImageManagerService(Service):
             # Do the cleanup
             deleted_imgids.add(an_image.imgid)
             if dup_exists:
-                remover.add_files([an_image.file_name])
+                remover.add_files([img_file_name])
             self.session.delete(an_image)
             self.session.delete(an_image_file)
         # Wait for the files handled

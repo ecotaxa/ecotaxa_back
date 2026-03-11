@@ -1,6 +1,8 @@
 EcoTaxa automated tests directory
 ==
 
+All functional tests are located in the `tests/` directory.
+
 You will find here a suite of quality-related automated tests and checks. This suite runs in GitHub actions after each
 commit, but should run flawlessly as well on each developper PC before a commit.
 

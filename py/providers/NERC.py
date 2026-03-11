@@ -5,7 +5,6 @@
 # https://eds.ukri.org/ NERC Vocabulary Server
 #
 
-import httpx
 import requests
 
 
@@ -15,7 +14,6 @@ class NERCFetcher(object):
     """
 
     BASE_URL = "http://vocab.nerc.ac.uk"
-    client = httpx.AsyncClient(base_url=BASE_URL, timeout=5)
     the_session = None
 
     JSON_REQ = "?_profile=nvs&_mediatype=application/ld+json"
@@ -24,7 +22,7 @@ class NERCFetcher(object):
     def get_preferred_name(cls, vocab_url: str) -> str:
         assert vocab_url.startswith(cls.BASE_URL)
         session = cls.get_session()
-        response = session.get(vocab_url + cls.JSON_REQ)
+        response = session.get(vocab_url + cls.JSON_REQ, timeout=5)
         if not response.ok:
             cls.invalidate_session()
             return ""

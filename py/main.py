@@ -58,12 +58,12 @@ from API_models.crud import (
 from API_models.exports import (
     ExportReq,
     ExportRsp,
-    TaxonomyRecast,
     DarwinCoreExportReq,
     GeneralExportReq,
     SummaryExportReq,
     BackupExportReq,
 )
+from API_models.taxonomy import TaxoRecastRsp, TaxonomyRecastReq
 from API_models.filesystem import DirectoryModel
 from API_models.filters import ProjectFilters
 from API_models.helpers.Introspect import plain_columns
@@ -149,17 +149,17 @@ from BO.ColumnUpdate import ColUpdateList
 from BO.Job import JobBO
 from BO.Object import ObjectBO
 from BO.Process import ProcessBO
-from BO.Project import ProjectBO, ProjectUserStats
+from BO.Project import ProjectBO, ProjectUserStats, ProjectColumns
 from BO.ProjectSet import ProjectSetColumnStats
 from BO.Sample import SampleBO, SampleTaxoStats
 from BO.Taxonomy import TaxonBO
+from BO.WoRMSification import WoRMSBO
 from BO.User import UserIDT, GuestIDT
 from DB import Sample
 from DB.Object import ObjectIDListT
 from DB.Project import ProjectTaxoStat, Project
 from DB.ProjectPrivilege import ProjectPrivilege
 from DB.User import User, OrganizationIDT
-from helpers.Asyncio import async_bg_run, log_streamer
 from helpers.DynamicLogs import get_logger, get_api_logger, MONITOR_LOG_PATH
 from helpers.fastApiUtils import (
     internal_server_error_handler,
@@ -920,7 +920,7 @@ def list_collections(
         title="Fields",
         description="Return the default fields (typically used in conjunction with an additional field list). For users list display purpose.",
         example="*default,fieldlist",
-    ),
+    ),  # TODO: Unused param
     current_user: int = Depends(get_current_user),
 ) -> List[CollectionBO]:
     """
@@ -1138,59 +1138,6 @@ def patch_collection(
             sce.update(current_user, collection_id, collection_update)
 
 
-@app.put(
-    "/collections/{collection_id}/taxo_recast",
-    operation_id="update_collection_taxonomy_recast",
-    tags=["collections"],
-    responses={200: {"content": {"application/json": {"example": null}}}},
-)
-def update_collection_taxo_recast(
-    recast: TaxonomyRecast = Body(...),
-    collection_id: int = Path(
-        ...,
-        description="Internal, the unique numeric id of this collection.",
-        example=1,
-    ),
-    current_user: int = Depends(get_current_user),
-) -> None:
-    """
-    **Create or Update the collection taxonomy recast**.
-
-     **Returns NULL upon success.**
-
-     Note: The collection is updated only if manageable.
-    """
-    with CollectionsService() as sce:
-        with RightsThrower():
-            sce.update_taxo_recast(current_user, collection_id, recast)
-
-
-@app.get(
-    "/collections/{collection_id}/taxo_recast",
-    operation_id="get_collection_taxonomy_recast",
-    tags=["collections"],
-    responses={200: {"content": {"application/json": {"example": {}}}}},
-)
-def read_collection_taxo_recast(
-    collection_id: int = Path(
-        ...,
-        description="Internal, the unique numeric id of this collection.",
-        example=1,
-    ),
-    current_user: int = Depends(get_current_user),
-) -> TaxonomyRecast:
-    """
-    **Read the collection taxonomy recast**.
-
-     **Returns NULL upon success.**
-
-     Note: The collection data is returned only if manageable.
-    """
-    with CollectionsService() as sce:
-        with RightsThrower():
-            return sce.read_taxo_recast(current_user, collection_id)
-
-
 @app.post(
     "/collections/export/darwin_core",
     operation_id="darwin_core_format_export",
@@ -1257,10 +1204,12 @@ MyORJSONResponse.register(ProjectBO, ProjectModel)
 MyORJSONResponse.register(User, UserModelWithRights)
 MyORJSONResponse.register(User, MinUserModel)
 MyORJSONResponse.register(TaxonBO, TaxonModel)
+MyORJSONResponse.register(WoRMSBO, TaxonModel)
 MyORJSONResponse.register(ObjectSetQueryRsp, ObjectSetQueryRsp)
 MyORJSONResponse.register(CollectionBO, CollectionModel)
 MyORJSONResponse.register(CollectionAggregatedRsp, CollectionAggregatedRsp)
 MyORJSONResponse.register(Sample, SampleModel)
+MyORJSONResponse.register(ProjectColumns, ProjectColumnsModel)
 project_model_columns = plain_columns(ProjectModel)
 
 
@@ -2645,7 +2594,7 @@ def reclassify_object_set(
     **Returns the number of affected objects.**
     """
     with ObjectManager() as sce:
-        with RightsThrower():
+        with ValidityThrower(), RightsThrower():
             nb_impacted = sce.reclassify(
                 current_user, project_id, filters.base(), forced_id, reason
             )
@@ -3301,6 +3250,31 @@ async def query_taxa_set(  # MyORJSONResponse -> JSONResponse -> Response -> awa
 
 
 @app.get(
+    "/taxon_set/wormsification",
+    operation_id="wormsification_taxa_set",
+    tags=["Taxonomy Tree"],
+    response_model=Dict[str, TaxonModel],
+    response_class=MyORJSONResponse,  # Force the ORJSON encoder
+)
+def wormsification_taxa_set(  # MyORJSONResponse -> JSONResponse -> Response -> await
+    ids: str = Query(
+        ...,
+        title="Ids",
+        description="The separator between numbers is arbitrary non-digit, e.g. ':', '|' or ','.",
+        example="1:2:3",
+    ),
+    _current_user: Optional[int] = Depends(get_optional_current_user),
+) -> MyORJSONResponse:  # Dict[str,WoRMSBO]:
+    """
+    Returns **information about several taxa**, including their lineage.
+    """
+    num_ids = _split_num_list(ids)
+    with TaxonomyService() as sce:
+        ret = sce.wormsification_set(num_ids)
+    return MyORJSONResponse(ret)
+
+
+@app.get(
     "/taxon/central/{taxon_id}",
     operation_id="get_taxon_in_central",
     tags=["Taxonomy Tree"],
@@ -3463,6 +3437,69 @@ def add_worms_taxon(
             return sce.add_worms_taxon(taxon.aphia_id, _current_user)
 
 
+@app.put(
+    "/taxo_recast",
+    operation_id="update_taxonomy_recast",
+    tags=["Taxonomy Tree"],
+    responses={200: {"content": {"application/json": {"example": null}}}},
+)
+def update_taxonomy_recast(
+    recast: TaxonomyRecastReq = Body(...),
+    current_user: int = Depends(get_current_user),
+) -> None:
+    """
+    **Create or Update the collection or project taxonomy recast**.
+     Note: The recast is updated only if manageable.
+    """
+    print("recast  ----", recast.operation)
+    print("recast ---------", recast.recast)
+    print("reacst target", recast.target_id)
+    print("iscoll", recast.is_collection)
+    with TaxonomyService() as sce:
+        with RightsThrower():
+            sce.update_taxonomy_recast(current_user, recast)
+
+
+@app.get(
+    "/taxo_recast",
+    operation_id="get_taxonomy_recast",
+    tags=["Taxonomy Tree"],
+    response_model=TaxoRecastRsp,
+)
+def get_taxonomy_recast(
+    target_id: int = Query(
+        ...,
+        description="Internal, the unique numeric id of this collection.",
+        example=1,
+    ),
+    operation: str = Query(
+        default=None,
+        title="Operation name",
+        description="One of RecastOperation enum value",
+        example="settings",
+    ),
+    is_collection: bool = Query(
+        default=False,
+        title="Is a collection",
+        description="target_id refers to a collection_id or not",
+    ),
+    current_user: int = Depends(get_current_user),
+) -> Optional[TaxoRecastRsp]:
+    """
+    **Read the collection or project taxonomy recast**.
+     Note: The data is returned only if manageable.
+    """
+    with TaxonomyService() as sce:
+        with RightsThrower():
+            ret = sce.get_taxonomy_recast(
+                current_user,
+                target_id=target_id,
+                operation=operation,
+                is_collection=is_collection,
+            )
+    return ret
+
+
 # ######################## END OF TAXA_REF
 
 
@@ -3487,33 +3524,6 @@ def digest_project_images(
     with ImageManagerService() as sce:
         with RightsThrower():
             ret: str = sce.do_digests(current_user, project_id, max_digests)
-    return ret
-
-
-@app.get(
-    "/admin/images/digest",
-    operation_id="digest_images",
-    tags=["WIP"],
-    include_in_schema=False,
-    response_model=str,
-)
-def digest_images(
-    max_digests: Optional[int] = Query(
-        default=100000, description="Number of images to scan."
-    ),
-    project_id: Optional[int] = Query(
-        default=None, description="Internal, numeric id of the project."
-    ),
-    current_user: int = Depends(get_current_user),
-) -> str:
-    """
-    Compute digests if they are not.
-    """
-    with ImageManagerService() as sce:
-        with RightsThrower():
-            ret: str = sce.do_digests(
-                current_user, prj_id=project_id, max_digests=max_digests
-            )
     return ret
 
 
@@ -3653,7 +3663,7 @@ def list_jobs(
         title="For admin",
         description="If FALSE return the jobs for current user, else return all of them.",
         example=False,
-    ),
+    ),  # TODO: Could be optional default False
     current_user: int = Depends(get_current_user),
 ) -> List[JobBO]:
     """

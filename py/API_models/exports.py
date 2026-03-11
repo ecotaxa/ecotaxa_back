@@ -474,27 +474,4 @@ class ExportRsp(BaseModel):
     )
 
 
-class TaxonomyRecast(BaseModel):
-    """
-    In various contexts, a taxo recast (from taxon -> to taxon) setting.
-    """
 
-    from_to: Dict[int, Optional[int]] = Field(
-        title="Categories mapping",
-        description="Mapping from seen taxon (key) to output replacement one (value)."
-        " Use a null replacement to _discard_ the present taxon. Note: keys are strings.",
-        example={"456": 956, "2456": 213, "9134": None},
-    )
-
-    doc: Optional[Dict[int, str]] = Field(
-        title="Mapping documentation",
-        description="To keep memory of the reasons for the above mapping. Note: keys are strings.",
-        example={
-            "456": "Up to species",
-            "2456": "Up to nearest non-morpho",
-            "9134": "Detritus",
-        },
-    )
-
-    class Config:
-        extra = Extra.forbid

@@ -11,7 +11,6 @@ from API_models.imports import ImportReq, SimpleImportReq
 from API_operations.helpers.JobService import JobServiceOnProjectBase, ArgsDict
 from BO.User import UserIDT
 from FS.CommonDir import CommonFolder
-from FS.UserDir import UserDirectory
 from FS.UserFilesDir import UserFilesDirectory
 from FS.Vault import Vault
 from helpers.DynamicLogs import get_logger
@@ -50,9 +49,6 @@ class ImportServiceBase(JobServiceOnProjectBase, ABC):
         if my_files_source_dir.exists():
             self.from_myfiles = owner_id
             return str(my_files_source_dir)
-        elif UserDirectory(owner_id).contains(source_dir_or_zip):
-            # OK
-            pass
         else:
             # prevent directory escape trick
             assert ".." not in source_dir_or_zip

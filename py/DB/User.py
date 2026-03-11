@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Iterable, TYPE_CHECKING, Final, Optional, List
+from typing import Iterable, TYPE_CHECKING, Optional, List
 
 from sqlalchemy import event, SmallInteger
 
@@ -22,21 +22,20 @@ from .helpers.Direct import func
 from .helpers.ORM import Model, relationship, Insert
 from .helpers.Postgres import TIMESTAMP, INTEGER
 
-
 if TYPE_CHECKING:
     from .ProjectPrivilege import ProjectPrivilege
 
 
 class UserStatus(int, Enum):
-    blocked: Final = -1
-    inactive: Final = 0
-    active: Final = 1
-    pending: Final = 2
+    blocked = -1
+    inactive = 0
+    active = 1
+    pending = 2
 
 
 class UserType(str, Enum):
-    guest: Final = "guest"
-    user: Final = "user"
+    guest = "guest"
+    user = "user"
 
 
 NO_ORGANIZATION_ADDED = "Error adding organization name"
@@ -45,8 +44,8 @@ OrganizationIDListT = List[int]
 
 
 class PeopleOrganizationDirectory(str, Enum):
-    orcid: Final = "https://orcid.org/"
-    edmo: Final = "https://edmo.seadatanet.org/"
+    orcid = "https://orcid.org/"
+    edmo = "https://edmo.seadatanet.org/"
 
 
 class Organization(Model):
@@ -126,17 +125,6 @@ class User(Person):
     __mapper_args__ = {
         "polymorphic_identity": "user",
     }
-
-    def to_guest(self) -> Guest:
-        guest = Guest()
-        guest.id = self.id
-        guest.name = self.name
-        guest.email = self.email
-        guest.country = self.country
-        guest.orcid = self.orcid
-        guest.usercreationdate = self.usercreationdate
-        guest.organization_id = self.organization_id
-        return guest
 
     def has_role(self, role: str) -> bool:
         # TODO: Cache a bit. All roles are just python objects due to SQLAlchemy magic.

@@ -3,9 +3,12 @@ import logging
 # noinspection PyPackageRequirements
 import pytest
 from starlette import status
-from fastapi import HTTPException
-from tests.credentials import ADMIN_AUTH, USER_AUTH, CREATOR_AUTH
+
+from tests.credentials import ADMIN_AUTH, CREATOR_AUTH, ORDINARY_USER3_USER_ID
+from tests.test_export import OBJECT_SET_GENERAL_EXPORT_URL
 from tests.test_fastapi import PROJECT_QUERY_URL, USER_ME_URL
+from tests.jobs import get_job_and_wait_until_ok
+from tests.test_import import do_test_import
 from tests.test_update_prj import PROJECT_UPDATE_URL
 
 PROJECT_EXPORT_EMODNET_URL = "/export/darwin_core?dry_run=False"
@@ -16,19 +19,19 @@ COLLECTION_SEARCH_URL = "/collections/search?title={title}"
 COLLECTION_EXACT_QUERY_URL = "/collections/by_short_title?q={short_title}"
 COLLECTION_UPDATE_URL = "/collections/{collection_id}"
 COLLECTION_DELETE_URL = "/collections/{collection_id}"
+PROJECT_COLLECTIONS_URL = "/projects/{project_id}/collections"
 
 INSTRUMENT_QUERY_URL = "/instruments/?project_ids={project_id}"
 
 
 @pytest.mark.parametrize("who", [ADMIN_AUTH, CREATOR_AUTH])
-def test_collection_lifecycle(database, fastapi, caplog, who):
-    caplog.set_level(logging.FATAL)
+def test_collection_lifecycle(fastapi, who):
 
     # Admin (always) imports the project
-    from tests.test_import import test_import
-
-    prj_id = test_import(
-        database, caplog, "Collection project 1", instrument="Other scanner"
+    prj_id = do_test_import(
+        fastapi,
+        "Collection project 1 " + who["Authorization"],
+        instrument="Other scanner",
     )
 
     # Small instrument 'list' test
@@ -110,7 +113,7 @@ def test_collection_lifecycle(database, fastapi, caplog, who):
         "provider_user": None,
         "title": "Test collection",
         "short_title": None,
-        'display_order': {'associates': [], 'creators': []}
+        "display_order": {"associates": [], "creators": []},
     }
 
     # Update the abstract
@@ -126,6 +129,8 @@ def test_collection_lifecycle(database, fastapi, caplog, who):
         the_coll["external_id"] = "doi1234"
     the_coll["associate_organisations"] = ["An org"]
     the_coll["creator_organisations"] = ["At least one (ONE)"]
+    the_coll["contact_user"] = ORDINARY_USER3_USER_ID
+    the_coll["provider_user"] = ORDINARY_USER3_USER_ID
     del the_coll["display_order"]
     rsp = fastapi.put(url, headers=who, json=the_coll)
     assert rsp.status_code == status.HTTP_200_OK
@@ -147,10 +152,9 @@ def test_collection_lifecycle(database, fastapi, caplog, who):
     else:
         short_title = None
         external_id = "?"
-    print('rsp===', rsp.json())
     assert rsp.json() == [
         {
-          "abstract": """   
+            "abstract": """   
     A bit less abstract...
     """,
             "associate_organisations": [
@@ -160,7 +164,12 @@ def test_collection_lifecycle(database, fastapi, caplog, who):
             "external_id": external_id,
             "external_id_system": "?",
             "citation": None,
-            "contact_user": None,
+            "contact_user": {
+                "email": "real2@users.com",
+                "id": ORDINARY_USER3_USER_ID,
+                "name": "Real User 3",
+                "organisation": "Double Dash - Institute - DDORG",
+            },
             "creator_organisations": [
                 {"id": 7, "name": "At least one (ONE)", "directories": None}
             ],
@@ -169,18 +178,39 @@ def test_collection_lifecycle(database, fastapi, caplog, who):
             "id": coll_id,
             "license": "",
             "project_ids": [prj_id],
-            "provider_user": None,
+            "provider_user": {
+                "email": "real2@users.com",
+                "id": ORDINARY_USER3_USER_ID,
+                "name": "Real User 3",
+                "organisation": "Double Dash - Institute - DDORG",
+            },
             "title": "Test collection",
             "short_title": short_title,
-            'display_order': {'creators': ['7_o'], 'associates': ['8_o']}
+            "display_order": {"creators": ["7_o"], "associates": ["8_o"]},
+        }
+    ]
+
+    # Test project to collection link
+    url = PROJECT_COLLECTIONS_URL.format(project_id=prj_id)
+    rsp = fastapi.get(url, headers=who)
+    assert rsp.status_code == status.HTTP_200_OK
+    assert rsp.json() == [
+        {
+            "contact_user": ORDINARY_USER3_USER_ID,
+            "external_id": "doi1234" if who == CREATOR_AUTH else "?",
+            "id": coll_id,
+            "project_ids": [prj_id],
+            "provider_user": ORDINARY_USER3_USER_ID,
+            "short_title": "my-tiny-title" if who == CREATOR_AUTH else None,
+            "title": "Test collection",
         }
     ]
 
     # update the project_ids
     url = COLLECTION_UPDATE_URL.format(collection_id=coll_id)
-    the_coll = {"project_ids": [6, prj_id]}
+    the_coll = {"project_ids": [-1, prj_id]}
     rsp = fastapi.patch(url, headers=who, json=the_coll)
-    assert rsp.status_code == status.HTTP_200_OK
+    assert rsp.status_code == status.HTTP_404_NOT_FOUND
     # reset to previous for compatibility with other tests
     url = COLLECTION_UPDATE_URL.format(collection_id=coll_id)
     the_coll = {"project_ids": [prj_id]}
@@ -191,6 +221,15 @@ def test_collection_lifecycle(database, fastapi, caplog, who):
         url = COLLECTION_EXACT_QUERY_URL.format(short_title="my-tiny-title")
         rsp = fastapi.get(url, headers=who)
         assert rsp.status_code == status.HTTP_200_OK
+
+    # Test export
+    req_and_filters = {
+        "filters": {},
+        "request": {"collection_id": coll_id, "project_id": str(prj_id)},
+    }
+    rsp = fastapi.post(OBJECT_SET_GENERAL_EXPORT_URL, headers=who, json=req_and_filters)
+    assert rsp.status_code == status.HTTP_200_OK
+    get_job_and_wait_until_ok(fastapi, rsp)
 
     # Wrong search by short title
     url = COLLECTION_EXACT_QUERY_URL.format(short_title="my-absent-title")
@@ -203,7 +242,7 @@ def test_collection_lifecycle(database, fastapi, caplog, who):
     assert rsp.status_code == status.HTTP_200_OK
     assert rsp.json() == []
 
-    # Delete the collection
+    # Delete the collection. Note: It will cascade errors if a problem prevents it
     url = COLLECTION_DELETE_URL.format(collection_id=coll_id)
     rsp = fastapi.delete(url, headers=who)
     if who == CREATOR_AUTH:

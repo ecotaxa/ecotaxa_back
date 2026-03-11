@@ -5,18 +5,23 @@
 # End-user services around taxonomy tree.
 #
 from datetime import datetime
-from typing import List, Optional, Dict, Any
-
-from API_models.taxonomy import TaxaSearchRsp
+from typing import List, Optional, Dict, Any, Union
+import json
+from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
+from API_models.taxonomy import TaxaSearchRsp, TaxonomyRecastReq, TaxoRecastRsp
 from API_operations.helpers.Service import Service
 from BO.Classification import ClassifIDT, ClassifIDListT
 from BO.Project import ProjectBOSet
+from BO.Collection import CollectionIDT
 from BO.ReClassifyLog import ReClassificationBO
 from BO.Taxonomy import TaxonomyBO, TaxonBO, TaxonBOSet
+from BO.WoRMSification import WoRMSifier, WoRMSBO
 from BO.User import UserIDT, UserBO
 from DB.Project import ProjectTaxoStat, Project, ProjectIDT
 from DB.Taxonomy import Taxonomy
+from DB.TaxoRecast import TaxoRecast, RecastOperation
 from helpers.DynamicLogs import get_logger
+
 
 logger = get_logger(__name__)
 
@@ -144,6 +149,73 @@ class TaxonomyService(Service):
     def query_set(self, taxon_ids: ClassifIDListT) -> List[TaxonBO]:
         ret = TaxonBOSet(self.ro_session, taxon_ids)
         return ret.as_list()
+
+    def wormsification_set(self, taxon_ids: ClassifIDListT) -> Dict[int, WoRMSBO]:
+        wormsifier: WoRMSifier = WoRMSifier()
+        wormsifier.do_match(self.ro_session, taxon_ids)
+        worms_targets = wormsifier.phylo2worms.copy()
+        for taxonid, to in wormsifier.morpho2phylo.items():
+            if to is not None and taxonid > 0:
+                toworms = wormsifier.phylo2worms[int(to)]
+                if isinstance(toworms, WoRMSBO):
+                    worms_targets.update({taxonid: toworms})
+        return worms_targets
+
+    def update_taxonomy_recast(
+        self, current_user_id: UserIDT, recast: TaxonomyRecastReq
+    ):
+        # Just remove and re-add
+        assert (
+            recast.operation in RecastOperation.__members__
+        ), HTTP_422_UNPROCESSABLE_ENTITY
+        qry = WoRMSifier.query_recast(
+            self.session,
+            current_user_id,
+            target_id=recast.target_id,
+            operation=recast.operation,
+            is_collection=recast.is_collection,
+            for_update=True,
+        )
+        qry.delete()
+        new_recast = TaxoRecast()
+        if recast.is_collection:
+            new_recast.collection_id = recast.target_id
+        else:
+            new_recast.project_id = recast.target_id
+        new_recast.operation = recast.operation
+        new_recast.transforms = json.dumps(recast.recast.from_to)
+        new_recast.documentation = (
+            json.dumps(recast.recast.doc) if recast.recast.doc else {}
+        )
+        self.session.add(new_recast)
+        self.session.commit()
+
+    def get_taxonomy_recast(
+        self,
+        current_user_id: UserIDT,
+        target_id: Union[ProjectIDT, CollectionIDT],
+        operation: RecastOperation,
+        is_collection: bool = False,
+    ) -> Optional[TaxoRecastRsp]:
+        assert operation in RecastOperation.__members__, HTTP_422_UNPROCESSABLE_ENTITY
+        qry = WoRMSifier.query_recast(
+            self.ro_session,
+            current_user_id,
+            target_id,
+            operation,
+            is_collection,
+            for_update=False,
+        ).all()
+        res = qry
+        if res is None or len(res) != 1:
+            return None
+        the_one: TaxoRecast = res[0]
+        ret = TaxoRecastRsp(
+            from_to=json.loads(str(the_one.transforms)),
+            doc=json.loads(str(the_one.documentation)),
+        )
+
+        return ret
 
     def most_used_non_advised(
         self, _current_user_id: Optional[UserIDT], taxon_ids: ClassifIDListT
