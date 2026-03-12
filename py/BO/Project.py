@@ -436,11 +436,14 @@ class ProjectBO(object):
                 params["tids"] = taxa_ids
         sql += """
         GROUP BY pts.projid"""
+        print("---sql--- " + sql, params)
         if len(taxa_ids) > 0:
             sql += ", pts.id"
         res: Result = session.execute(text(sql), params)
+        print("res-----", res)
         with CodeTimer("stats for %d projects:" % len(prj_ids), logger):
             ret = [ProjectTaxoStats(**rec) for rec in res]  # type:ignore # case4
+        print("ret----", ret)
         for a_stat in ret:
             a_stat.used_taxa.sort()
         return ret

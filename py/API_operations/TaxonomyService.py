@@ -152,29 +152,23 @@ class TaxonomyService(Service):
         ret = TaxonBOSet(self.ro_session, taxon_ids)
         return ret.as_list()
 
-    def wormsification_set(self, taxon_ids: ClassifIDListT) -> Dict[int, WoRMSBO]:
+    def wormsification_set(self, taxaids: ClassifIDListT) -> Dict[int, WoRMSBO]:
+        wormsauto = self.get_taxonomy_worms(taxaids)
+        targets = WoRMSifier.do_wormsify(self.ro_session, list(wormsauto.values()))
+        return targets
+
+    def get_taxonomy_worms(self, taxaids: ClassifIDListT) -> Dict[str, int]:
         wormsifier: WoRMSifier = WoRMSifier()
-        wormsifier.do_match(self.ro_session, taxon_ids)
-        worms_targets = wormsifier.phylo2worms.copy()
+        wormsifier.do_match(self.ro_session, taxaids)
+        taxo_worms_auto: Dict[str, int] = {}
+        for k, v in wormsifier.phylo2worms.items():
+            if v is not None:
+                taxo_worms_auto.update({str(k): v})
         for taxonid, to in wormsifier.morpho2phylo.items():
             if to is not None and taxonid > 0:
                 toworms = wormsifier.phylo2worms[int(to)]
-                if isinstance(toworms, WoRMSBO):
-                    worms_targets.update({taxonid: toworms})
-        return worms_targets
-
-    def get_taxonomy_worms(self, taxa_ids: ClassifIDListT) -> Dict[str, int]:
-        wormsifier: WoRMSifier = WoRMSifier()
-        wormsifier.do_match(self.ro_session, taxa_ids)
-        taxo_worms_auto = {
-            str(k): v.id for k, v in wormsifier.phylo2worms.copy().items()
-        }
-
-        for taxonid, to in wormsifier.morpho2phylo.items():
-            if to is not None and taxonid > 0:
-                toworms = wormsifier.phylo2worms[int(to)]
-                if isinstance(toworms, WoRMSBO):
-                    taxo_worms_auto.update({str(taxonid): toworms.id})
+                if toworms is not None:
+                    taxo_worms_auto.update({str(taxonid): toworms})
         return taxo_worms_auto
 
     def update_taxonomy_recast(
@@ -206,7 +200,6 @@ class TaxonomyService(Service):
             RecastOperation.dwca_export_emof,
         ]
         transforms = self.validate_remapping(recast.recast.from_to, isworms)
-        print("transforms=====:", transforms)
         new_recast.transforms = json.dumps(transforms)
         new_recast.documentation = (
             json.dumps(recast.recast.doc) if recast.recast.doc else {}
@@ -284,7 +277,7 @@ class TaxonomyService(Service):
         for from_ in remapping.keys():
             f = int(from_)
             validremap[f] = end_of_chain(f, f)
-        if isWoRMS == True:
+        if isWoRMS:
             qry = (
                 self.ro_session.query(Taxonomy.id)
                 .filter(Taxonomy.id.in_(validremap.values()))

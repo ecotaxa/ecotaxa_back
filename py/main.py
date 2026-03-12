@@ -3505,7 +3505,7 @@ def get_taxonomy_recast(
     response_model=Dict[str, int],
 )
 def get_taxonomy_worms(
-    taxa_ids: str = Query(
+    taxaids: str = Query(
         title="Taxa Ids",
         description="taxon id separated by ,",
         default="",
@@ -3517,10 +3517,10 @@ def get_taxonomy_worms(
     **Read the collection or project taxonomy recast**.
      Note: The data is returned only if manageable.
     """
-    taxaids = _split_num_list(taxa_ids)
+    ids = _split_num_list(taxaids)
     with TaxonomyService() as sce:
         ret = sce.get_taxonomy_worms(
-            taxa_ids=taxaids,
+            taxaids=ids,
         )
     return ret
 
