@@ -74,9 +74,9 @@ class DatasetMetadata(object):
         for a_keyword in meta.keywordSet.keywords:
             etree_sub_element(xml_keywordset, "keyword").text = a_keyword
         if meta.keywordSet.keywordThesaurus:
-            etree_sub_element(
-                xml_keywordset, "keywordThesaurus"
-            ).text = meta.keywordSet.keywordThesaurus
+            etree_sub_element(xml_keywordset, "keywordThesaurus").text = (
+                meta.keywordSet.keywordThesaurus
+            )
         if meta.additionalInfo:
             etree_sub_element(
                 etree_sub_element(dataset, "additionalInfo"), "para"
@@ -92,9 +92,9 @@ class DatasetMetadata(object):
         self.coverage_to_xml(etree_sub_element(dataset, "coverage"))
         # Purpose
         if meta.purpose:
-            etree_sub_element(
-                etree_sub_element(dataset, "purpose"), "para"
-            ).text = meta.purpose
+            etree_sub_element(etree_sub_element(dataset, "purpose"), "para").text = (
+                meta.purpose
+            )
         # Method
         if meta.methods:
             raise Exception("You should use eMoF table to describe the method")
@@ -112,9 +112,9 @@ class DatasetMetadata(object):
             etree_sub_element(
                 etree_sub_element(xml_maint, "description"), "para"
             ).text = meta.maintenance
-            etree_sub_element(
-                xml_maint, "maintenanceUpdateFrequency"
-            ).text = meta.maintenanceUpdateFrequency
+            etree_sub_element(xml_maint, "maintenanceUpdateFrequency").text = (
+                meta.maintenanceUpdateFrequency
+            )
         # Contacts
         for a_person in sorted(meta.contacts, key=lambda person: person.json()):
             # TODO: Not reached by tests
@@ -154,6 +154,7 @@ class DatasetMetadata(object):
     @staticmethod
     def additional_meta_to_xml(xml_meta_plus, eml_meta_plus: EMLAdditionalMeta):
         etree_sub_element(xml_meta_plus, "dateStamp").text = eml_meta_plus.dateStamp
+        etree_sub_element(xml_meta_plus, "citation").text = eml_meta_plus.citation
 
     @staticmethod
     def person_to_xml(xml_person, eml_person: EMLPerson):
@@ -164,9 +165,9 @@ class DatasetMetadata(object):
                 etree_sub_element(indiv, "givenName").text = eml_person.givenName
             if eml_person.surName:
                 etree_sub_element(indiv, "surName").text = eml_person.surName
-        etree_sub_element(
-            xml_person, "organizationName"
-        ).text = eml_person.organizationName
+        etree_sub_element(xml_person, "organizationName").text = (
+            eml_person.organizationName
+        )
         if eml_person.positionName:
             etree_sub_element(xml_person, "positionName").text = eml_person.positionName
         # Address block
@@ -176,9 +177,9 @@ class DatasetMetadata(object):
         if eml_person.city:
             etree_sub_element(addr, "city").text = eml_person.city
         if eml_person.administrativeArea:
-            etree_sub_element(
-                addr, "administrativeArea"
-            ).text = eml_person.administrativeArea
+            etree_sub_element(addr, "administrativeArea").text = (
+                eml_person.administrativeArea
+            )
         if eml_person.postalCode:
             etree_sub_element(addr, "postalCode").text = eml_person.postalCode
         if eml_person.country:
@@ -187,9 +188,9 @@ class DatasetMetadata(object):
         if eml_person.phone:
             etree_sub_element(xml_person, "phone").text = eml_person.phone
         if eml_person.electronicMailAddress:
-            etree_sub_element(
-                xml_person, "electronicMailAddress"
-            ).text = eml_person.electronicMailAddress
+            etree_sub_element(xml_person, "electronicMailAddress").text = (
+                eml_person.electronicMailAddress
+            )
         if eml_person.onlineUrl:
             etree_sub_element(xml_person, "onlineUrl").text = eml_person.onlineUrl
         if eml_person.userID:
@@ -205,29 +206,29 @@ class DatasetMetadata(object):
         # Geographic
         xml_geo_cov = etree_sub_element(xml_coverage, "geographicCoverage")
         eml_geo_cov = meta.geographicCoverage
-        etree_sub_element(
-            xml_geo_cov, "geographicDescription"
-        ).text = eml_geo_cov.geographicDescription
+        etree_sub_element(xml_geo_cov, "geographicDescription").text = (
+            eml_geo_cov.geographicDescription
+        )
         xml_geo_cov_bounding = etree_sub_element(xml_geo_cov, "boundingCoordinates")
-        etree_sub_element(
-            xml_geo_cov_bounding, "westBoundingCoordinate"
-        ).text = eml_geo_cov.westBoundingCoordinate
-        etree_sub_element(
-            xml_geo_cov_bounding, "eastBoundingCoordinate"
-        ).text = eml_geo_cov.eastBoundingCoordinate
-        etree_sub_element(
-            xml_geo_cov_bounding, "northBoundingCoordinate"
-        ).text = eml_geo_cov.northBoundingCoordinate
-        etree_sub_element(
-            xml_geo_cov_bounding, "southBoundingCoordinate"
-        ).text = eml_geo_cov.southBoundingCoordinate
+        etree_sub_element(xml_geo_cov_bounding, "westBoundingCoordinate").text = (
+            eml_geo_cov.westBoundingCoordinate
+        )
+        etree_sub_element(xml_geo_cov_bounding, "eastBoundingCoordinate").text = (
+            eml_geo_cov.eastBoundingCoordinate
+        )
+        etree_sub_element(xml_geo_cov_bounding, "northBoundingCoordinate").text = (
+            eml_geo_cov.northBoundingCoordinate
+        )
+        etree_sub_element(xml_geo_cov_bounding, "southBoundingCoordinate").text = (
+            eml_geo_cov.southBoundingCoordinate
+        )
         # Temporal
         xml_temporal_cov = etree_sub_element(xml_coverage, "temporalCoverage")
         eml_temporal_cov = meta.temporalCoverage
         if eml_temporal_cov.singleDateTime:
-            etree_sub_element(
-                xml_temporal_cov, "singleDateTime"
-            ).text = eml_temporal_cov.singleDateTime
+            etree_sub_element(xml_temporal_cov, "singleDateTime").text = (
+                eml_temporal_cov.singleDateTime
+            )
         else:
             xml_range = etree_sub_element(xml_temporal_cov, "rangeOfDates")
             etree_sub_element(
@@ -239,19 +240,19 @@ class DatasetMetadata(object):
         # Taxonomic
         xml_taxo_cov = etree_sub_element(xml_coverage, "taxonomicCoverage")
         if meta.generalTaxonomicCoverage:
-            etree_sub_element(
-                xml_taxo_cov, "generalTaxonomicCoverage"
-            ).text = meta.generalTaxonomicCoverage
+            etree_sub_element(xml_taxo_cov, "generalTaxonomicCoverage").text = (
+                meta.generalTaxonomicCoverage
+            )
         eml_taxo_cov = meta.taxonomicCoverage
         for an_eml_taxo in sorted(eml_taxo_cov, key=lambda taxo: taxo.json()):
             xml_classif = etree_sub_element(xml_taxo_cov, "taxonomicClassification")
-            etree_sub_element(
-                xml_classif, "taxonRankName"
-            ).text = an_eml_taxo.taxonRankName
-            etree_sub_element(
-                xml_classif, "taxonRankValue"
-            ).text = an_eml_taxo.taxonRankValue
+            etree_sub_element(xml_classif, "taxonRankName").text = (
+                an_eml_taxo.taxonRankName
+            )
+            etree_sub_element(xml_classif, "taxonRankValue").text = (
+                an_eml_taxo.taxonRankValue
+            )
             if an_eml_taxo.commonName:
-                etree_sub_element(
-                    xml_classif, "commonName"
-                ).text = an_eml_taxo.commonName
+                etree_sub_element(xml_classif, "commonName").text = (
+                    an_eml_taxo.commonName
+                )

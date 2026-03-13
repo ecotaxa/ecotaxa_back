@@ -3453,6 +3453,7 @@ def update_taxonomy_recast(
     **Create or Update the collection or project taxonomy recast**.
      Note: The recast is updated only if manageable.
     """
+    print("reacats----", recast)
     with TaxonomyService() as sce:
         with RightsThrower():
             sce.update_taxonomy_recast(current_user, recast)

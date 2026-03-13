@@ -114,6 +114,7 @@ class DarwinCoreExport(JobServiceBase):
 
     JOB_TYPE = "DarwinCoreExport"
     OCCURENCE_REPORT_EVERY = 10
+    PUBLISHER_ECOTAXA = "EcoTaxa"
 
     def init_args(self, args: ArgsDict) -> ArgsDict:
         # A bit unusual to find a method before init(), but here we can visually ensure
@@ -385,6 +386,8 @@ class DarwinCoreExport(JobServiceBase):
     MIN_ABSTRACT_CHARS = 256
     """ Minimum size of a 'quality' abstract """
     MIN_CITATION_CHARS = 128
+    MAX_ABSTRACT_CHARS = 1000
+    """ Maximum size of a 'quality' description """
     """ Minimum size of a 'quality' citation """
     OK_LICENSES = [LicenseEnum.CC0, LicenseEnum.CC_BY, LicenseEnum.CC_BY_NC]
 
@@ -479,6 +482,7 @@ class DarwinCoreExport(JobServiceBase):
             self.warnings.extend(errs)
 
         publication_date = now_time().date().isoformat()
+        # the abstract appears as description in the ITP but it is the abstract field of the collection
         abstract = self.the_collection.abstract
         if not abstract:
             self.errors.append("Collection 'abstract' field is empty")
@@ -486,6 +490,11 @@ class DarwinCoreExport(JobServiceBase):
             self.errors.append(
                 "Collection 'abstract' field is too short (%d chars) to make a good EMLMeta abstract. Minimum is %d"
                 % (len(abstract), self.MIN_ABSTRACT_CHARS)
+            )
+        elif len(abstract) > self.MAX_ABSTRACT_CHARS:
+            self.errors.append(
+                "Collection 'abstract' field is too long (%d chars) to make a good EMLMeta abstract. Maximum is %d"
+                % (len(abstract), self.MAX_ABSTRACT_CHARS)
             )
         citation = self.the_collection.citation
         if not citation:
@@ -495,6 +504,7 @@ class DarwinCoreExport(JobServiceBase):
                 "Collection 'citation' field is too short (%d chars) to make a good EMLMeta citation. Minimum is %d"
                 % (len(citation), self.MIN_CITATION_CHARS)
             )
+        # the description is the collection description field and is stored in EML additional_info
         description = self.the_collection.description
         # temporary add description in additional_info
         additional_info = description  # Just to see if it goes through QC
@@ -522,7 +532,7 @@ class DarwinCoreExport(JobServiceBase):
                 'This work is licensed under a <ulink url="%s"><citetitle>%s</citetitle></ulink>.'
                 % (lic_url, lic_txt)
             )
-
+        publisher = self.PUBLISHER_ECOTAXA
         # Preferably one of https://www.emodnet-biology.eu/contribute?page=list&subject=thestdas&SpColID=552&showall=1#P
         keywords = EMLKeywordSet(
             keywords=[
@@ -593,6 +603,7 @@ class DarwinCoreExport(JobServiceBase):
             temporalCoverage=time_cov,
             taxonomicCoverage=taxo_cov,
             intellectualRights=licence,
+            publisher=publisher,
             # project=project,
             maintenance="periodic review of origin data",
             maintenanceUpdateFrequency="unknown",  # From XSD
