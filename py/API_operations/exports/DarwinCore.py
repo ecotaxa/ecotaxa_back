@@ -1369,8 +1369,7 @@ class DarwinCoreExport(JobServiceBase):
 
         res = self.query_taxo_mapping(RecastOperation.dwca_export_occurrence)
         if res is None:
-            wormsifier = self.get_automatic_worms_taxo()
-            renames_occurrence = wormsifier.phylo2worms
+            renames_occurrence = self.get_automatic_worms_taxo()
         else:
             renames_occurrence = res
             # Args are serialized in JSON -> keys have become str and 0 val becomes None
@@ -1464,7 +1463,7 @@ class DarwinCoreExport(JobServiceBase):
         present_morpho2phylo.update(recast)
         return present_morpho2phylo
 
-    def get_automatic_worms_taxo(self):
+    def get_automatic_worms_taxo(self) -> TaxoRemappingT:
         # TODO: This could be expressed directly in a join in below query
         project_ids = [a_project.projid for a_project in self.collection.projects]
         # Fetch the used taxa in the projects
@@ -1472,10 +1471,11 @@ class DarwinCoreExport(JobServiceBase):
         taxo_qry = taxo_qry.filter(ProjectTaxoStat.nbr > 0)
         taxo_qry = taxo_qry.filter(ProjectTaxoStat.id > 0)  # Exclude unclassified
         taxo_qry = taxo_qry.filter(ProjectTaxoStat.projid.in_(project_ids))
-        used_taxa = {an_id for an_id, in taxo_qry}
+        used_taxa = [an_id for an_id, in taxo_qry]
         # Note: Not _All_ used taxa will appear in occurrences, recast does not
         # impact occurrences output, @see def add_occurrences_for_sample.
         # OTOH, the recast target taxa will (likely) appear in coverage as it comes
         # from computed quantities.
         wormsifier = WoRMSifier()
         wormsifier.do_match(self.ro_session, used_taxa)
+        return wormsifier.phylo2worms
