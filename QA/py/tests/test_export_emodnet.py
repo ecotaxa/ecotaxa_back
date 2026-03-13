@@ -168,6 +168,9 @@ This series is part of the long term planktonic monitoring of
             "organisation": "OrgTest",
         }
         the_coll["provider_user"] = user_doing_all
+        the_coll["description"] = "additional infos of the collection"
+        the_coll["citation"] = "Citation of the collection"
+        the_coll["'publisher"] = "EcoTaxa"
 
     the_coll = update_collection(fastapi, coll_id, admin_or_creator, update_cb)
 
