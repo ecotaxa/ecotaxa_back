@@ -1369,7 +1369,7 @@ class DarwinCoreExport(JobServiceBase):
 
         res = self.query_taxo_mapping(RecastOperation.dwca_export_occurrence)
         if res is None:
-            wormsifier = self.get_auto_worms_taxo()
+            wormsifier = self.get_automatic_worms_taxo()
             renames_occurrence = wormsifier.phylo2worms
         else:
             renames_occurrence = res
