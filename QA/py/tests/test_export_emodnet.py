@@ -9,7 +9,7 @@ from zipfile import ZipFile
 import pytest
 from starlette import status
 from starlette.testclient import TestClient
-
+from DB.TaxoRecast import RecastOperation
 from tests.api_wrappers import (
     api_wait_for_stable_job,
     api_check_job_failed,
@@ -42,8 +42,9 @@ from tests.test_import import do_test_import, do_import_a_bit_more_skipping
 from tests.test_update import ACQUISITION_SET_UPDATE_URL, SAMPLE_SET_UPDATE_URL
 from tests.test_update_prj import PROJECT_UPDATE_URL
 
-COLLECTION_EXPORT_EMODNET_URL = "/collections/export/darwin_core"
 
+COLLECTION_EXPORT_EMODNET_URL = "/collections/export/darwin_core"
+TAXORECAST_URL = "/taxo_recast"
 _req_tmpl = {
     "collection_id": None,
     "dry_run": False,
@@ -333,6 +334,23 @@ def test_emodnet_export_recast1(
     fastapi, exportable_collection, admin_or_creator, fixed_date
 ):
     coll_id = exportable_collection["id"]
+    # add recast in taxao_recast
+    recast = {
+        "from_to": {
+            "45072": 56693,  # Cyclopoida -> Actinopterygii
+            "78418": 0,  # Oncaeidae -> remove
+            "25928": 25828,  # Gnathostomata-> Copepoda, not in dataset but to ensure it doesn't hurt
+        },
+        "doc": {},
+    }
+    recastreq = {
+        "target_id": coll_id,
+        "operation": RecastOperation.dwca_export_emof,
+        "recast": recast,
+        "is_collection": True,
+    }
+    rsp = fastapi.put(TAXORECAST_URL, data=recastreq, headers=ADMIN_AUTH)
+    assert rsp.status_code == status.HTTP_200_OK
     prj_id, prj_id2 = sorted(exportable_collection["project_ids"])
     # Foreseen options for June 2023-like exports
     req = _req_tmpl.copy()
@@ -341,11 +359,6 @@ def test_emodnet_export_recast1(
             "collection_id": coll_id,
             "include_predicted": False,
             "with_computations": ["ABO", "CNC", "BIV"],
-            "computations_pre_mapping": {
-                45072: 56693,  # Cyclopoida -> Actinopterygii
-                78418: 0,  # Oncaeidae -> remove
-                25928: 25828,  # Gnathostomata-> Copepoda, not in dataset but to ensure it doesn't hurt
-            },
         }
     )
     job_id = export_collection(fastapi, req, ADMIN_AUTH)
@@ -362,6 +375,22 @@ def test_emodnet_export_recast2(
     fastapi, exportable_collection, admin_or_creator, fixed_date
 ):
     coll_id = exportable_collection["id"]
+    recast = {
+        "from_to": {
+            # vs previous test, 56693 is not anymore a recast target
+            "78418": 45072,  # Oncaeidae -> Cyclopoida, inside sample 1 there are both
+            "25928": 25828,  # Gnathostomata-> Copepoda, not in dataset but to ensure it doesn't hurt
+        },
+        "doc": {},
+    }
+    recastreq = {
+        "target_id": coll_id,
+        "operation": str(RecastOperation.dwca_export_emof.value),
+        "recast": recast,
+        "is_collection": True,
+    }
+    rsp = fastapi.put(TAXORECAST_URL, data=recastreq, headers=ADMIN_AUTH)
+    assert rsp.status_code == status.HTTP_200_OK
     prj_id, prj_id2 = sorted(exportable_collection["project_ids"])
     # Options for June 2023-like exports with intra-sample aggregation
     req = _req_tmpl.copy()
@@ -370,11 +399,6 @@ def test_emodnet_export_recast2(
             "collection_id": coll_id,
             "include_predicted": False,
             "with_computations": ["ABO", "CNC", "BIV"],
-            "computations_pre_mapping": {
-                # vs previous test, 56693 is not anymore a recast target
-                78418: 45072,  # Oncaeidae -> Cyclopoida, inside sample 1 there are both
-                25928: 25828,  # Gnathostomata-> Copepoda, not in dataset but to ensure it doesn't hurt
-            },
         }
     )
     job_id = export_collection(fastapi, req, ADMIN_AUTH)

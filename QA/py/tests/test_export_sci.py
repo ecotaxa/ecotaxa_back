@@ -1,8 +1,6 @@
-import logging
 from typing import Dict, List
-
 from starlette import status
-
+from DB.TaxoRecast import RecastOperation
 from tests.credentials import CREATOR_AUTH, ADMIN_AUTH
 from tests.export_shared import download_and_check
 from tests.formulae import uvp_formulae
@@ -20,6 +18,7 @@ from tests.test_objectset_query import _prj_query
 from tests.test_update_prj import PROJECT_UPDATE_URL
 
 OBJECT_SET_SUMMARY_EXPORT_URL = "/object_set/export/summary"
+TAXORECAST_URL = "/taxo_recast"
 
 
 def set_formulae_in_project(fastapi, prj_id: int, prj_formulae: Dict):
@@ -97,19 +96,30 @@ def test_export_abundances(fastapi):
     job_id = get_job_and_wait_until_ok(fastapi, rsp)
     download_and_check(fastapi, job_id, "abundances_by_subsample", only_hdr=True)
     # log = get_log_file(fastapi, job_id)
-
+    # add recast in taxao_recast
+    recast = {
+        "from_to": {
+            85012: None,  # t001 -> Remove
+            84963: None,  # detritus -> Remove
+            85078: 78418,  # egg<other -> Oncaeidae
+            92731: 78418,  # small<egg -> Oncaeidae
+        },
+        "doc": {},
+    }
+    recastreq = {
+        "target_id": prj_id,
+        "operation": RecastOperation.project_export.value,
+        "recast": recast,
+        "is_collection": False,
+    }
+    rsp = fastapi.put(TAXORECAST_URL, json=recastreq, headers=ADMIN_AUTH)
+    assert rsp.status_code == status.HTTP_200_OK
     # Abundance export by subsample but playing with taxa mapping
     req_and_filters = {
         "filters": {},
         "request": {
             "project_id": prj_id,
             "summarise_by": "acquisition",
-            "taxo_mapping": {
-                85012: None,  # t001 -> Remove
-                84963: None,  # detritus -> Remove
-                85078: 78418,  # egg<other -> Oncaeidae
-                92731: 78418,  # small<egg -> Oncaeidae
-            },
         },
     }
     rsp = fastapi.post(
