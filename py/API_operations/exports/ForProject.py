@@ -1078,7 +1078,7 @@ class ProjectExport(JobServiceBase):
         the_one = json.loads(res[0].transforms)
         transforms: Dict[ClassifIDT, Optional[ClassifIDT]] = {}
         for k, v in the_one.items():
-            if v == "":
+            if v is None:
                 val = 0
             else:
                 val = int(v)
