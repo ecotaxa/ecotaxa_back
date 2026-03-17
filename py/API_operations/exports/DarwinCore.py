@@ -47,7 +47,7 @@ from DB.Collection import Collection
 from DB.Project import ProjectTaxoStat, Project
 from DB.Sample import Sample
 from DB.TaxoRecast import TaxoRecast, RecastOperation
-from DB.Taxonomy import Taxonomy, TaxonomyIDT
+from DB.Taxonomy import Taxonomy
 from DB.User import User, Organization
 from DB.helpers import Session
 from DB.helpers.Direct import text
@@ -499,11 +499,11 @@ class DarwinCoreExport(JobServiceBase):
         citation = self.the_collection.citation
         if not citation:
             self.errors.append("Collection 'citation' field is empty")
-        elif len(citation) < self.MIN_CITATION_CHARS:
-            self.errors.append(
-                "Collection 'citation' field is too short (%d chars) to make a good EMLMeta citation. Minimum is %d"
-                % (len(citation), self.MIN_CITATION_CHARS)
-            )
+        # elif len(citation) < self.MIN_CITATION_CHARS:
+        #    self.errors.append(
+        #        "Collection 'citation' field is too short (%d chars) to make a good EMLMeta citation. Minimum is %d"
+        #        % (len(citation), self.MIN_CITATION_CHARS)
+        #    )
         # the description is the collection description field and is stored in EML additional_info
         description = self.the_collection.description
         # temporary add description in additional_info
@@ -1372,10 +1372,10 @@ class DarwinCoreExport(JobServiceBase):
             renames_occurrence = self.get_automatic_worms_taxo()
         else:
             renames_occurrence = res
-            # Args are serialized in JSON -> keys have become str and 0 val becomes None
-            self.computations_occurrence = {
-                int(k): v if v != 0 else None for k, v in renames_occurrence.items()
-            }
+        # Args are serialized in JSON -> keys have become str and 0 val becomes None
+        self.computations_occurrence = {
+            int(k): v if v != 0 else None for k, v in renames_occurrence.items()
+        }
         res = self.query_taxo_mapping(RecastOperation.dwca_export_emof)
         if res is None:
             self.computations_emof = self.computations_occurrence
@@ -1384,7 +1384,6 @@ class DarwinCoreExport(JobServiceBase):
             self.computations_emof = {
                 int(k): v if v != 0 else None for k, v in renames_emof.items()
             }
-
         coverage_taxa = list(self.computations_occurrence.copy().values())
         coverage_taxa.extend(list(self.computations_emof.copy().values()))
         self.coverage_taxa = WoRMSifier.do_wormsify(

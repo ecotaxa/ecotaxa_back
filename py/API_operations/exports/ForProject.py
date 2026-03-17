@@ -111,7 +111,6 @@ class ProjectExport(JobServiceBase):
             if pre_mapping is not None:
                 self.pre_mapping = pre_mapping
 
-            print(self.pre_mapping)
         self.create_job(self.JOB_TYPE, current_user_id)
         ret = ExportRsp(job_id=self.job_id)
         return ret

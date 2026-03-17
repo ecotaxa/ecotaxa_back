@@ -98,13 +98,14 @@ def exportable_collection(fastapi, admin_or_creator):
         }
     )
     job_id = export_collection(fastapi, req, admin_or_creator)
-    rsp = api_check_job_failed(fastapi, job_id, "5 error(s) during run")
+    rsp = api_check_job_failed(fastapi, job_id, "6 error(s) during run")
     json = rsp.json()
     assert json["errors"] == [
         "No valid data creator (user or organisation) found for EML metadata.",
         "No valid contact user found for EML metadata.",
         "No valid metadata provider user found for EML metadata.",
         "Collection 'abstract' field is empty",
+        "Collection 'citation' field is empty",
         "Collection license should be one of [<LicenseEnum.CC0: 'CC0 1.0'>, "
         "<LicenseEnum.CC_BY: 'CC BY 4.0'>, <LicenseEnum.CC_BY_NC: 'CC BY-NC 4.0'>] to be "
         "accepted, not .",
@@ -240,7 +241,6 @@ def test_emodnet_export(fastapi, exportable_collection, admin_or_creator, fixed_
     job_id = export_collection(fastapi, req, admin_or_creator)
     api_wait_for_stable_job(fastapi, job_id)
     job_status = api_check_job_ok(fastapi, job_id)
-
     assert "wrns" in job_status["result"], job_status
     warns = job_status["result"]["wrns"]
     ref_warns = [
@@ -345,12 +345,22 @@ def test_emodnet_export_recast1(
     }
     recastreq = {
         "target_id": coll_id,
-        "operation": RecastOperation.dwca_export_emof,
+        "operation": RecastOperation.dwca_export_emof.value,
         "recast": recast,
         "is_collection": True,
     }
-    rsp = fastapi.put(TAXORECAST_URL, data=recastreq, headers=ADMIN_AUTH)
+    rsp = fastapi.put(TAXORECAST_URL, json=recastreq, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
+    # Re-read
+    payload = {
+        "target_id": int(coll_id),
+        "operation": RecastOperation.dwca_export_emof.value,
+        "is_collection": True,
+    }
+    rsp2 = fastapi.get(TAXORECAST_URL, headers=ADMIN_AUTH, params=payload)
+    assert rsp2.status_code == status.HTTP_200_OK
+    print("rspjson --emodnet00", rsp2.json())
+    assert rsp2.json() == recast
     prj_id, prj_id2 = sorted(exportable_collection["project_ids"])
     # Foreseen options for June 2023-like exports
     req = _req_tmpl.copy()
@@ -385,12 +395,22 @@ def test_emodnet_export_recast2(
     }
     recastreq = {
         "target_id": coll_id,
-        "operation": str(RecastOperation.dwca_export_emof.value),
+        "operation": RecastOperation.dwca_export_emof.value,
         "recast": recast,
         "is_collection": True,
     }
-    rsp = fastapi.put(TAXORECAST_URL, data=recastreq, headers=ADMIN_AUTH)
+    rsp = fastapi.put(TAXORECAST_URL, json=recastreq, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
+    # Re-read
+    payload = {
+        "target_id": int(coll_id),
+        "operation": RecastOperation.dwca_export_emof.value,
+        "is_collection": True,
+    }
+    rsp2 = fastapi.get(TAXORECAST_URL, headers=ADMIN_AUTH, params=payload)
+    assert rsp2.status_code == status.HTTP_200_OK
+    print("rspjson emodnet --", rsp2.json())
+    assert rsp2.json() == recast
     prj_id, prj_id2 = sorted(exportable_collection["project_ids"])
     # Options for June 2023-like exports with intra-sample aggregation
     req = _req_tmpl.copy()

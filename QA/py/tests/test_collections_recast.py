@@ -18,7 +18,7 @@ def test_collection_taxo_recast(fastapi):
     url = TAXORECAST_URL
     # Example write
     taxo_recast = {
-        "from_to": {"12345": None, "6789": 123},
+        "from_to": {"12345": 0, "6789": 123},
         "doc": {"6789": "Bump up one level"},
     }
     recast = {
@@ -37,7 +37,6 @@ def test_collection_taxo_recast(fastapi):
     }
     rsp2 = fastapi.get(url, headers=ADMIN_AUTH, params=payload)
     assert rsp2.status_code == status.HTTP_200_OK
-
     assert rsp2.json() == taxo_recast
 
 
@@ -46,19 +45,19 @@ def test_collection_taxo_recast_endpoint(fastapi):
     url = TAXORECAST_URL
     # Example wrong write
     recast = {
-        "from_to": {"12345": None, "6789": 123, "a:": 12.3},
+        "from_to": {"12345": 0, "6789": 123, "a:": 12.3},
         "doc": {"6789": "Bump up one level"},
     }
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=recast)
     assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
     recast = {
-        "from_cto": {"12345": None, "6789": 123, 12: 127},
+        "from_to": {"12345": 0, "6789": 123, 12: 127},
         "doc": {"6789": "Bump up one level"},
     }
     rsp2 = fastapi.put(url, headers=ADMIN_AUTH, json=recast)
     assert rsp2.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
     recast = {
-        "from_to": {"12345": None, "6789": 123, "12": 127},
+        "from_to": {"12345": 0, "6789": 123, "12": 127},
         "no_doc": {"6789": "Bump up one level"},
     }
     rsp2 = fastapi.put(url, headers=ADMIN_AUTH, json=recast)
