@@ -186,7 +186,7 @@ class WoRMSifier(object):
     ) -> Dict[ClassifIDT, WoRMSBO]:
         ret = TaxonBOSet(session, taxaids)
         taxamapping: Dict[ClassifIDT, WoRMSBO] = {
-            t.id: create_worms_bo(t) for t in ret.as_list()
+            t.id: create_worms_bo(t) for t in ret.as_list() if t.aphia_id is not None
         }
         return taxamapping
 
@@ -220,9 +220,11 @@ class WoRMSifier(object):
             current_user_id, update_preference=False, action=action
         )
         qry = session.query(TaxoRecast)
-        qry = qry.filter(TaxoRecast.operation == operation)
+        qry = qry.filter(TaxoRecast.operation == operation.value)
         if is_collection:
             qry = qry.filter(TaxoRecast.collection_id == target_id)
         else:
             qry = qry.filter(TaxoRecast.project_id == target_id)
+        logger.info("Execute query_recast SQL : %s", str(qry))
+        logger.info("Params :target_id  %s " + str(target_id), operation.value)
         return qry

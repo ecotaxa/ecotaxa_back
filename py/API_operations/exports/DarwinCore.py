@@ -332,8 +332,8 @@ class DarwinCoreExport(JobServiceBase):
                     % (for_messages, user.organisation)
                 )
                 return ret, problems
-            orgname, _dummy = user.organisation.strip().split("-", 1)
-            organization = orgname.strip() + " (" + orgacr.strip() + ")"
+            orgname = user.organisation.strip().split("-")[:-1]
+            organization = " - ".join(orgname).strip() + " (" + orgacr.strip() + ")"
         # TODO: Organization should fit from https://edmo.seadatanet.org/search
 
         try:
@@ -1477,4 +1477,6 @@ class DarwinCoreExport(JobServiceBase):
         # from computed quantities.
         wormsifier = WoRMSifier()
         wormsifier.do_match(self.ro_session, used_taxa)
-        return wormsifier.phylo2worms
+        worms_auto = wormsifier.phylo2worms.copy()
+        worms_auto.update(wormsifier.morpho2phylo.copy())
+        return worms_auto

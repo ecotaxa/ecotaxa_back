@@ -548,7 +548,7 @@ class CollectionBO(object):
         else:
             found = str(institution_name).split("-")
             if len(found) > 1:
-                return found[1].strip()
+                return found[-1].strip()
             else:
                 return "?"
 

@@ -84,6 +84,9 @@ class DatasetMetadata(object):
         # Licence
         ir_xml = etree.HTML("<para>" + meta.intellectualRights + "</para>")
         etree_sub_element(dataset, "intellectualRights").append(ir_xml[0][0])
+        # publisher
+        if meta.publisher:
+            etree_sub_element(dataset, "publisher").text = meta.publisher
         # Back-link URL
         online = etree_sub_element(etree_sub_element(dataset, "distribution"), "online")
         url_elem = etree_sub_element(online, "url", attrib={"function": "information"})

@@ -501,6 +501,8 @@ class EMLMeta(BaseModel):
     taxonomicCoverage: List[EMLTaxonomicClassification]
     intellectualRights: str
     """ AKA licence """
+    publisher: str
+    """ AKA EcoTaxa """
     informationUrl: str
     """ A back-link to the dataset origin """
     purpose: Optional[str]

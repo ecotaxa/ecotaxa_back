@@ -58,7 +58,7 @@ This series is part of the long term planktonic monitoring of
         <citetitle>Creative Commons Attribution (CC-BY) 4.0 License</citetitle>
       </ulink>.</para>
   </intellectualRights>
-  <publisher>EcoTaxa</publisher
+  <publisher>EcoTaxa</publisher>
   <distribution>
     <online>
       <url function="information">https://ecotaxa.obs-vlfr.fr/api/collections/by_title?q=EMODNET+test+collection+exp</url>
@@ -114,7 +114,7 @@ This series is part of the long term planktonic monitoring of
       <givenName>Real</givenName>
       <surName>User 3</surName>
     </individualName>
-    <organizationName>Institute - DDORG</organizationName>
+    <organizationName>Double Dash - Institute - DDORG</organizationName>
     <address>
       <country>CL</country>
     </address>

@@ -99,10 +99,10 @@ def test_export_abundances(fastapi):
     # add recast in taxao_recast
     recast = {
         "from_to": {
-            85012: 0,  # t001 -> Remove
-            84963: 0,  # detritus -> Remove
-            85078: 78418,  # egg<other -> Oncaeidae
-            92731: 78418,  # small<egg -> Oncaeidae
+            "85012": 0,  # t001 -> Remove
+            "84963": 0,  # detritus -> Remove
+            "85078": 78418,  # egg<other -> Oncaeidae
+            "92731": 78418,  # small<egg -> Oncaeidae
         },
         "doc": {},
     }
