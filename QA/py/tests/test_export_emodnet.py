@@ -41,10 +41,11 @@ from tests.test_fastapi import PROJECT_QUERY_URL
 from tests.test_import import do_test_import, do_import_a_bit_more_skipping
 from tests.test_update import ACQUISITION_SET_UPDATE_URL, SAMPLE_SET_UPDATE_URL
 from tests.test_update_prj import PROJECT_UPDATE_URL
-
+from tests.api_wrappers import JOB_QUERY_URL
 
 COLLECTION_EXPORT_EMODNET_URL = "/collections/export/darwin_core"
 TAXORECAST_URL = "/taxo_recast"
+
 _req_tmpl = {
     "collection_id": None,
     "dry_run": False,
@@ -87,8 +88,32 @@ def exportable_collection(fastapi, admin_or_creator):
         fastapi, "exp", admin_or_creator
     )
 
+    # before exporting at least a worms taxonomy renames is made
+    recast = {
+        "from_to": {
+            "45072": 45072,
+            "78418": 78418,
+            "1": 1,
+            "56693": 56693,
+            "84963": 1,
+            "85011": 1,
+            "85012": 1,
+            "85078": 1,
+            "92731": 56693,
+        },
+        "doc": {},
+    }
+    recastreq = {
+        "target_id": coll_id,
+        "operation": RecastOperation.dwca_export_occurrence.value,
+        "recast": recast,
+        "is_collection": True,
+    }
+    rsp = fastapi.put(TAXORECAST_URL, json=recastreq, headers=ADMIN_AUTH)
+    assert rsp.status_code == status.HTTP_200_OK
     # Admin exports it
     # First attempt with LOTS of missing data
+    # req params
     req = _req_tmpl.copy()
     req.update(
         {
@@ -283,7 +308,6 @@ def test_emodnet_export(fastapi, exportable_collection, admin_or_creator, fixed_
         "Stats: predicted:2 validated:19 produced to zip:21 not produced (M):0 not produced (P):0",
     ]
     assert warns == ref_warns
-    print("warnsok----")
     # Download the result zip
     url = JOB_DOWNLOAD_URL.format(job_id=job_id)
     # Ensure it's not public
@@ -335,22 +359,32 @@ def test_emodnet_export_recast1(
 ):
     coll_id = exportable_collection["id"]
     # add recast in taxao_recast
+
     recast = {
         "from_to": {
+            "84963": 1,
+            "85011": 1,
+            "85012": 1,
+            "85078": 1,
+            "92731": 56693,
             "1": 1,
             "56693": 56693,
             "45072": 56693,  # Cyclopoida -> Actinopterygii
-            "78418": 0,  # Oncaeidae -> remove
-            "25928": 25828,  # Gnathostomata-> Copepoda, not in dataset but to ensure it doesn't hurt
+            "78418": 78418,  # Oncaeidae -> remove
+            # "25928": 25828,  # Gnathostomata-> Copepoda, not in dataset but to ensure it doesn't hurt
         },
         "doc": {},
     }
     recastreq = {
         "target_id": coll_id,
-        "operation": RecastOperation.dwca_export_emof.value,
+        "operation": RecastOperation.dwca_export_occurrence.value,
         "recast": recast,
         "is_collection": True,
     }
+    rsp = fastapi.put(TAXORECAST_URL, json=recastreq, headers=ADMIN_AUTH)
+    assert rsp.status_code == status.HTTP_200_OK
+    recastreq["operation"] = RecastOperation.dwca_export_emof.value
+    recastreq["recast"]["from_to"]["78418"] = 0  # Oncaeidae -> remove"
     rsp = fastapi.put(TAXORECAST_URL, json=recastreq, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
     # Re-read
@@ -376,7 +410,6 @@ def test_emodnet_export_recast1(
     job_status = api_check_job_ok(fastapi, job_id)
     assert "wrns" in job_status["result"], job_status
     warns = job_status["result"]["wrns"]
-    print("----warns====", warns)
     assert "Not produced due to non-match" not in str(warns)
     dl_url = JOB_DOWNLOAD_URL.format(job_id=job_id)
     rsp = fastapi.get(dl_url, headers=ADMIN_AUTH)
@@ -389,12 +422,17 @@ def test_emodnet_export_recast2(
     coll_id = exportable_collection["id"]
     recast = {
         "from_to": {
+            "84963": 1,
+            "85011": 1,
+            "85012": 1,
+            "85078": 1,
+            "92731": 56693,
             "45072": 45072,
             "1": 1,
             "56693": 56693,
             # vs previous test, 56693 is not anymore a recast target
             "78418": 45072,  # Oncaeidae -> Cyclopoida, inside sample 1 there are both
-            "25928": 25828,  # Gnathostomata-> Copepoda, not in dataset but to ensure it doesn't hurt
+            # "25928": 25828,  # Gnathostomata-> Copepoda, not in dataset but to ensure it doesn't hurt
         },
         "doc": {},
     }
@@ -498,22 +536,18 @@ def create_test_collection(fastapi, suffix, who=ADMIN_AUTH):
 
 def test_emodnet_invalid_req(fastapi):
     recast = {
-        "from_to": {  # Loop in mapping, not allowed
-            "45072": 78418,
-            "78418": 45072,
-        },
-        "doc": {},
+        "from_to": {"45072": 78418, "78418": 45072},
+        "doc": {"45072": " not good"},
     }
-    taxoreq = {
+    recastreq = {
         "target_id": 0,
-        "recast": recast,
         "operation": RecastOperation.dwca_export_occurrence.value,
+        "recast": recast,
         "is_collection": True,
     }
-
-    rsp = fastapi.put(TAXORECAST_URL, headers=ADMIN_AUTH, json=taxoreq)
+    url = TAXORECAST_URL
+    rsp = fastapi.put(url, json=recastreq, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
-    print("rsp.content-----", rsp.content)
     assert "inconsistent" in str(rsp.content)
 
 
@@ -529,7 +563,6 @@ def unzip_and_check(zip_content, ref_content, who):
             if who != ADMIN_AUTH:
                 # The unique name is present in the produced text
                 file_content = file_content.replace("exp3", "exp")
-            print("Dump of", name)
             # Add CRs before and after for readability of the py version
             file_content = "\n" + file_content + "\n"
             all_in_one[name] = file_content

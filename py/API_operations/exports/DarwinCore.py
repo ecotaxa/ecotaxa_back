@@ -16,6 +16,8 @@ from collections import OrderedDict
 from functools import lru_cache
 from typing import Dict, List, Optional, Tuple, cast, Set, Any, Iterable
 from urllib.parse import quote_plus
+from fastapi import HTTPException
+from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 import BO.ProjectVarsDefault as DefaultVars
 from API_models.exports import ExportRsp, SciExportTypeEnum
@@ -333,7 +335,8 @@ class DarwinCoreExport(JobServiceBase):
                 )
                 return ret, problems
             orgname = user.organisation.strip().split("-")[:-1]
-            organization = " - ".join(orgname).strip() + " (" + orgacr.strip() + ")"
+            orgname = [o.strip() for o in orgname]
+            organization = " - ".join(orgname) + " (" + orgacr.strip() + ")"
         # TODO: Organization should fit from https://edmo.seadatanet.org/search
 
         try:
@@ -1368,22 +1371,20 @@ class DarwinCoreExport(JobServiceBase):
         """
 
         res = self.query_taxo_mapping(RecastOperation.dwca_export_occurrence)
-        if res is None:
-            renames_occurrence = self.get_automatic_worms_taxo()
-        else:
-            renames_occurrence = res
+        assert res is not None, HTTP_422_UNPROCESSABLE_ENTITY
+        renames_occurrence = res
         # Args are serialized in JSON -> keys have become str and 0 val becomes None
         self.computations_occurrence = {
             int(k): v if v != 0 else None for k, v in renames_occurrence.items()
         }
         res = self.query_taxo_mapping(RecastOperation.dwca_export_emof)
         if res is None:
-            self.computations_emof = self.computations_occurrence
+            renames_emof = renames_occurrence
         else:
             renames_emof = res
-            self.computations_emof = {
-                int(k): v if v != 0 else None for k, v in renames_emof.items()
-            }
+        self.computations_emof = {
+            int(k): v if v != 0 else None for k, v in renames_emof.items()
+        }
         coverage_taxa = list(self.computations_occurrence.copy().values())
         coverage_taxa.extend(list(self.computations_emof.copy().values()))
         self.coverage_taxa = WoRMSifier.do_wormsify(

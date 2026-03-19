@@ -21,7 +21,7 @@ class TaxoRecastRsp(BaseModel):
     from_to: Dict[str, Optional[int]] = Field(
         title="Categories mapping",
         description="Mapping from seen taxon (key) to output replacement one (value)."
-        " Use a null replacement to _discard_ the present taxon. Note: keys are strings.",
+        " Use a null replacement to _discard_ the present taxon. Note: keys are strings. Every",
         example={"456": 956, "2456": 213, "9134": None},
     )
     doc: Optional[Dict[str, str]] = Field(

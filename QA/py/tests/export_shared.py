@@ -66,11 +66,9 @@ def one_tsv_check(content_bin, name, only_hdr, ref_dir_path):
         file_content = TextIOWrapper(BytesIO(content_bin), "utf-8-sig").readlines()
     except UnicodeDecodeError as e:
         raise e
-    print("---file_content==", "".join(file_content))
 
     with open(ref_dir_path / name) as fd:
         ref_content = fd.readlines()
-        print("ref__content-dsvsh", ref_content)
         assert len(file_content) == len(
             ref_content
         ), "For %s and %s, not same number of lines %s vs %s" % (
