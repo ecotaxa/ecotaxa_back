@@ -11,6 +11,7 @@ from BO.ColumnUpdate import ColUpdateList
 from BO.helpers.MappedEntity import MappedEntity
 from BO.helpers.MappedTable import MappedTable
 from DB import Session
+from DB.Acquisition import Acquisition
 from DB.Process import Process
 from DB.Project import ProjectIDListT, Project
 from DB.Sample import Sample
@@ -77,3 +78,25 @@ class EnumeratedProcessSet(MappedTable):
 
     def add_filter(self, upd):
         return upd.filter(Process.processid == any_(self.ids))
+
+
+class DescribedProcessSet(object):
+    """
+    A set of processes, so far all of them for a project.
+    """
+
+    def __init__(self, session: Session, prj_id: int):
+        self._session = session
+        self.prj_id = prj_id
+
+    def list(self) -> List[ProcessBO]:
+        """
+        Return all processes from description.
+        """
+        
+        qry = self._session.query(Process)
+        qry = qry.join(Acquisition)
+        qry = qry.join(Sample)
+        qry = qry.join(Project)
+        qry = qry.filter(Project.projid == self.prj_id)
+        return [ProcessBO(self._session, prc.processid) for prc in qry]
