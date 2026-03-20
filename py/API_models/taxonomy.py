@@ -216,6 +216,20 @@ class TaxonomyRecastReq(BaseModel):
         },
     )
 
+    # noinspection PyMethodParameters
+    @validator("recast")
+    def ensure_consistent_renaming(cls, val):
+        v = val.from_to
+        vals_but_0 = set(v.values()).difference({0})
+        assert set(v.keys()).isdisjoint(
+            vals_but_0
+        ), "inconsistent taxonomy renaming, can't do remap chains or loops: common part is %s" % set(
+            v.keys()
+        ).intersection(
+            set(v.values())
+        )
+        return val
+
 
 class _Taxo2Model(BaseModel):
     creation_datetime: Any = Field(

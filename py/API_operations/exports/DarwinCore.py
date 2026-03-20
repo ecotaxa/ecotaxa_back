@@ -1068,7 +1068,7 @@ class DarwinCoreExport(JobServiceBase):
         aggregs = self._aggregate_for_sample(
             ro_session=self.ro_session,
             sample=sample,
-            recast_occurrences=self.computations_emof,
+            recast_occurrences=self.computations_occurrence,
             with_computations=[SciExportTypeEnum.abundances],
             # SciExportTypeEnum.abundances is needed for production of per aphia_id in present def.
             formulae=dict(),  # Nothing to compute
@@ -1369,9 +1369,12 @@ class DarwinCoreExport(JobServiceBase):
         """
         We have occurrence and emof  "spaces"
         """
-
         res = self.query_taxo_mapping(RecastOperation.dwca_export_occurrence)
-        assert res is not None, HTTP_422_UNPROCESSABLE_ENTITY
+        if res is None:
+            raise HTTPException(
+                status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Taxonomy renames is required. see Taxonomy recast",
+            )
         renames_occurrence = res
         # Args are serialized in JSON -> keys have become str and 0 val becomes None
         self.computations_occurrence = {

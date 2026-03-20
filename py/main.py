@@ -1169,7 +1169,7 @@ def darwin_core_format_export(
         request.extra_xml,
         current_user,
     ) as sce:
-        with RightsThrower():
+        with ValidityThrower(), RightsThrower():
             return sce.run()
 
 
@@ -3454,7 +3454,7 @@ def update_taxonomy_recast(
      Note: The recast is updated only if manageable.
     """
     with TaxonomyService() as sce:
-        with RightsThrower():
+        with ValidityThrower(), RightsThrower():
             sce.update_taxonomy_recast(current_user, recast)
 
 

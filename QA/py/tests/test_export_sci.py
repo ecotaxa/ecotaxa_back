@@ -96,9 +96,13 @@ def test_export_abundances(fastapi):
     job_id = get_job_and_wait_until_ok(fastapi, rsp)
     download_and_check(fastapi, job_id, "abundances_by_subsample", only_hdr=True)
     # log = get_log_file(fastapi, job_id)
-    # add recast in taxao_recast
+    # add recast in taxo_recast
     recast = {
         "from_to": {
+            "1": 1,
+            "56693": 56693,
+            "45072": 45072,
+            "78418": 78418,  # Oncaeidae
             "85012": 0,  # t001 -> Remove
             "84963": 0,  # detritus -> Remove
             "85078": 78418,  # egg<other -> Oncaeidae

@@ -73,24 +73,6 @@ class ProjectExport(JobServiceBase):
         self.out_path: Path = Path("")
         self.backup_with_just_image_refs = False
         self.pre_mapping: Dict[ClassifIDT, Optional[ClassifIDT]] = {}
-
-    def run(self, current_user_id: int) -> ExportRsp:
-        """
-        Initial run, basically just do security check and create the job.
-        """
-        project_ids = str(self.req.project_id).split(",")
-        if self.JOB_TYPE == "BackupExport" or (
-            self.JOB_TYPE == "GeneralExport" and self.req.with_images
-        ):
-            action = Action.ADMINISTRATE
-        else:
-            action = Action.ANNOTATE
-        for project_id in project_ids:
-            _user, _project = RightsBO.user_wants_export(
-                self.session, current_user_id, action, int(project_id)
-            )
-
-        # Security OK, create pending job
         # get pre_mapping
         if self.JOB_TYPE == "SummaryExport" or self.JOB_TYPE == "GeneralExport":
             if self.req.collection_id is not None:
@@ -111,6 +93,23 @@ class ProjectExport(JobServiceBase):
             if pre_mapping is not None:
                 self.pre_mapping = pre_mapping
 
+    def run(self, current_user_id: int) -> ExportRsp:
+        """
+        Initial run, basically just do security check and create the job.
+        """
+        project_ids = str(self.req.project_id).split(",")
+        if self.JOB_TYPE == "BackupExport" or (
+            self.JOB_TYPE == "GeneralExport" and self.req.with_images
+        ):
+            action = Action.ADMINISTRATE
+        else:
+            action = Action.ANNOTATE
+        for project_id in project_ids:
+            _user, _project = RightsBO.user_wants_export(
+                self.session, current_user_id, action, int(project_id)
+            )
+
+        # Security OK, create pending job
         self.create_job(self.JOB_TYPE, current_user_id)
         ret = ExportRsp(job_id=self.job_id)
         return ret
