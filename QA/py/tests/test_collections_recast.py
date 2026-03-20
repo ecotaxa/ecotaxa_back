@@ -18,10 +18,6 @@ def test_collection_taxo_recast(fastapi):
     url = TAXORECAST_URL
     taxo_recast = {
         "from_to": {
-            "45072": 45072,
-            "78418": 78418,
-            "1": 1,
-            "56693": 56693,
             "12345": 0,
             "6789": 123,
         },
@@ -38,10 +34,6 @@ def test_collection_taxo_recast(fastapi):
     # Example write
     taxo_recast = {
         "from_to": {
-            "45072": 45072,
-            "78418": 78418,
-            "1": 1,
-            "56693": 56693,
             "12345": 0,
             "6789": 123,
         },

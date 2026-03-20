@@ -5,19 +5,20 @@
 # A description of transformation to the WoRMS taxonomic system.
 #
 from typing import Dict, List, Optional, Set, Union
+
 from sqlalchemy.orm import Session
 
 from BO.Classification import ClassifIDT
-from BO.Taxonomy import TaxonBOSet, TaxonBO
-from DB.Taxonomy import TaxonomyIDT, TaxoType
+from BO.Collection import CollectionIDT
+from BO.ObjectSetQueryPlus import TaxoRemappingT
 from BO.ProjectSet import PermissionConsistentProjectSet
+from BO.Rights import NOT_FOUND, Action
+from BO.Taxonomy import TaxonBOSet, TaxonBO
+from BO.User import UserIDT
 from DB.Collection import CollectionProject
 from DB.Project import ProjectIDT
 from DB.TaxoRecast import TaxoRecast, RecastOperation
-from BO.User import UserIDT
-from BO.Collection import CollectionIDT
-from BO.ObjectSetQueryPlus import TaxoRemappingT
-from BO.Rights import NOT_FOUND, Action
+from DB.Taxonomy import TaxonomyIDT, TaxoType
 from helpers.DynamicLogs import get_logger
 
 logger = get_logger(__name__)
@@ -102,6 +103,7 @@ class WoRMSifier(object):
         # A dict with Morpho -> nearest_phylo mapping. None value means that there
         # is no "solution" for the "problem" of mapping this taxon, or that it was
         # purposing-ly discarded.
+        # All _values_ are also keys of self.phylo2worms
         self.morpho2phylo: TaxoRemappingT = {}
 
     def do_match(self, session: Session, taxaids: List[TaxonomyIDT]):

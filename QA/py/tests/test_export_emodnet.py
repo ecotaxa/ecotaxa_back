@@ -8,6 +8,7 @@ from zipfile import ZipFile
 import pytest
 from starlette import status
 from starlette.testclient import TestClient
+
 from DB.TaxoRecast import RecastOperation
 from tests.api_wrappers import (
     api_wait_for_stable_job,
@@ -38,7 +39,7 @@ from tests.test_collections import (
     regrant_if_needed,
 )
 from tests.test_fastapi import PROJECT_QUERY_URL
-from tests.test_import import do_test_import, do_import_a_bit_more_skipping
+from tests.test_import import do_test_import, do_import_a_bit_more_skipping, PLAIN_FILE
 from tests.test_update import ACQUISITION_SET_UPDATE_URL, SAMPLE_SET_UPDATE_URL
 from tests.test_update_prj import PROJECT_UPDATE_URL
 
@@ -102,10 +103,10 @@ def exportable_collection(fastapi, admin_or_creator):
     # before exporting at least a worms taxonomy renames is made
     recast = {
         "from_to": {
-            "45072": 45072,
-            "78418": 78418,
-            "1": 1,
-            "56693": 56693,
+            # "45072": 45072,  # These 4 loop -> 422
+            # "78418": 78418,
+            # "1": 1,
+            # "56693": 56693,
             "84963": 1,
             "85011": 1,
             "85012": 1,
@@ -372,16 +373,7 @@ def test_emodnet_export_recast1(
     # add recast in taxao_recast
     # old values { 45072: 56693,  # Cyclopoida -> Actinopterygii    78418: 0,  # Oncaeidae -> remove}
     recast = {
-        "from_to": {
-            "84963": 1,
-            "85012": 1,
-            "85078": 1,
-            "56693": 56693,
-            "45072": 45072,
-            "78418": 78418,
-            "1": 1,  # Oncaeidae
-            # "25928": 25828,  # Gnathostomata-> Copepoda, not in dataset but to ensure it doesn't hurt
-        },
+        "from_to": {},  # Test data assumes no occurrence recast
         "doc": {},
     }
     recastreq = {
@@ -392,11 +384,24 @@ def test_emodnet_export_recast1(
     }
     rsp = fastapi.put(TAXORECAST_URL, json=recastreq, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
-    recastreq["operation"] = RecastOperation.dwca_export_emof.value
-    recastreq["recast"]["from_to"]["78418"] = 0  # Oncaeidae -> remove"
-    recastreq["recast"]["from_to"]["45072"] = 56693
-    rsp = fastapi.put(TAXORECAST_URL, json=recastreq, headers=ADMIN_AUTH)
+
+    recast2 = {
+        "from_to": {
+            "45072": 56693,  # Cyclopoida -> Actinopterygii
+            "78418": 0,  # Oncaeidae -> remove
+            "25928": 25828,  # Gnathostomata-> Copepoda, not in dataset but to ensure it doesn't hurt
+        },
+        "doc": {},
+    }
+    recastreq2 = {
+        "target_id": coll_id,
+        "operation": RecastOperation.dwca_export_emof.value,
+        "recast": recast2,
+        "is_collection": True,
+    }
+    rsp = fastapi.put(TAXORECAST_URL, json=recastreq2, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
+
     # Re-read
     payload = {
         "target_id": int(coll_id),
@@ -405,7 +410,8 @@ def test_emodnet_export_recast1(
     }
     rsp2 = fastapi.get(TAXORECAST_URL, headers=ADMIN_AUTH, params=payload)
     assert rsp2.status_code == status.HTTP_200_OK
-    assert rsp2.json() == recast
+    assert rsp2.json() == recast2
+
     prj_id, prj_id2 = sorted(exportable_collection["project_ids"])
     # Foreseen options for June 2023-like exports
     req = _req_tmpl.copy()
@@ -421,6 +427,7 @@ def test_emodnet_export_recast1(
     assert "wrns" in job_status["result"], job_status
     warns = job_status["result"]["wrns"]
     assert "Not produced due to non-match" not in str(warns)
+    api_check_job_ok(fastapi, job_id)
     dl_url = JOB_DOWNLOAD_URL.format(job_id=job_id)
     rsp = fastapi.get(dl_url, headers=ADMIN_AUTH)
     unzip_and_check(rsp.content, with_recast_zip(prj_id, prj_id2), admin_or_creator)
@@ -438,11 +445,6 @@ def test_emodnet_export_recast2(
             "85012": 1,
             "85078": 1,
             "92731": 56693,
-            "56693": 56693,
-            "45072": 45072,
-            "78418": 78418,
-            "1": 1,
-            # Oncaeidae
             # "25928": 25828,  # Gnathostomata-> Copepoda, not in dataset but to ensure it doesn't hurt
         },
         "doc": {},
@@ -457,17 +459,9 @@ def test_emodnet_export_recast2(
     assert rsp.status_code == status.HTTP_200_OK
     recast = {
         "from_to": {
-            "84963": 1,
-            "85011": 1,
-            "85012": 1,
-            "85078": 1,
-            "92731": 56693,
-            "45072": 45072,
-            "56693": 56693,
             # vs previous test, 56693 is not anymore a recast target
             "78418": 45072,  # Oncaeidae -> Cyclopoida, inside sample 1 there are both
-            "1": 1,
-            # "25928": 25828,  # Gnathostomata-> Copepoda, not in dataset but to ensure it doesn't hurt
+            "25928": 25828,  # Gnathostomata-> Copepoda, not in dataset but to ensure it doesn't hurt
         },
         "doc": {},
     }
@@ -488,6 +482,7 @@ def test_emodnet_export_recast2(
     rsp2 = fastapi.get(TAXORECAST_URL, headers=ADMIN_AUTH, params=payload)
     assert rsp2.status_code == status.HTTP_200_OK
     assert rsp2.json() == recast
+
     prj_id, prj_id2 = sorted(exportable_collection["project_ids"])
     # Options for June 2023-like exports with intra-sample aggregation
     req = _req_tmpl.copy()
@@ -570,20 +565,21 @@ def create_test_collection(fastapi, suffix, who=ADMIN_AUTH):
 
 
 def test_emodnet_invalid_req(fastapi):
+    prj_id = do_test_import(
+        fastapi, "test_emodnet_invalid_req", str(PLAIN_FILE), "UVP6"
+    )
     recast = {
-        "from_to": {"45072": 45072, "78418": 78418},
+        "from_to": {"45072": 78418, "78418": 45072},  # small cycle length 2
         "doc": {"45072": " not good"},
     }
     recastreq = {
-        "target_id": 0,
+        "target_id": prj_id,
         "operation": RecastOperation.dwca_export_occurrence.value,
         "recast": recast,
-        "is_collection": True,
     }
-    rsp = fastapi.put(TAXORECAST_URL, data=recastreq, headers=ADMIN_AUTH)
+    rsp = fastapi.put(TAXORECAST_URL, json=recastreq, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
-    # temporary removed
-    # assert "inconsistent" in str(rsp.content)
+    assert rsp.text == '{"detail":["loop in recast [45072, 78418]"]}'
 
 
 def unzip_and_check(zip_content, ref_content, who):

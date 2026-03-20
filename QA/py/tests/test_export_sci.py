@@ -99,10 +99,6 @@ def test_export_abundances(fastapi):
     # add recast in taxo_recast
     recast = {
         "from_to": {
-            "1": 1,
-            "56693": 56693,
-            "45072": 45072,
-            "78418": 78418,  # Oncaeidae
             "85012": 0,  # t001 -> Remove
             "84963": 0,  # detritus -> Remove
             "85078": 78418,  # egg<other -> Oncaeidae

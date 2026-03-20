@@ -4,26 +4,27 @@
 #
 # End-user services around taxonomy tree.
 #
-from datetime import datetime
-from fastapi import HTTPException
-from typing import List, Optional, Dict, Any, Union
 import json
+from datetime import datetime
+from typing import List, Optional, Dict, Any, Union
+
+from fastapi import HTTPException
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
+
 from API_models.taxonomy import TaxaSearchRsp, TaxonomyRecastReq, TaxoRecastRsp
 from API_operations.helpers.Service import Service
 from BO.Classification import ClassifIDT, ClassifIDListT
+from BO.Collection import CollectionIDT
 from BO.ObjectSetQueryPlus import TaxoRemappingT
 from BO.Project import ProjectBOSet
-from BO.Collection import CollectionIDT
 from BO.ReClassifyLog import ReClassificationBO
 from BO.Taxonomy import TaxonomyBO, TaxonBO, TaxonBOSet
-from BO.WoRMSification import WoRMSifier, WoRMSBO
 from BO.User import UserIDT, UserBO
+from BO.WoRMSification import WoRMSifier, WoRMSBO
 from DB.Project import ProjectTaxoStat, Project, ProjectIDT
-from DB.Taxonomy import Taxonomy
 from DB.TaxoRecast import TaxoRecast, RecastOperation
+from DB.Taxonomy import Taxonomy
 from helpers.DynamicLogs import get_logger
-
 
 logger = get_logger(__name__)
 
@@ -259,24 +260,26 @@ class TaxonomyService(Service):
     def validate_remapping(
         self, remapping: Dict[str, Optional[int]], isWoRMS: bool
     ) -> TaxoRemappingT:
-        keys = remapping.keys()
 
-        def end_of_chain(remap: ClassifIDT, start: ClassifIDT) -> Optional[ClassifIDT]:
-            ret = remapping[str(remap)]
-            if ret is not None and ret != remap:
-                if ret == start:
+        def end_of_chain(recast_idx: ClassifIDT) -> Optional[ClassifIDT]:
+            visited = [recast_idx]
+            ret = remapping[str(recast_idx)]
+            while str(ret) in remapping:
+                if ret is None:
+                    return ret
+                if ret in visited:
                     raise HTTPException(
                         HTTP_422_UNPROCESSABLE_ENTITY,
-                        detail=[" error in  loop" + str(ret) + " --- " + str(start)],
+                        detail=["loop in recast " + str(visited)],
                     )
-                if ret in keys:
-                    ret = end_of_chain(ret, start)
+                visited.append(ret)
+                ret = remapping[str(ret)]
             return ret
 
         validremap: TaxoRemappingT = {}
         for from_ in remapping.keys():
             f = int(from_)
-            validremap[f] = end_of_chain(f, f)
+            validremap[f] = end_of_chain(f)
         if isWoRMS:
             qry = (
                 self.ro_session.query(Taxonomy.id)
