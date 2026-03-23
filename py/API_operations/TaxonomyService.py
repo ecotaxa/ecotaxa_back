@@ -267,6 +267,8 @@ class TaxonomyService(Service):
             while str(ret) in remapping:
                 if ret is None:
                     return ret
+                if ret == visited[-1]:  # length-1 cycle (self-recast)
+                    return ret
                 if ret in visited:
                     raise HTTPException(
                         HTTP_422_UNPROCESSABLE_ENTITY,
