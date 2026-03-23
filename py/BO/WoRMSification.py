@@ -19,6 +19,8 @@ from BO.Collection import CollectionIDT
 from BO.ObjectSetQueryPlus import TaxoRemappingT
 from BO.Rights import NOT_FOUND, Action
 from helpers.DynamicLogs import get_logger
+from fastapi import HTTPException
+from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 logger = get_logger(__name__)
 
@@ -228,3 +230,16 @@ class WoRMSifier(object):
         logger.info("Execute query_recast SQL : %s", str(qry))
         logger.info("Params :target_id  %s " + str(target_id), operation.value)
         return qry
+
+    @staticmethod
+    def valid_remap_throw(val):
+        v = {k: str(vv) for k, vv in val.items() if str(vv) != k}
+        vals_but_0 = set(v.values()).difference({0})
+        if not set(v.keys()).isdisjoint(vals_but_0):
+            raise HTTPException(
+                HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=[
+                    "inconsistent taxonomy renaming, can't do remap chains or loops: common part is %s"
+                    % set(v.keys()).intersection(set(v.values()))
+                ],
+            )

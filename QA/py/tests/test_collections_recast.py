@@ -20,7 +20,6 @@ def test_collection_taxo_recast(fastapi):
         "from_to": {
             "45072": 45072,
             "78418": 78418,
-            "1": 1,
             "56693": 56693,
             "12345": 0,
             "6789": 123,
@@ -40,7 +39,6 @@ def test_collection_taxo_recast(fastapi):
         "from_to": {
             "45072": 45072,
             "78418": 78418,
-            "1": 1,
             "56693": 56693,
             "12345": 0,
             "6789": 123,
@@ -61,10 +59,8 @@ def test_collection_taxo_recast(fastapi):
         "operation": RecastOperation.dwca_export_emof.value,
         "is_collection": True,
     }
-    print("payload -- coll_reacst", payload)
     rsp2 = fastapi.get(url, headers=ADMIN_AUTH, params=payload)
     assert rsp2.status_code == status.HTTP_200_OK
-    print("rsp2json----", rsp2.json())
     assert rsp2.json() == taxo_recast
 
 

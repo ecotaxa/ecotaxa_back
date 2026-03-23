@@ -9,10 +9,13 @@ from fastapi import HTTPException
 from typing import List, Optional, Dict, Any, Union
 import json
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
-from API_models.taxonomy import TaxaSearchRsp, TaxonomyRecastReq, TaxoRecastRsp
+from API_models.taxonomy import (
+    TaxaSearchRsp,
+    TaxonomyRecastReq,
+    TaxoRecastRsp,
+)
 from API_operations.helpers.Service import Service
 from BO.Classification import ClassifIDT, ClassifIDListT
-from BO.ObjectSetQueryPlus import TaxoRemappingT
 from BO.Project import ProjectBOSet
 from BO.Collection import CollectionIDT
 from BO.ReClassifyLog import ReClassificationBO
@@ -199,8 +202,8 @@ class TaxonomyService(Service):
             RecastOperation.dwca_export_occurrence,
             RecastOperation.dwca_export_emof,
         ]
-        transforms = self.validate_remapping(recast.recast.from_to, isworms)
-        new_recast.transforms = json.dumps(transforms)
+        self.validate_remapping_throw(recast.recast.from_to, isworms)
+        new_recast.transforms = json.dumps(recast.recast.from_to)
         new_recast.documentation = (
             json.dumps(recast.recast.doc) if recast.recast.doc else {}
         )
@@ -256,31 +259,14 @@ class TaxonomyService(Service):
         history = ReClassificationBO.history_for_project(self.ro_session, project_id)
         return history
 
-    def validate_remapping(
+    def validate_remapping_throw(
         self, remapping: Dict[str, Optional[int]], isWoRMS: bool
-    ) -> TaxoRemappingT:
-        keys = remapping.keys()
-
-        def end_of_chain(remap: ClassifIDT, start: ClassifIDT) -> Optional[ClassifIDT]:
-            ret = remapping[str(remap)]
-            if ret is not None and ret != remap:
-                if ret == start:
-                    raise HTTPException(
-                        HTTP_422_UNPROCESSABLE_ENTITY,
-                        detail=[" error in  loop" + str(ret) + " --- " + str(start)],
-                    )
-                if ret in keys:
-                    ret = end_of_chain(ret, start)
-            return ret
-
-        validremap: TaxoRemappingT = {}
-        for from_ in remapping.keys():
-            f = int(from_)
-            validremap[f] = end_of_chain(f, f)
+    ):
+        WoRMSifier.valid_remap_throw(remapping)
         if isWoRMS:
             qry = (
                 self.ro_session.query(Taxonomy.id)
-                .filter(Taxonomy.id.in_(validremap.values()))
+                .filter(Taxonomy.id.in_(remapping.values()))
                 .filter(Taxonomy.aphia_id is None)
             )
             not_valid = [t.id for t in qry]
@@ -292,4 +278,3 @@ class TaxonomyService(Service):
                         + ", ".join(not_valid)
                     ],
                 )
-        return validremap
