@@ -156,9 +156,16 @@ class WoRMSifier(object):
         recast = recast.copy()  # We destroy it, protect the arg
 
         def end_of_chain(recast_idx: ClassifIDT) -> Optional[ClassifIDT]:
+            visited = [recast_idx]
             ret = recast[recast_idx]
-            if ret in recast:
-                ret = end_of_chain(ret)  # Infinite loop ->stack issue
+            while ret in recast:
+                if ret == visited[-1]:  # length-1 cycle (self-recast)
+                    return ret
+                if ret in visited:
+                    # Cycle detected (should not as we enforce input quality), drop the taxon
+                    return None
+                visited.append(ret)
+                ret = recast[ret]
             return ret
 
         # e.g. m2p: { 84974: 83278, 84975: 83278 }

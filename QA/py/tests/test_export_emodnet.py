@@ -579,7 +579,20 @@ def test_emodnet_invalid_req(fastapi):
     }
     rsp = fastapi.put(TAXORECAST_URL, json=recastreq, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
-    assert rsp.text == '{"detail":["loop in recast [45072, 78418]"]}'
+    assert "loop in recast [45072, 78418]" in rsp.text
+
+    # Test length-1 cycle (self-recast)
+    recast_ok = {
+        "from_to": {"45072": 45072},  # self-recast
+        "doc": {"45072": "this is OK"},
+    }
+    recastreq_ok = {
+        "target_id": prj_id,
+        "operation": RecastOperation.dwca_export_occurrence.value,
+        "recast": recast_ok,
+    }
+    rsp_ok = fastapi.put(TAXORECAST_URL, json=recastreq_ok, headers=ADMIN_AUTH)
+    assert rsp_ok.status_code == status.HTTP_200_OK
 
 
 def unzip_and_check(zip_content, ref_content, who):

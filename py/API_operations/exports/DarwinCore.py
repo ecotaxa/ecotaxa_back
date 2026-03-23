@@ -1454,13 +1454,15 @@ class DarwinCoreExport(JobServiceBase):
         recast = recast.copy()  # We destroy it, protect the arg
 
         def end_of_chain(recast_idx: ClassifIDT) -> Optional[ClassifIDT]:
-            visited = {recast_idx}
+            visited = [recast_idx]
             end = recast[recast_idx]
             while end in recast:
+                if end == visited[-1]:  # length-1 cycle (self-recast)
+                    return end
                 if end in visited:
                     # Cycle detected (should not as we enforce input quality), drop the taxon
                     return None
-                visited.add(end)
+                visited.append(end)
                 end = recast[end]
             return end
 
