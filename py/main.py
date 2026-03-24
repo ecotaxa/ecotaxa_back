@@ -162,6 +162,7 @@ from DB.Object import ObjectIDListT
 from DB.Project import ProjectTaxoStat, Project
 from DB.ProjectPrivilege import ProjectPrivilege
 from DB.User import User, OrganizationIDT
+from DB.TaxoRecast import RecastOperation
 from helpers.DynamicLogs import get_logger, get_api_logger, MONITOR_LOG_PATH
 from helpers.fastApiUtils import (
     internal_server_error_handler,
@@ -1165,18 +1166,19 @@ def darwin_core_format_export(
 
     Note: Only manageable collections can be exported.
     """
+
     with DarwinCoreExport(
         request.collection_id,
         request.dry_run,
-        request.computations_pre_mapping,
         request.include_predicted,
         request.with_absent,
         request.with_computations,
         request.formulae,
         request.extra_xml,
+        current_user,
     ) as sce:
-        with RightsThrower():
-            return sce.run(current_user)
+        with ValidityThrower(), RightsThrower():
+            return sce.run()
 
 
 @app.delete(
@@ -3429,12 +3431,8 @@ def update_taxonomy_recast(
     **Create or Update the collection or project taxonomy recast**.
      Note: The recast is updated only if manageable.
     """
-    print("recast  ----", recast.operation)
-    print("recast ---------", recast.recast)
-    print("reacst target", recast.target_id)
-    print("iscoll", recast.is_collection)
     with TaxonomyService() as sce:
-        with RightsThrower():
+        with ValidityThrower(), RightsThrower():
             sce.update_taxonomy_recast(current_user, recast)
 
 
@@ -3450,11 +3448,11 @@ def get_taxonomy_recast(
         description="Internal, the unique numeric id of this collection.",
         example=1,
     ),
-    operation: str = Query(
+    operation: RecastOperation = Query(
         default=None,
         title="Operation name",
         description="One of RecastOperation enum value",
-        example="settings",
+        example="dwca_export_occurrence",
     ),
     is_collection: bool = Query(
         default=False,
@@ -3470,11 +3468,38 @@ def get_taxonomy_recast(
     with TaxonomyService() as sce:
         with RightsThrower():
             ret = sce.get_taxonomy_recast(
-                current_user,
+                current_user_id=current_user,
                 target_id=target_id,
                 operation=operation,
                 is_collection=is_collection,
             )
+    return ret
+
+
+@app.get(
+    "/taxo_worms",
+    operation_id="get_taxonomy_worms",
+    tags=["Taxonomy Tree"],
+    response_model=Dict[str, int],
+)
+def get_taxonomy_worms(
+    taxaids: str = Query(
+        title="Taxa Ids",
+        description="taxon id separated by ,",
+        default="",
+        example="all",
+    ),
+    current_user: int = Depends(get_current_user),
+) -> Dict[str, int]:
+    """
+    **Read the collection or project taxonomy recast**.
+     Note: The data is returned only if manageable.
+    """
+    ids = _split_num_list(taxaids)
+    with TaxonomyService() as sce:
+        ret = sce.get_taxonomy_worms(
+            taxaids=ids,
+        )
     return ret
 
 

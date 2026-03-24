@@ -31,9 +31,9 @@ def check_sqlalchemy_version() -> None:
 
 
 class TimeEvictedQueue(Queue):
-    DB_SESSION_MAX_AGE: ClassVar[
-        int
-    ] = 300  # No inactive session should be older than 5m
+    DB_SESSION_MAX_AGE: ClassVar[int] = (
+        300  # No inactive session should be older than 5m
+    )
     CLEAN_INTERVAL: ClassVar[int] = 5  # Find sessions to expire after every n sec
 
     def __init__(self, maxsize=0, use_lifo=False):
@@ -97,7 +97,10 @@ class Connection(object):
         Open a SQLAlchemy connection, i.e. an engine.
         """
         if read_only:
-            exec_options = {"postgresql_readonly": True}
+            exec_options = {
+                "postgresql_readonly": True,
+                # "isolation_level": "AUTOCOMMIT",
+            }
         else:
             exec_options = {}
         # We connect with the help of the PostgreSQL URL

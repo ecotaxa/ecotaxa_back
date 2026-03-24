@@ -1802,114 +1802,6 @@
         ]
       }
     },
-    "/collections/{collection_id}/taxo_recast":{
-      "get":{
-        "tags":[
-          "collections"
-        ],
-        "summary":"Read Collection Taxo Recast",
-        "description":"**Read the collection taxonomy recast**.\n\n **Returns NULL upon success.**\n\n Note: The collection data is returned only if manageable.",
-        "operationId":"get_collection_taxonomy_recast",
-        "parameters":[
-          {
-            "description":"Internal, the unique numeric id of this collection.",
-            "required":true,
-            "schema":{
-              "title":"Collection Id",
-              "type":"integer",
-              "description":"Internal, the unique numeric id of this collection."
-            },
-            "example":1,
-            "name":"collection_id",
-            "in":"path"
-          }
-        ],
-        "responses":{
-          "200":{
-            "description":"Successful Response",
-            "content":{
-              "application/json":{
-                "schema":{},
-                "example":{}
-              }
-            }
-          },
-          "422":{
-            "description":"Validation Error",
-            "content":{
-              "application/json":{
-                "schema":{
-                  "$ref":"#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security":[
-          {
-            "BearerOrCookieAuth":[]
-          }
-        ]
-      },
-      "put":{
-        "tags":[
-          "collections"
-        ],
-        "summary":"Update Collection Taxo Recast",
-        "description":"**Create or Update the collection taxonomy recast**.\n\n **Returns NULL upon success.**\n\n Note: The collection is updated only if manageable.",
-        "operationId":"update_collection_taxonomy_recast",
-        "parameters":[
-          {
-            "description":"Internal, the unique numeric id of this collection.",
-            "required":true,
-            "schema":{
-              "title":"Collection Id",
-              "type":"integer",
-              "description":"Internal, the unique numeric id of this collection."
-            },
-            "example":1,
-            "name":"collection_id",
-            "in":"path"
-          }
-        ],
-        "requestBody":{
-          "content":{
-            "application/json":{
-              "schema":{
-                "$ref":"#/components/schemas/TaxonomyRecast"
-              }
-            }
-          },
-          "required":true
-        },
-        "responses":{
-          "200":{
-            "description":"Successful Response",
-            "content":{
-              "application/json":{
-                "schema":{},
-                "example":{}
-              }
-            }
-          },
-          "422":{
-            "description":"Validation Error",
-            "content":{
-              "application/json":{
-                "schema":{
-                  "$ref":"#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security":[
-          {
-            "BearerOrCookieAuth":[]
-          }
-        ]
-      }
-    },
     "/collections/export/darwin_core":{
       "post":{
         "tags":[
@@ -5653,6 +5545,61 @@
         ]
       }
     },
+    "/taxon_set/wormsification":{
+      "get":{
+        "tags":[
+          "Taxonomy Tree"
+        ],
+        "summary":"Wormsification Taxa Set",
+        "description":"Returns **information about several taxa**, including their lineage.",
+        "operationId":"wormsification_taxa_set",
+        "parameters":[
+          {
+            "description":"The separator between numbers is arbitrary non-digit, e.g. ':', '|' or ','.",
+            "required":true,
+            "schema":{
+              "title":"Ids",
+              "type":"string",
+              "description":"The separator between numbers is arbitrary non-digit, e.g. ':', '|' or ','."
+            },
+            "example":"1:2:3",
+            "name":"ids",
+            "in":"query"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "title":"Response Wormsification Taxa Set Taxon Set Wormsification Get",
+                  "type":"object",
+                  "additionalProperties":{
+                    "$ref":"#/components/schemas/TaxonModel"
+                  }
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
     "/taxon/central/{taxon_id}":{
       "get":{
         "tags":[
@@ -5944,6 +5891,185 @@
               "application/json":{
                 "schema":{
                   "title":"Response Add Worms Taxon Addworms  Post"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/taxo_recast":{
+      "get":{
+        "tags":[
+          "Taxonomy Tree"
+        ],
+        "summary":"Get Taxonomy Recast",
+        "description":"**Read the collection or project taxonomy recast**.\n Note: The data is returned only if manageable.",
+        "operationId":"get_taxonomy_recast",
+        "parameters":[
+          {
+            "description":"Internal, the unique numeric id of this collection.",
+            "required":true,
+            "schema":{
+              "title":"Target Id",
+              "type":"integer",
+              "description":"Internal, the unique numeric id of this collection."
+            },
+            "example":1,
+            "name":"target_id",
+            "in":"query"
+          },
+          {
+            "description":"One of RecastOperation enum value",
+            "required":false,
+            "schema":{
+              "title":"Operation name",
+              "allOf":[
+                {
+                  "$ref":"#/components/schemas/RecastOperation"
+                }
+              ],
+              "description":"One of RecastOperation enum value"
+            },
+            "example":"dwca_export_occurrence",
+            "name":"operation",
+            "in":"query"
+          },
+          {
+            "description":"target_id refers to a collection_id or not",
+            "required":false,
+            "schema":{
+              "title":"Is a collection",
+              "type":"boolean",
+              "description":"target_id refers to a collection_id or not",
+              "default":false
+            },
+            "name":"is_collection",
+            "in":"query"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/TaxoRecastRsp"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      },
+      "put":{
+        "tags":[
+          "Taxonomy Tree"
+        ],
+        "summary":"Update Taxonomy Recast",
+        "description":"**Create or Update the collection or project taxonomy recast**.\n Note: The recast is updated only if manageable.",
+        "operationId":"update_taxonomy_recast",
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "$ref":"#/components/schemas/TaxonomyRecastReq"
+              }
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{},
+                "example":{}
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
+    "/taxo_worms":{
+      "get":{
+        "tags":[
+          "Taxonomy Tree"
+        ],
+        "summary":"Get Taxonomy Worms",
+        "description":"**Read the collection or project taxonomy recast**.\n Note: The data is returned only if manageable.",
+        "operationId":"get_taxonomy_worms",
+        "parameters":[
+          {
+            "description":"taxon id separated by ,",
+            "required":false,
+            "schema":{
+              "title":"Taxa Ids",
+              "type":"string",
+              "description":"taxon id separated by ,",
+              "default":""
+            },
+            "example":"all",
+            "name":"taxaids",
+            "in":"query"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "title":"Response Get Taxonomy Worms Taxo Worms Get",
+                  "type":"object",
+                  "additionalProperties":{
+                    "type":"integer"
+                  }
                 }
               }
             }
@@ -7471,13 +7597,13 @@
           "abstract":{
             "title":"Abstract",
             "type":"string",
-            "description":"The collection abstract.",
+            "description":"The collection abstract. It appears in the IPT under the description label",
             "example":""
           },
           "description":{
             "title":"Description",
             "type":"string",
-            "description":"The collection description.",
+            "description":"The collection description. It appears in the EMLMeta fields as the additional_info field and in the IPT under the additional info label.",
             "example":""
           },
           "project_ids":{
@@ -7924,6 +8050,27 @@
             "type":"string",
             "description":"url of taxonomy server ecotaxoserver",
             "default":"https://ecotaxoserver.obs-vlfr.fr/"
+          },
+          "recast_operation":{
+            "title":"Recast operation",
+            "type":"object",
+            "additionalProperties":{
+              "type":"string"
+            },
+            "description":"Taxonomy recast operation name",
+            "default":{
+              "prediction_input":"pre_predict",
+              "prediction_output":"post_predict",
+              "project_export":"project_export",
+              "collection_export":"collection_export",
+              "dwca_export_occurrence":"dwca_export_occurrence",
+              "dwca_export_emof":"dwca_export_emof"
+            },
+            "example":{
+              "prediction_input":"pre_predict",
+              "dwca_export_occurrence":"dwca_export_occurrence",
+              "dwca_export_emof":"dwca_export_emof"
+            }
           }
         },
         "description":"Values which can be considered identical over the lifetime of the back-end."
@@ -8040,20 +8187,6 @@
             "example":[
               "ABO"
             ]
-          },
-          "computations_pre_mapping":{
-            "title":"Computation mapping",
-            "type":"object",
-            "additionalProperties":{
-              "type":"integer"
-            },
-            "description":"Mapping from present taxon (key) to output replacement one (value), during computations. Use a 0 replacement to _discard_ the objects with present taxon. Note: These are EcoTaxa categories, WoRMS mapping happens after, whatever.",
-            "default":{},
-            "example":{
-              "456":956,
-              "2456":213,
-              "93672":0
-            }
           },
           "formulae":{
             "title":"Computation formulas",
@@ -8274,19 +8407,6 @@
             "description":"For 'SUM', 'ABO', 'CNC' and 'BIV' types, if computations should be combined. Per A(cquisition) or S(ample) or <Empty>(just taxa).",
             "default":"",
             "example":"A"
-          },
-          "pre_mapping":{
-            "title":"Categories mapping",
-            "type":"object",
-            "additionalProperties":{
-              "type":"integer"
-            },
-            "description":"For 'ABO', 'CNC' and 'BIV' types types, mapping from present taxon (key) to output replacement one (value). Use a null replacement to _discard_ the present taxon.",
-            "default":{},
-            "example":{
-              "456":956,
-              "2456":213
-            }
           },
           "formulae":{
             "title":"Computation formulas",
@@ -9039,7 +9159,6 @@
         "required":[
           "id",
           "title",
-          "provider_user",
           "project_ids"
         ],
         "type":"object",
@@ -10493,6 +10612,19 @@
           }
         }
       },
+      "RecastOperation":{
+        "title":"RecastOperation",
+        "enum":[
+          "pre_predict",
+          "post_predict",
+          "project_export",
+          "collection_export",
+          "dwca_export_occurrence",
+          "dwca_export_emof"
+        ],
+        "type":"string",
+        "description":"An enumeration."
+      },
       "ResetPasswordReq":{
         "title":"ResetPasswordReq",
         "type":"object",
@@ -10849,7 +10981,7 @@
         "description":"An enumeration."
       },
       "SummaryExportReq":{
-        "title":"Summary Export request Model",
+        "title":"SummaryExportReq",
         "required":[
           "project_id"
         ],
@@ -10895,20 +11027,6 @@
             "description":"Computations aggregation level.",
             "default":"sample",
             "example":"acquisition"
-          },
-          "taxo_mapping":{
-            "title":"Categories mapping",
-            "type":"object",
-            "additionalProperties":{
-              "type":"integer"
-            },
-            "description":"Mapping from present taxon (key) to output replacement one (value). Use a 0 replacement to _discard_ the present taxon.",
-            "default":{},
-            "example":{
-              "456":956,
-              "2456":213,
-              "7153":0
-            }
           },
           "formulae":{
             "title":"Computation formulas",
@@ -10966,18 +11084,6 @@
             "description":"The taxon/category status, 'D' for Deprecated, 'A' for Approved or 'N' for Not approved.",
             "example":"P"
           },
-          "aphia_id":{
-            "title":"Aphia Id",
-            "type":"integer",
-            "description":"The Worms aphia_id of the taxon.",
-            "example":"null"
-          },
-          "renm_id":{
-            "title":"Renm_id",
-            "type":"integer",
-            "description":"The advised replacement ID if the taxon/category is deprecated.",
-            "example":"null"
-          },
           "text":{
             "title":"Text",
             "type":"string",
@@ -10989,8 +11095,56 @@
             "type":"integer",
             "description":"1 if the taxon is in project list, 0 otherwise.",
             "example":0
+          },
+          "aphia_id":{
+            "title":"Aphia ID",
+            "type":"integer",
+            "description":"The WoRMS aphia_id of the taxon.",
+            "example":"null"
+          },
+          "renm_id":{
+            "title":"Renm id",
+            "type":"integer",
+            "description":"The advised replacement ID if the taxon/category is deprecated.",
+            "example":"null"
           }
         }
+      },
+      "TaxoRecastRsp":{
+        "title":"TaxoRecastRsp",
+        "required":[
+          "from_to"
+        ],
+        "type":"object",
+        "properties":{
+          "from_to":{
+            "title":"Categories mapping",
+            "type":"object",
+            "additionalProperties":{
+              "type":"integer"
+            },
+            "description":"Mapping from seen taxon (key) to output replacement one (value). Use a null replacement to _discard_ the present taxon. Note: keys are strings. Every",
+            "example":{
+              "456":956,
+              "2456":213
+            }
+          },
+          "doc":{
+            "title":"Mapping documentation",
+            "type":"object",
+            "additionalProperties":{
+              "type":"string"
+            },
+            "description":"To keep memory of the reasons for the above mapping. Note: keys are strings.",
+            "example":{
+              "456":"Up to species",
+              "2456":"Up to nearest non-morpho",
+              "9134":"Detritus"
+            }
+          }
+        },
+        "additionalProperties":false,
+        "description":"In various contexts, a taxo recast (from taxon -> to taxon) setting."
       },
       "TaxonCentral":{
         "title":"TaxonCentral",
@@ -11073,7 +11227,7 @@
             "title":"Source url",
             "type":"string",
             "description":"The source url.",
-            "example":"http://www.google.fr/"
+            "example":"https://www.google.fr/"
           },
           "source_desc":{
             "title":"Source desc",
@@ -11267,41 +11421,57 @@
           }
         }
       },
-      "TaxonomyRecast":{
-        "title":"TaxonomyRecast",
+      "TaxonomyRecastReq":{
+        "title":"TaxonomyRecastReq",
         "required":[
-          "from_to"
+          "target_id",
+          "operation",
+          "recast"
         ],
         "type":"object",
         "properties":{
-          "from_to":{
-            "title":"Categories mapping",
-            "type":"object",
-            "additionalProperties":{
-              "type":"integer"
-            },
-            "description":"Mapping from seen taxon (key) to output replacement one (value). Use a null replacement to _discard_ the present taxon. Note: keys are strings.",
-            "example":{
-              "456":956,
-              "2456":213
-            }
+          "target_id":{
+            "title":"Target Id",
+            "type":"integer",
+            "description":"The Collection or Project Id.",
+            "example":3
           },
-          "doc":{
-            "title":"Mapping documentation",
-            "type":"object",
-            "additionalProperties":{
-              "type":"string"
-            },
-            "description":"To keep memory of the reasons for the above mapping. Note: keys are strings.",
+          "operation":{
+            "title":"Recast operation",
+            "allOf":[
+              {
+                "$ref":"#/components/schemas/RecastOperation"
+              }
+            ],
+            "description":"Recast operation name.",
+            "example":"dwca_export_emof"
+          },
+          "is_collection":{
+            "title":"Is collection",
+            "type":"boolean",
+            "description":"If True the target_id is a Collection Id otherwise a Project Id.",
+            "default":false
+          },
+          "recast":{
+            "title":"Recast mapping and react doc",
+            "allOf":[
+              {
+                "$ref":"#/components/schemas/TaxoRecastRsp"
+              }
+            ],
+            "description":"Recast taxonomy from key to value.",
             "example":{
-              "456":"Up to species",
-              "2456":"Up to nearest non-morpho",
-              "9134":"Detritus"
-            }
+              "from_to":{
+                "234":12,
+                "124":7
+              },
+              "doc":{
+                "234":"up to the nearest non morpho"
+              }
+            },
+            "defaut":{}
           }
-        },
-        "additionalProperties":false,
-        "description":"In various contexts, a taxo recast (from taxon -> to taxon) setting."
+        }
       },
       "TaxonomyTreeStatus":{
         "title":"TaxonomyTreeStatus",

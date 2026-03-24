@@ -4,21 +4,21 @@
 #
 # A description of transformation to the WoRMS taxonomic system.
 #
-from typing import Dict, Iterable, List, Optional, Set, Union
-import json
+from typing import Dict, List, Optional, Set, Union
+
 from sqlalchemy.orm import Session
 
-from BO.Classification import ClassifIDT, ClassifIDListT
+from BO.Classification import ClassifIDT
+from BO.Collection import CollectionIDT
 from BO.ObjectSetQueryPlus import TaxoRemappingT
-from BO.Taxonomy import TaxonBOSet, TaxonBO
-from DB.Taxonomy import TaxonomyIDT, TaxoType
 from BO.ProjectSet import PermissionConsistentProjectSet
+from BO.Rights import NOT_FOUND, Action
+from BO.Taxonomy import TaxonBOSet, TaxonBO
+from BO.User import UserIDT
 from DB.Collection import CollectionProject
 from DB.Project import ProjectIDT
 from DB.TaxoRecast import TaxoRecast, RecastOperation
-from BO.User import UserIDT
-from BO.Collection import CollectionIDT
-from BO.Rights import NOT_FOUND, Action
+from DB.Taxonomy import TaxonomyIDT, TaxoType
 from helpers.DynamicLogs import get_logger
 
 logger = get_logger(__name__)
@@ -99,14 +99,15 @@ class WoRMSifier(object):
 
     def __init__(self) -> None:
         # A dict with Phylo taxo ids->WoRMS entry.
-        self.phylo2worms: Dict[ClassifIDT, WoRMSBO] = {}
+        self.phylo2worms: TaxoRemappingT = {}
         # A dict with Morpho -> nearest_phylo mapping. None value means that there
         # is no "solution" for the "problem" of mapping this taxon, or that it was
         # purposing-ly discarded.
-        self.morpho2phylo: Dict[ClassifIDT, Optional[ClassifIDT]] = {}
+        # All _values_ are also keys of self.phylo2worms
+        self.morpho2phylo: TaxoRemappingT = {}
 
-    def do_match(self, session: Session, taxa_ids: List[TaxonomyIDT]):
-        req_taxon_list = TaxonBOSet(session, taxa_ids).as_list()
+    def do_match(self, session: Session, taxaids: List[TaxonomyIDT]):
+        req_taxon_list = TaxonBOSet(session, taxaids).as_list()
         # Get all parent ids
         parent_ids: Set[ClassifIDT] = set()
         for a_taxon in req_taxon_list:
@@ -114,35 +115,32 @@ class WoRMSifier(object):
         parent_taxon_set = TaxonBOSet(session, list(parent_ids))
 
         # Get closest phylos for morphos
-        added_phylos = set(taxa_ids)
+        added_phylos = set(taxaids)
         for a_taxon in req_taxon_list:
             if not a_taxon.type == TaxoType.morpho:
                 continue
-            for parent_id in a_taxon.id_lineage[1:]:
-                parent = parent_taxon_set.get_by_id(parent_id)
+            for parentid in a_taxon.id_lineage[1:]:
+                parent = parent_taxon_set.get_by_id(parentid)
                 if parent.type != TaxoType.morpho:
-                    self.morpho2phylo[a_taxon.id] = parent_id
-                    added_phylos.add(parent_id)
+                    self.morpho2phylo[a_taxon.id] = parentid
+                    added_phylos.add(parentid)
                     break
             else:
                 self.morpho2phylo[a_taxon.id] = None  # Can't resolve
         added_phylos_list = TaxonBOSet(session, list(added_phylos)).as_list()
 
         # And all target renames
-        rename_ids: Set[ClassifIDT] = set()
+        renameids: Set[ClassifIDT] = set()
         for a_taxon in req_taxon_list + added_phylos_list:
             if a_taxon.renm_id is not None:
-                rename_ids.add(a_taxon.renm_id)
-        renamed_taxon_set = TaxonBOSet(session, list(rename_ids))
-
+                renameids.add(a_taxon.renm_id)
         # Get closest WoRMS for phylos
         for a_taxon in req_taxon_list + added_phylos_list:
             if a_taxon.type == TaxoType.phylo:
                 if a_taxon.aphia_id is not None:  # Closest WoRMS is self
-                    self.phylo2worms[a_taxon.id] = create_worms_bo(a_taxon)
+                    self.phylo2worms[a_taxon.id] = a_taxon.id
                 elif a_taxon.renm_id is not None:
-                    renamed_taxon = renamed_taxon_set.get_by_id(a_taxon.renm_id)
-                    self.phylo2worms[a_taxon.id] = create_worms_bo(renamed_taxon)
+                    self.phylo2worms[a_taxon.id] = a_taxon.renm_id
                 else:
                     logger.warning("No solution for Phylo %s", a_taxon)
             else:
@@ -154,43 +152,20 @@ class WoRMSifier(object):
         logger.info("Mapping phylo2worms: %s", self.phylo2worms)
         logger.info("Mapping morpho2phylo: %s", self.morpho2phylo)
 
-    def get_worms_targets(self) -> List[WoRMSBO]:
-        return list(self.phylo2worms.values())
-
-    def get_taxo_mapping_targets(
-        self,
-        session: Session,
-        current_user_id: UserIDT,
-        target_id: Union[CollectionIDT, ProjectIDT],
-        operation: RecastOperation,
-        is_collection: bool,
-    ) -> Optional[Dict[ClassifIDT, WoRMSBO]]:
-        res = self.query_recast(
-            session,
-            current_user_id,
-            target_id,
-            operation,
-            is_collection,
-            for_update=False,
-        ).all()
-        if res is None or len(res) != 1:
-            return None
-        the_one: TaxoRecast = res[0]
-        taxa_ids = json.loads(str(the_one.transforms)).values()
-        ret = TaxonBOSet(session, taxa_ids)
-        taxons = {str(t.id): create_worms_bo(t) for t in ret.as_list()}
-        taxo_mapping_targets: Dict[ClassifIDT, WoRMSBO] = {
-            int(_from): taxons[str(_to)] for _from, _to in taxons.items()
-        }
-        return taxo_mapping_targets
-
     def apply_recast(self, recast: TaxoRemappingT) -> None:
         recast = recast.copy()  # We destroy it, protect the arg
 
         def end_of_chain(recast_idx: ClassifIDT) -> Optional[ClassifIDT]:
+            visited = [recast_idx]
             ret = recast[recast_idx]
-            if ret in recast:
-                ret = end_of_chain(ret)  # Infinite loop ->stack issue
+            while ret in recast:
+                if ret == visited[-1]:  # length-1 cycle (self-recast)
+                    return ret
+                if ret in visited:
+                    # Cycle detected (should not as we enforce input quality), drop the taxon
+                    return None
+                visited.append(ret)
+                ret = recast[ret]
             return ret
 
         # e.g. m2p: { 84974: 83278, 84975: 83278 }
@@ -214,13 +189,15 @@ class WoRMSifier(object):
         present_morpho2phylo.update(recast)
         self.morpho2phylo = present_morpho2phylo
 
-    def unreferenced_ids(self, ids: Iterable[ClassifIDT]) -> ClassifIDListT:
-        """Return the taxa from ids, not known in self"""
-        return [
-            an_id
-            for an_id in ids
-            if an_id not in self.phylo2worms and an_id not in self.morpho2phylo
-        ]
+    @staticmethod
+    def do_wormsify(
+        session: Session, taxaids: List[TaxonomyIDT]
+    ) -> Dict[ClassifIDT, WoRMSBO]:
+        ret = TaxonBOSet(session, taxaids)
+        taxamapping: Dict[ClassifIDT, WoRMSBO] = {
+            t.id: create_worms_bo(t) for t in ret.as_list() if t.aphia_id is not None
+        }
+        return taxamapping
 
     @staticmethod
     def query_recast(
@@ -252,9 +229,11 @@ class WoRMSifier(object):
             current_user_id, update_preference=False, action=action
         )
         qry = session.query(TaxoRecast)
-        qry = qry.filter(TaxoRecast.operation == operation)
+        qry = qry.filter(TaxoRecast.operation == operation.value)
         if is_collection:
             qry = qry.filter(TaxoRecast.collection_id == target_id)
         else:
             qry = qry.filter(TaxoRecast.project_id == target_id)
+        logger.info("Execute query_recast SQL : %s", str(qry))
+        logger.info("Params :target_id  %s " + str(target_id), operation.value)
         return qry

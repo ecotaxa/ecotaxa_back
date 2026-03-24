@@ -77,7 +77,6 @@ class UserFilesDirectory(object):
         :param path: The client-side full path of the file. For replicating a directory structure.
         :param stream: The byte stream with file content.
         """
-        t0 = time.time()
         base_path: Path = self._root_path
         self.ensure_exists(base_path)
         if path is not None:
@@ -91,16 +90,11 @@ class UserFilesDirectory(object):
             while len(buff) != 0:
                 file.write(buff)  # type:ignore # Mypy is unaware of async read result
                 buff = await stream.read(65536)
-        t1 = time.time()
         file_ext, compressed_path, mime_type = self._get_file_info(
             name.lstrip(os.path.sep), base_path.absolute()
         )
         self.compressed_origin = compressed_path
         self.dispatch_unpack(compressed_path, base_path.absolute())
-        t2 = time.time()
-        logger.info(
-            f"add_file {name}: {t1-t0:.2f}s upload, {t2-t1:.2f}s unpack, {t2-t0:.2f}s total"
-        )
         return str(source_path)
 
     def list(self, sub_path: str) -> List[DirEntryT]:
@@ -214,8 +208,6 @@ class UserFilesDirectory(object):
         return shutil.disk_usage(ospath)
 
     def extract_archive(self, archive, filepath: str, path: Path):
-        t0 = time.time()
-        logger.info(f"extract_archive {filepath} starting")
         if hasattr(archive, "namelist"):
             filenames = archive.namelist()
         else:
@@ -227,17 +219,13 @@ class UserFilesDirectory(object):
         if sub_path != "temp/" and (filenames[0][0 : len(sub_path)] != sub_path):
             path = path.joinpath(sub_path[:-1])
         archive.extractall(path.as_posix())
-        t1 = time.time()
         more_mime = {
             "csv": "text/csv",
             "txt": "text/plain",
             "tsv": "text/tab-separated-values",
         }
-        magic_time = 0.0
         for filename in filenames:
-            t_magic_0 = time.time()
             file_ext, compressed_path, mime_type = self._get_file_info(filename, path)
-            magic_time += time.time() - t_magic_0
             if mime_type in accepted_mime_types:
                 extracted.append(filename)
                 if (
@@ -253,10 +241,6 @@ class UserFilesDirectory(object):
             else:
                 os.remove(compressed_path)
                 logger.info("NOT EXTRACTED '%s' ", str(compressed_path))
-        t2 = time.time()
-        logger.info(
-            f"extract_archive {filepath}: {t1-t0:.2f}s extractall, {t2-t1:.2f}s info/dispatch ({magic_time:.2f}s magic), {t2-t0:.2f}s total"
-        )
         return sub_path
 
     @staticmethod
