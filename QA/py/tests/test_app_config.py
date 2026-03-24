@@ -237,39 +237,44 @@ def test_config_validate_with_folders_permissions(
     cfg.validate()  # Should not raise
 
 
-def test_config_validate_fails_when_common_not_readable(
-    tmp_path, temp_dirs, base_config, mocker
+@pytest.mark.parametrize(
+    "config_key, folder_key, access_mode, expected_error",
+    [
+        ("SERVERLOADAREA", "SERVERLOADAREA", os.R_OK, "is not readable"),
+        ("FTPEXPORTAREA", "FTPEXPORTAREA", os.W_OK, "is not writable"),
+    ],
+)
+def test_config_validate_fails_when_folder_permissions_invalid(
+    tmp_path,
+    temp_dirs,
+    base_config,
+    mocker,
+    config_key,
+    folder_key,
+    access_mode,
+    expected_error,
 ):
     config_path = tmp_path / "config.ini"
     content = base_config.copy()
-    content.update({"SERVERLOADAREA": temp_dirs["SERVERLOADAREA"]})
-    # Make common NOT readable
-    os.chmod(temp_dirs["SERVERLOADAREA"], 0o000)
+    folder_path = temp_dirs[folder_key]
+    content.update({config_key: folder_path})
 
     create_config_file(config_path, content)
 
     mocker.patch.dict(os.environ, {"APP_CONFIG": str(config_path)})
     mocker.patch("socket.gethostbyname", side_effect=lambda x: "127.0.0.1")
 
-    cfg = Config()
-    with pytest.raises(AssertionError, match="is not readable"):
-        cfg.validate()
+    # Workaround: os.chmod is not effective in some CI environments (like GitHub Actions).
+    # Mock os.access to simulate permission issues.
+    original_access = os.access
 
+    def mocked_access(path, mode):
+        if str(path) == str(folder_path) and mode == access_mode:
+            return False
+        return original_access(path, mode)
 
-def test_config_validate_fails_when_export_not_writable(
-    tmp_path, temp_dirs, base_config, mocker
-):
-    config_path = tmp_path / "config.ini"
-    content = base_config.copy()
-    content.update({"FTPEXPORTAREA": temp_dirs["FTPEXPORTAREA"]})
-    # Make export NOT writable
-    os.chmod(temp_dirs["FTPEXPORTAREA"], 0o555)
-
-    create_config_file(config_path, content)
-
-    mocker.patch.dict(os.environ, {"APP_CONFIG": str(config_path)})
-    mocker.patch("socket.gethostbyname", side_effect=lambda x: "127.0.0.1")
+    mocker.patch("os.access", side_effect=mocked_access)
 
     cfg = Config()
-    with pytest.raises(AssertionError, match="is not writable"):
+    with pytest.raises(AssertionError, match=expected_error):
         cfg.validate()
