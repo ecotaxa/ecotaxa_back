@@ -26,11 +26,16 @@ class Config(object):
             config_file = Path(os.environ[ENV_KEY])
         else:
             # For dev mode and tests
-            config_file = "config.ini"
+            config_file = Path("config.ini")
         # Config needs to be in an ini-like format
         config_parser = configparser.ConfigParser()
-        config_parser.read(config_file)
-        self.parser = config_parser["conf"]
+        if config_file.exists():
+            config_parser.read(config_file)
+        if "conf" in config_parser:
+            self.parser = config_parser["conf"]
+        else:
+            # Empty config, all from env or defaults
+            self.parser = {}  # type: ignore
 
     @overload
     def _get(
@@ -59,11 +64,11 @@ class Config(object):
     def jobs_dir(self) -> str:
         return self._get("JOBS_DIR", mandatory=True)
 
-    def common_folder(self) -> str:
-        return self._get("SERVERLOADAREA", mandatory=True)
+    def common_folder(self) -> Optional[str]:
+        return self._get("SERVERLOADAREA", mandatory=False)
 
-    def export_folder(self) -> str:
-        return self._get("FTPEXPORTAREA", mandatory=True)
+    def export_folder(self) -> Optional[str]:
+        return self._get("FTPEXPORTAREA", mandatory=False)
 
     def secret_key(self) -> str:
         return self._get("SECRET_KEY", mandatory=True)
@@ -172,10 +177,14 @@ class Config(object):
             export_folder,
             users_files_dir,
         ]:
+            if d is None:
+                continue
             path = Path(d)
             assert path.is_dir(), f"Directory '{d}' does not exist."
-            assert os.access(path, os.R_OK), f"Directory '{d}' is not readable."
-            assert os.access(path, os.W_OK), f"Directory '{d}' is not writable."
+            if d != export_folder:
+                assert os.access(path, os.R_OK), f"Directory '{d}' is not readable."
+            if d != common_folder:
+                assert os.access(path, os.W_OK), f"Directory '{d}' is not writable."
 
         db_address = self.get_db_address(read_only=False)
         ro_db_address = self.get_db_address(read_only=True)

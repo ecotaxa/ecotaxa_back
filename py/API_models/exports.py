@@ -5,7 +5,7 @@
 from enum import Enum
 from typing import List, Dict, Optional, Union
 
-from pydantic import Extra, validator
+from pydantic import Extra
 
 from helpers.pydantic import BaseModel, Field
 
@@ -195,7 +195,7 @@ class ExportReq(ProjectIdReq):
     )
     out_to_ftp: bool = Field(
         title="Out to ftp",
-        description="Copy result file to FTP area. Original file is still available.",
+        description="Copy result file to FTP area (if configured). Original file is still available.",
         example=False,
         default=False,
     )
@@ -241,7 +241,7 @@ class GeneralExportReq(ProjectIdReq):
     )
     out_to_ftp: bool = Field(
         title="Out to ftp",
-        description="Copy result file to FTP area. Original file is still available.",
+        description="Copy result file to FTP area (if configured). Original file is still available.",
         default=False,
         example=False,
     )
@@ -282,7 +282,7 @@ class SummaryExportReq(ProjectIdReq):
     )
     out_to_ftp: bool = Field(
         title="Out to ftp",
-        description="Copy result file to FTP area. Original file is still available.",
+        description="Copy result file to FTP area (if configured). Original file is still available.",
         default=False,
         example=False,
     )
