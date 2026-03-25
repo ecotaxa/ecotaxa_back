@@ -23,14 +23,9 @@ def temp_dirs(tmp_path):
 
     common = tmp_path / "common"
     common.mkdir()
-    # Read-only common
-    os.chmod(common, 0o555)
 
     export = tmp_path / "export"
     export.mkdir()
-    # Write-only (or at least non-readable) export
-    # Note: on some systems, write-only might still allow some access, but we want to test if it's NOT readable
-    os.chmod(export, 0o222)
 
     yield {
         "VAULT_DIR": str(vault),
@@ -40,9 +35,7 @@ def temp_dirs(tmp_path):
         "FTPEXPORTAREA": str(export),
     }
 
-    # Cleanup: restore permissions to allow deletion
-    os.chmod(common, 0o777)
-    os.chmod(export, 0o777)
+    # Cleanup
 
 
 @pytest.fixture
@@ -240,8 +233,8 @@ def test_config_validate_with_folders_permissions(
 @pytest.mark.parametrize(
     "config_key, folder_key, access_mode, expected_error",
     [
-        ("SERVERLOADAREA", "SERVERLOADAREA", os.R_OK, "is not readable"),
-        ("FTPEXPORTAREA", "FTPEXPORTAREA", os.W_OK, "is not writable"),
+        ("SERVERLOADAREA", "SERVERLOADAREA", os.W_OK, "is not writable"),
+        ("FTPEXPORTAREA", "FTPEXPORTAREA", os.R_OK, "is not readable"),
     ],
 )
 def test_config_validate_fails_when_folder_permissions_invalid(

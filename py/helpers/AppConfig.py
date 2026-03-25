@@ -181,9 +181,9 @@ class Config(object):
                 continue
             path = Path(d)
             assert path.is_dir(), f"Directory '{d}' does not exist."
-            if d != export_folder:
-                assert os.access(path, os.R_OK), f"Directory '{d}' is not readable."
             if d != common_folder:
+                assert os.access(path, os.R_OK), f"Directory '{d}' is not readable."
+            if d != export_folder:
                 assert os.access(path, os.W_OK), f"Directory '{d}' is not writable."
 
         db_address = self.get_db_address(read_only=False)
