@@ -278,8 +278,19 @@ class ProjectExport(JobServiceBase):
         if out_file_name is not None and "out_file" not in done_infos:
             self.out_file_name = out_file_name
             done_infos.update({"out_file": self.out_file_name})
-            # pre_mapping
-            done_infos.update({"re_mapping": self.pre_mapping})
+            if self.JOB_TYPE == "SummaryExport" or self.JOB_TYPE == "GeneralExport":
+                # pre_mapping
+                infotaxonomy = {
+                    "taxonomy": {
+                        "renames": self.pre_mapping,
+                    }
+                }
+                done_infos.update(infotaxonomy)
+
+                logger.info(
+                    "------------------ taxonomy renames --------------- %s",
+                    json.dumps(infotaxonomy),
+                )
         self.set_job_result(errors=[], infos=done_infos)
 
     def append_log_to_zip(self) -> None:

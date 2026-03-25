@@ -10,13 +10,12 @@
 # EMODnet QC source code:
 #      https://github.com/EMODnet/EMODnetBiocheck
 import datetime
-import json
 import re
+import json
 from collections import OrderedDict
 from functools import lru_cache
 from typing import Dict, List, Optional, Tuple, cast, Set, Any, Iterable
 from urllib.parse import quote_plus
-
 from fastapi import HTTPException
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
@@ -42,10 +41,11 @@ from BO.ObjectSetQueryPlus import (
 from BO.Project import ProjectBO, ProjectTaxoStats, ProjectIDListT
 from BO.ProjectSet import PermissionConsistentProjectSet
 from BO.Sample import SampleBO, SampleAggregForTaxon
-from BO.Taxonomy import TaxonBOSet
-from BO.User import UserIDT
+from BO.TaxoRecast import TaxoRecastBO
 from BO.Vocabulary import Vocabulary, Units
-from BO.WoRMSification import WoRMSifier, WoRMSBO, create_worms_bo
+from BO.WoRMSification import WoRMSifier
+from BO.Taxonomy import TaxonBOSet, WoRMSBO
+from BO.User import UserIDT
 from DB.Collection import Collection
 from DB.Project import ProjectTaxoStat, Project
 from DB.Sample import Sample
@@ -167,12 +167,8 @@ class DarwinCoreExport(JobServiceBase):
         self.current_user_id = current_user_id
         #
         # During processing
-        # Key = a category present in the samples, Value = corresponding category for DwCA
-        self.occurence_recast: TaxoRemappingT = {}
-        self.emof_recast: TaxoRemappingT = {}
-        # Raw (recast-free) coverage
-        self.raw_coverage: Dict[ClassifIDT, WoRMSBO] = {}
-        # Correspondance b/w any phylo taxon (from dataset or from recast) to WoRMs
+        self.computations_occurrence: TaxoRemappingT = {}
+        self.computations_emof: TaxoRemappingT = {}
         self.coverage_taxa: Dict[ClassifIDT, WoRMSBO] = {}
         #
         # Output
@@ -256,6 +252,21 @@ class DarwinCoreExport(JobServiceBase):
             "collection_id": self.collection.id,
             "out_file": self.DWC_ZIP_NAME,
         }
+        infotaxonomy = {
+            "taxonomy": {
+                "rename_occurrence": self.computations_occurrence,
+                "rename_emof": self.computations_emof,
+                "taxonomy_coverage": {
+                    str(k): str(v.id) for k, v in self.coverage_taxa.items()
+                },
+            }
+        }
+        done_infos.update(infotaxonomy)
+
+        logger.info(
+            "------------------ taxonomy renames --------------- %s",
+            json.dumps(infotaxonomy),
+        )
         done_infos.update({"wrns": self.warnings})
         self.set_job_result(self.errors, infos=done_infos)
 
@@ -266,6 +277,10 @@ class DarwinCoreExport(JobServiceBase):
         Second pass, occurrence creations for absent taxa.
         """
         all_taxa = self.compute_all_seen_taxa(taxa_per_sample)
+        occurrence_targets: Dict[int, WoRMSBO] = {}
+        for k, v in self.computations_occurrence.items():
+            if v is not None:
+                occurrence_targets.update({int(k): self.coverage_taxa[v]})
         # For what's missing, issue an 'absent' record
         for an_event_id, an_id_set in taxa_per_sample.items():
             missing_for_sample = all_taxa.difference(an_id_set)
@@ -273,7 +288,7 @@ class DarwinCoreExport(JobServiceBase):
                 occurrence_id = an_event_id + "_" + str(a_missing_id)
                 # No need to catch any exception here, the lookup worked during the
                 # "present" records generation.
-                worms = self.coverage_taxa[a_missing_id]
+                worms = occurrence_targets[a_missing_id]
                 occ = DwC_Occurrence(
                     eventID=an_event_id,
                     occurrenceID=occurrence_id,
@@ -486,7 +501,7 @@ class DarwinCoreExport(JobServiceBase):
             self.warnings.extend(errs)
 
         publication_date = now_time().date().isoformat()
-        # the abstract appears as description in the IPT but it is the abstract field of the collection
+        # the abstract appears as description in the ITP but it is the abstract field of the collection
         abstract = self.the_collection.abstract
         if not abstract:
             self.errors.append("Collection 'abstract' field is empty")
@@ -625,7 +640,7 @@ class DarwinCoreExport(JobServiceBase):
         """
         ret: List[EMLTaxonomicClassification] = []
         # Coverage is from recast "space", the biggest one
-        worms_targets = list(self.raw_coverage.values())
+        worms_targets = list(self.coverage_taxa.values())
         # Error out if nothing at all
         if len(worms_targets) == 0:
             self.errors.append(
@@ -1069,18 +1084,20 @@ class DarwinCoreExport(JobServiceBase):
         aggregs = self._aggregate_for_sample(
             ro_session=self.ro_session,
             sample=sample,
-            recast_occurrences=self.occurence_recast,
+            recast_occurrences=self.computations_occurrence,
             with_computations=[SciExportTypeEnum.abundances],
             # SciExportTypeEnum.abundances is needed for production of per aphia_id in present def.
             formulae=dict(),  # Nothing to compute
             predicted=predicted,
             warnings=self.warnings,
         )
-        to_worms: Dict[ClassifIDT, WoRMSBO] = self.coverage_taxa.copy()
-        self.apply_occurrence_recast(to_worms)
+        mapping: Dict[ClassifIDT, WoRMSBO] = {}
+        for k, v in self.computations_occurrence.items():
+            if v is not None:
+                mapping.update({int(k): self.coverage_taxa[v]})
 
         by_abundance_desc, not_found = self._occurrences_from_aggregations(
-            aggregs, to_worms, event_id, predicted, self.warnings
+            aggregs, mapping, event_id, predicted, self.warnings
         )
         for an_id in not_found:
             # Mapping failed, count how many of them
@@ -1120,13 +1137,6 @@ class DarwinCoreExport(JobServiceBase):
                 occ.identificationVerificationStatus = verif_status
             arch.occurrences.add(occ)
         return by_abundance_desc
-
-    def apply_occurrence_recast(self, to_worms: Dict[int, WoRMSBO]):
-        for k, v in self.occurence_recast.items():
-            if v is not None:
-                to_worms.update({int(k): self.coverage_taxa[v]})
-            else:
-                del to_worms[int(k)]
 
     @staticmethod
     def _occurrences_from_aggregations(
@@ -1201,18 +1211,21 @@ class DarwinCoreExport(JobServiceBase):
         aggregs = self._aggregate_for_sample(
             ro_session=self.ro_session,
             sample=sample,
-            recast_occurrences=self.emof_recast,
+            recast_occurrences=self.computations_emof,
             with_computations=self.with_computations,
             formulae=self.formulae,
             predicted=predicted,
             warnings=self.warnings,
         )
-        to_worms: Dict[ClassifIDT, WoRMSBO] = self.coverage_taxa.copy()
-        self.apply_occurrence_recast(to_worms)
+
+        mapping: Dict[ClassifIDT, WoRMSBO] = {}
+        for k, v in self.computations_occurrence.items():
+            if v is not None:
+                mapping.update({int(k): self.coverage_taxa[v]})
 
         by_abundance_desc, not_found = self._occurrences_from_aggregations(
             aggregs,
-            to_worms,
+            mapping,
             event_id,
             predicted,
             self.warnings,
@@ -1373,38 +1386,46 @@ class DarwinCoreExport(JobServiceBase):
         """
         We have occurrence and emof  "spaces"
         """
-        phylo2worms, morpho2phylo = self.get_automatic_worms_taxo()
-        # Assume the DwCA taxonomic coverage is before any recast TODO:ensure
-        self.raw_coverage = WoRMSifier.do_wormsify(
-            self.session, list(phylo2worms.values())
-        )
-
-        renames_occurrence = self.query_taxo_mapping(
-            RecastOperation.dwca_export_occurrence
-        )
-        if renames_occurrence is None:
+        res = self.query_taxo_mapping(RecastOperation.dwca_export_occurrence)
+        if res is None:
             raise HTTPException(
                 status_code=HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Taxonomy renames is required. see Taxonomy recast",
             )
-        self.occurence_recast = self.apply_recast(morpho2phylo, renames_occurrence)
-
-        renames_emof = self.query_taxo_mapping(RecastOperation.dwca_export_emof)
-        if renames_emof is None:
+        renames_occurrence = res
+        # Args are serialized in JSON -> keys have become str and 0 val becomes None
+        self.computations_occurrence = {
+            int(k): v if v != 0 else None for k, v in renames_occurrence.items()
+        }
+        # complete list with id of values missing in occurrences
+        keys = self.computations_occurrence.keys()
+        for v in renames_occurrence.values():
+            if v is not None and v not in keys:
+                self.computations_occurrence.update({int(v): v})
+        res = self.query_taxo_mapping(RecastOperation.dwca_export_emof)
+        if res is None:
             renames_emof = renames_occurrence
-        self.emof_recast = self.apply_recast(morpho2phylo, renames_emof)
-
-        # We can have in the output...
-        used_taxa = set(phylo2worms.keys())  # ...a taxon in the dataset
-        used_taxa.update(
-            self.occurence_recast.values()
-        )  # ...a recast taxon for occurrences
-        used_taxa.update(self.emof_recast.values())  # ...a recast taxon for emofs
-        self.coverage_taxa = WoRMSifier.do_wormsify(self.ro_session, list(used_taxa))
-
+        else:
+            renames_emof = res
+        self.computations_emof = {
+            int(k): v if v != 0 else None for k, v in renames_emof.items()
+        }
+        # complete list with id of values missing in occurrences keys
+        keys = self.computations_emof.keys()
+        for v in renames_emof.values():
+            if v is not None and v not in keys:
+                self.computations_emof.update({int(v): v})
+        coverage_taxa = list(self.computations_occurrence.copy().values())
+        coverage_taxa.extend(list(self.computations_emof.copy().values()))
+        if None in coverage_taxa:
+            coverage_taxa.remove(None)
+        self.coverage_taxa = WoRMSifier.do_wormsify(
+            self.ro_session, list(set(coverage_taxa))
+        )
         # Prepare warnings for non-matches
+
         for an_id in self.unreferenced_ids(
-            list(set(self.coverage_taxa.keys())), list(set(used_taxa))
+            list(set(self.coverage_taxa.keys())), list(set(coverage_taxa))
         ):
             taxon = self.session.get(Taxonomy, an_id)
             assert taxon is not None
@@ -1415,7 +1436,7 @@ class DarwinCoreExport(JobServiceBase):
         self,
         operation: RecastOperation,
     ) -> Optional[TaxoRemappingT]:
-        res = WoRMSifier.query_recast(
+        res = TaxoRecastBO.query_recast(
             self.ro_session,
             self.current_user_id,
             self.collection.id,
@@ -1426,13 +1447,13 @@ class DarwinCoreExport(JobServiceBase):
         if res is None or len(res) != 1:
             return None
         the_one: TaxoRecast = res[0]
-        ret = json.loads(str(the_one.transforms))
-        # Args are serialized in JSON -> keys have become str and 0 val becomes None
-        return {int(k): v if v != 0 else None for k, v in ret.items()}
+        return json.loads(str(the_one.transforms))
 
     def get_worms_targets(self, recastids: List[int]) -> List[WoRMSBO]:
         taxa = TaxonBOSet(self.ro_session, recastids)
-        targets: List[WoRMSBO] = [create_worms_bo(taxon) for taxon in taxa.as_list()]
+        targets: List[WoRMSBO] = [
+            TaxoRecastBO.create_worms_bo(taxon) for taxon in taxa.as_list()
+        ]
         return targets
 
     @staticmethod
@@ -1442,53 +1463,7 @@ class DarwinCoreExport(JobServiceBase):
         """Return the taxa from ids, not known in self"""
         return [an_id for an_id in ids if an_id not in refids]
 
-    @staticmethod
-    def apply_recast(
-        morpho2phylo: TaxoRemappingT, recast: TaxoRemappingT
-    ) -> TaxoRemappingT:
-        """
-        Apply recast rules onto existing morpho2phylo mapping.
-        As a consequence, the result is not anymore strictly morpho2phylo, it composes
-        previous morpho -> phylo with any -> phylo so becomes any (found in samples) -> phylo.
-        """
-        recast = recast.copy()  # We destroy it, protect the arg
-
-        def end_of_chain(recast_idx: ClassifIDT) -> Optional[ClassifIDT]:
-            visited = [recast_idx]
-            end = recast[recast_idx]
-            while end in recast:
-                if end == visited[-1]:  # length-1 cycle (self-recast)
-                    return end
-                if end in visited:
-                    # Cycle detected (should not as we enforce input quality), drop the taxon
-                    return None
-                visited.append(end)
-                end = recast[end]
-            return end
-
-        # e.g. m2p: { 84974: 83278, 84975: 83278 }
-        # recast: { 83278: 72398 }
-        # present_morpho2phylo: TaxoRemappingT = self.morpho2phylo.copy()
-        ret = morpho2phylo.copy()
-        for from_, to_ in ret.items():
-            if from_ in recast:
-                # The _source_ (morpho) is a recast source e.g. 84975 -> 83278 but 84975 -> 72398
-                # Override with recast so become e.g. 84975 -> 72398
-                ret[from_] = end_of_chain(from_)
-                # Note: if new_to None then drop it's OK
-                continue
-            if to_ in recast:
-                # The _target_ (phylo) is a recast source e.g. 92012 -> 83278 and 83278 -> 72398
-                # Compose the recast so become e.g. 92012 -> 72398
-                ret[from_] = end_of_chain(to_)
-                # Note: new_to might be None, so the taxon is dropped
-        # Inject recasts but don't override rules applications
-        for from_ in set(recast.keys()).intersection(ret.keys()):
-            del recast[from_]
-        ret.update(recast)  # Ensure all recast sources are present
-        return ret
-
-    def get_automatic_worms_taxo(self) -> Tuple[TaxoRemappingT, TaxoRemappingT]:
+    def get_automatic_worms_taxo(self) -> TaxoRemappingT:
         # TODO: This could be expressed directly in a join in below query
         project_ids = [a_project.projid for a_project in self.collection.projects]
         # Fetch the used taxa in the projects
@@ -1503,4 +1478,6 @@ class DarwinCoreExport(JobServiceBase):
         # from computed quantities.
         wormsifier = WoRMSifier()
         wormsifier.do_match(self.ro_session, used_taxa)
-        return wormsifier.phylo2worms, wormsifier.morpho2phylo
+        worms_auto = wormsifier.phylo2worms.copy()
+        worms_auto.update(wormsifier.morpho2phylo.copy())
+        return worms_auto
