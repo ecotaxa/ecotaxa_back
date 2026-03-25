@@ -1207,8 +1207,11 @@ class DarwinCoreExport(JobServiceBase):
             predicted=predicted,
             warnings=self.warnings,
         )
-        to_worms: Dict[ClassifIDT, WoRMSBO] = self.coverage_taxa.copy()
-        self.apply_occurrence_recast(to_worms)
+
+        mapping: Dict[ClassifIDT, WoRMSBO] = {}
+        for k, v in self.computations_occurrence.items():
+            if v is not None:
+                mapping.update({int(k): self.coverage_taxa[v]})
 
         by_abundance_desc, not_found = self._occurrences_from_aggregations(
             aggregs,
@@ -1387,20 +1390,37 @@ class DarwinCoreExport(JobServiceBase):
                 status_code=HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Taxonomy renames is required. see Taxonomy recast",
             )
-        self.occurence_recast = self.apply_recast(morpho2phylo, renames_occurrence)
-
-        renames_emof = self.query_taxo_mapping(RecastOperation.dwca_export_emof)
-        if renames_emof is None:
+        renames_occurrence = res
+        # Args are serialized in JSON -> keys have become str and 0 val becomes None
+        self.computations_occurrence = {
+            int(k): v if v != 0 else None for k, v in renames_occurrence.items()
+        }
+        # complete list with id of values missing in occurrences
+        keys = self.computations_occurrence.keys()
+        for v in renames_occurrence.values():
+            if v is not None and v not in keys:
+                self.computations_occurrence.update({int(v): v})
+        res = self.query_taxo_mapping(RecastOperation.dwca_export_emof)
+        if res is None:
             renames_emof = renames_occurrence
-        self.emof_recast = self.apply_recast(morpho2phylo, renames_emof)
-
-        # We can have in the output...
-        used_taxa = set(phylo2worms.keys())  # ...a taxon in the dataset
-        used_taxa.update(
-            self.occurence_recast.values()
-        )  # ...a recast taxon for occurrences
-        used_taxa.update(self.emof_recast.values())  # ...a recast taxon for emofs
-        self.coverage_taxa = WoRMSifier.do_wormsify(self.ro_session, list(used_taxa))
+        else:
+            renames_emof = res
+        self.computations_emof = {
+            int(k): v if v != 0 else None for k, v in renames_emof.items()
+        }
+        # complete list with id of values missing in occurrences keys
+        keys = self.computations_emof.keys()
+        for v in renames_emof.values():
+            if v is not None and v not in keys:
+                self.computations_emof.update({int(v): v})
+        coverage_taxa = list(self.computations_occurrence.copy().values())
+        coverage_taxa.extend(list(self.computations_emof.copy().values()))
+        if None in coverage_taxa:
+            coverage_taxa.remove(None)
+        self.coverage_taxa = WoRMSifier.do_wormsify(
+            self.ro_session, list(set(coverage_taxa))
+        )
+        # Prepare warnings for non-matches
 
         # Prepare warnings for non-matches
         for an_id in self.unreferenced_ids(

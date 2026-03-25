@@ -103,10 +103,9 @@ def exportable_collection(fastapi, admin_or_creator):
     # before exporting at least a worms taxonomy renames is made
     recast = {
         "from_to": {
-            # "45072": 45072,  # These 4 loop -> 422
-            # "78418": 78418,
-            # "1": 1,
-            # "56693": 56693,
+            "45072": 45072,
+            "78418": 78418,
+            "56693": 56693,
             "84963": 1,
             "85011": 1,
             "85012": 1,
@@ -373,9 +372,19 @@ def test_emodnet_export_recast1(
     # add recast in taxao_recast
     # old values { 45072: 56693,  # Cyclopoida -> Actinopterygii    78418: 0,  # Oncaeidae -> remove}
     recast = {
-        "from_to": {},  # Test data assumes no occurrence recast
+        "from_to": {
+            "84963": 1,
+            "85011": 1,
+            "85012": 1,
+            "85078": 1,
+            "92731": 56693,
+            "56693": 56693,
+            "45072": 45072,
+            "78418": 78418,
+        },
         "doc": {},
     }
+    # recast for occurrence
     recastreq = {
         "target_id": coll_id,
         "operation": RecastOperation.dwca_export_occurrence.value,
@@ -384,22 +393,11 @@ def test_emodnet_export_recast1(
     }
     rsp = fastapi.put(TAXORECAST_URL, json=recastreq, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
-
-    recast2 = {
-        "from_to": {
-            "45072": 56693,  # Cyclopoida -> Actinopterygii
-            "78418": 0,  # Oncaeidae -> remove
-            "25928": 25828,  # Gnathostomata-> Copepoda, not in dataset but to ensure it doesn't hurt
-        },
-        "doc": {},
-    }
-    recastreq2 = {
-        "target_id": coll_id,
-        "operation": RecastOperation.dwca_export_emof.value,
-        "recast": recast2,
-        "is_collection": True,
-    }
-    rsp = fastapi.put(TAXORECAST_URL, json=recastreq2, headers=ADMIN_AUTH)
+    # recast for computation
+    recastreq["operation"] = RecastOperation.dwca_export_emof.value
+    recastreq["recast"]["from_to"]["78418"] = 0  # Oncaeidae -> remove"
+    recastreq["recast"]["from_to"]["45072"] = 56693  # Cyclopoida -> Actinopterygii
+    rsp = fastapi.put(TAXORECAST_URL, json=recastreq, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
 
     # Re-read
@@ -445,20 +443,8 @@ def test_emodnet_export_recast2(
             "85012": 1,
             "85078": 1,
             "92731": 56693,
-            # "25928": 25828,  # Gnathostomata-> Copepoda, not in dataset but to ensure it doesn't hurt
-        },
-        "doc": {},
-    }
-    recastreq = {
-        "target_id": coll_id,
-        "operation": RecastOperation.dwca_export_occurrence.value,
-        "recast": recast,
-        "is_collection": True,
-    }
-    rsp = fastapi.put(TAXORECAST_URL, json=recastreq, headers=ADMIN_AUTH)
-    assert rsp.status_code == status.HTTP_200_OK
-    recast = {
-        "from_to": {
+            "45072": 45072,
+            "56693": 56693,
             # vs previous test, 56693 is not anymore a recast target
             "78418": 45072,  # Oncaeidae -> Cyclopoida, inside sample 1 there are both
             "25928": 25828,  # Gnathostomata-> Copepoda, not in dataset but to ensure it doesn't hurt
@@ -565,15 +551,13 @@ def create_test_collection(fastapi, suffix, who=ADMIN_AUTH):
 
 
 def test_emodnet_invalid_req(fastapi):
-    prj_id = do_test_import(
-        fastapi, "test_emodnet_invalid_req", str(PLAIN_FILE), "UVP6"
-    )
+
     recast = {
-        "from_to": {"45072": 78418, "78418": 45072},  # small cycle length 2
-        "doc": {"45072": " not good"},
+        "from_to": {"45072": 78418, "78418": 45072},
+        "doc": {},
     }
     recastreq = {
-        "target_id": prj_id,
+        "target_id": 5,
         "operation": RecastOperation.dwca_export_occurrence.value,
         "recast": recast,
     }

@@ -10,6 +10,8 @@ from pydantic import Extra, validator
 
 from API_models.crud import ProjectSummaryModel
 from API_models.helpers.DBtoModel import OrmConfig, combine_models
+from BO.WoRMSification import WoRMSifier
+from DB.Taxonomy import Taxonomy
 from DB.TaxoRecast import RecastOperation
 from DB.Taxonomy import Taxonomy
 from helpers.pydantic import BaseModel, Field
@@ -39,14 +41,7 @@ class TaxoRecastRsp(BaseModel):
     # noinspection PyMethodParameters
     @validator("from_to")
     def ensure_consistent_renaming(cls, v):
-        vals_but_0 = set(v.values()).difference({0})
-        assert set(v.keys()).isdisjoint(
-            vals_but_0
-        ), "inconsistent taxonomy renaming, can't do remap chains or loops: common part is %s" % set(
-            v.keys()
-        ).intersection(
-            set(v.values())
-        )
+        WoRMSifier.valid_remap_throw(v)
         return v
 
     class Config:
@@ -221,15 +216,7 @@ class TaxonomyRecastReq(BaseModel):
     # noinspection PyMethodParameters
     @validator("recast")
     def ensure_consistent_renaming(cls, val):
-        v = val.from_to
-        vals_but_0 = set(v.values()).difference({0})
-        assert set(v.keys()).isdisjoint(
-            vals_but_0
-        ), "inconsistent taxonomy renaming, can't do remap chains or loops: common part is %s" % set(
-            v.keys()
-        ).intersection(
-            set(v.values())
-        )
+        WoRMSifier.valid_remap_throw(val.from_to)
         return val
 
 
