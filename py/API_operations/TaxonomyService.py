@@ -4,10 +4,11 @@
 #
 # End-user services around taxonomy tree.
 #
-from datetime import datetime
-from fastapi import HTTPException
-from typing import List, Optional, Dict, Any, Union
 import json
+from datetime import datetime
+from typing import List, Optional, Dict, Any, Union
+
+from fastapi import HTTPException
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 from API_models.taxonomy import (
     TaxaSearchRsp,
@@ -17,16 +18,14 @@ from API_models.taxonomy import (
 from API_operations.helpers.Service import Service
 from BO.Classification import ClassifIDT, ClassifIDListT
 from BO.Project import ProjectBOSet
-from BO.Collection import CollectionIDT
 from BO.ReClassifyLog import ReClassificationBO
 from BO.Taxonomy import TaxonomyBO, TaxonBO, TaxonBOSet
-from BO.WoRMSification import WoRMSifier, WoRMSBO
 from BO.User import UserIDT, UserBO
+from BO.WoRMSification import WoRMSifier, WoRMSBO
 from DB.Project import ProjectTaxoStat, Project, ProjectIDT
-from DB.Taxonomy import Taxonomy
 from DB.TaxoRecast import TaxoRecast, RecastOperation
+from DB.Taxonomy import Taxonomy
 from helpers.DynamicLogs import get_logger
-
 
 logger = get_logger(__name__)
 

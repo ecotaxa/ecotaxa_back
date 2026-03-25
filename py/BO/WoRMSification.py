@@ -5,19 +5,20 @@
 # A description of transformation to the WoRMS taxonomic system.
 #
 from typing import Dict, List, Optional, Set, Union
+
 from sqlalchemy.orm import Session
 
 from BO.Classification import ClassifIDT
-from BO.Taxonomy import TaxonBOSet, TaxonBO
-from DB.Taxonomy import TaxonomyIDT, TaxoType
+from BO.Collection import CollectionIDT
+from BO.ObjectSetQueryPlus import TaxoRemappingT
 from BO.ProjectSet import PermissionConsistentProjectSet
+from BO.Rights import NOT_FOUND, Action
+from BO.Taxonomy import TaxonBOSet, TaxonBO
+from BO.User import UserIDT
 from DB.Collection import CollectionProject
 from DB.Project import ProjectIDT
 from DB.TaxoRecast import TaxoRecast, RecastOperation
-from BO.User import UserIDT
-from BO.Collection import CollectionIDT
-from BO.ObjectSetQueryPlus import TaxoRemappingT
-from BO.Rights import NOT_FOUND, Action
+from DB.Taxonomy import TaxonomyIDT, TaxoType
 from helpers.DynamicLogs import get_logger
 from fastapi import HTTPException
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
@@ -104,6 +105,7 @@ class WoRMSifier(object):
         # A dict with Morpho -> nearest_phylo mapping. None value means that there
         # is no "solution" for the "problem" of mapping this taxon, or that it was
         # purposing-ly discarded.
+        # All _values_ are also keys of self.phylo2worms
         self.morpho2phylo: TaxoRemappingT = {}
 
     def do_match(self, session: Session, taxaids: List[TaxonomyIDT]):
@@ -156,9 +158,16 @@ class WoRMSifier(object):
         recast = recast.copy()  # We destroy it, protect the arg
 
         def end_of_chain(recast_idx: ClassifIDT) -> Optional[ClassifIDT]:
+            visited = [recast_idx]
             ret = recast[recast_idx]
-            if ret in recast:
-                ret = end_of_chain(ret)  # Infinite loop ->stack issue
+            while ret in recast:
+                if ret == visited[-1]:  # length-1 cycle (self-recast)
+                    return ret
+                if ret in visited:
+                    # Cycle detected (should not as we enforce input quality), drop the taxon
+                    return None
+                visited.append(ret)
+                ret = recast[ret]
             return ret
 
         # e.g. m2p: { 84974: 83278, 84975: 83278 }

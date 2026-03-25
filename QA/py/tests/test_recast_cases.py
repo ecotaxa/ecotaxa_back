@@ -77,3 +77,27 @@ def test_implied_recast_for_EmoF_generation():
         92231: 56789,
         92873: 56789,
     }
+
+
+def test_length_1_cycle_recast():
+    wrmsier = WoRMSifier()
+    wrmsier.phylo2worms = {}
+    wrmsier.morpho2phylo = {
+        1001: 2001,
+        1002: 2002,
+    }
+    recast = {
+        2001: 2001,  # length-1 cycle (self-recast)
+        1002: 1002,  # length-1 cycle (self-recast)
+        2002: 3002,
+    }
+    wrmsier.apply_recast(recast)
+    # 1001 -> 2001 -> 2001, should stay 2001
+    # 1002 -> 1002, should stay 1002
+    # 2002 -> 3002
+    assert wrmsier.morpho2phylo == {
+        1001: 2001,
+        1002: 1002,
+        2001: 2001,
+        2002: 3002,
+    }
