@@ -16,9 +16,7 @@ from collections import OrderedDict
 from functools import lru_cache
 from typing import Dict, List, Optional, Tuple, cast, Set, Any, Iterable
 from urllib.parse import quote_plus
-from fastapi import HTTPException
-from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
-
+from helpers.CustomException import ValidationException
 import BO.ProjectVarsDefault as DefaultVars
 from API_models.exports import ExportRsp, SciExportTypeEnum
 from BO.Acquisition import AcquisitionIDT
@@ -1388,39 +1386,52 @@ class DarwinCoreExport(JobServiceBase):
         """
         res = self.query_taxo_mapping(RecastOperation.dwca_export_occurrence)
         if res is None:
-            raise HTTPException(
-                status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Taxonomy renames is required. see Taxonomy recast",
-            )
-        renames_occurrence = res
+            msg = "Taxonomy renames is required. see Taxonomy recast"
+            logger.error(msg)
+            raise ValidationException(msg)
+        full_renames_occurrence = res
+
+        res = self.query_taxo_mapping(RecastOperation.dwca_export_emof)
+        if res is None:
+            full_renames_emof = full_renames_occurrence
+        else:
+            full_renames_emof = res
+        # verify if new taxa where added to the collection
+        keys = full_renames_occurrence.keys()
+        self.validate_taxa_list_throw([int(k) for k in keys])
+        emofkeys = full_renames_emof.keys()
+        # complete list with id of values missing in occurrences and remove if not wanted in occurrence and not wanted in emof
+        renames_occurrence = {
+            k: v
+            for k, v in full_renames_occurrence.items()
+            if (v != 0 or not (k in emofkeys and full_renames_emof[k] == 0))
+        }
+        renames_emof = {
+            k: v
+            for k, v in full_renames_emof.items()
+            if (v != 0 or not (k in keys and full_renames_occurrence[k] == 0))
+        }
         # Args are serialized in JSON -> keys have become str and 0 val becomes None
         self.computations_occurrence = {
             int(k): v if v != 0 else None for k, v in renames_occurrence.items()
         }
-        # complete list with id of values missing in occurrences
         keys = self.computations_occurrence.keys()
         for v in renames_occurrence.values():
-            if v is not None and v not in keys:
+            if v != 0 and v not in keys:
                 self.computations_occurrence.update({int(v): v})
-        res = self.query_taxo_mapping(RecastOperation.dwca_export_emof)
-        if res is None:
-            renames_emof = renames_occurrence
-        else:
-            renames_emof = res
+        # complete list with id of values missing in occurrences keys
         self.computations_emof = {
             int(k): v if v != 0 else None for k, v in renames_emof.items()
         }
-        # complete list with id of values missing in occurrences keys
-        keys = self.computations_emof.keys()
+        emofkeys = self.computations_emof.keys()
         for v in renames_emof.values():
-            if v is not None and v not in keys:
+            if v != 0 and v not in emofkeys:
                 self.computations_emof.update({int(v): v})
         coverage_taxa = list(self.computations_occurrence.copy().values())
         coverage_taxa.extend(list(self.computations_emof.copy().values()))
-        if None in coverage_taxa:
-            coverage_taxa.remove(None)
+
         self.coverage_taxa = WoRMSifier.do_wormsify(
-            self.ro_session, list(set(coverage_taxa))
+            self.ro_session, list(set(coverage_taxa).difference({None}))
         )
         # Prepare warnings for non-matches
 
@@ -1463,7 +1474,18 @@ class DarwinCoreExport(JobServiceBase):
         """Return the taxa from ids, not known in self"""
         return [an_id for an_id in ids if an_id not in refids]
 
-    def get_automatic_worms_taxo(self) -> TaxoRemappingT:
+    def validate_taxa_list_throw(self, taxakeys: ClassifIDListT):
+        usedtaxa = self._get_used_taxa()
+        newtaxa = list(set(usedtaxa).difference(set(taxakeys)))
+        if len(newtaxa) > 0:
+            msg = (
+                "Taxonomy renames is required. New taxa added since previous taxa renaming. %s "
+                % " , ".join([str(k) for k in newtaxa])
+            )
+            logger.error(msg)
+            raise ValidationException(msg)
+
+    def _get_used_taxa(self) -> List[ClassifIDT]:
         # TODO: This could be expressed directly in a join in below query
         project_ids = [a_project.projid for a_project in self.collection.projects]
         # Fetch the used taxa in the projects
@@ -1472,12 +1494,4 @@ class DarwinCoreExport(JobServiceBase):
         taxo_qry = taxo_qry.filter(ProjectTaxoStat.id > 0)  # Exclude unclassified
         taxo_qry = taxo_qry.filter(ProjectTaxoStat.projid.in_(project_ids))
         used_taxa = [an_id for an_id, in taxo_qry]
-        # Note: Not _All_ used taxa will appear in occurrences, recast does not
-        # impact occurrences output, @see def add_occurrences_for_sample.
-        # OTOH, the recast target taxa will (likely) appear in coverage as it comes
-        # from computed quantities.
-        wormsifier = WoRMSifier()
-        wormsifier.do_match(self.ro_session, used_taxa)
-        worms_auto = wormsifier.phylo2worms.copy()
-        worms_auto.update(wormsifier.morpho2phylo.copy())
-        return worms_auto
+        return used_taxa

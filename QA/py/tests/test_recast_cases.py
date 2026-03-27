@@ -19,8 +19,6 @@ def test_exhaustive_recast_for_EmoF_generation():
     recasted = WoRMSifier.apply_recast(recast)
     # No rule source should appear as a target
     left = set(recasted.values()).intersection(recast.keys())
-    print("recasted:", recasted)
-    print("-----left", left)
     assert len(left) == 0, f"Recast rule source still in m2p target :{left}"
     assert recasted == {
         83278: 72398,
