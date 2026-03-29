@@ -4182,8 +4182,6 @@ async def get_image(  # async due to StreamingResponse
 #     time.sleep(random()/10)
 #     return Response(sce.run(), media_type="text/plain")
 
-app.include_router(create_big_files_router())
-
 app.add_exception_handler(
     status.HTTP_500_INTERNAL_SERVER_ERROR, internal_server_error_handler
 )
@@ -4200,6 +4198,10 @@ def startup_event() -> None:
     # Small service construction & check, to ensure config and the DB are OK
     with ConstantsService() as sce:
         sce.config.validate()
+
+    # The router for big files needs a valid USERSFILESAREA config
+    app.include_router(create_big_files_router())
+
     # Clean memory every minute
     JobScheduler.todo_on_idle = regular_mem_cleanup
     # Don't run predictions, they are left to a specialized runner
