@@ -43,6 +43,8 @@ lxml-stubs==0.2.0
 requests==2.26.0
 types-requests==2.25.6
 python-multipart==0.0.5
+# Big files import lib - Needs fastapi>=0.110.0
+# tuspyserver==4.2.3
 # mime type for import
 magic-rs==0.2.0
 # Auth validation

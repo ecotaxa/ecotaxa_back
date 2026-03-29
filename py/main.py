@@ -63,7 +63,6 @@ from API_models.exports import (
     SummaryExportReq,
     BackupExportReq,
 )
-from API_models.taxonomy import TaxoRecastRsp, TaxonomyRecastReq
 from API_models.filesystem import DirectoryModel
 from API_models.filters import ProjectFilters
 from API_models.helpers.Introspect import plain_columns
@@ -97,6 +96,8 @@ from API_models.taxonomy import (
     TaxonCentral,
     AddWormsTaxonModel,
 )
+from API_models.taxonomy import TaxoRecastRsp, TaxonomyRecastReq
+from API_operations.BigFiles import create_big_files_router
 from API_operations.CRUD.Collections import CollectionsService
 from API_operations.CRUD.Constants import ConstantsService
 from API_operations.CRUD.Guests import GuestService
@@ -153,14 +154,14 @@ from BO.Project import ProjectBO, ProjectUserStats, ProjectColumns
 from BO.ProjectSet import ProjectSetColumnStats
 from BO.Sample import SampleBO, SampleTaxoStats
 from BO.Taxonomy import TaxonBO
-from BO.WoRMSification import WoRMSBO
 from BO.User import UserIDT, GuestIDT
+from BO.WoRMSification import WoRMSBO
 from DB import Sample
 from DB.Object import ObjectIDListT
 from DB.Project import ProjectTaxoStat, Project
 from DB.ProjectPrivilege import ProjectPrivilege
-from DB.User import User, OrganizationIDT
 from DB.TaxoRecast import RecastOperation
+from DB.User import User, OrganizationIDT
 from helpers.DynamicLogs import get_logger, get_api_logger, MONITOR_LOG_PATH
 from helpers.fastApiUtils import (
     internal_server_error_handler,
@@ -209,6 +210,10 @@ add_timing_middleware(app, record=logger.info, prefix="app", exclude="untimed")
 # Optimize large responses -> Let's leave this task to some proxy coded in C
 # app.add_middleware(GZipMiddleware, minimum_size=1024)
 
+# This tells FastAPI to trust the headers from your proxy
+# 'trusted_hosts=["*"]' allows any proxy; in production,
+# limit this to your proxy's specific IP/range.
+# app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
 
 # HTML stuff
 # app.mount("/styles", StaticFiles(directory="pages/styles"), name="styles")
@@ -4222,6 +4227,10 @@ def startup_event() -> None:
     # Small service construction & check, to ensure config and the DB are OK
     with ConstantsService() as sce:
         sce.config.validate()
+
+    # The router for big files needs a valid USERSFILESAREA config
+    app.include_router(create_big_files_router())
+
     # Clean memory every minute
     JobScheduler.todo_on_idle = regular_mem_cleanup
     # Don't run predictions, they are left to a specialized runner
