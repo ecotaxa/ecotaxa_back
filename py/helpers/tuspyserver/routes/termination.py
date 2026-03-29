@@ -46,7 +46,12 @@ def termination_extension_routes(router, options):
     https://tus.io/protocols/resumable-upload#termination
     """
 
-    @router.delete("/{uuid}", status_code=status.HTTP_204_NO_CONTENT)
+    @router.delete(
+        "/{uuid}",
+        status_code=status.HTTP_204_NO_CONTENT,
+        summary="TUS: Terminate Upload",
+        description="Terminates an upload and deletes its data and metadata, as per the Tus Termination extension.",
+    )
     async def extension_termination_route(
         uuid: str,
         response: Response,

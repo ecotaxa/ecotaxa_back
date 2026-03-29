@@ -23,8 +23,18 @@ def creation_extension_routes(router, options):
     https://tus.io/protocols/resumable-upload#creation
     """
 
-    @router.post("", status_code=status.HTTP_201_CREATED)
-    @router.post("/", status_code=status.HTTP_201_CREATED)
+    @router.post(
+        "",
+        status_code=status.HTTP_201_CREATED,
+        summary="TUS: Create Upload Resource",
+        description="Creates a new upload resource, as per the Tus Creation extension. Can also be used to create a concatenated upload from partial uploads.",
+    )
+    @router.post(
+        "/",
+        status_code=status.HTTP_201_CREATED,
+        summary="TUS: Create Upload Resource",
+        description="Creates a new upload resource, as per the Tus Creation extension. Can also be used to create a concatenated upload from partial uploads.",
+    )
     async def extension_creation_route(
         request: Request,
         response: Response,
@@ -246,7 +256,7 @@ def creation_extension_routes(router, options):
         # if the callback returned a coroutine, await it
         if inspect.isawaitable(result):
             await result
-        uid = None
+        uid = None  # type:ignore
         file_result = file_dep(metadata)
         file_options = deepcopy(options)
         # if the callback returned a coroutine, await it

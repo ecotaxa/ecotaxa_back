@@ -4,7 +4,7 @@ import typing
 from typing import List, Optional
 
 if typing.TYPE_CHECKING:
-    from tuspyserver.router import TusRouterOptions
+    from helpers.tuspyserver.router import TusRouterOptions
 
 import datetime
 import os

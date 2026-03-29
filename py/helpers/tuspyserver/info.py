@@ -4,7 +4,7 @@ import typing
 from typing import Optional
 
 if typing.TYPE_CHECKING:
-    from tuspyserver.file import TusUploadFile
+    from helpers.tuspyserver.file import TusUploadFile
 
 import json
 import os

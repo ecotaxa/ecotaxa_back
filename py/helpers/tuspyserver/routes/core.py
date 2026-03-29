@@ -55,7 +55,12 @@ def core_routes(router, options):
 
     request_chunks_dep = make_request_chunks_dep(options)
 
-    @router.head("/{uuid}", status_code=status.HTTP_200_OK)
+    @router.head(
+        "/{uuid}",
+        status_code=status.HTTP_200_OK,
+        summary="TUS: Get Upload Information",
+        description="Returns the current offset and metadata for an upload, as per the Tus Core protocol.",
+    )
     async def core_head_route(
         request: Request,
         response: Response,
@@ -195,7 +200,12 @@ def core_routes(router, options):
 
         return response
 
-    @router.patch("/{uuid}", status_code=status.HTTP_204_NO_CONTENT)
+    @router.patch(
+        "/{uuid}",
+        status_code=status.HTTP_204_NO_CONTENT,
+        summary="TUS: Upload Data",
+        description="Uploads a chunk of data to the specified upload resource, as per the Tus Core protocol.",
+    )
     async def core_patch_route(
         request: Request,
         response: Response,
@@ -310,7 +320,12 @@ def core_routes(router, options):
 
         return response
 
-    @router.options("/", status_code=status.HTTP_204_NO_CONTENT)
+    @router.options(
+        "/",
+        status_code=status.HTTP_204_NO_CONTENT,
+        summary="TUS: Get Server Configuration",
+        description="Returns information about the server's Tus implementation and supported extensions.",
+    )
     def core_options_route(
         request: Request,
         response: Response,

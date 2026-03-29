@@ -8,7 +8,7 @@ from copy import deepcopy
 from typing import Callable, Optional
 
 if typing.TYPE_CHECKING:
-    from tuspyserver.router import TusRouterOptions
+    from helpers.tuspyserver.router import TusRouterOptions
 
 from fastapi import Depends, HTTPException, Path, Request
 from starlette.requests import ClientDisconnect

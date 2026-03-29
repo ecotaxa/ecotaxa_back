@@ -52,9 +52,11 @@ def create_tus_router(
     async def _fallback_file_dep() -> Callable[[dict], None]:
         return lambda metadata: None
 
-    upload_complete_dep = upload_complete_dep or _fallback_on_complete_dep
-    pre_create_dep = pre_create_dep or _fallback_pre_create_dep
-    file_dep = file_dep or _fallback_file_dep
+    upload_complete_dep = (
+        upload_complete_dep or _fallback_on_complete_dep  # type:ignore
+    )
+    pre_create_dep = pre_create_dep or _fallback_pre_create_dep  # type:ignore
+    file_dep = file_dep or _fallback_file_dep  # type:ignore
 
     options = TusRouterOptions(
         prefix=prefix[1:] if prefix and prefix[0] == "/" else prefix,
@@ -88,7 +90,7 @@ def create_tus_router(
     router = APIRouter(
         prefix=f"/{clean_prefix}" if clean_prefix else "",
         redirect_slashes=True,
-        tags=options.tags or ["Tus"],
+        tags=options.tags or ["Tus"],  # type:ignore
     )
 
     modules = [

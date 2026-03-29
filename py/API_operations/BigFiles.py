@@ -121,7 +121,7 @@ async def get_on_complete_handler(
         return lambda *_: None
 
     return lambda file_path, metadata: on_tus_upload_complete(
-        file_path, metadata, current_user_id
+        file_path, metadata, current_user_id  # type:ignore
     )
 
 
@@ -130,7 +130,7 @@ def create_big_files_router():
     Create the TUS router for big files.
     """
     return create_tus_router(
-        prefix="/big_files/upload",
+        prefix="/user_files/upload",
         files_dir=get_tus_files_dir(),
         max_size=Config().get_max_upload_size(),  # Same as client
         auth=tus_auth,

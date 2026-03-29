@@ -161,8 +161,8 @@ from DB import Sample
 from DB.Object import ObjectIDListT
 from DB.Project import ProjectTaxoStat, Project
 from DB.ProjectPrivilege import ProjectPrivilege
-from DB.User import User, OrganizationIDT
 from DB.TaxoRecast import RecastOperation
+from DB.User import User, OrganizationIDT
 from helpers.DynamicLogs import get_logger, get_api_logger, MONITOR_LOG_PATH
 from helpers.fastApiUtils import (
     internal_server_error_handler,
@@ -228,8 +228,6 @@ CRSF_header = {
 
 # Establish second routes via /api to same app
 app.mount("/api", app)
-
-app.include_router(create_big_files_router())
 
 
 # noinspection PyUnusedLocal
@@ -4183,6 +4181,8 @@ async def get_image(  # async due to StreamingResponse
 #     import time
 #     time.sleep(random()/10)
 #     return Response(sce.run(), media_type="text/plain")
+
+app.include_router(create_big_files_router())
 
 app.add_exception_handler(
     status.HTTP_500_INTERNAL_SERVER_ERROR, internal_server_error_handler
