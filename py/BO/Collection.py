@@ -50,6 +50,10 @@ associates_key = "associates"
 user_order_type = "u"
 org_order_type = "o"
 
+CODE_RE = re.compile(
+    "\\(([A-Z]+)\\)$"
+)  # Quite strict, just uppercase letters at the end of the name
+
 
 class CollectionBO(object):
     """
@@ -468,10 +472,6 @@ class CollectionBO(object):
         session.commit()
         return True
 
-    CODE_RE = re.compile(
-        "\\(([A-Z]+)\\)$"
-    )  # Quite strict, just uppercase letters at the end of the name
-
     @staticmethod
     def is_a_manager(session: Session, user: User) -> CollectionIDListT:
         """
@@ -536,16 +536,21 @@ class CollectionBO(object):
         can_manage = qry.scalar()
         return can_manage is not None
 
-    def get_institution_code(self) -> str:
+    @staticmethod
+    def get_institution_code(institution_name: str) -> str:
         """
         Conventionally, institution code is the first (sent via API) creator org short name.
-        e.g. Institut de la Mer de Villefranche (IMEV) -> IMEV
+        e.g. Institut de la Mer de Villefranche - (IMEV) -> IMEV  or Institut de la Mer de Villefranche - IMEV -> IMEV
         """
-        found = self.CODE_RE.findall(str(self.code_provider_org))
+        found = CODE_RE.findall(str(institution_name))
         if len(found) == 1:
             return found[0]
         else:
-            return "?"
+            found = str(institution_name).split("-")
+            if len(found) > 1:
+                return found[-1].strip()
+            else:
+                return "?"
 
     def homonym_samples(self, ro_session: Session) -> Set[SampleOrigIDT]:
         """

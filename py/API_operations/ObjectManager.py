@@ -52,7 +52,7 @@ from .helpers.Service import Service
 logger = get_logger(__name__)
 
 # Basic hint preventing FTS on big tables
-HINT = "/*+ IndexOnlyScan(obh) IndexOnlyScan(obf) */"
+HINT = "/*+ Leading(sam acq obh) NestLoop(sam acq obh) IndexOnlyScan(obh) IndexOnlyScan(obf) */"
 
 
 class ObjectManager(Service):

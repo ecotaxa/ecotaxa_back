@@ -141,5 +141,9 @@ class Constants(BaseModel):
         title="Recast operation",
         description="Taxonomy recast operation name",
         default={st.name: st.value for st in RecastOperation},
-        example={"prediction_input": "pre_predict", "settings": "settings","dwca_export":"dwca_export"},
+        example={
+            "prediction_input": "pre_predict",
+            "dwca_export_occurrence": "dwca_export_occurrence",
+            "dwca_export_emof": "dwca_export_emof",
+        },
     )
