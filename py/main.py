@@ -3306,13 +3306,43 @@ def get_taxon_in_central(
 # noinspection PyUnusedLocal
 @app.put("/taxon/central", operation_id="add_taxon_in_central", tags=["Taxonomy Tree"])
 def add_taxon_in_central(
-    name: str,
-    parent_id: int,
-    taxotype: str,
-    creator_email: str,
-    request: Request,
-    source_desc: Optional[str] = None,
-    source_url: Optional[str] = None,
+    name: str = Query(
+        ...,
+        title="Name",
+        description="The taxon/category verbatim name.",
+        example="Echinodermata",
+    ),
+    parent_id: int = Query(
+        ...,
+        title="Parent Id",
+        description="It's not possible to create a root taxon.",
+        example=2367,
+    ),
+    taxotype: str = Query(
+        ...,
+        title="Taxo Type",
+        description="The taxon type, 'M' for Morpho or 'P' for Phylo.",
+        example="P",
+    ),
+    creator_email: str = Query(
+        ...,
+        title="Creator email",
+        description="The email of the taxo creator.",
+        example="user.creator@email.com",
+    ),
+    request: Request = Query(..., title="Request", description=""),
+    source_desc: Optional[str] = Query(
+        default=None,
+        title="Source desc",
+        description="The source description.",
+        example="null",
+    ),
+    source_url: Optional[str] = Query(
+        default=None,
+        title="Source url",
+        description="The source url.",
+        example="http://www.google.fr/",
+    ),
     current_user: int = Depends(get_current_user),
 ) -> str:
     """
