@@ -8425,7 +8425,7 @@
           "out_to_ftp":{
             "title":"Out to ftp",
             "type":"boolean",
-            "description":"Copy result file to FTP area. Original file is still available.",
+            "description":"Copy result file to FTP area (if configured). Original file is still available.",
             "default":false,
             "example":false
           }
@@ -8568,7 +8568,7 @@
           "out_to_ftp":{
             "title":"Out to ftp",
             "type":"boolean",
-            "description":"Copy result file to FTP area. Original file is still available.",
+            "description":"Copy result file to FTP area (if configured). Original file is still available.",
             "default":false,
             "example":false
           }
@@ -11045,7 +11045,7 @@
           "out_to_ftp":{
             "title":"Out to ftp",
             "type":"boolean",
-            "description":"Copy result file to FTP area. Original file is still available.",
+            "description":"Copy result file to FTP area (if configured). Original file is still available.",
             "default":false,
             "example":false
           }
@@ -11453,7 +11453,7 @@
             "default":false
           },
           "recast":{
-            "title":"Recast mapping and react doc",
+            "title":"Recast mapping and doc",
             "allOf":[
               {
                 "$ref":"#/components/schemas/TaxoRecastRsp"

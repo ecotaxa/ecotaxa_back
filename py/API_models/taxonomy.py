@@ -7,9 +7,13 @@
 from typing import List, Optional, Any, Dict
 
 from pydantic import Extra, validator
+from fastapi import HTTPException
+from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 from API_models.crud import ProjectSummaryModel
 from API_models.helpers.DBtoModel import OrmConfig, combine_models
+from BO.TaxoRecast import TaxoRecastBO
+from DB.Taxonomy import Taxonomy
 from DB.TaxoRecast import RecastOperation
 from DB.Taxonomy import Taxonomy
 from helpers.pydantic import BaseModel, Field
@@ -39,14 +43,9 @@ class TaxoRecastRsp(BaseModel):
     # noinspection PyMethodParameters
     @validator("from_to")
     def ensure_consistent_renaming(cls, v):
-        vals_but_0 = set(v.values()).difference({0})
-        assert set(v.keys()).isdisjoint(
-            vals_but_0
-        ), "inconsistent taxonomy renaming, can't do remap chains or loops: common part is %s" % set(
-            v.keys()
-        ).intersection(
-            set(v.values())
-        )
+        resp = TaxoRecastBO.valid_remap(v)
+        if resp is not None:
+            raise HTTPException(HTTP_422_UNPROCESSABLE_ENTITY, detail=[resp])
         return v
 
     class Config:
@@ -220,17 +219,11 @@ class TaxonomyRecastReq(BaseModel):
 
     # noinspection PyMethodParameters
     @validator("recast")
-    def ensure_consistent_renaming(cls, val):
-        v = val.from_to
-        vals_but_0 = set(v.values()).difference({0})
-        assert set(v.keys()).isdisjoint(
-            vals_but_0
-        ), "inconsistent taxonomy renaming, can't do remap chains or loops: common part is %s" % set(
-            v.keys()
-        ).intersection(
-            set(v.values())
-        )
-        return val
+    def ensure_consistent_renaming(cls, v):
+        resp = TaxoRecastBO.valid_remap(v.from_to)
+        if resp is not None:
+            raise HTTPException(HTTP_422_UNPROCESSABLE_ENTITY, detail=[resp])
+        return v
 
 
 class _Taxo2Model(BaseModel):

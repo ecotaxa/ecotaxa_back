@@ -6,10 +6,10 @@
 #
 import abc
 import csv
+import json
 import os
 import re
 import zipfile
-import json
 from pathlib import Path
 from typing import Optional, Tuple, TextIO, Dict, List, Set, Any, Union
 from zipfile import ZipFile
@@ -28,13 +28,13 @@ from API_models.exports import (
     SummaryExportSumOptionsEnum,
 )
 from API_models.filters import ProjectFiltersDict
+from BO.Classification import ClassifIDT
+from BO.Collection import CollectionIDT
 from BO.Mappings import ProjectSetMapping, PREFIX_TO_TABLE
 from BO.ObjectSet import DescribedObjectSet, DescribedObjectBOSet
 from BO.ObjectSetQueryPlus import ResultGrouping, IterableRowsT, ObjectSetQueryPlus
 from BO.Rights import RightsBO, Action
 from BO.Taxonomy import TaxonomyBO
-from BO.Classification import ClassifIDT
-from BO.Collection import CollectionIDT
 from BO.Vocabulary import Vocabulary, Units
 from DB import Image
 from DB.Object import (
@@ -43,8 +43,8 @@ from DB.Object import (
     PREDICTED_CLASSIF_QUAL,
 )
 from DB.Project import Project, ProjectIDListT, ProjectIDT
-from DB.TaxoRecast import TaxoRecast, RecastOperation
 from DB.ProjectVariables import ProjectVariables
+from DB.TaxoRecast import TaxoRecast, RecastOperation
 from DB.helpers.Direct import text
 from DB.helpers.SQL import OrderClause
 from FS.CommonDir import ExportFolder
@@ -254,8 +254,13 @@ class ProjectExport(JobServiceBase):
             done_infos.update({"rowcount": nb_rows, "out_file": self.out_file_name})
         # Final copy
         if req.out_to_ftp:
+            export_folder = self.config.export_folder()
+            if export_folder is None:
+                raise Exception(
+                    "out_to_ftp was requested but export folder is not defined"
+                )
             self.update_progress(progress_before_copy, "Copying file to FTP")
-            dest = ExportFolder(self.config.export_folder())
+            dest = ExportFolder(export_folder)
             # Disambiguate using the job ID
             if out_file_name is None:
                 out_file_name = self.out_file_name
@@ -273,8 +278,19 @@ class ProjectExport(JobServiceBase):
         if out_file_name is not None and "out_file" not in done_infos:
             self.out_file_name = out_file_name
             done_infos.update({"out_file": self.out_file_name})
-            # pre_mapping
-            done_infos.update({"re_mapping": self.pre_mapping})
+            if self.JOB_TYPE == "SummaryExport" or self.JOB_TYPE == "GeneralExport":
+                # pre_mapping
+                infotaxonomy = {
+                    "taxonomy": {
+                        "renames": self.pre_mapping,
+                    }
+                }
+                done_infos.update(infotaxonomy)
+
+                logger.info(
+                    "------------------ taxonomy renames --------------- %s",
+                    json.dumps(infotaxonomy),
+                )
         self.set_job_result(errors=[], infos=done_infos)
 
     def append_log_to_zip(self) -> None:

@@ -6,11 +6,11 @@
 #
 
 from API_models.filesystem import DirectoryModel
+from API_operations.UserFilesFolder import UserFilesFolderService
 from BO.Rights import RightsBO
 from BO.User import UserIDT
 from DB.User import User
 from FS.CommonDir import CommonFolder
-from API_operations.UserFilesFolder import UserFilesFolderService
 from helpers.DynamicLogs import get_logger
 from .helpers.Service import Service
 
@@ -33,5 +33,8 @@ class CommonFolderService(Service):
         _: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
         # Leading / implies root of user directory
         sub_path = sub_path.lstrip("/")
-        folder = CommonFolder(self.config.common_folder())
+        common_folder = self.config.common_folder()
+        if common_folder is None:
+            return DirectoryModel(path="", entries=[])
+        folder = CommonFolder(common_folder)
         return UserFilesFolderService.list_and_format(folder, sub_path)

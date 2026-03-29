@@ -4,27 +4,30 @@
 #
 # End-user services around taxonomy tree.
 #
-import json
 from datetime import datetime
-from typing import List, Optional, Dict, Any, Union
-
 from fastapi import HTTPException
+from typing import List, Optional, Dict, Any, Union
+import json
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
-
-from API_models.taxonomy import TaxaSearchRsp, TaxonomyRecastReq, TaxoRecastRsp
+from API_models.taxonomy import (
+    TaxaSearchRsp,
+    TaxonomyRecastReq,
+    TaxoRecastRsp,
+)
 from API_operations.helpers.Service import Service
 from BO.Classification import ClassifIDT, ClassifIDListT
-from BO.Collection import CollectionIDT
-from BO.ObjectSetQueryPlus import TaxoRemappingT
 from BO.Project import ProjectBOSet
+from BO.Collection import CollectionIDT
 from BO.ReClassifyLog import ReClassificationBO
-from BO.Taxonomy import TaxonomyBO, TaxonBO, TaxonBOSet
+from BO.Taxonomy import TaxonomyBO, TaxonBO, TaxonBOSet, WoRMSBO
+from BO.TaxoRecast import TaxoRecastBO
+from BO.WoRMSification import WoRMSifier
 from BO.User import UserIDT, UserBO
-from BO.WoRMSification import WoRMSifier, WoRMSBO
 from DB.Project import ProjectTaxoStat, Project, ProjectIDT
-from DB.TaxoRecast import TaxoRecast, RecastOperation
 from DB.Taxonomy import Taxonomy
+from DB.TaxoRecast import TaxoRecast, RecastOperation
 from helpers.DynamicLogs import get_logger
+
 
 logger = get_logger(__name__)
 
@@ -180,7 +183,7 @@ class TaxonomyService(Service):
             raise HTTPException(
                 HTTP_422_UNPROCESSABLE_ENTITY, detail="operation not supported"
             )
-        qry = WoRMSifier.query_recast(
+        qry = TaxoRecastBO.query_recast(
             self.session,
             current_user_id,
             target_id=recast.target_id,
@@ -200,8 +203,8 @@ class TaxonomyService(Service):
             RecastOperation.dwca_export_occurrence,
             RecastOperation.dwca_export_emof,
         ]
-        transforms = self.validate_remapping(recast.recast.from_to, isworms)
-        new_recast.transforms = json.dumps(transforms)
+        self.validate_remapping_throw(recast.recast.from_to, isworms)
+        new_recast.transforms = json.dumps(recast.recast.from_to)
         new_recast.documentation = (
             json.dumps(recast.recast.doc) if recast.recast.doc else {}
         )
@@ -216,7 +219,7 @@ class TaxonomyService(Service):
         is_collection: bool = False,
     ) -> Optional[TaxoRecastRsp]:
         assert operation in RecastOperation.__members__, HTTP_422_UNPROCESSABLE_ENTITY
-        qry = WoRMSifier.query_recast(
+        qry = TaxoRecastBO.query_recast(
             self.ro_session,
             current_user_id,
             target_id,
@@ -257,35 +260,16 @@ class TaxonomyService(Service):
         history = ReClassificationBO.history_for_project(self.ro_session, project_id)
         return history
 
-    def validate_remapping(
+    def validate_remapping_throw(
         self, remapping: Dict[str, Optional[int]], isWoRMS: bool
-    ) -> TaxoRemappingT:
-
-        def end_of_chain(recast_idx: ClassifIDT) -> Optional[ClassifIDT]:
-            visited = [recast_idx]
-            ret = remapping[str(recast_idx)]
-            while str(ret) in remapping:
-                if ret is None:
-                    return ret
-                if ret == visited[-1]:  # length-1 cycle (self-recast)
-                    return ret
-                if ret in visited:
-                    raise HTTPException(
-                        HTTP_422_UNPROCESSABLE_ENTITY,
-                        detail=["loop in recast " + str(visited)],
-                    )
-                visited.append(ret)
-                ret = remapping[str(ret)]
-            return ret
-
-        validremap: TaxoRemappingT = {}
-        for from_ in remapping.keys():
-            f = int(from_)
-            validremap[f] = end_of_chain(f)
+    ):
+        resp = TaxoRecastBO.valid_remap(remapping)
+        if resp is not None:
+            raise HTTPException(HTTP_422_UNPROCESSABLE_ENTITY, detail=[resp])
         if isWoRMS:
             qry = (
                 self.ro_session.query(Taxonomy.id)
-                .filter(Taxonomy.id.in_(validremap.values()))
+                .filter(Taxonomy.id.in_(remapping.values()))
                 .filter(Taxonomy.aphia_id is None)
             )
             not_valid = [t.id for t in qry]
@@ -297,4 +281,3 @@ class TaxonomyService(Service):
                         + ", ".join(not_valid)
                     ],
                 )
-        return validremap
