@@ -29,7 +29,7 @@ from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from fastapi_utils.timing import add_timing_middleware
 from sqlalchemy.sql.expression import null
-from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from API_models.constants import Constants
 from API_models.crud import (
@@ -163,6 +163,7 @@ from DB.Project import ProjectTaxoStat, Project
 from DB.ProjectPrivilege import ProjectPrivilege
 from DB.TaxoRecast import RecastOperation
 from DB.User import User, OrganizationIDT
+from helpers.AppConfig import Config
 from helpers.DynamicLogs import get_logger, get_api_logger, MONITOR_LOG_PATH
 from helpers.fastApiUtils import (
     internal_server_error_handler,
@@ -214,8 +215,24 @@ add_timing_middleware(app, record=logger.info, prefix="app", exclude="untimed")
 # This tells FastAPI to trust the headers from your proxy
 # 'trusted_hosts=["*"]' allows any proxy; in production,
 # limit this to your proxy's specific IP/range.
-# Needed for TUS which sends back a location. # TODO: Use SERVERURL config instead
-app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
+# Needed for TUS which sends back a location.
+# app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
+
+
+class FixLocationMiddleware(BaseHTTPMiddleware):
+    FRONT_URL = Config().get_account_validation_url()
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        location = response.headers.get("location")
+        if location and location.startswith("http://"):
+            path = location.split("/api/")[1]
+            new_location = f"{self.FRONT_URL}/api/{path}"
+            response.headers["location"] = new_location
+        return response
+
+
+app.add_middleware(FixLocationMiddleware)
 
 # HTML stuff
 # app.mount("/styles", StaticFiles(directory="pages/styles"), name="styles")
