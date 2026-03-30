@@ -127,11 +127,9 @@ class Config(object):
         # string separator - separate  ticket number if ticket software is used and admin comment to user
         return (self._get("ADD_TICKET") or "").strip()
 
-    def get_account_validation_url(self) -> Optional[str]:
+    def get_account_validation_url(self) -> str:
         # TODO find a way to have multi request url ( list of identified url ???)
-        url = (self._get("SERVERURL") or "").strip()
-        if not url:
-            return None
+        url = self._get("SERVERURL", mandatory=True).strip()
         return url + ("/" if url[-1] != "/" else "")
 
     def get_users_files_dir(self) -> str:

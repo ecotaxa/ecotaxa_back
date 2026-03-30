@@ -1,7 +1,10 @@
 # Fixture for monkey-patching fastapi
 # So that no token validation occurs, user ID is in security token
-import logging
+import logging, os
 from typing import Any, Generator
+
+FAKE_SERVER = "https://my.real.site:443/"
+os.environ["SERVERURL"] = FAKE_SERVER
 
 import main
 import pytest

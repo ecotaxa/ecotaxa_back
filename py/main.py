@@ -5,6 +5,7 @@
 # Based on https://fastapi.tiangolo.com/
 #
 import os
+import re
 import time
 from logging import INFO
 from typing import Union, Tuple, List, Dict, Any, Optional
@@ -212,23 +213,19 @@ add_timing_middleware(app, record=logger.info, prefix="app", exclude="untimed")
 # Optimize large responses -> Let's leave this task to some proxy coded in C
 # app.add_middleware(GZipMiddleware, minimum_size=1024)
 
-# This tells FastAPI to trust the headers from your proxy
-# 'trusted_hosts=["*"]' allows any proxy; in production,
-# limit this to your proxy's specific IP/range.
-# Needed for TUS which sends back a location.
-# app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
-
 
 class FixLocationMiddleware(BaseHTTPMiddleware):
+    # Any redirect should point to the frontend, not the backend
     FRONT_URL = Config().get_account_validation_url()
 
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
         location = response.headers.get("location")
-        if location and location.startswith("http://"):
-            path = location.split("/api/")[1]
-            new_location = f"{self.FRONT_URL}/api/{path}"
-            response.headers["location"] = new_location
+        if location:
+            match = re.match(r"^http://[^/]+(/.*|$)", location)
+            if match:
+                path = match.group(1) or "/"
+                response.headers["location"] = f"{self.FRONT_URL}{path[1:]}"
         return response
 
 
