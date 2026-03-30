@@ -29,6 +29,7 @@ from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from fastapi_utils.timing import add_timing_middleware
 from sqlalchemy.sql.expression import null
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from API_models.constants import Constants
 from API_models.crud import (
@@ -213,7 +214,8 @@ add_timing_middleware(app, record=logger.info, prefix="app", exclude="untimed")
 # This tells FastAPI to trust the headers from your proxy
 # 'trusted_hosts=["*"]' allows any proxy; in production,
 # limit this to your proxy's specific IP/range.
-# app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
+# Needed for TUS which sends back a location. # TODO: Use SERVERURL config instead
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
 
 # HTML stuff
 # app.mount("/styles", StaticFiles(directory="pages/styles"), name="styles")
