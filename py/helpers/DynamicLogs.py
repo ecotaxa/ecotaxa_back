@@ -4,6 +4,8 @@
 #
 import abc
 import logging
+import os
+import sys
 import time
 from abc import ABC
 from logging import Logger, Handler
@@ -131,3 +133,12 @@ def get_api_logger():
     api_file_handler.setFormatter(UTCFormatter("%(message)s #AT %(asctime)-15s"))
     api_logger.addHandler(api_file_handler)
     return api_logger
+
+
+def trash_stdout_stderr():
+    """Redirect stdout and stderr to os.devnull, to avoid leakage and prints."""
+    # Open devnull
+    f = open(os.devnull, "w")
+    # Redirect
+    os.dup2(f.fileno(), sys.stdout.fileno())
+    os.dup2(f.fileno(), sys.stderr.fileno())

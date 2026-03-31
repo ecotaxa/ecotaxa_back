@@ -39,7 +39,7 @@ def upd(col, val) -> ColUpdate:
 
 
 def test_updates(fastapi, tstlogs):
-    prj_id = do_import_uvp6(fastapi, "Test Updates")
+    prj_id, _ = do_import_uvp6(fastapi, "Test Updates")
     check_project(tstlogs, prj_id)
 
     acquis_id, process_id, sample_id = _get_ids(tstlogs, prj_id)

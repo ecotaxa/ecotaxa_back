@@ -5,7 +5,8 @@
 import json
 import threading
 import time
-from threading import Thread, Event
+from multiprocessing import Process
+from threading import Event
 from typing import Any, Optional, List, ClassVar, Callable
 
 from API_operations.helpers.JobService import JobServiceBase
@@ -13,12 +14,19 @@ from API_operations.helpers.Service import Service
 from BO.Job import JobBO
 from DB.Job import Job, DBJobStateEnum, JobIDT
 from DB.helpers.ORM import clone_of
-from helpers.DynamicLogs import get_logger
+from helpers.DynamicLogs import (
+    get_logger,
+    trash_stdout_stderr,
+)
 
 logger = get_logger(__name__)
 
+JOB_PARENT_CLASS = Process
+# Uncomment if you need to debug some job
+# JOB_PARENT_CLASS = Thread
 
-class JobRunner(Thread):
+
+class JobRunner(JOB_PARENT_CLASS):
     """
     Run background part of a job.
     """
@@ -31,6 +39,11 @@ class JobRunner(Thread):
         """
         Run the background part of the service.
         """
+        if JOB_PARENT_CLASS == Process:
+            # Re-init DB connection as this is a new process
+            Service.re_init_after_fork()
+            # Trash stdout and stderr to avoid prints and leakage
+            trash_stdout_stderr()
         try:
             sce = JobScheduler.instantiate(self.db_job)
         except (AssertionError, TypeError, json.decoder.JSONDecodeError) as te:
@@ -56,7 +69,6 @@ class JobRunner(Thread):
 class JobScheduler(Service):
     """
     In charge of launching/monitoring sub processes i.e. keep sync b/w processes and their images in jobs DB table.
-    These are not really processes, just threads, so far.
     """
 
     # Filter out these job types
@@ -107,8 +119,8 @@ class JobScheduler(Service):
         # Align DB job state
         the_job.state = DBJobStateEnum.Running
         self.session.commit()
-        # Detach the job DB line from session, as JobRunner is in another thread
-        # and SQLAlchemy objects are linked to sessions, and sessions cannot be shared b/w threads.
+        # Detach the job DB line from session, as JobRunner is in another process
+        # and SQLAlchemy objects are linked to sessions, and sessions cannot be shared b/w processes.
         job_clone = clone_of(the_job)
         job_clone.id = the_job.id
         # Run the service background
@@ -173,7 +185,7 @@ class JobScheduler(Service):
     @classmethod
     def shutdown(cls) -> None:
         """
-        Clean close of multi-threading resources: Runner, Timer and Event
+        Clean close of multi-threading resources: Runner, Timer, and Event
         Restore class-loading time state.
         Current thread: Main
         """

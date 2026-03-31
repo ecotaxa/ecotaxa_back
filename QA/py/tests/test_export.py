@@ -267,7 +267,7 @@ def test_export_roundtrip(fastapi, tstlogs):
     """roundtrip export/import other/compare"""
 
     # Admin imports the project
-    prj_id = do_import_uvp6(fastapi, "TSV UVP6 roundtrip export source project")
+    prj_id, _ = do_import_uvp6(fastapi, "TSV UVP6 roundtrip export source project")
 
     # Get the project for update
     url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
@@ -349,7 +349,7 @@ def test_export_roundtrip_self(fastapi, caplog, export_method):
 
     # Admin imports the project
 
-    prj_id = do_import_uvp6(
+    prj_id, _ = do_import_uvp6(
         fastapi, "TSV UVP6 roundtrip classifs export source project"
     )
 
@@ -383,14 +383,14 @@ def test_export_roundtrip_self(fastapi, caplog, export_method):
         fastapi, prj_id, just_annots=export_method != "full"
     )
 
-    do_import_update(
+    log = do_import_update(
         fastapi,
         prj_id,
         caplog,
         "Cla",
         str(DATA_DIR / "ftp" / ("task_%d_%s" % (export_job_id, file_in_ftp))),
     )
-    nb_upds = len([msg for msg in caplog.messages if msg.startswith("Updating")])
+    nb_upds = len([line for line in log if "Updating" in line])
     # There should be no update, even if export of classif_when truncates microseconds
     assert nb_upds == 0
 
@@ -409,31 +409,30 @@ def test_export_roundtrip_self(fastapi, caplog, export_method):
     )
 
     # Oops, let's get back to saved state
-    do_import_update(
+    log = do_import_update(
         fastapi,
         prj_id,
         caplog,
         "Cla",
         str(DATA_DIR / "ftp" / ("task_%d_%s" % (export_job_id, file_in_ftp))),
     )
-    assert len(caplog.messages) > 0, "no log messages found!"
-    nb_upds = len([msg for msg in caplog.messages if msg.startswith("Updating")])
+    nb_upds = len([line for line in log if "Updating" in line])
     # All changed, restored to backup state
-    assert nb_upds == 15, caplog.messages
+    assert nb_upds == 15, log
 
     # Re-classify different user
     classify_validate_all(USER_AUTH, False)
     # Admin wants _his_ name back
-    do_import_update(
+    log = do_import_update(
         fastapi,
         prj_id,
         caplog,
         "Cla",
         str(DATA_DIR / "ftp" / ("task_%d_%s" % (export_job_id, file_in_ftp))),
     )
-    nb_upds = len([msg for msg in caplog.messages if msg.startswith("Updating")])
+    nb_upds = len([line for line in log if "Updating" in line])
     # All changed, restored to backup state
-    assert nb_upds == 15, caplog.messages
+    assert nb_upds == 15, log
 
     if False:
         for an_obj in sorted(obj_ids):
@@ -454,14 +453,14 @@ def test_export_roundtrip_self(fastapi, caplog, export_method):
         assert len(an_hist) == 4
 
     # Restore a second time the same first backup
-    do_import_update(
+    log = do_import_update(
         fastapi,
         prj_id,
         caplog,
         "Cla",
         str(DATA_DIR / "ftp" / ("task_%d_%s" % (export_job_id, file_in_ftp))),
     )
-    nb_upds = len([msg for msg in caplog.messages if msg.startswith("Updating")])
+    nb_upds = len([line for line in log if "Updating" in line])
     # No change
     assert nb_upds == 0
     # Not more history
@@ -470,16 +469,16 @@ def test_export_roundtrip_self(fastapi, caplog, export_method):
         assert len(an_hist) == 4
 
     # Restore the second backup, i.e. back in time
-    do_import_update(
+    log = do_import_update(
         fastapi,
         prj_id,
         caplog,
         "Cla",
         str(DATA_DIR / "ftp" / ("task_%d_%s" % (export_job_id2, file_in_ftp2))),
     )
-    nb_upds = len([msg for msg in caplog.messages if msg.startswith("Updating")])
+    nb_upds = len([line for line in log if "Updating" in line])
     # All changed
-    assert nb_upds == 15, caplog.messages
+    assert nb_upds == 15, log
     # Not more history as all was historized before
     for an_obj in obj_ids:
         an_hist = get_object_classif_history(fastapi, an_obj)

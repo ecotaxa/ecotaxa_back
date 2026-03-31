@@ -21,12 +21,14 @@ from API_operations.JsonDumper import JsonDumper
 
 # noinspection PyPackageRequirements
 from DB.Job import DBJobStateEnum
+from tests.consts import *
 from tests.api_wrappers import (
     api_file_import,
     api_wait_for_stable_job,
     api_check_job_questions,
     MY_FILES_URL,
     api_upload_file,
+    api_get_log_file,
 )
 from tests.credentials import ADMIN_AUTH, ADMIN_USER_ID, CREATOR_USER_ID, CREATOR_AUTH
 from tests.jobs import (
@@ -36,43 +38,6 @@ from tests.jobs import (
 )
 from tests.logspy_feature import DBWRITER_LOG
 from tests.prj_utils import check_project
-
-# All files paths are now relative to root shared directory
-TEST_DIR = Path(dirname(realpath(__file__))).resolve()
-SHARED_DIR = (Path(dirname(realpath(__file__))) / ".." / "data").resolve()
-FTP_DIR = SHARED_DIR / "ftp"
-DATA_DIR = Path("")
-PLAIN_FILE = DATA_DIR / "import_test.zip"  # As seen from server
-PLAIN_FILE_PATH = SHARED_DIR / "import_test.zip"  # As seen from client
-V6_FILE = DATA_DIR / "UVP6_example.zip"
-V6_DIR = DATA_DIR / "import_uvp6_zip_in_dir"
-PLAIN_DIR = DATA_DIR / "import_test"
-UPDATE_DIR = DATA_DIR / "import_update"
-BAD_FREE_DIR = DATA_DIR / "import_bad_free_data"
-SPARSE_DIR = DATA_DIR / "import_sparse"
-PLUS_DIR = DATA_DIR / "import_test_plus"
-PLUS_MORE_DIR = DATA_DIR / "import_test_plus_more"
-JUST_PREDICTED_DIR = DATA_DIR / "import_just_predicted"
-V_OR_D_ONLY_DIR = DATA_DIR / "import_v_or_d_just_state"
-WEIRD_DIR = DATA_DIR / "import_test_weird"
-ISSUES_DIR = DATA_DIR / "import_issues" / "tsv_issues"
-ISSUES_DIR2 = DATA_DIR / "import_issues" / "no_classif_id"
-ISSUES_DIR3 = DATA_DIR / "import_issues" / "tsv_too_many_cols"
-ISSUES_DIR4 = DATA_DIR / "import_issues" / "duplicate_in_tsv"
-ISSUES_DIR5 = DATA_DIR / "import_issues" / "predicted_but_what"
-ISSUES_DIR6 = DATA_DIR / "import_issues" / "classif_without_state"
-ISSUES_DIR7 = DATA_DIR / "import_issues" / "extra_data_without_header"
-MIX_OF_STATES = DATA_DIR / "import_mixed_states"
-EMPTY_DIR = DATA_DIR / "import_issues" / "no_relevant_file"
-EMPTY_TSV_DIR = DATA_DIR / "import_issues" / "empty_tsv"
-EMPTY_TSV_DIR2 = DATA_DIR / "import_issues" / "empty_tsv2"
-BREAKING_HIERARCHY_DIR = DATA_DIR / "import_issues" / "breaking_hierarchy"
-EMPTY_TSV_IN_UPD_DIR = DATA_DIR / "import_test_upd_empty"
-AMBIG_DIR = DATA_DIR / "import de categories ambigues"
-VARIOUS_STATES_DIR = DATA_DIR / "import_various_states"
-IMPORT_TOT_VOL = DATA_DIR / "import_test_tot_vol"
-IMPORT_TOT_VOL_UPDATE = DATA_DIR / "import_test_tot_vol_update"
-IMPORT_TOT_VOL_BAD_UPDATE = DATA_DIR / "import_test_tot_vol_bad_update"
 
 
 def create_project(owner, title, instrument=None, access="1"):
@@ -103,14 +68,15 @@ def dump_project(asker: int, prj_id: int, fd: Any):
         sce.run(fd)
 
 
-def do_import(fastapi, prj_id: int, source_path: str, auth: dict):
+def do_import(fastapi, prj_id: int, source_path: str, auth: dict, fetch_log=False):
     """Import helper for tests"""
     params = dict(source_path=str(source_path))
     rsp = api_file_import(fastapi, prj_id, params, auth)
     job = api_wait_for_stable_job(fastapi, rsp.json()["job_id"])
     job = fill_in_if_missing(fastapi, job)
     check_job_ok(job)
-    return prj_id
+
+    return api_get_log_file(fastapi, job.id) if fetch_log else []
 
 
 def fill_in_if_missing(fastapi, job):
@@ -254,12 +220,11 @@ def test_import_again_not_skipping_tsv_skipping_imgs(fastapi, ccheck, caplog):
     srch = search_unique_project(ADMIN_USER_ID, ONE_WITH_TITLE)
     prj_id = srch.projid  # <- need the project from first test
     # Do preparation
-    import_plain(fastapi, prj_id)
+    log = import_plain(fastapi, prj_id)
     # Check that all went fine
-    for a_msg in caplog.records:
-        assert a_msg.levelno != logging.ERROR, a_msg.getMessage()
-        # ecotaxa/ecotaxa_dev#583: Ensure that no extra image was added
-        assert "One more image" not in a_msg.getMessage()
+    assert all(":ERROR" not in line for line in log)
+    # ecotaxa/ecotaxa_dev#583: Ensure that no extra image was added
+    assert all("One more image" not in line for line in log)
 
 
 def import_plain(fastapi, prj_id):
@@ -280,6 +245,7 @@ def import_plain(fastapi, prj_id):
     api_reply_to_waiting_job(fastapi, rsp.json()["job_id"], reply)
     job = api_wait_for_stable_job(fastapi, rsp.json()["job_id"])
     check_job_ok(job)
+    return api_get_log_file(fastapi, job.id)
 
 
 def import_various(fastapi, prj_id):
@@ -329,19 +295,19 @@ def test_equal_dump_prj1(fastapi, ccheck, tstlogs):
 def test_import_uvp6(fastapi, caplog, title):
     caplog.set_level(logging.INFO)
     caplog.set_level(logging.INFO, DBWRITER_LOG)
-    do_import_uvp6(fastapi, title)
+    prj_id, log = do_import_uvp6(fastapi, title, fetch_log=True)
     # Check that all went fine
-    for a_msg in caplog.records:
-        assert a_msg.levelno != logging.ERROR, a_msg.getMessage()
+    assert all(":ERROR" not in line for line in log)
 
 
-def do_import_uvp6(fastapi, title):
+def do_import_uvp6(fastapi, title, fetch_log=False):
     prj_id = create_project(ADMIN_USER_ID, title, "UVP6", "2")
     params = {"source_path": str(V6_FILE)}
     rsp = api_file_import(fastapi, prj_id, params, ADMIN_AUTH)
     job = api_wait_for_stable_job(fastapi, rsp.json()["job_id"])
     check_job_ok(job)
-    return prj_id
+    log = api_get_log_file(fastapi, job.id) if fetch_log else []
+    return prj_id, log
 
 
 # @pytest.mark.skip()
@@ -579,8 +545,8 @@ def test_import_uvp6_zip_in_dir(fastapi, caplog):
     job = api_wait_for_stable_job(fastapi, rsp.json()["job_id"])
     check_job_ok(job)
     # Check that all went fine
-    for a_msg in caplog.records:
-        assert a_msg.levelno != logging.ERROR, a_msg.getMessage()
+    log = api_get_log_file(fastapi, job.id)
+    assert all(":ERROR" not in line for line in log)
 
 
 # @pytest.mark.skip()
@@ -663,7 +629,7 @@ def test_uvp6_via_myfile(fastapi, caplog):
     user_files = list_rsp.json()
     assert no_zip in [a_file["name"] for a_file in user_files["entries"]]
 
-    do_import(fastapi, prj_id, no_zip, CREATOR_AUTH)
+    log = do_import(fastapi, prj_id, no_zip, CREATOR_AUTH, fetch_log=True)
     # Check that objects were imported
     rsp = fastapi.post(
         f"/object_set/{prj_id}/summary",
@@ -673,4 +639,4 @@ def test_uvp6_via_myfile(fastapi, caplog):
     )
     assert rsp.json()["total_objects"] == 15
 
-    assert f"Importing UVP6 file [base]/b_da_19_Images" in caplog.messages
+    assert any(f"Importing UVP6 file [base]/b_da_19_Images" in line for line in log)

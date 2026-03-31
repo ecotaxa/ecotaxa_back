@@ -12,7 +12,7 @@ from os.path import join, dirname, realpath
 from pathlib import Path
 
 from lib.processes import SyncSubProcess
-from tests.test_import import SHARED_DIR, FTP_DIR, TEST_DIR
+from tests.consts import SHARED_DIR, FTP_DIR, TEST_DIR
 
 psql_bin = "psql"
 # If we already have a server don't create one, e.g. in GitHub action
