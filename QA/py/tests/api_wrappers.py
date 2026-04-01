@@ -12,6 +12,7 @@ from tests.export_shared import JOB_LOG_DOWNLOAD_URL
 
 FILE_IMPORT_URL = "/file_import/{project_id}"
 JOB_QUERY_URL = "/jobs/{job_id}/"
+JOB_DELETE_URL = "/jobs/{job_id}"
 
 JOB_STABLE_STATES = (
     DBJobStateEnum.Finished,

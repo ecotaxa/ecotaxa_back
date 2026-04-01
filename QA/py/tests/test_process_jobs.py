@@ -1,14 +1,21 @@
 import os
 import time
+
 import pytest
-from BG_operations import JobScheduler
-from BG_operations.JobScheduler import ProcessJobRunner, ThreadJobRunner
+
 from API_operations.helpers.JobService import JobServiceBase, ArgsDict
-from main import logger
-from tests.credentials import ADMIN_USER_ID
-from tests.api_wrappers import api_wait_for_stable_job, api_check_job_ok
+from BG_operations import JobScheduler
+from BG_operations.JobScheduler import ProcessJobRunner
 from helpers.DynamicLogs import LogsSwitcher, get_logger
-import sys
+from tests.api_wrappers import (
+    api_wait_for_stable_job,
+    api_check_job_ok,
+    api_get_log_file,
+    JOB_QUERY_URL,
+    JOB_DELETE_URL,
+)
+from tests.export_shared import JOB_LOG_DOWNLOAD_URL
+from tests.credentials import ADMIN_USER_ID, ADMIN_AUTH
 
 
 @pytest.fixture
@@ -62,44 +69,10 @@ class PidReportingJob(JobServiceBase):
             )
 
 
-def test_job_runs_in_separate_process(fastapi, jobs_as_process):
+def test_job_process_behavior(fastapi, jobs_as_process):
     """
-    Verify that a job runs in a separate process than the main FastAPI/test process.
-    """
-    # 1. Record the current PID (the one running the test)
-    current_pid = os.getpid()
-
-    # 2. Launch the PidReportingJob via JobService mechanism
-    with PidReportingJob(main_pid=current_pid) as job:
-        job.run(ADMIN_USER_ID)
-        job_id = job.job_id
-
-    # 3. Wait for the job to complete
-    job_info = api_wait_for_stable_job(fastapi, job_id)
-    api_check_job_ok(fastapi, job_id)
-
-    # 4. Retrieve the PID reported by the job from its results
-    # The api_wait_for_stable_job returns a SimpleNamespace which contains the job dict
-    # Results are usually in job_info.result as a dict
-    job_pid = job_info.result.get("pid")
-
-    print(f"Test PID: {current_pid}, Job PID: {job_pid}")
-
-    # 5. Assertions
-    assert job_pid is not None, "Job did not report its PID"
-
-    # Check if we are in a state where processes are expected
-    assert (
-        JobScheduler.JobRunner == ProcessJobRunner
-    ), "JobRunner should be ProcessJobRunner when not debugging"
-    assert (
-        job_pid != current_pid
-    ), f"Job PID {job_pid} should be different from test PID {current_pid}"
-
-
-def test_job_reports_progress(fastapi, jobs_as_process):
-    """
-    Verify that PidReportingJob reports progress and messages while running.
+    Verify that a job runs in a separate process than the main FastAPI/test process,
+    and that it reports progress and messages while running.
     """
     current_pid = os.getpid()
 
@@ -110,12 +83,9 @@ def test_job_reports_progress(fastapi, jobs_as_process):
 
     # 2. Wait for the job to start (state 'R') and check progress
     # We use a loop to check progress while it's running
-    import time
-
     start_time = time.time()
     found_ticks = set()
-    job_url = f"/jobs/{job_id}/"
-    from tests.credentials import ADMIN_AUTH
+    job_url = JOB_QUERY_URL.format(job_id=job_id)
 
     while time.time() - start_time < 10:  # 10s timeout
         rsp = fastapi.get(job_url, headers=ADMIN_AUTH)
@@ -130,8 +100,24 @@ def test_job_reports_progress(fastapi, jobs_as_process):
             break
         time.sleep(0.5)
 
-    # 3. Final checks
-    final_job_info = api_check_job_ok(fastapi, job_id)
+    # 3. Final checks and PID verification
+    job_info_obj = api_wait_for_stable_job(fastapi, job_id)
+    api_check_job_ok(fastapi, job_id)
+
+    # Check if we are in a state where processes are expected
+    assert (
+        JobScheduler.JobRunner == ProcessJobRunner
+    ), "JobRunner should be ProcessJobRunner when not debugging"
+
+    # Retrieve the PID reported by the job from its results
+    job_pid = job_info_obj.result.get("pid")
+    print(f"Test PID: {current_pid}, Job PID: {job_pid}")
+    assert job_pid is not None, "Job did not report its PID"
+    assert (
+        job_pid != current_pid
+    ), f"Job PID {job_pid} should be different from test PID {current_pid}"
+
+    # Verify progress messages
     assert (
         len(found_ticks) >= 3
     ), f"Should have seen at least some ticks, got: {found_ticks}"
@@ -141,11 +127,101 @@ def test_job_reports_progress(fastapi, jobs_as_process):
         "Tick 4" in found_ticks or "Tick 5" in found_ticks
     ), f"Should have reached at least Tick 4, got: {found_ticks}"
 
-    # 4. Check the log file content (optional, as it's hard to verify in all envs)
-    # But it should work if LogsSwitcher is correctly used.
-    # from tests.api_wrappers import api_get_log_file
-    # log_lines = api_get_log_file(fastapi, job_id)
-    # print(f"Log lines: {log_lines}")
-    # log_lines = [line for line in log_lines if line.strip()]
-    # log_ticks = [line for line in log_lines if "Tick" in line]
-    # assert len(log_ticks) >= 5, f"Should have at least 5 ticks in log file, got {len(log_ticks)}: {log_ticks}"
+    # 4. Check the log file content
+    log_lines = api_get_log_file(fastapi, job_id)
+    print(f"Log lines: {log_lines}")
+    log_lines = [line for line in log_lines if line.strip()]
+    log_ticks = [line for line in log_lines if "Tick" in line]
+    assert (
+        len(log_ticks) == 8
+    ), f"Should have exactly 8 ticks in log file, got {len(log_ticks)}: {log_ticks}"
+    for i in range(1, 9):
+        assert any(
+            f"Tick {i}" in line for line in log_ticks
+        ), f"Tick {i} missing from log file"
+
+
+def test_job_kill(fastapi, jobs_as_process):
+    """
+    Verify that a job can be killed (deleted) while running.
+    """
+    current_pid = os.getpid()
+
+    # 1. Launch the PidReportingJob
+    # It runs for 8 * 0.5s = 4s total.
+    with PidReportingJob(main_pid=current_pid) as job:
+        job.run(ADMIN_USER_ID)
+        job_id = job.job_id
+
+    # 2. Wait for it to start running
+    job_get_url = JOB_QUERY_URL.format(job_id=job_id)
+    job_delete_url = JOB_DELETE_URL.format(job_id=job_id)
+    start_time = time.time()
+    while time.time() - start_time < 5:
+        rsp = fastapi.get(job_get_url, headers=ADMIN_AUTH)
+        job_info = rsp.json()
+        if job_info["state"] == "R":
+            # Check if PID is already in the log file (required for kill_process)
+            try:
+                log_lines = api_get_log_file(fastapi, job_id)
+                if any("Running in PID" in line for line in log_lines):
+                    break
+            except Exception:
+                pass
+        time.sleep(0.1)
+    else:
+        pytest.fail("Job did not start running or didn't write PID in time")
+
+    # 3. Kill it after ~2 seconds of total run (we already waited some time for it to start)
+    # The job ticks every 0.5s.
+    time.sleep(1.0)
+
+    # 4. Delete the job (which should kill it)
+    rsp = fastapi.delete(job_delete_url, headers=ADMIN_AUTH)
+    assert rsp.status_code == 200
+
+    # 5. Verify it's in Error state with Killed message
+    # Wait a bit for the state to update if it's not immediate
+    # Actually JobCRUDService.delete updates the state immediately in DB
+    rsp = fastapi.get(job_get_url, headers=ADMIN_AUTH)
+    job_info = rsp.json()
+    assert (
+        job_info["state"] == "E"
+    ), f"Job state should be 'E' (Error) after kill, got: {job_info['state']}"
+    assert (
+        job_info["progress_msg"] == "Killed"
+    ), f"Job progress_msg should be 'Killed' after kill, got: {job_info['progress_msg']}"
+
+
+def test_job_delete_pending(fastapi, jobs_as_process):
+    """
+    Verify that a pending job can be deleted and it goes to Error state with Killed message.
+    """
+    # 1. Launch a job but kill it faster than the Scheduler
+    current_pid = os.getpid()
+    with PidReportingJob(main_pid=current_pid) as job:
+        job.run(ADMIN_USER_ID)
+        job_id = job.job_id
+
+    # 2. Verify it's pending
+    job_get_url = JOB_QUERY_URL.format(job_id=job_id)
+    rsp = fastapi.get(job_get_url, headers=ADMIN_AUTH)
+    assert rsp.json()["state"] == "P"
+
+    # 3. Delete it
+    job_delete_url = JOB_DELETE_URL.format(job_id=job_id)
+    rsp = fastapi.delete(job_delete_url, headers=ADMIN_AUTH)
+    assert rsp.status_code == 200
+
+    # 4. Verify it's in Error state with Killed message
+    rsp = fastapi.get(job_get_url, headers=ADMIN_AUTH)
+    job_info = rsp.json()
+    assert job_info["state"] == "E"
+    assert job_info["progress_msg"] == "Killed"
+
+    # 6. Verify the log file contains the "Process killed by" line
+    log_lines = api_get_log_file(fastapi, job_id)
+    print(f"Log lines after kill: {log_lines}")
+    assert any(
+        "Process killed by" in line for line in log_lines
+    ), f"Log file should contain kill message, got: {log_lines}"

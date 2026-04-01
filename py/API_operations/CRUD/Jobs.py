@@ -2,6 +2,9 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+import os
+import signal
+import time
 from pathlib import Path
 from typing import Tuple, List, Any, Dict, TextIO
 
@@ -133,19 +136,51 @@ class JobCRUDService(Service):
         """
         Erase the job, from user's point of view.
         """
+        do_kill = False
         # Security check
         with self._query_for_update(current_user_id, job_id) as job_bo:
             temp_for_job = TempDirForTasks(self.config.jobs_dir())
             if job_bo.state in (
                 DBJobStateEnum.Finished,
                 DBJobStateEnum.Error,
-                DBJobStateEnum.Pending,
             ):
                 # TODO: Set the job to a state e.g. Trashed and erase in background, better for responsiveness
                 temp_for_job.archive_for(job_id, {JobServiceBase.JOB_LOG_FILE_NAME})
                 job_bo.archive()
-            elif job_bo.state == DBJobStateEnum.Running:
-                # Set the job to Killed
-                # TODO: It's not a _real_ kill, bg thread keeps running. It's just presentation
+            elif job_bo.state in (
+                DBJobStateEnum.Running,
+                DBJobStateEnum.Pending,
+                DBJobStateEnum.Asking,
+            ):
+                # Set the status in DB immediately before anything else
                 job_bo.state = DBJobStateEnum.Error
                 job_bo.progress_msg = JobBO.KILLED_MESSAGE
+                do_kill = True
+        if do_kill:
+            # Actually kill the background process, using the PID in log file.
+            self.kill_process(current_user_id, job_id)
+
+    def kill_process(self, current_user_id: UserIDT, job_id: JobIDT) -> None:
+        """
+        Actually kill the background process, using the PID in log file, and log who did it.
+        """
+        log_path = self.get_log_path(current_user_id, job_id)
+        if not log_path.exists():
+            return
+        with open(log_path, "r") as f:
+            # Skip first line
+            _ = f.readline()
+            # Line 2 should be e.g. 'Running in PID 123456'
+            line = f.readline()
+        if line and "Running in PID" in line:
+            pid_str = line.split("in PID")[-1].strip()
+            try:
+                pid = int(pid_str)
+                os.kill(pid, signal.SIGTERM)
+                # Wait a bit for the process to exit
+                time.sleep(0.5)
+            except (ValueError, ProcessLookupError):
+                pass
+        # Log who killed the process
+        with open(log_path, "a") as f:
+            f.write(f"\nProcess killed by user {current_user_id}\n")

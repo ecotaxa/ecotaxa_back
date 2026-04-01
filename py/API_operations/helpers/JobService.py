@@ -77,18 +77,13 @@ class JobServiceBase(Service, LogEmitter, ABC):
         except Exception as e:
             # If the exception damaged the session, we might end up in:
             # sqlalchemy.exc.InternalError: (psycopg2.errors.InFailedSqlTransaction)
-            try:
-                self.session.rollback()
-            except Exception:
-                pass
+            self.session.rollback()
             with JobBO.get_for_update(self.session, self.job_id) as job_bo:
                 job_bo.state = DBJobStateEnum.Error
                 job_bo.progress_msg = str(e)
-                from helpers.DynamicLogs import format_exception
-
                 job_bo.set_messages(format_exception(e))
             with LogsSwitcher(self):
-                logger.error("Unexpected termination of #%d", self.job_id)
+                logger.error("Unexpected termination of #%d", job_bo.id)
                 logger.exception(e)
 
     @abc.abstractmethod
