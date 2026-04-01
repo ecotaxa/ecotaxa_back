@@ -35,6 +35,8 @@ def fastapi(config, database, tstlogs) -> Generator[TestClient, Any, None]:
     # Teardown, once per module
     consistency_exception = None
     try:
+        # Note: if it fails here, add ccheck fixture to all tests in module and
+        # track the faulty one
         sce_check_consistency("fastapi fx")
     except AssertionError as e:
         consistency_exception = e

@@ -24,7 +24,6 @@ from tests.jobs import (
     api_check_job_ok,
     get_job_and_wait_until_ok,
 )
-from tests.logspy_feature import DBWRITER_LOG
 from tests.test_classification import (
     classify_all,
     query_all_objects,
@@ -43,7 +42,7 @@ from tests.test_import import (
     do_test_import,
     do_import_a_bit_more_skipping,
 )
-from tests.test_import_update import do_import_update, IMPORT_JOB_LOG
+from tests.test_import_update import do_import_update
 from tests.test_subentities import current_object
 from tests.test_update_prj import PROJECT_UPDATE_URL
 
@@ -345,7 +344,6 @@ def test_export_roundtrip_self(fastapi, caplog, export_method):
     The format makes it possible to import update into another project, provided object_ids are present.
     """
     caplog.set_level(logging.CRITICAL)
-    caplog.set_level(logging.INFO, DBWRITER_LOG)
 
     # Admin imports the project
 

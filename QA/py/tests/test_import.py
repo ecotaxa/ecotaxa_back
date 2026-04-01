@@ -36,7 +36,6 @@ from tests.jobs import (
     check_job_errors,
     api_reply_to_waiting_job,
 )
-from tests.logspy_feature import DBWRITER_LOG
 from tests.prj_utils import check_project
 
 
@@ -133,7 +132,7 @@ def do_test_import(fastapi, title, path=str(PLAIN_FILE), instrument=None):
 
 
 # @pytest.mark.skip()
-def test_import_again_skipping(fastapi, ccheck):
+def test_import_again_skipping(fastapi):
     """Re-import similar files into same project
     CANNOT RUN BY ITSELF"""
     srch = search_unique_project(ADMIN_USER_ID, ONE_WITH_TITLE)
@@ -154,7 +153,7 @@ def test_import_again_skipping(fastapi, ccheck):
 
 
 # @pytest.mark.skip()
-def test_import_again_irrelevant_skipping(fastapi, ccheck):
+def test_import_again_irrelevant_skipping(fastapi):
     """Re-import similar files into same project
     CANNOT RUN BY ITSELF"""
     srch = search_unique_project(ADMIN_USER_ID, ONE_WITH_TITLE)
@@ -210,7 +209,7 @@ def do_import_a_bit_more_skipping(fastapi, title, path=str(PLUS_DIR)):
     # TODO: Assert the extra "object_extra" in TSV in data/import_test_plus/m106_mn01_n3_sml
 
 
-def test_import_again_not_skipping_tsv_skipping_imgs(fastapi, ccheck, caplog):
+def test_import_again_not_skipping_tsv_skipping_imgs(fastapi, caplog):
     """Re-import into same project, not skipping TSVs
     CANNOT RUN BY ITSELF"""
     # time.sleep(
@@ -269,7 +268,7 @@ def import_various(fastapi, prj_id):
 
 
 # @pytest.mark.skip()
-def test_import_again_not_skipping_nor_imgs(fastapi, ccheck):
+def test_import_again_not_skipping_nor_imgs(fastapi):
     """Re-import into same project, not skipping TSVs or images
     CANNOT RUN BY ITSELF"""
     srch = search_unique_project(ADMIN_USER_ID, ONE_WITH_TITLE)
@@ -283,7 +282,7 @@ def test_import_again_not_skipping_nor_imgs(fastapi, ccheck):
 
 
 # @pytest.mark.skip()
-def test_equal_dump_prj1(fastapi, ccheck, tstlogs):
+def test_equal_dump_prj1(fastapi, tstlogs):
     out_dump = "prj1.txt"
     with AsciiDumper() as sce:
         sce.run(projid=1, out=tstlogs / out_dump)
@@ -294,7 +293,6 @@ def test_equal_dump_prj1(fastapi, ccheck, tstlogs):
 @pytest.mark.parametrize("title", ["Test LS 2"])
 def test_import_uvp6(fastapi, caplog, title):
     caplog.set_level(logging.INFO)
-    caplog.set_level(logging.INFO, DBWRITER_LOG)
     prj_id, log = do_import_uvp6(fastapi, title, fetch_log=True)
     # Check that all went fine
     assert all(":ERROR" not in line for line in log)
@@ -318,7 +316,7 @@ def test_equal_dump_prj2(fastapi, tstlogs):
 
 
 # @pytest.mark.skip()
-def test_import_empty(fastapi, ccheck):
+def test_import_empty(fastapi):
     """Nothing relevant to import"""
     prj_id = create_project(ADMIN_USER_ID, "Test LS 3")
 
@@ -330,7 +328,7 @@ def test_import_empty(fastapi, ccheck):
 
 
 # @pytest.mark.skip()
-def test_import_empty_tsv(fastapi, ccheck):
+def test_import_empty_tsv(fastapi):
     """a TSV with header but no data"""
     prj_id = create_project(ADMIN_USER_ID, "Test LS 3")
 
@@ -341,7 +339,7 @@ def test_import_empty_tsv(fastapi, ccheck):
     assert len(errors) == 1
 
 
-def test_import_empty_tsv2(fastapi, ccheck):
+def test_import_empty_tsv2(fastapi):
     """a TSV with nothing at all"""
     prj_id = create_project(ADMIN_USER_ID, "Test LS 2.6.3")
 
@@ -353,7 +351,7 @@ def test_import_empty_tsv2(fastapi, ccheck):
 
 
 # @pytest.mark.skip()
-def test_import_issues(fastapi, ccheck):
+def test_import_issues(fastapi):
     """The TSV contains loads of problems"""
     prj_id = create_project(ADMIN_USER_ID, "Test LS 4")
 
@@ -381,7 +379,7 @@ def test_import_issues(fastapi, ccheck):
     ]
 
 
-def test_import_no_valid_category(fastapi, ccheck):
+def test_import_no_valid_category(fastapi):
     """The TSV contains an unknown classification id"""
     prj_id = create_project(ADMIN_USER_ID, "Test LS 5")
 
@@ -394,7 +392,7 @@ def test_import_no_valid_category(fastapi, ccheck):
     ]
 
 
-def test_import_no_valid_state_and_others(fastapi, ccheck, tstlogs):
+def test_import_no_valid_state_and_others(fastapi, tstlogs):
     """Some states need complementary information that cannot be defaulted"""
     prj_id = create_project(ADMIN_USER_ID, "Test LS 10")
 
@@ -409,7 +407,7 @@ def test_import_no_valid_state_and_others(fastapi, ccheck, tstlogs):
     check_project(tstlogs, prj_id)
 
 
-def test_import_classif_without_state(fastapi, ccheck, tstlogs):
+def test_import_classif_without_state(fastapi, tstlogs):
     """Importing a classification implies having a state"""
     prj_id = create_project(ADMIN_USER_ID, "Test import problem 11")
 
@@ -424,7 +422,7 @@ def test_import_classif_without_state(fastapi, ccheck, tstlogs):
     check_project(tstlogs, prj_id)
 
 
-def test_import_data_without_header(fastapi, ccheck, tstlogs):
+def test_import_data_without_header(fastapi, tstlogs):
     """Mistake, no header but some data in a column"""
     prj_id = create_project(ADMIN_USER_ID, "Test import problem 12")
 
@@ -439,7 +437,7 @@ def test_import_data_without_header(fastapi, ccheck, tstlogs):
     check_project(tstlogs, prj_id)
 
 
-def test_import_state_without_related(fastapi, ccheck, tstlogs):
+def test_import_state_without_related(fastapi, tstlogs):
     """Importing just 'V' or 'D' is OK, we provide reasonable defaults"""
     prj_id = create_project(ADMIN_USER_ID, "Test import case 12")
 
@@ -451,7 +449,7 @@ def test_import_state_without_related(fastapi, ccheck, tstlogs):
 
 
 # @pytest.mark.skip()
-def test_import_too_many_custom_columns(fastapi, ccheck):
+def test_import_too_many_custom_columns(fastapi):
     """The TSV contains too many custom columns.
     Not a realistic case, but it simulates what happens if importing into a project with
      mappings"""
@@ -485,7 +483,7 @@ def test_import_too_many_custom_columns(fastapi, ccheck):
     assert errors == compare_errors
 
 
-def test_import_dups_in_tsv(fastapi, ccheck):
+def test_import_dups_in_tsv(fastapi):
     """The TSV contains duplicated lines.
     Either without _or without_ 'skip_existing_objects' option, it must not pass preliminary validation,
     as such duplicate is against referential integrity."""

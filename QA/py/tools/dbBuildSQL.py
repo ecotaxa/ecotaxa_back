@@ -126,7 +126,10 @@ class EcoTaxaDBFrom0(object):
         # Produce connection sockets in a user-writable directory (linux)
         pg_opts = [
             "-o",
-            '-c unix_socket_directories="' + str(self.db_dir / "run") + '"',
+            '-c unix_socket_directories="'
+            + str(self.db_dir / "run")
+            + '" '  # Speed up DB operations
+            + "-c fsync=off -c synchronous_commit=off -c full_page_writes=off",
         ]
         pg_opts += ["-o", '"-p %d"' % PG_PORT]
         cmd = [pgctl_bin, "start", "-W"] + pg_opts

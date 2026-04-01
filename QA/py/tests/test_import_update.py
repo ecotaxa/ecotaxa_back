@@ -13,7 +13,6 @@ from tests.api_wrappers import (
     api_get_log_file,
 )
 from tests.credentials import ADMIN_USER_ID, ADMIN_AUTH
-from tests.logspy_feature import IMPORT_JOB_LOG, DBWRITER_LOG
 from tests.jobs import check_job_ok, api_reply_to_waiting_job
 from tests.test_import import (
     create_project,
@@ -188,7 +187,6 @@ def do_import_update(fastapi, prj_id, caplog, mode, source, expected_errors=Fals
     params = dict(skip_existing_objects=True, update_mode=mode, source_path=source)
     caplog.clear()
     caplog.set_level(logging.INFO)
-    caplog.set_level(logging.INFO, DBWRITER_LOG)
     rsp = api_file_import(fastapi, prj_id, params, ADMIN_AUTH)
     job_id = rsp.json()["job_id"]
     job = api_wait_for_stable_job(fastapi, job_id)
