@@ -7,14 +7,14 @@
 from typing import Dict, List, Optional
 
 from BO.DataLicense import DataLicense, AccessLevelEnum
+from DB.TaxoRecast import RecastOperation
+from DB.User import UserStatus, UserType, PeopleOrganizationDirectory
 from BO.User import (
     USER_PWD_REGEXP,
     USER_PWD_REGEXP_DESCRIPTION,
     SHORT_TOKEN_AGE,
     PROFILE_TOKEN_AGE,
 )
-from DB.TaxoRecast import RecastOperation
-from DB.User import UserStatus, UserType, PeopleOrganizationDirectory
 from helpers.pydantic import BaseModel, Field
 
 FORMULAE = """subsample_coef: 1/ssm.sub_part
@@ -148,7 +148,7 @@ class Constants(BaseModel):
         default={st.name: st.value for st in RecastOperation},
         example={
             "prediction_input": "pre_predict",
-            "settings": "settings",
-            "dwca_export": "dwca_export",
+            "dwca_export_occurrence": "dwca_export_occurrence",
+            "dwca_export_emof": "dwca_export_emof",
         },
     )

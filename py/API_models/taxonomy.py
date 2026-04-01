@@ -6,10 +6,14 @@
 #
 from typing import List, Optional, Any, Dict
 
-from pydantic import Extra
+from pydantic import Extra, validator
+from fastapi import HTTPException
+from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 from API_models.crud import ProjectSummaryModel
 from API_models.helpers.DBtoModel import OrmConfig, combine_models
+from BO.TaxoRecast import TaxoRecastBO
+from DB.Taxonomy import Taxonomy
 from DB.TaxoRecast import RecastOperation
 from DB.Taxonomy import Taxonomy
 from helpers.pydantic import BaseModel, Field
@@ -23,7 +27,7 @@ class TaxoRecastRsp(BaseModel):
     from_to: Dict[str, Optional[int]] = Field(
         title="Categories mapping",
         description="Mapping from seen taxon (key) to output replacement one (value)."
-        " Use a null replacement to _discard_ the present taxon. Note: keys are strings.",
+        " Use a null replacement to _discard_ the present taxon. Note: keys are strings. Every",
         example={"456": 956, "2456": 213, "9134": None},
     )
     doc: Optional[Dict[str, str]] = Field(
@@ -35,6 +39,14 @@ class TaxoRecastRsp(BaseModel):
             "9134": "Detritus",
         },
     )
+
+    # noinspection PyMethodParameters
+    @validator("from_to")
+    def ensure_consistent_renaming(cls, v):
+        resp = TaxoRecastBO.valid_remap(v)
+        if resp is not None:
+            raise HTTPException(HTTP_422_UNPROCESSABLE_ENTITY, detail=[resp])
+        return v
 
     class Config:
         extra = Extra.forbid
@@ -188,8 +200,7 @@ class TaxonomyRecastReq(BaseModel):
     operation: RecastOperation = Field(
         title="Recast operation",
         description="Recast operation name.",
-        example="overwrite_auto",
-        default=RecastOperation.settings,
+        example=RecastOperation.dwca_export_emof,
     )
     is_collection: bool = Field(
         title="Is collection",
@@ -197,7 +208,7 @@ class TaxonomyRecastReq(BaseModel):
         default=False,
     )
     recast: TaxoRecastRsp = Field(
-        title="Recast mapping and react doc",
+        title="Recast mapping and doc",
         description="Recast taxonomy from key to value.",
         # defaut={},
         example={
@@ -205,6 +216,14 @@ class TaxonomyRecastReq(BaseModel):
             "doc": {"234": "up to the nearest non morpho"},
         },
     )
+
+    # noinspection PyMethodParameters
+    @validator("recast")
+    def ensure_consistent_renaming(cls, v):
+        resp = TaxoRecastBO.valid_remap(v.from_to)
+        if resp is not None:
+            raise HTTPException(HTTP_422_UNPROCESSABLE_ENTITY, detail=[resp])
+        return v
 
 
 class _Taxo2Model(BaseModel):

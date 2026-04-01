@@ -4,7 +4,7 @@
 #
 #  Models used in CRUD API_operations.
 #
-from typing import Optional, Dict, List, Any, Union,Tuple
+from typing import Optional, Dict, List, Any, Union, Tuple
 from BO.ColumnUpdate import ColUpdate
 from BO.DataLicense import LicenseEnum, AccessLevelEnum
 from BO.Job import DBJobStateEnum
@@ -358,10 +358,14 @@ class _Collection2Model(DescriptiveModel):
         example=LicenseEnum.CC_BY,
     )
     abstract: str = Field(
-        title="Abstract", description="The collection abstract.", example=""
+        title="Abstract",
+        description="The collection abstract. It appears in the IPT under the description label",
+        example="",
     )
     description: str = Field(
-        title="Description", description="The collection description.", example=""
+        title="Description",
+        description="The collection description. It appears in the EMLMeta fields as the additional_info field and in the IPT under the additional info label.",
+        example="",
     )
 
 
@@ -787,7 +791,15 @@ class _AddedToCollection(BaseModel):
         organisation(s) associated with the collection (with display order) .""",
         default=[],
     )
-    display_order:Dict[str,Any] = Field(title="Creators and associates display order",description="display order of creators and asosciates (users and organizations) needed to publish", default={"creators":[],"associates":[]},example={"creators":["123_o","657_u","213_u"],"associates":["13_u","823_o","3_u"]})
+    display_order: Dict[str, Any] = Field(
+        title="Creators and associates display order",
+        description="display order of creators and asosciates (users and organizations) needed to publish",
+        default={"creators": [], "associates": []},
+        example={
+            "creators": ["123_o", "657_u", "213_u"],
+            "associates": ["13_u", "823_o", "3_u"],
+        },
+    )
 
 
 class CollectionModel(_AddedToCollection, _CollectionModelFromDB):
@@ -865,7 +877,15 @@ class CollectionReq(BaseModel):
         description="""Other
         organisation(s) Ids or names associated with the collection.""",
     )
-    display_order:Dict[str,Any] = Field(title="Creators and associates display order",description="display order of creators and asosciates (users and organizations) needed to publish", default={"creators":[],"associates":[]},example={"creators":["123_o","657_u","213_u"],"associates":["13_u","823_o","3_u"]})
+    display_order: Dict[str, Any] = Field(
+        title="Creators and associates display order",
+        description="display order of creators and asosciates (users and organizations) needed to publish",
+        default={"creators": [], "associates": []},
+        example={
+            "creators": ["123_o", "657_u", "213_u"],
+            "associates": ["13_u", "823_o", "3_u"],
+        },
+    )
 
     class Config:
         schema_extra = {"title": "Update full or partial Collection Model"}

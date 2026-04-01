@@ -12,7 +12,7 @@ _eml = r"""
       <givenName>Real</givenName>
       <surName>User</surName>
     </individualName>
-    <organizationName>IMEV</organizationName>
+    <organizationName>Institut de la Mer de Villefranche (IMEV)</organizationName>
     <address>
       <country>FR</country>
     </address>
@@ -27,7 +27,7 @@ _eml = r"""
       <givenName>Real</givenName>
       <surName>User</surName>
     </individualName>
-    <organizationName>IMEV</organizationName>
+    <organizationName>Institut de la Mer de Villefranche (IMEV)</organizationName>
     <address>
       <country>FR</country>
     </address>
@@ -50,11 +50,15 @@ This series is part of the long term planktonic monitoring of
     <keyword>EcoTaxa</keyword>
     <keywordThesaurus>GBIF Dataset Type Vocabulary: http://rs.gbif.org/vocabulary/gbif/dataset_type.xml</keywordThesaurus>
   </keywordSet>
+  <additionalInfo>
+    <para>additional infos of the collection</para>
+  </additionalInfo>
   <intellectualRights>
     <para>This work is licensed under a <ulink url="https://creativecommons.org/licenses/by/4.0/legalcode">
         <citetitle>Creative Commons Attribution (CC-BY) 4.0 License</citetitle>
       </ulink>.</para>
   </intellectualRights>
+  <publisher>EcoTaxa</publisher>
   <distribution>
     <online>
       <url function="information">https://ecotaxa.obs-vlfr.fr/api/collections/by_title?q=EMODNET+test+collection+exp</url>
@@ -110,7 +114,7 @@ This series is part of the long term planktonic monitoring of
       <givenName>Real</givenName>
       <surName>User 3</surName>
     </individualName>
-    <organizationName>Institute - DDORG</organizationName>
+    <organizationName>Double Dash - Institute (DDORG)</organizationName>
     <address>
       <country>CL</country>
     </address>
@@ -125,6 +129,7 @@ This series is part of the long term planktonic monitoring of
   <metadata>
     <gbif>
       <dateStamp>2021-07-10T11:22:33</dateStamp>
+      <citation>Citation of the collection</citation>
     </gbif>
   </metadata>
 </additionalMetadata>

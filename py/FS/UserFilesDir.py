@@ -6,6 +6,7 @@ import gzip
 import os
 import shutil
 import tarfile
+import time
 import zipfile
 from pathlib import Path
 from typing import Optional, List, NamedTuple, Dict, Tuple

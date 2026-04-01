@@ -5,6 +5,7 @@
 # Based on https://fastapi.tiangolo.com/
 #
 import os
+import re
 import time
 from logging import INFO
 from typing import Union, Tuple, List, Dict, Any, Optional
@@ -29,6 +30,7 @@ from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from fastapi_utils.timing import add_timing_middleware
 from sqlalchemy.sql.expression import null
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
 from API_models.constants import Constants
@@ -64,7 +66,6 @@ from API_models.exports import (
     SummaryExportReq,
     BackupExportReq,
 )
-from API_models.taxonomy import TaxoRecastRsp, TaxonomyRecastReq
 from API_models.filesystem import DirectoryModel
 from API_models.filters import ProjectFilters
 from API_models.helpers.Introspect import plain_columns
@@ -98,6 +99,8 @@ from API_models.taxonomy import (
     TaxonCentral,
     AddWormsTaxonModel,
 )
+from API_models.taxonomy import TaxoRecastRsp, TaxonomyRecastReq
+from API_operations.BigFiles import create_big_files_router
 from API_operations.CRUD.Collections import CollectionsService
 from API_operations.CRUD.Constants import ConstantsService
 from API_operations.CRUD.Guests import GuestService
@@ -155,12 +158,13 @@ from BO.Project import ProjectBO, ProjectUserStats, ProjectColumns
 from BO.ProjectSet import ProjectSetColumnStats
 from BO.Sample import SampleBO, SampleTaxoStats
 from BO.Taxonomy import TaxonBO
-from BO.WoRMSification import WoRMSBO
 from BO.User import UserIDT, GuestIDT
+from BO.WoRMSification import WoRMSBO
 from DB import Sample
 from DB.Object import ObjectIDListT
 from DB.Project import ProjectTaxoStat, Project
 from DB.ProjectPrivilege import ProjectPrivilege
+from DB.TaxoRecast import RecastOperation
 from DB.User import User, OrganizationIDT
 from helpers.AppConfig import Config
 from helpers.Asyncio import async_bg_run, log_streamer
@@ -224,6 +228,23 @@ app.add_middleware(
 # Optimize large responses -> Let's leave this task to some proxy coded in C
 # app.add_middleware(GZipMiddleware, minimum_size=1024)
 
+
+class FixLocationMiddleware(BaseHTTPMiddleware):
+    # Any redirect should point to the frontend, not the backend
+    FRONT_URL = Config().get_account_validation_url()
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        location = response.headers.get("location")
+        if location:
+            match = re.match(r"^http://[^/]+(/.*|$)", location)
+            if match:
+                path = match.group(1) or "/"
+                response.headers["location"] = f"{self.FRONT_URL}{path[1:]}"
+        return response
+
+
+app.add_middleware(FixLocationMiddleware)
 
 # HTML stuff
 # app.mount("/styles", StaticFiles(directory="pages/styles"), name="styles")
@@ -1173,18 +1194,19 @@ def darwin_core_format_export(
 
     Note: Only manageable collections can be exported.
     """
+
     with DarwinCoreExport(
         request.collection_id,
         request.dry_run,
-        request.computations_pre_mapping,
         request.include_predicted,
         request.with_absent,
         request.with_computations,
         request.formulae,
         request.extra_xml,
+        current_user,
     ) as sce:
-        with RightsThrower():
-            return sce.run(current_user)
+        with ValidityThrower(), RightsThrower():
+            return sce.run()
 
 
 @app.delete(
@@ -3467,12 +3489,8 @@ def update_taxonomy_recast(
     **Create or Update the collection or project taxonomy recast**.
      Note: The recast is updated only if manageable.
     """
-    print("recast  ----", recast.operation)
-    print("recast ---------", recast.recast)
-    print("reacst target", recast.target_id)
-    print("iscoll", recast.is_collection)
     with TaxonomyService() as sce:
-        with RightsThrower():
+        with ValidityThrower(), RightsThrower():
             sce.update_taxonomy_recast(current_user, recast)
 
 
@@ -3488,11 +3506,11 @@ def get_taxonomy_recast(
         description="Internal, the unique numeric id of this collection.",
         example=1,
     ),
-    operation: str = Query(
+    operation: RecastOperation = Query(
         default=None,
         title="Operation name",
         description="One of RecastOperation enum value",
-        example="settings",
+        example="dwca_export_occurrence",
     ),
     is_collection: bool = Query(
         default=False,
@@ -3508,11 +3526,38 @@ def get_taxonomy_recast(
     with TaxonomyService() as sce:
         with RightsThrower():
             ret = sce.get_taxonomy_recast(
-                current_user,
+                current_user_id=current_user,
                 target_id=target_id,
                 operation=operation,
                 is_collection=is_collection,
             )
+    return ret
+
+
+@app.get(
+    "/taxo_worms",
+    operation_id="get_taxonomy_worms",
+    tags=["Taxonomy Tree"],
+    response_model=Dict[str, int],
+)
+def get_taxonomy_worms(
+    taxaids: str = Query(
+        title="Taxa Ids",
+        description="taxon id separated by ,",
+        default="",
+        example="all",
+    ),
+    current_user: int = Depends(get_current_user),
+) -> Dict[str, int]:
+    """
+    **Read the collection or project taxonomy recast**.
+     Note: The data is returned only if manageable.
+    """
+    ids = _split_num_list(taxaids)
+    with TaxonomyService() as sce:
+        ret = sce.get_taxonomy_worms(
+            taxaids=ids,
+        )
     return ret
 
 
@@ -4213,6 +4258,10 @@ def startup_event() -> None:
     # Small service construction & check, to ensure config and the DB are OK
     with ConstantsService() as sce:
         sce.config.validate()
+
+    # The router for big files needs a valid USERSFILESAREA config
+    app.include_router(create_big_files_router())
+
     # Clean memory every minute
     JobScheduler.todo_on_idle = regular_mem_cleanup
     # Don't run predictions, they are left to a specialized runner

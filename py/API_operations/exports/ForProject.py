@@ -6,6 +6,7 @@
 #
 import abc
 import csv
+import json
 import os
 import re
 import zipfile
@@ -27,6 +28,8 @@ from API_models.exports import (
     SummaryExportSumOptionsEnum,
 )
 from API_models.filters import ProjectFiltersDict
+from BO.Classification import ClassifIDT
+from BO.Collection import CollectionIDT
 from BO.Mappings import ProjectSetMapping, PREFIX_TO_TABLE
 from BO.ObjectSet import DescribedObjectSet, DescribedObjectBOSet
 from BO.ObjectSetQueryPlus import ResultGrouping, IterableRowsT, ObjectSetQueryPlus
@@ -39,8 +42,9 @@ from DB.Object import (
     DUBIOUS_CLASSIF_QUAL,
     PREDICTED_CLASSIF_QUAL,
 )
-from DB.Project import Project, ProjectIDListT
+from DB.Project import Project, ProjectIDListT, ProjectIDT
 from DB.ProjectVariables import ProjectVariables
+from DB.TaxoRecast import TaxoRecast, RecastOperation
 from DB.helpers.Direct import text
 from DB.helpers.SQL import OrderClause
 from FS.CommonDir import ExportFolder
@@ -68,6 +72,26 @@ class ProjectExport(JobServiceBase):
         self.out_file_name: str = ""
         self.out_path: Path = Path("")
         self.backup_with_just_image_refs = False
+        self.pre_mapping: Dict[ClassifIDT, Optional[ClassifIDT]] = {}
+        # get pre_mapping
+        if self.JOB_TYPE == "SummaryExport" or self.JOB_TYPE == "GeneralExport":
+            if self.req.collection_id is not None:
+                is_collection = True
+                target_id = int(self.req.collection_id)
+                operation = RecastOperation.collection_export
+            else:
+                is_collection = False
+                target_id = int(self.req.project_id)
+                operation = RecastOperation.project_export
+            pre_mapping: Optional[Dict[int, Optional[ClassifIDT]]] = (
+                self.query_taxo_recast(
+                    target_id=target_id,
+                    operation=operation,
+                    is_collection=is_collection,
+                )
+            )
+            if pre_mapping is not None:
+                self.pre_mapping = pre_mapping
 
     def run(self, current_user_id: int) -> ExportRsp:
         """
@@ -230,8 +254,13 @@ class ProjectExport(JobServiceBase):
             done_infos.update({"rowcount": nb_rows, "out_file": self.out_file_name})
         # Final copy
         if req.out_to_ftp:
+            export_folder = self.config.export_folder()
+            if export_folder is None:
+                raise Exception(
+                    "out_to_ftp was requested but export folder is not defined"
+                )
             self.update_progress(progress_before_copy, "Copying file to FTP")
-            dest = ExportFolder(self.config.export_folder())
+            dest = ExportFolder(export_folder)
             # Disambiguate using the job ID
             if out_file_name is None:
                 out_file_name = self.out_file_name
@@ -249,6 +278,19 @@ class ProjectExport(JobServiceBase):
         if out_file_name is not None and "out_file" not in done_infos:
             self.out_file_name = out_file_name
             done_infos.update({"out_file": self.out_file_name})
+            if self.JOB_TYPE == "SummaryExport" or self.JOB_TYPE == "GeneralExport":
+                # pre_mapping
+                infotaxonomy = {
+                    "taxonomy": {
+                        "renames": self.pre_mapping,
+                    }
+                }
+                done_infos.update(infotaxonomy)
+
+                logger.info(
+                    "------------------ taxonomy renames --------------- %s",
+                    json.dumps(infotaxonomy),
+                )
         self.set_job_result(errors=[], infos=done_infos)
 
     def append_log_to_zip(self) -> None:
@@ -919,7 +961,7 @@ class ProjectExport(JobServiceBase):
         # Get possible taxa names
         txo_qry = (
             ObjectSetQueryPlus(object_set)
-            .remap_categories(self.req.pre_mapping)
+            .remap_categories(self.pre_mapping)
             .add_selects(["txo.display_name"])
             .set_aliases({"txo.display_name": "txo"})
             .set_grouping(ResultGrouping.BY_TAXO)
@@ -978,7 +1020,7 @@ class ProjectExport(JobServiceBase):
         )
         # The specialized SQL builder operates from the object set
         aug_qry = ObjectSetQueryPlus(object_set)
-        aug_qry.remap_categories(req.pre_mapping)
+        aug_qry.remap_categories(self.pre_mapping)
         # Formulae default from the project but are overriden by the query
         formulae: Dict[str, str] = {}
         for project_id in project_ids:
@@ -1031,6 +1073,31 @@ class ProjectExport(JobServiceBase):
         self.update_progress(90, msg)
 
         return 0
+
+    def query_taxo_recast(
+        self,
+        target_id: Union[ProjectIDT, CollectionIDT],
+        operation: RecastOperation,
+        is_collection: bool = False,
+    ) -> Optional[Dict[ClassifIDT, Optional[ClassifIDT]]]:
+        qry = self.ro_session.query(TaxoRecast)
+        qry = qry.filter(TaxoRecast.operation == operation)
+        if is_collection:
+            qry = qry.filter(TaxoRecast.collection_id == target_id)
+        else:
+            qry = qry.filter(TaxoRecast.project_id == target_id)
+        res = qry.all()
+        if res is None or len(res) != 1:
+            return None
+        the_one = json.loads(res[0].transforms)
+        transforms: Dict[ClassifIDT, Optional[ClassifIDT]] = {}
+        for k, v in the_one.items():
+            if v is None:
+                val = 0
+            else:
+                val = int(v)
+            transforms.update({int(k): val})
+        return transforms
 
 
 class SpecializedProjectExport(ProjectExport):
@@ -1105,7 +1172,6 @@ class SummaryProjectExport(SpecializedProjectExport):
             project_id=req.project_id,
             exp_type=new_type_to_old[req.quantity],
             sum_subtotal=new_level_to_old[req.summarise_by],
-            pre_mapping=req.taxo_mapping,
             formulae=req.formulae,
             out_to_ftp=req.out_to_ftp,
         )
