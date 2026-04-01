@@ -5,7 +5,6 @@
 import os
 import sys
 import threading
-import time
 from multiprocessing import Process
 from threading import Event, Thread
 from typing import Any, Optional, List, ClassVar, Callable, Type, Union
@@ -243,12 +242,6 @@ class JobScheduler(Service):
             # Cancel the timer if it's waiting
             if cls.the_timer:
                 cls.the_timer.cancel()
-            # Wait for it gone, with a timeout to avoid infinite block
-            start_wait = time.time()
-            while cls.the_timer is not None and time.time() - start_wait < 10:
-                time.sleep(0.1)
-            if cls.the_timer is not None:
-                logger.warning("JobScheduler timer did not stop gracefully")
                 cls.the_timer = None
 
         # Also ensure the runner is joined if it was finished or we are shutting down
