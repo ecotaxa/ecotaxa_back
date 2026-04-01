@@ -180,6 +180,22 @@ def test_job_kill(fastapi, jobs_as_process):
     rsp = fastapi.delete(job_delete_url, headers=ADMIN_AUTH)
     assert rsp.status_code == 200
 
+    # 5. Check if it's really killed and state is Error/Killed
+    start_time = time.time()
+    while time.time() - start_time < 5:
+        rsp = fastapi.get(job_get_url, headers=ADMIN_AUTH)
+        job_info = rsp.json()
+        if job_info["state"] == "E" and job_info["progress_msg"] == "Killed":
+            break
+        time.sleep(0.1)
+    else:
+        pytest.fail(
+            f"Job was not killed properly or didn't reach Error state. Current: {job_info}"
+        )
+
+    # Wait for the process to truly exit
+    time.sleep(1.0)
+
     # 5. Verify it's in Error state with Killed message
     # Wait a bit for the state to update if it's not immediate
     # Actually JobCRUDService.delete updates the state immediately in DB

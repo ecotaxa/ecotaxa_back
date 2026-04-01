@@ -2,10 +2,9 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2021  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-import json
 import os
-import threading
 import sys
+import threading
 import time
 from multiprocessing import Process
 from threading import Event, Thread
@@ -224,6 +223,7 @@ class JobScheduler(Service):
             logger.exception("Job run() exception: %s", e)
         if not cls.do_run.is_set():
             if cls.the_runner is not None:
+                # Wait for child process indefinitely before taking another task
                 cls.the_runner.join()
                 cls.the_runner = None
             cls.the_timer = None
@@ -240,6 +240,27 @@ class JobScheduler(Service):
         if cls.do_run.is_set():
             # Signal the timer to stop & cancel itself
             cls.do_run.clear()
-            # Wait for it gone
-            while cls.the_timer is not None:
-                time.sleep(1)
+            # Cancel the timer if it's waiting
+            if cls.the_timer:
+                cls.the_timer.cancel()
+            # Wait for it gone, with a timeout to avoid infinite block
+            start_wait = time.time()
+            while cls.the_timer is not None and time.time() - start_wait < 10:
+                time.sleep(0.1)
+            if cls.the_timer is not None:
+                logger.warning("JobScheduler timer did not stop gracefully")
+                cls.the_timer = None
+
+        # Also ensure the runner is joined if it was finished or we are shutting down
+        if cls.the_runner is not None:
+            if not cls.the_runner.is_alive():
+                cls.the_runner.join(timeout=1)
+                cls.the_runner = None
+            else:
+                # If it's still alive, we might want to wait a bit or just leave it
+                # but for tests, we should probably try to join it
+                cls.the_runner.join(timeout=2)
+                if not cls.the_runner.is_alive():
+                    cls.the_runner = None
+                else:
+                    logger.warning("JobScheduler runner is still alive during shutdown")
