@@ -55,7 +55,7 @@ def test_import_update(fastapi, caplog, tstlogs):
     # 9 fields + 7 derived sun positions
     assert nb_upds == 16
     saves = [line for line in log if "Batch save objects" in line]
-    assert len(saves) == 4
+    assert len(saves) == 4  # Note: Is only 2 with spawned tasks
     for s in saves:
         assert "Batch save objects of 0/0/0/0/0/0" in s
 
@@ -71,7 +71,7 @@ def test_import_update(fastapi, caplog, tstlogs):
         dump_sce.run(projid=prj_id, out=tstlogs / "after_upd.txt")
     # ecotaxa/ecotaxa_dev#583: Check that no image was added during the update
     saves = [line for line in log if "Batch save objects" in line]
-    assert len(saves) == 4
+    assert len(saves) == 4  # Note: Is only 2 with spawned tasks
     for s in saves:
         assert "Batch save objects of 0/0/0/0/0/0" in s
 

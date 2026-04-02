@@ -6,7 +6,7 @@ import os
 import signal
 import time
 from pathlib import Path
-from typing import Tuple, List, Any, Dict, TextIO
+from typing import Tuple, List, Any, Dict, TextIO, Optional
 
 from BG_operations.JobScheduler import JobScheduler
 from BO.Job import JobBO
@@ -86,7 +86,12 @@ class JobCRUDService(Service):
             temp_for_job = TempDirForTasks(self.config.jobs_dir())
             temp_dir = temp_for_job.base_dir_for(job_id)
             # Get the job in its state...
-            with JobScheduler.instantiate(job_bo) as sce:
+            sce_class = JobServiceBase.find_jobservice_class_by_type(job_bo.type)
+            assert sce_class is not None, "Found unknown job type %s for id %d" % (
+                job_bo.type,
+                job_id,
+            )
+            with JobScheduler.instantiate(sce_class, job_bo) as sce:
                 out_file_name = sce.PRODUCED_FILE_NAME
                 assert out_file_name is not None
             # ...and the file in its temp directory
@@ -167,20 +172,25 @@ class JobCRUDService(Service):
         log_path = self.get_log_path(current_user_id, job_id)
         if not log_path.exists():
             return
+
+        last_pid: Optional[int] = None
         with open(log_path, "r") as f:
-            # Skip first line
-            _ = f.readline()
-            # Line 2 should be e.g. 'Running in PID 123456'
-            line = f.readline()
-        if line and "Running in PID" in line:
-            pid_str = line.split("in PID")[-1].strip()
+            for line in f:
+                if "Running in PID" in line:
+                    try:
+                        pid_str = line.split("in PID")[-1].strip()
+                        last_pid = int(pid_str)
+                    except (ValueError, IndexError):
+                        pass
+
+        if last_pid is not None:
             try:
-                pid = int(pid_str)
-                os.kill(pid, signal.SIGTERM)
+                os.kill(last_pid, signal.SIGTERM)
                 # Wait a bit for the process to exit
                 time.sleep(0.5)
-            except (ValueError, ProcessLookupError):
+            except ProcessLookupError:
                 pass
+
         # Log who killed the process
         with open(log_path, "a") as f:
             f.write(f"\nProcess killed by user {current_user_id}\n")

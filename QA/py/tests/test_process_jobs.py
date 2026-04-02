@@ -208,6 +208,15 @@ def test_job_kill(fastapi, jobs_as_process):
         job_info["progress_msg"] == "Killed"
     ), f"Job progress_msg should be 'Killed' after kill, got: {job_info['progress_msg']}"
 
+    # 6. Verify a NEW job can be submitted and run after the previous one was killed
+    with PidReportingJob(main_pid=current_pid) as job2:
+        job2.run(ADMIN_USER_ID)
+        job2_id = job2.job_id
+
+    # Wait for the second job to finish successfully
+    api_wait_for_stable_job(fastapi, job2_id)
+    api_check_job_ok(fastapi, job2_id)
+
 
 def test_job_delete_pending(fastapi, jobs_as_process):
     """

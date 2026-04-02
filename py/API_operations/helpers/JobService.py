@@ -4,7 +4,7 @@
 #
 import abc
 from abc import ABC
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Type
 
 from BO.Job import JobBO
 from BO.User import UserIDT
@@ -42,19 +42,24 @@ class JobServiceBase(Service, LogEmitter, ABC):
         self.last_reply: Dict[str, Any] = {}
 
     @staticmethod
-    def find_jobservice_class_by_type(clazz, job_type: str):
+    def find_jobservice_class_by_type(
+        job_type: str,
+    ) -> Optional[Type["JobServiceBase"]]:
         """
-        Find a subclass with given type
+        Find a subclass with given JOB_TYPE
         """
-        for job_sub_class in clazz.__subclasses__():
-            if job_sub_class.JOB_TYPE == job_type:
-                return job_sub_class
-            else:
-                for_subclass = JobServiceBase.find_jobservice_class_by_type(
-                    job_sub_class, job_type
-                )
-                if for_subclass:
-                    return for_subclass
+
+        def find_class_by_type(clazz):
+            for job_sub_class in clazz.__subclasses__():
+                if job_sub_class.JOB_TYPE == job_type:
+                    return job_sub_class
+                else:
+                    for_subclass = find_class_by_type(job_sub_class)
+                    if for_subclass:
+                        return for_subclass
+            return None
+
+        return find_class_by_type(JobServiceBase)
 
     def log_file_path(self) -> str:
         """

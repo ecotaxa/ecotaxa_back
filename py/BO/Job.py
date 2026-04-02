@@ -89,6 +89,8 @@ class JobBO(object):
     def __getattr__(self, item):
         """Fallback for 'not found' field after the C getattr() call.
         If we did not enrich a Job field somehow then return it"""
+        if item in self.__slots__:
+            raise AttributeError(item)
         return getattr(self._job, item)
 
     def __setattr__(self, item, value):

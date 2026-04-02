@@ -2,6 +2,7 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2021  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+import multiprocessing as mp
 import os
 import sys
 import threading
@@ -16,11 +17,12 @@ from DB.Job import Job, DBJobStateEnum, JobIDT
 from DB.helpers.ORM import clone_of
 from helpers.DynamicLogs import (
     get_logger,
-    trash_stdout_stderr,
     LogsSwitcher,
 )
 
 logger = get_logger(__name__)
+
+mp.set_start_method("spawn", force=True)
 
 
 class BaseJobRunner:
@@ -29,14 +31,21 @@ class BaseJobRunner:
     """
 
     def __init__(self, a_db_job: JobBO):
+        # Get class to run
+        sce_class = JobServiceBase.find_jobservice_class_by_type(a_db_job.type)
+        if sce_class is None:
+            msg = "Found %s in DB and could not match to a Service" % a_db_job.type
+            logger.error(msg)
+            assert sce_class is not None, msg
         self.db_job = a_db_job
+        self.sce_class = sce_class
 
     def common_run(self, msg: str) -> None:
         """
         Common run logic for both Thread and Process runners.
         """
         try:
-            sce = JobScheduler.instantiate(self.db_job)
+            sce = JobScheduler.instantiate(self.sce_class, self.db_job)
             with LogsSwitcher(sce):
                 logger.info("Running in %s", msg)
         except Exception as te:
@@ -84,15 +93,25 @@ class ProcessJobRunner(Process, BaseJobRunner):
     def __init__(self, a_db_job: JobBO):
         Process.__init__(self, name="Job #%d" % a_db_job.id)
         BaseJobRunner.__init__(self, a_db_job)
+        self.daemon = False
 
     def run(self) -> None:
         """
         Run the background part of the service.
         """
-        # Re-init DB connection as this is a new process
-        Service.re_init_after_fork()
-        # Trash stdout and stderr to avoid prints and leakage
-        trash_stdout_stderr()
+        # Detach from prent
+        os.setsid()
+        # Redirect all FDs
+        null_fd = os.open(os.devnull, os.O_RDWR)
+        os.dup2(null_fd, 0)
+        os.dup2(null_fd, 1)
+        os.dup2(null_fd, 2)
+        os.close(null_fd)
+        # Fork again
+        pid = os.fork()
+        if pid > 0:
+            os._exit(0)
+        # Launch the job
         self.common_run(f"PID {os.getpid()}")
 
 
@@ -167,14 +186,7 @@ class JobScheduler(Service):
         cls.the_runner.start()
 
     @staticmethod
-    def instantiate(a_job: JobBO):
-        sce_class = JobServiceBase.find_jobservice_class_by_type(
-            JobServiceBase, a_job.type
-        )
-        if sce_class is None:
-            msg = "Found %s in DB and could not match to a Service" % a_job.type
-            logger.error(msg)
-            assert sce_class is not None, msg
+    def instantiate(sce_class: Type["JobServiceBase"], a_job: JobBO):
         # Load the service creation arguments
         assert a_job.params is not None
         sce_class.deser_args(a_job.params)
