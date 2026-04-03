@@ -2,8 +2,8 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2026  Picheral, Colin, Irisson (UPMC-CNRS)
 
-import logging
 from datetime import datetime
+from typing import Dict
 from urllib.parse import urlencode
 
 from authlib.integrations.starlette_client import OAuth  # type:ignore
@@ -13,6 +13,7 @@ from starlette.responses import RedirectResponse
 from API_models.crud import UserModelWithRights
 from API_operations.CRUD.Users import UserService
 from helpers.AppConfig import Config
+from helpers.DynamicLogs import get_logger
 from helpers.fastApiUtils import build_serializer
 from helpers.httpexception import (
     DETAIL_OPENID_NOT_CONFIGURED,
@@ -28,13 +29,19 @@ router = APIRouter(
 
 THE_PROVIDER = "gaia_data"
 
+logger = get_logger(__name__)
+
 
 def init_openid():
     client_id, client_secret, server_metadata_url = Config().get_openid_config()
 
     if client_id is None:
-        logging.info("OpenID provider NOT registered (missing config).")
+        logger.info("OpenID provider NOT registered (missing config).")
         return
+    # For self-signed local https in dev
+    strict_verify = (
+        False if server_metadata_url.startswith("https://localhost") else True
+    )
     oauth.register(
         name=THE_PROVIDER,
         client_id=client_id,
@@ -43,9 +50,10 @@ def init_openid():
         client_kwargs={
             "scope": "openid email profile",
             "code_challenge_method": "S256",
+            "verify": strict_verify,
         },
     )
-    logging.info("OpenID provider registered.")
+    logger.info("OpenID provider registered.")
 
 
 @router.get("/login", operation_id="openid_login")
@@ -65,8 +73,34 @@ async def openid_login(request: Request):
     try:
         return await provider.authorize_redirect(request, redirect_uri)
     except Exception as e:
-        logging.error(f"OpenID login redirect error: {e}")
-        raise HTTPException(status_code=502, detail=[DETAIL_OPENID_PROVIDER_ERROR])
+        logger.error(f"OpenID login redirect error: {e}")
+        raise HTTPException(
+            status_code=502, detail=[DETAIL_OPENID_PROVIDER_ERROR, str(e)]
+        )
+
+
+def normalize_user_info(user_info: Dict[str, str]):
+    email = user_info.get("email")
+    name = user_info.get("name")
+    if name is None:
+        given_name = user_info.get("given_name")
+        family_name = user_info.get("family_name")
+        if given_name or family_name:
+            name = (
+                (given_name if given_name else "")
+                + (" " if given_name and family_name else "")
+                + (family_name if family_name else "")
+            )
+        else:
+            name = email
+    return {
+        "email": email,
+        "name": name,
+        "organisation": user_info.get("organization", "Unknown"),
+        "country": user_info.get("country", "Unknown"),
+        "orcid": user_info.get("orcid", ""),
+        "usercreationreason": "Please fill in",
+    }
 
 
 @router.get(
@@ -83,9 +117,12 @@ async def openid_callback(request: Request):
     try:
         token = await provider.authorize_access_token(request)
     except Exception as e:
-        logging.error(f"OpenID callback access token error: {e}")
-        raise HTTPException(status_code=502, detail=[DETAIL_OPENID_PROVIDER_ERROR])
+        logger.error(f"OpenID callback access token error: {e}")
+        raise HTTPException(
+            status_code=502, detail=[DETAIL_OPENID_PROVIDER_ERROR, str(e)]
+        )
     user_info = token.get("userinfo")
+    logger.info("Callback got user_info %s", str(user_info))
     if user_info is None:
         return {
             "status": "error",
@@ -100,7 +137,7 @@ async def openid_callback(request: Request):
     id_token = token.get("id_token")
 
     with UserService() as sce:
-        sub = user_info.get(
+        _subject = user_info.get(
             "sub"
         )  # TODO: This one is unique, e.g. if user changes mail it will still point at him
         db_user = sce.find_by_email(email=email)
@@ -110,23 +147,25 @@ async def openid_callback(request: Request):
             user_id = db_user.id
         else:
             # Self-register or convert
+            norm_info = normalize_user_info(user_info)
             # Fill missing UserModelWithRights fields with relevant data
             new_user = UserModelWithRights(
                 id=-1,
-                email=email,
+                email=norm_info["email"],
                 mail_status=True,  # Trust provider
                 mail_status_date=datetime.now(),
                 status_date=datetime.now(),
                 status_admin_comment="OpenID auto-registration",
-                name=user_info.get("name", email),
-                organisation=user_info.get("organisation", "Unknown"),
-                country=user_info.get("country", "Unknown"),
-                usercreationreason="Please fill in",
-                orcid=user_info.get("orcid"),
+                name=norm_info["name"],
+                organisation=norm_info["organisation"],
+                country=norm_info["country"],
+                usercreationreason=norm_info["usercreationreason"],
+                orcid=norm_info["orcid"],
                 usercreationdate=datetime.now(),
                 password=None,
             )
             user_id = sce.add_openid_user(new_user=new_user)
+            logger.info("Added %s as %d", str(new_user), user_id)
 
             if user_id == -1:
                 return {
@@ -158,8 +197,10 @@ async def openid_logout(request: Request):
     try:
         metadata = await provider.load_server_metadata()
     except Exception as e:
-        logging.error(f"OpenID logout metadata error: {e}")
-        raise HTTPException(status_code=502, detail=[DETAIL_OPENID_PROVIDER_ERROR])
+        logger.error(f"OpenID logout metadata error: {e}")
+        raise HTTPException(
+            status_code=502, detail=[DETAIL_OPENID_PROVIDER_ERROR, str(e)]
+        )
     end_session_endpoint = metadata.get("end_session_endpoint")
     front_url = Config().get_account_validation_url()
     assert front_url is not None

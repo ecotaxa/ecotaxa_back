@@ -3,6 +3,7 @@
 import logging, os
 from typing import Any, Generator
 
+# We need this before first import of main.py for location middleware
 FAKE_SERVER = "https://my.real.site:443/"
 os.environ["SERVERURL"] = FAKE_SERVER
 

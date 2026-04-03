@@ -1,5 +1,9 @@
 import pytest
 from API_operations.OpenID import oauth, THE_PROVIDER
+from tests.fastapi_fixture import FAKE_SERVER
+
+# TODO: previous test_users_* and test_v_* tests depend on hard-coded user IDs.
+# Hence the not-so-intuitive name of present file
 
 
 def get_provider():
@@ -73,7 +77,7 @@ async def test_login_existing_user(config, database, fastapi, monkeypatch):
     )
     assert response.status_code == 307
     hdrs = response.headers
-    assert hdrs.get("location") == "http://localhost:8000/"  # From ini
+    assert hdrs.get("location") == FAKE_SERVER
     cooks = response.cookies
     assert {"token", "id_token"}.issubset(set(cooks.iterkeys()))
 
@@ -102,7 +106,7 @@ async def test_login_new_user(config, database, fastapi, monkeypatch):
     )
     assert response.status_code == 307
     hdrs = response.headers
-    assert hdrs.get("location") == "http://localhost:8000/"
+    assert hdrs.get("location") == FAKE_SERVER
     cooks = response.cookies
     assert {"token", "id_token"}.issubset(set(cooks.iterkeys()))
 
@@ -204,4 +208,4 @@ async def test_openid_logout_redirects_to_provider(config, fastapi, monkeypatch)
     assert qs.get("id_token_hint", [None])[0] == "logout-id-token"
     # From tests config.ini
     assert qs.get("client_id", [None])[0] == "ecotaxa"
-    assert qs.get("post_logout_redirect_uri", [None])[0] == "http://localhost:8000/"
+    assert qs.get("post_logout_redirect_uri", [None])[0] == FAKE_SERVER

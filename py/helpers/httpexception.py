@@ -28,6 +28,7 @@ DETAIL_SSL_ERROR = "SSL ERROR"
 DETAIL_SAME_NAME_IN_TRASH = (
     "same folder or file name already in trash. Please delete from trash and try again."
 )
+# openid
 DETAIL_ALREADY_EXISTS = "Already exists"
 DETAIL_OPENID_NOT_CONFIGURED = "OpenID provider not configured"
 DETAIL_OPENID_PROVIDER_ERROR = "OpenID provider error"
