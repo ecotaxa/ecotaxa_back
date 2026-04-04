@@ -35,6 +35,7 @@ def filled_database(config) -> Generator[EcoTaxaExistingDB, Any, None]:
 
 @pytest.fixture(scope="function")
 def ccheck():
+    # If the per-module consistency check fails, add this fixture to all tests in the module
     # Setup
     yield
     # Teardown

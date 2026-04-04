@@ -21,7 +21,7 @@ from tests.prj_utils import sce_check_consistency
 # Note: We need this fixture in 99% of the tests, so it could be "session" scoped,
 # but the remaining 1% AKA test_login.py fails due to below security patch
 @pytest.fixture(scope="module")
-def fastapi(config, database, tstlogs) -> Generator[TestClient, Any, None]:
+def fastapi(config, database, tstlogs, request) -> Generator[TestClient, Any, None]:
     # Overwrite a method in URLSafeTimedSerializer
     from helpers import fastApiUtils
     import main
@@ -32,12 +32,17 @@ def fastapi(config, database, tstlogs) -> Generator[TestClient, Any, None]:
     fastApiUtils._serializer.loads = lambda s, max_age: {"user_id": s}
 
     client = TestClient(main.app)
-    main.JOB_INTERVAL = 0.01
+    # Check if we should NOT set the JOB_INTERVAL
+    if "no_job_interval" not in request.fixturenames:
+        main.JOB_INTERVAL = 0.01
+
     with client:  # Trigger the fastapi 'startup' event -> launches the JobScheduler
         yield client
     # Teardown, once per module
     consistency_exception = None
     try:
+        # Note: if it fails here, add ccheck fixture to all tests in module and
+        # track the faulty one
         sce_check_consistency("fastapi fx")
     except AssertionError as e:
         consistency_exception = e

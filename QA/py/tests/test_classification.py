@@ -20,8 +20,8 @@ from tests.credentials import (
     CREATOR_USER_ID,
 )
 from tests.prj_utils import sce_check_consistency
-from tests.test_import import VARIOUS_STATES_DIR, do_test_import
-from tests.test_import import create_project, import_various
+from tests.consts import VARIOUS_STATES_DIR
+from tests.test_import import do_test_import, create_project, import_various
 from tests.test_objectset_query import OBJECT_SET_QUERY_URL
 from tests.test_prj_admin import PROJECT_CLASSIF_STATS_URL
 from tests.test_subentities import OBJECT_HISTORY_QUERY_URL

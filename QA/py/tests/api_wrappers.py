@@ -8,9 +8,11 @@ from starlette.testclient import TestClient
 from tests.credentials import ADMIN_AUTH
 
 from DB.Job import DBJobStateEnum
+from tests.export_shared import JOB_LOG_DOWNLOAD_URL
 
 FILE_IMPORT_URL = "/file_import/{project_id}"
 JOB_QUERY_URL = "/jobs/{job_id}/"
+JOB_DELETE_URL = "/jobs/{job_id}"
 
 JOB_STABLE_STATES = (
     DBJobStateEnum.Finished,
@@ -84,6 +86,12 @@ def api_check_job_failed(fastapi, job_id, expected_message):
         expected_message,
     ), job_dict
     return rsp
+
+
+def api_get_log_file(fastapi, job_id):
+    log_url = JOB_LOG_DOWNLOAD_URL.format(job_id=job_id)
+    rsp = fastapi.get(log_url, headers=ADMIN_AUTH)
+    return rsp.content.decode("utf-8").split("\n")
 
 
 MY_FILES_URL = "/user_files/"

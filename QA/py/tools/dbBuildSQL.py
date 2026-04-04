@@ -12,7 +12,7 @@ from os.path import join, dirname, realpath
 from pathlib import Path
 
 from lib.processes import SyncSubProcess
-from tests.test_import import SHARED_DIR, FTP_DIR, TEST_DIR
+from tests.consts import SHARED_DIR, FTP_DIR, TEST_DIR
 
 psql_bin = "psql"
 # If we already have a server don't create one, e.g. in GitHub action
@@ -126,7 +126,10 @@ class EcoTaxaDBFrom0(object):
         # Produce connection sockets in a user-writable directory (linux)
         pg_opts = [
             "-o",
-            '-c unix_socket_directories="' + str(self.db_dir / "run") + '"',
+            '-c unix_socket_directories="'
+            + str(self.db_dir / "run")
+            + '" '  # Speed up DB operations
+            + "-c fsync=off -c synchronous_commit=off -c full_page_writes=off",
         ]
         pg_opts += ["-o", '"-p %d"' % PG_PORT]
         cmd = [pgctl_bin, "start", "-W"] + pg_opts
