@@ -31,6 +31,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi_utils.timing import add_timing_middleware
 from sqlalchemy.sql.expression import null
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 
 from API_models.constants import Constants
 from API_models.crud import (
@@ -121,6 +122,7 @@ from API_operations.DBSyncService import DBSyncService
 from API_operations.JsonDumper import JsonDumper
 from API_operations.Merge import MergeService
 from API_operations.ObjectManager import ObjectManager
+from API_operations.OpenID import router as openid_router, init_openid
 from API_operations.Prediction import PredictForProject, PredictionDataService
 from API_operations.SimilaritySearch import SimilaritySearchForProject
 from API_operations.Stats import ProjectStatsFetcher
@@ -165,6 +167,7 @@ from DB.ProjectPrivilege import ProjectPrivilege
 from DB.TaxoRecast import RecastOperation
 from DB.User import User, OrganizationIDT
 from helpers.AppConfig import Config
+from helpers.Asyncio import async_bg_run, log_streamer
 from helpers.DynamicLogs import get_logger, get_api_logger, MONITOR_LOG_PATH
 from helpers.fastApiUtils import (
     internal_server_error_handler,
@@ -191,7 +194,7 @@ api_logger = get_api_logger()
 
 app = FastAPI(
     title="EcoTaxa",
-    version="0.0.42",
+    version="0.0.43",
     # openapi URL as seen from navigator, this is included when /docs is required
     # which serves swagger-ui JS app. Stay in /api sub-path.
     openapi_url="/api/openapi.json",
@@ -203,8 +206,20 @@ app = FastAPI(
     # For later: Root path is in fact _removed_ from incoming requests, so not relevant here
 )
 
+init_openid()
+
+app.include_router(openid_router)
+
 # Instrument a bit
 add_timing_middleware(app, record=logger.info, prefix="app", exclude="untimed")
+
+app.add_middleware(
+    SessionMiddleware,
+    session_cookie="oid_session",
+    secret_key=Config().secret_key(),
+    same_site="lax",
+    https_only=False,
+)
 
 # 'Client disconnect kills running job' problem workaround. _Must_ be the _last_ added middleware in chain.
 # Update 08/03/2024: Bad diagnostic probably, workaround disabled.

@@ -1,6 +1,7 @@
 # Fixture for ensuring we have the DB up and running
 from os.path import dirname, realpath
 from pathlib import Path
+from typing import Any, Generator
 
 import pytest
 
@@ -13,7 +14,7 @@ CONF_FILE = HERE / "config.ini"
 
 
 @pytest.fixture(scope="session")
-def database(config) -> EcoTaxaDBFrom0:
+def database(config) -> Generator[EcoTaxaDBFrom0, Any, None]:
     # Setup
     db = EcoTaxaDBFrom0(PG_DIR, CONF_FILE)
     db.create()
@@ -24,7 +25,7 @@ def database(config) -> EcoTaxaDBFrom0:
 
 
 @pytest.fixture(scope="session")
-def filled_database(config) -> EcoTaxaDBFrom0:
+def filled_database(config) -> Generator[EcoTaxaExistingDB, Any, None]:
     # Setup
     db = EcoTaxaExistingDB()
     db.write_config(CONF_FILE, "localhost", 5434)

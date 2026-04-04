@@ -158,6 +158,33 @@ class Config(object):
         url = self._get("TAXOSERVER_URL", mandatory=True).strip()
         return url + ("/" if url[-1] != "/" else "")
 
+    def get_openid_config(self) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+        """
+        Return (client_id, client_secret, metadata_url) if all are present,
+        or (None, None, None) if none are present.
+        Raise an exception if only some are present.
+        """
+        client_id = self._get("OPENID_CLIENT_ID")
+        client_secret = self._get("OPENID_CLIENT_SECRET")
+        metadata_url = self._get("OPENID_METADATA_URL")
+
+        configs = [client_id, client_secret, metadata_url]
+        if all(configs):
+            return client_id, client_secret, metadata_url
+        if not any(configs):
+            return None, None, None
+
+        missing = []
+        if not client_id:
+            missing.append("OPENID_CLIENT_ID")
+        if not client_secret:
+            missing.append("OPENID_CLIENT_SECRET")
+        if not metadata_url:
+            missing.append("OPENID_METADATA_URL")
+        raise ValueError(
+            f"Inconsistent OpenID configuration. Missing: {', '.join(missing)}"
+        )
+
     def validate(self):
         """
         Read all configuration values to ensure they are present and valid.
@@ -214,3 +241,4 @@ class Config(object):
         self.get_max_captcha_token_length()
         self.get_max_upload_size()
         self.get_taxoserver_url()
+        self.get_openid_config()
