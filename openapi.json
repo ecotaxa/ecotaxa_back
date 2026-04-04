@@ -2,7 +2,7 @@
   "openapi":"3.0.2",
   "info":{
     "title":"EcoTaxa",
-    "version":"0.0.42"
+    "version":"0.0.43"
   },
   "servers":[
     {
@@ -15,6 +15,66 @@
     }
   ],
   "paths":{
+    "/openid/login":{
+      "get":{
+        "tags":[
+          "openid"
+        ],
+        "summary":"Openid Login",
+        "description":"Initiate OpenID connection flow.",
+        "operationId":"openid_login",
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/openid/callback":{
+      "get":{
+        "tags":[
+          "openid"
+        ],
+        "summary":"Openid Callback",
+        "description":"Handle OpenID provider callback.",
+        "operationId":"openid_callback",
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/openid/logout":{
+      "get":{
+        "tags":[
+          "openid"
+        ],
+        "summary":"Openid Logout",
+        "description":"Log out from OpenID and local session.\nReturns a redirect to openid provider, it will clear its cookies and force a fresh login next time.",
+        "operationId":"openid_logout",
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{}
+              }
+            }
+          }
+        }
+      }
+    },
     "/login":{
       "post":{
         "tags":[
@@ -8051,6 +8111,12 @@
             "description":"url of taxonomy server ecotaxoserver",
             "default":"https://ecotaxoserver.obs-vlfr.fr/"
           },
+          "openid_configured":{
+            "title":"OpenID configured",
+            "type":"boolean",
+            "description":"Whether OpenID authentication is configured.",
+            "default":false
+          },
           "recast_operation":{
             "title":"Recast operation",
             "type":"object",
@@ -11425,8 +11491,7 @@
         "title":"TaxonomyRecastReq",
         "required":[
           "target_id",
-          "operation",
-          "recast"
+          "operation"
         ],
         "type":"object",
         "properties":{
@@ -11460,6 +11525,9 @@
               }
             ],
             "description":"Recast taxonomy from key to value.",
+            "default":{
+              "from_to":{}
+            },
             "example":{
               "from_to":{
                 "234":12,
@@ -11468,8 +11536,7 @@
               "doc":{
                 "234":"up to the nearest non morpho"
               }
-            },
-            "defaut":{}
+            }
           }
         }
       },

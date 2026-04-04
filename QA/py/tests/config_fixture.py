@@ -6,6 +6,7 @@ import shutil
 import sys
 from os.path import join, dirname, realpath
 from pathlib import Path
+from typing import Any, Generator
 
 import pytest
 
@@ -28,7 +29,7 @@ class EcoTaxaConfig(object):
 
 
 @pytest.fixture(scope="session")
-def config() -> EcoTaxaConfig:
+def config() -> Generator[EcoTaxaConfig, Any, None]:
     conf = EcoTaxaConfig()
     # Inject low values for covering, even with test small dataset
     DBWriter.SEQUENCE_CACHE_SIZE = 5

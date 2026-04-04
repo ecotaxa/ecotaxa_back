@@ -3,6 +3,7 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 
+import pytest
 from starlette import status
 from starlette.testclient import TestClient
 
@@ -13,13 +14,17 @@ from tests.test_import import create_project
 LOGIN_URL = "/login"
 
 # Note we cannot use fastapi fixture here, as it skips auth for all other tests
-from main import app
 
-client = TestClient(app)
+
+@pytest.fixture
+def client():
+    from main import app
+
+    return TestClient(app)
 
 
 # Don't use fastapi fixture as it tweaks security
-def test_plain_API_login(database):
+def test_plain_API_login(database, client):
     url = LOGIN_URL
     # Wrong params
     rsp = client.post(url, data={"usernazme": "foo", "password": "bar"})

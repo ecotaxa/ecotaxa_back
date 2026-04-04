@@ -137,6 +137,11 @@ class Constants(BaseModel):
         description="url of taxonomy server ecotaxoserver",
         default="https://ecotaxoserver.obs-vlfr.fr/",
     )
+    openid_configured: bool = Field(
+        title="OpenID configured",
+        description="Whether OpenID authentication is configured.",
+        default=False,
+    )
     recast_operation: Dict[str, str] = Field(
         title="Recast operation",
         description="Taxonomy recast operation name",

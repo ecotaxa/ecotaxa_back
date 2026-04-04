@@ -2,7 +2,6 @@ import pytest
 from fastapi import Response
 from fastapi.testclient import TestClient
 
-import main
 from helpers.AppConfig import Config
 from tests.fastapi_fixture import FAKE_SERVER
 
@@ -14,6 +13,8 @@ from tests.fastapi_fixture import FAKE_SERVER
 
 @pytest.fixture
 def test_app():
+    import main
+
     # Add a temporary route to test redirection
     @main.app.get("/test-redirect-internal")
     async def test_redirect_internal():

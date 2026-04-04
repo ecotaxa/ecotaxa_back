@@ -3,18 +3,18 @@
 import logging, os
 from typing import Any, Generator
 
+# We need this before first import of main.py for location middleware
 FAKE_SERVER = "https://my.real.site:443/"
 os.environ["SERVERURL"] = FAKE_SERVER
 
-import main
 import pytest
 from BG_operations.JobScheduler import JobScheduler
 from fastapi.testclient import TestClient
 
+# from starlette.testclient import TestClient
+
 from tests.jobs import clear_all_jobs
 from tests.prj_utils import sce_check_consistency
-
-client = TestClient(main.app)
 
 
 # noinspection PyProtectedMember
@@ -24,11 +24,14 @@ client = TestClient(main.app)
 def fastapi(config, database, tstlogs) -> Generator[TestClient, Any, None]:
     # Overwrite a method in URLSafeTimedSerializer
     from helpers import fastApiUtils
+    import main
 
     fastApiUtils.build_serializer()
     main.logger.setLevel(logging.CRITICAL)
     sav_loads = fastApiUtils._serializer.loads
     fastApiUtils._serializer.loads = lambda s, max_age: {"user_id": s}
+
+    client = TestClient(main.app)
     main.JOB_INTERVAL = 0.01
     with client:  # Trigger the fastapi 'startup' event -> launches the JobScheduler
         yield client
