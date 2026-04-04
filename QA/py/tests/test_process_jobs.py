@@ -218,11 +218,19 @@ def test_job_kill(fastapi, jobs_as_process):
     api_check_job_ok(fastapi, job2_id)
 
 
-def test_job_delete_pending(fastapi, jobs_as_process):
+@pytest.fixture
+def no_job_interval():
+    """
+    Dummy fixture to tell fastapi fixture NOT to set JOB_INTERVAL.
+    """
+    pass
+
+
+def test_job_delete_pending(fastapi, no_job_interval, jobs_as_process):
     """
     Verify that a pending job can be deleted and it goes to Error state with Killed message.
     """
-    # 1. Launch a job but kill it faster than the Scheduler
+    # 1. Launch a job but kill it faster than the Scheduler picks it
     current_pid = os.getpid()
     with PidReportingJob(main_pid=current_pid) as job:
         job.run(ADMIN_USER_ID)
