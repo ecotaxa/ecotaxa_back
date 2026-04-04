@@ -164,9 +164,9 @@ class Config(object):
         or (None, None, None) if none are present.
         Raise an exception if only some are present.
         """
-        client_id = self.parser.get("OPENID_CLIENT_ID")
-        client_secret = self.parser.get("OPENID_CLIENT_SECRET")
-        metadata_url = self.parser.get("OPENID_METADATA_URL")
+        client_id = self._get("OPENID_CLIENT_ID")
+        client_secret = self._get("OPENID_CLIENT_SECRET")
+        metadata_url = self._get("OPENID_METADATA_URL")
 
         configs = [client_id, client_secret, metadata_url]
         if all(configs):
