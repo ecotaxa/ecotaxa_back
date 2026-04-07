@@ -12,7 +12,7 @@ _eml = r"""
       <givenName>Real</givenName>
       <surName>User</surName>
     </individualName>
-    <organizationName>IMEV</organizationName>
+    <organizationName>Institut de la Mer de Villefranche (IMEV)</organizationName>
     <address>
       <country>FR</country>
     </address>
@@ -27,7 +27,7 @@ _eml = r"""
       <givenName>Real</givenName>
       <surName>User</surName>
     </individualName>
-    <organizationName>IMEV</organizationName>
+    <organizationName>Institut de la Mer de Villefranche (IMEV)</organizationName>
     <address>
       <country>FR</country>
     </address>
@@ -50,11 +50,15 @@ This series is part of the long term planktonic monitoring of
     <keyword>EcoTaxa</keyword>
     <keywordThesaurus>GBIF Dataset Type Vocabulary: http://rs.gbif.org/vocabulary/gbif/dataset_type.xml</keywordThesaurus>
   </keywordSet>
+  <additionalInfo>
+    <para>additional infos of the collection</para>
+  </additionalInfo>
   <intellectualRights>
     <para>This work is licensed under a <ulink url="https://creativecommons.org/licenses/by/4.0/legalcode">
         <citetitle>Creative Commons Attribution (CC-BY) 4.0 License</citetitle>
       </ulink>.</para>
   </intellectualRights>
+  <publisher>EcoTaxa</publisher>
   <distribution>
     <online>
       <url function="information">https://ecotaxa.obs-vlfr.fr/api/collections/by_title?q=EMODNET+test+collection+exp</url>
@@ -110,7 +114,7 @@ This series is part of the long term planktonic monitoring of
       <givenName>Real</givenName>
       <surName>User 3</surName>
     </individualName>
-    <organizationName>Institute - DDORG</organizationName>
+    <organizationName>Double Dash - Institute (DDORG)</organizationName>
     <address>
       <country>CL</country>
     </address>
@@ -125,6 +129,7 @@ This series is part of the long term planktonic monitoring of
   <metadata>
     <gbif>
       <dateStamp>2021-07-10T11:22:33</dateStamp>
+      <citation>Citation of the collection</citation>
     </gbif>
   </metadata>
 </additionalMetadata>
@@ -252,7 +257,21 @@ m106_mn04_n6_sml	m106_mn04_n6_sml	m106_mn04_n6_sml_45072	MachineObservation	Cycl
 m106_mn04_n6_sml	m106_mn04_n6_sml	m106_mn04_n6_sml_78418	MachineObservation	Oncaeidae	urn:lsid:marinespecies.org:taxname:128586	Animalia	present
 m106_mn04_n6_sml	m106_mn04_n6_sml	m106_mn04_n6_sml_56693	MachineObservation	Actinopterygii	urn:lsid:marinespecies.org:taxname:10194	Animalia	present
 """
-_occurence_with_absent = ""
+_occurence_with_absent = r"""m106_mn01_n1_sml	m106_mn01_n1_sml	m106_mn01_n1_sml_56693	MachineObservation		Actinopterygii	urn:lsid:marinespecies.org:taxname:10194	Animalia	absent
+m106_mn01_n2_sml	m106_mn01_n2_sml	m106_mn01_n2_sml_45072	MachineObservation		Cyclopoida	urn:lsid:marinespecies.org:taxname:1101	Animalia	absent
+m106_mn01_n2_sml	m106_mn01_n2_sml	m106_mn01_n2_sml_78418	MachineObservation		Oncaeidae	urn:lsid:marinespecies.org:taxname:128586	Animalia	absent
+m106_mn01_n2_sml	m106_mn01_n2_sml	m106_mn01_n2_sml_56693	MachineObservation		Actinopterygii	urn:lsid:marinespecies.org:taxname:10194	Animalia	absent
+m106_mn01_n3_sml	m106_mn01_n3_sml	m106_mn01_n3_sml_45072	MachineObservation		Cyclopoida	urn:lsid:marinespecies.org:taxname:1101	Animalia	absent
+m106_mn01_n3_sml	m106_mn01_n3_sml	m106_mn01_n3_sml_78418	MachineObservation		Oncaeidae	urn:lsid:marinespecies.org:taxname:128586	Animalia	absent
+{p1}_m106_mn04_n4_sml	{p1}_m106_mn04_n4_sml	{p1}_m106_mn04_n4_sml_45072	MachineObservation		Cyclopoida	urn:lsid:marinespecies.org:taxname:1101	Animalia	absent
+{p1}_m106_mn04_n4_sml	{p1}_m106_mn04_n4_sml	{p1}_m106_mn04_n4_sml_56693	MachineObservation		Actinopterygii	urn:lsid:marinespecies.org:taxname:10194	Animalia	absent
+m106_mn04_n5_sml	m106_mn04_n5_sml	m106_mn04_n5_sml_45072	MachineObservation		Cyclopoida	urn:lsid:marinespecies.org:taxname:1101	Animalia	absent
+m106_mn04_n5_sml	m106_mn04_n5_sml	m106_mn04_n5_sml_56693	MachineObservation		Actinopterygii	urn:lsid:marinespecies.org:taxname:10194	Animalia	absent
+m106_mn04_n6_sml	m106_mn04_n6_sml	m106_mn04_n6_sml_56693	MachineObservation		Actinopterygii	urn:lsid:marinespecies.org:taxname:10194	Animalia	absent
+{p2}_m106_mn04_n4_sml	{p2}_m106_mn04_n4_sml	{p2}_m106_mn04_n4_sml_45072	MachineObservation		Cyclopoida	urn:lsid:marinespecies.org:taxname:1101	Animalia	absent
+{p2}_m106_mn04_n4_sml	{p2}_m106_mn04_n4_sml	{p2}_m106_mn04_n4_sml_78418	MachineObservation		Oncaeidae	urn:lsid:marinespecies.org:taxname:128586	Animalia	absent
+{p2}_m106_mn04_n4_sml	{p2}_m106_mn04_n4_sml	{p2}_m106_mn04_n4_sml_56693	MachineObservation		Actinopterygii	urn:lsid:marinespecies.org:taxname:10194	Animalia	absent
+"""
 _emofs = r"""
 id	occurrenceID	measurementValue	measurementType	measurementUnit	measurementValueID	measurementTypeID	measurementUnitID
 m106_mn01_n1_sml	m106_mn01_n1_sml_1	2	Count (in assayed sample) of biological entity specified elsewhere			http://vocab.nerc.ac.uk/collection/P01/current/OCOUNT01/	

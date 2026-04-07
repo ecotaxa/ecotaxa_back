@@ -20,7 +20,7 @@ The simplest way to set up a running instance is to follow the [all_in_one instr
 In this directory:
 
 - `py` is for Python back-end
-- `QA` contains all tests & measurements on the code.
+- `QA` contains all tests & measurements on the code (all functional tests are in `QA/py/tests`).
 
 The UI itself is a server-side Flask app, in the `../ecotaxa` folder.
 

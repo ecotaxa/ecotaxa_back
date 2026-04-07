@@ -1,6 +1,5 @@
 from API_operations.Consistency import ProjectConsistencyChecker
 from API_operations.admin.NightlyJob import NightlyJobService, logger
-from API_operations.helpers.Service import Service
 
 from tests.credentials import ADMIN_USER_ID
 from tests.tstlogs_fixture import pushd

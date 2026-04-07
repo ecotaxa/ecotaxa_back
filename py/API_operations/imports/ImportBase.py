@@ -11,7 +11,6 @@ from API_models.imports import ImportReq, SimpleImportReq
 from API_operations.helpers.JobService import JobServiceOnProjectBase, ArgsDict
 from BO.User import UserIDT
 from FS.CommonDir import CommonFolder
-from FS.UserDir import UserDirectory
 from FS.UserFilesDir import UserFilesDirectory
 from FS.Vault import Vault
 from helpers.DynamicLogs import get_logger
@@ -50,15 +49,13 @@ class ImportServiceBase(JobServiceOnProjectBase, ABC):
         if my_files_source_dir.exists():
             self.from_myfiles = owner_id
             return str(my_files_source_dir)
-        elif UserDirectory(owner_id).contains(source_dir_or_zip):
-            # OK
-            pass
         else:
             # prevent directory escape trick
             assert ".." not in source_dir_or_zip
-            source_dir_or_zip = CommonFolder(self.config.common_folder()).path_to(
-                source_dir_or_zip
-            )
+            common_folder = self.config.common_folder()
+            if common_folder is None:
+                raise Exception("No common folder defined")
+            source_dir_or_zip = CommonFolder(common_folder).path_to(source_dir_or_zip)
         if source_dir_or_zip.lower().endswith(".zip"):
             logger.info("SubTask : Unzip File into temporary folder")
             self.update_progress(1, "Unzip File into temporary folder")

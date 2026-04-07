@@ -359,10 +359,14 @@ class _Collection2Model(DescriptiveModel):
         example=LicenseEnum.CC_BY,
     )
     abstract: str = Field(
-        title="Abstract", description="The collection abstract.", example=""
+        title="Abstract",
+        description="The collection abstract. It appears in the IPT under the description label",
+        example="",
     )
     description: str = Field(
-        title="Description", description="The collection description.", example=""
+        title="Description",
+        description="The collection description. It appears in the EMLMeta fields as the additional_info field and in the IPT under the additional info label.",
+        example="",
     )
 
 

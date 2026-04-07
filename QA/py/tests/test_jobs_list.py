@@ -1,7 +1,8 @@
 import pytest
 from API_operations.helpers.JobService import JobServiceBase, ArgsDict
-from tests.credentials import ADMIN_USER_ID, ADMIN_AUTH
-from tests.jobs import api_wait_for_stable_job, clear_all_jobs
+from tests.credentials import ADMIN_USER_ID, ADMIN_AUTH, CREATOR_USER_ID, CREATOR_AUTH
+from tests.jobs import clear_all_jobs
+from tests.api_wrappers import api_wait_for_stable_job
 from DB.Job import DBJobStateEnum
 
 
@@ -33,7 +34,55 @@ class TypeBJob(JobServiceBase):
         raise Exception("Simulated error")
 
 
-def test_list_jobs_filtering(fastapi, database):
+def test_list_jobs(fastapi):
+    # Register our test job classes if needed, though JobServiceBase.create_job works anyway
+
+    # 0. Cleanup
+    clear_all_jobs()
+
+    # 1. Create some jobs of different types and that will end in different states
+    # TypeA -> Finished
+    with TypeAJob() as job1:
+        job1.run(ADMIN_USER_ID)
+        id1 = job1.job_id
+
+    # Another TypeA -> Finished
+    with TypeAJob() as job2:
+        job2.run(CREATOR_USER_ID)
+        id2 = job2.job_id
+
+    # TypeB -> Error
+    with TypeBJob() as job3:
+        job3.run(ADMIN_USER_ID)
+        id3 = job3.job_id
+
+    # Wait for all jobs to be stable
+    api_wait_for_stable_job(fastapi, id1)
+    api_wait_for_stable_job(fastapi, id2)
+    api_wait_for_stable_job(fastapi, id3)
+
+    # All jobs for admin
+    rsp = fastapi.get("/jobs/?for_admin=true", headers=ADMIN_AUTH)
+    assert rsp.status_code == 200
+    jobs = rsp.json()
+    assert len(jobs) == 3
+    assert {j["id"] for j in jobs} == {id1, id2, id3}
+
+    # Self job for a user
+    rsp = fastapi.get("/jobs/?for_admin=false", headers=CREATOR_AUTH)
+    assert rsp.status_code == 200
+    jobs = rsp.json()
+    assert len(jobs) == 1
+    assert jobs[0]["type"] == "TypeA"
+    assert jobs[0]["id"] == id2
+
+    # All jobs for a user
+    rsp = fastapi.get("/jobs/?for_admin=true", headers=CREATOR_AUTH)
+    assert rsp.status_code == 403
+
+
+@pytest.mark.skip(reason="No code yet")
+def test_list_jobs_filtering(fastapi):
     # Register our test job classes if needed, though JobServiceBase.create_job works anyway
 
     # 0. Cleanup

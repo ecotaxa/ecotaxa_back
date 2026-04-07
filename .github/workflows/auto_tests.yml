@@ -22,7 +22,7 @@ jobs:
       # Label used to access the service container
       postgres:
         # Docker Hub image
-        image: pgvector/pgvector:0.7.4-pg14
+        image: pgvector/pgvector:0.8.2-pg18-trixie
         # Provide the password for postgres
         env:
           POSTGRES_PASSWORD: postgres12
@@ -55,7 +55,7 @@ jobs:
     # Checkout.
     - uses: actions/checkout@v4
     # Run both tests and coverage
-    - run: PATH=/venv/bin:$PATH pip3 install tox==3.24.3
+    - run: PATH=/venv/bin:$PATH pip3 install tox==4.25.0
     - name: Run tox in QA
       working-directory: ./QA/py
       run: |

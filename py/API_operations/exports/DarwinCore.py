@@ -11,16 +11,23 @@
 #      https://github.com/EMODnet/EMODnetBiocheck
 import datetime
 import re
+import json
 from collections import OrderedDict
 from functools import lru_cache
-from typing import Dict, List, Optional, Tuple, cast, Set, Any
+from typing import Dict, List, Optional, Tuple, cast, Set, Any, Iterable
 from urllib.parse import quote_plus
-
+from helpers.CustomException import ValidationException
 import BO.ProjectVarsDefault as DefaultVars
 from API_models.exports import ExportRsp, SciExportTypeEnum
 from BO.Acquisition import AcquisitionIDT
-from BO.Classification import ClassifIDT, ClassifIDSetT
-from BO.Collection import CollectionIDT, CollectionBO, creators_key,associates_key, user_order_type
+from BO.Classification import ClassifIDT, ClassifIDListT, ClassifIDSetT
+from BO.Collection import (
+    CollectionIDT,
+    CollectionBO,
+    creators_key,
+    associates_key,
+    user_order_type,
+)
 from BO.CommonObjectSets import CommonObjectSets
 from BO.DataLicense import LicenseEnum, DataLicense
 from BO.ObjectSet import DescribedObjectSet
@@ -28,17 +35,19 @@ from BO.ObjectSetQueryPlus import (
     ResultGrouping,
     TaxoRemappingT,
     ObjectSetQueryPlus,
-    TaxoRemappingWith0AsNoneT,
 )
 from BO.Project import ProjectBO, ProjectTaxoStats, ProjectIDListT
 from BO.ProjectSet import PermissionConsistentProjectSet
 from BO.Sample import SampleBO, SampleAggregForTaxon
-from BO.Taxonomy import TaxonBO
+from BO.TaxoRecast import TaxoRecastBO
 from BO.Vocabulary import Vocabulary, Units
-from BO.WoRMSification import WoRMSifier, WoRMSBO
+from BO.WoRMSification import WoRMSifier
+from BO.Taxonomy import TaxonBOSet, WoRMSBO
+from BO.User import UserIDT
 from DB.Collection import Collection
 from DB.Project import ProjectTaxoStat, Project
 from DB.Sample import Sample
+from DB.TaxoRecast import TaxoRecast, RecastOperation
 from DB.Taxonomy import Taxonomy
 from DB.User import User, Organization
 from DB.helpers import Session
@@ -91,6 +100,7 @@ ROLE_FOR_ASSOCIATE = "originator"
 def get_scientific_name_id(worms) -> str:
     return "urn:lsid:marinespecies.org:taxname:" + str(worms.aphia_id)
 
+
 class DarwinCoreExport(JobServiceBase):
     """
     EMODNet export.
@@ -105,6 +115,7 @@ class DarwinCoreExport(JobServiceBase):
 
     JOB_TYPE = "DarwinCoreExport"
     OCCURENCE_REPORT_EVERY = 10
+    PUBLISHER_ECOTAXA = "EcoTaxa"
 
     def init_args(self, args: ArgsDict) -> ArgsDict:
         # A bit unusual to find a method before init(), but here we can visually ensure
@@ -113,12 +124,12 @@ class DarwinCoreExport(JobServiceBase):
             {
                 "collection_id": self.collection.id,
                 "dry_run": self.dry_run,
-                "taxo_recast": self.computations_taxo_recast,
                 "include_predicted": self.include_predicted,
                 "with_absent": self.with_absent,
                 "with_computations": self.with_computations,
                 "formulae": self.formulae,
                 "extra_xml": self.extra_xml,
+                "current_user_id": self.current_user_id,
             }
         )
         return args
@@ -127,12 +138,12 @@ class DarwinCoreExport(JobServiceBase):
         self,
         collection_id: CollectionIDT,
         dry_run: bool,
-        taxo_recast: TaxoRemappingWith0AsNoneT,
         include_predicted: bool,
         with_absent: bool,
         with_computations: List[SciExportTypeEnum],
         formulae: Dict[str, str],
         extra_xml: List[str],
+        current_user_id: UserIDT,
     ):
         super().__init__()
         # Input params
@@ -142,10 +153,6 @@ class DarwinCoreExport(JobServiceBase):
         self.the_collection: CollectionBO = CollectionBO(self.collection).enrich()
         self.dry_run: bool = dry_run
         self.include_predicted: bool = include_predicted
-        # Args are serialized in JSON -> keys have become str and 0 val becomes None
-        self.computations_taxo_recast: TaxoRemappingT = {
-            int(k): v if v != 0 else None for k, v in taxo_recast.items()
-        }
         # Output params
         self.with_absent: bool = with_absent
         self.with_computations: List[SciExportTypeEnum] = with_computations
@@ -155,12 +162,13 @@ class DarwinCoreExport(JobServiceBase):
         self.formulae: Dict[str, str] = formulae
         # TODO: Some sanity check on XML
         self.extra_xml: List[str] = extra_xml
+        self.current_user_id = current_user_id
         #
         # During processing
+        self.computations_occurrence: TaxoRemappingT = {}
+        self.computations_emof: TaxoRemappingT = {}
+        self.coverage_taxa: Dict[ClassifIDT, WoRMSBO] = {}
         #
-        # The taxa to their WoRMS counterpart...
-        self.worms_ifier: WoRMSifier = WoRMSifier()  # ...straight from project data...
-        self.recast_worms_ifier: WoRMSifier = WoRMSifier()  # ...with applied recast
         # Output
         self.errors: List[str] = []
         self.warnings: List[str] = []
@@ -179,16 +187,16 @@ class DarwinCoreExport(JobServiceBase):
     DWC_ZIP_NAME = "dwca.zip"
     PRODUCED_FILE_NAME = DWC_ZIP_NAME
 
-    def run(self, current_user_id: int) -> ExportRsp:
+    def run(self) -> ExportRsp:
         """
         Initial run, basically just create the job, after permission check.
         """
         project_ids = [a_project.projid for a_project in self.collection.projects]
         PermissionConsistentProjectSet(
             self.session, project_ids
-        ).can_be_administered_by(current_user_id)
+        ).can_be_administered_by(self.current_user_id)
         # Security OK, create pending job
-        self.create_job(self.JOB_TYPE, current_user_id)
+        self.create_job(self.JOB_TYPE, self.current_user_id)
         ret = ExportRsp(job_id=self.job_id)
         return ret
 
@@ -242,6 +250,21 @@ class DarwinCoreExport(JobServiceBase):
             "collection_id": self.collection.id,
             "out_file": self.DWC_ZIP_NAME,
         }
+        infotaxonomy = {
+            "taxonomy": {
+                "rename_occurrence": self.computations_occurrence,
+                "rename_emof": self.computations_emof,
+                "taxonomy_coverage": {
+                    str(k): str(v.id) for k, v in self.coverage_taxa.items()
+                },
+            }
+        }
+        done_infos.update(infotaxonomy)
+
+        logger.info(
+            "------------------ taxonomy renames --------------- %s",
+            json.dumps(infotaxonomy),
+        )
         done_infos.update({"wrns": self.warnings})
         self.set_job_result(self.errors, infos=done_infos)
 
@@ -252,6 +275,10 @@ class DarwinCoreExport(JobServiceBase):
         Second pass, occurrence creations for absent taxa.
         """
         all_taxa = self.compute_all_seen_taxa(taxa_per_sample)
+        occurrence_targets: Dict[int, WoRMSBO] = {}
+        for k, v in self.computations_occurrence.items():
+            if v is not None:
+                occurrence_targets.update({int(k): self.coverage_taxa[v]})
         # For what's missing, issue an 'absent' record
         for an_event_id, an_id_set in taxa_per_sample.items():
             missing_for_sample = all_taxa.difference(an_id_set)
@@ -259,11 +286,10 @@ class DarwinCoreExport(JobServiceBase):
                 occurrence_id = an_event_id + "_" + str(a_missing_id)
                 # No need to catch any exception here, the lookup worked during the
                 # "present" records generation.
-                worms = self.worms_ifier.phylo2worms[a_missing_id]
+                worms = occurrence_targets[a_missing_id]
                 occ = DwC_Occurrence(
                     eventID=an_event_id,
                     occurrenceID=occurrence_id,
-                    individualCount=0,
                     scientificName=worms.name,  # ETS stores scientificname as name,
                     scientificNameID=get_scientific_name_id(worms),
                     kingdom=worms.kingdom,
@@ -315,15 +341,16 @@ class DarwinCoreExport(JobServiceBase):
                 "%s user '%s' has no organization." % (for_messages, user.name)
             )
         else:
-            try:
-                _dummy, organization = user.organisation.strip().split("-", 1)
-                organization = organization.strip()
-            except ValueError:
+            orgacr = CollectionBO.get_institution_code(user.organisation.strip())
+            if orgacr == "?":
                 problems.append(
-                    "Cannot determine short organization from %s org: '%s' (need at least a - )."
+                    "Cannot determine short organization from %s org: '%s' (need at least a - or () )."
                     % (for_messages, user.organisation)
                 )
-
+                return ret, problems
+            orgname = user.organisation.strip().split("-")[:-1]
+            orgname = [o.strip() for o in orgname]
+            organization = " - ".join(orgname) + " (" + orgacr.strip() + ")"
         # TODO: Organization should fit from https://edmo.seadatanet.org/search
 
         try:
@@ -375,7 +402,10 @@ class DarwinCoreExport(JobServiceBase):
 
     MIN_ABSTRACT_CHARS = 256
     """ Minimum size of a 'quality' abstract """
-
+    MIN_CITATION_CHARS = 128
+    MAX_ABSTRACT_CHARS = 1000
+    """ Maximum size of a 'quality' description """
+    """ Minimum size of a 'quality' citation """
     OK_LICENSES = [LicenseEnum.CC0, LicenseEnum.CC_BY, LicenseEnum.CC_BY_NC]
 
     def build_meta(self) -> Tuple[Optional[EMLMeta], str]:
@@ -391,12 +421,22 @@ class DarwinCoreExport(JobServiceBase):
         title = EMLTitle(title=self.the_collection.title)
 
         creators: List[EMLPerson] = []
-        creators_by_id: Dict[str,Any] = {str(a_user.id)+"_u":a_user for a_user in self.the_collection.creator_users}
-        creators_by_id.update({str(an_org.id)+"_o":an_org for an_org in self.the_collection.creator_organisations})
+        creators_by_id: Dict[str, Any] = {
+            str(a_user.id) + "_u": a_user
+            for a_user in self.the_collection.creator_users
+        }
+        creators_by_id.update(
+            {
+                str(an_org.id) + "_o": an_org
+                for an_org in self.the_collection.creator_organisations
+            }
+        )
         for an_id in self.the_collection.display_order[creators_key]:
-            a_creator=creators_by_id[an_id]
-            if an_id[-1]==user_order_type:
-                person, errs = self.user_to_eml_person(a_creator, "creator '%s'" % a_creator.name)
+            a_creator = creators_by_id[an_id]
+            if an_id[-1] == user_order_type:
+                person, errs = self.user_to_eml_person(
+                    a_creator, "creator '%s'" % a_creator.name
+                )
                 if errs:
                     self.warnings.extend(errs)
                 else:
@@ -406,11 +446,19 @@ class DarwinCoreExport(JobServiceBase):
                 creators.append(self.organisation_to_eml_person(a_creator))
 
         associates: List[EMLAssociatedPerson] = []
-        associates_by_id: Dict[str,Any] = {str(a_user.id)+"_u":a_user for a_user in self.the_collection.associate_users}
-        associates_by_id.update({str(an_org.id)+"_o":an_org for an_org in self.the_collection.associate_organisations})
+        associates_by_id: Dict[str, Any] = {
+            str(a_user.id) + "_u": a_user
+            for a_user in self.the_collection.associate_users
+        }
+        associates_by_id.update(
+            {
+                str(an_org.id) + "_o": an_org
+                for an_org in self.the_collection.associate_organisations
+            }
+        )
         for an_id in self.the_collection.display_order[associates_key]:
-            an_associate=associates_by_id[an_id]
-            if an_id[-1]==user_order_type:
+            an_associate = associates_by_id[an_id]
+            if an_id[-1] == user_order_type:
                 person, errs = self.user_to_eml_person(
                     an_associate, "associated person %d" % an_associate.id
                 )
@@ -426,7 +474,8 @@ class DarwinCoreExport(JobServiceBase):
                 role = ROLE_FOR_ASSOCIATE
                 if an_associate == self.the_collection.code_provider_org:
                     role = "custody"
-                associates.append(self.eml_person_to_associated_person(person_from_org, role)
+                associates.append(
+                    self.eml_person_to_associated_person(person_from_org, role)
                 )
         # TODO if needed
         # EMLAssociatedPerson = EMLPerson + specific role
@@ -434,7 +483,9 @@ class DarwinCoreExport(JobServiceBase):
             self.errors.append(
                 "No valid data creator (user or organisation) found for EML metadata."
             )
-        contact, errs = self.user_to_eml_person(self.the_collection.contact_user, "contact")
+        contact, errs = self.user_to_eml_person(
+            self.the_collection.contact_user, "contact"
+        )
         if contact is None:
             self.errors.append("No valid contact user found for EML metadata.")
             self.warnings.extend(errs)
@@ -448,7 +499,7 @@ class DarwinCoreExport(JobServiceBase):
             self.warnings.extend(errs)
 
         publication_date = now_time().date().isoformat()
-
+        # the abstract appears as description in the ITP but it is the abstract field of the collection
         abstract = self.the_collection.abstract
         if not abstract:
             self.errors.append("Collection 'abstract' field is empty")
@@ -457,8 +508,23 @@ class DarwinCoreExport(JobServiceBase):
                 "Collection 'abstract' field is too short (%d chars) to make a good EMLMeta abstract. Minimum is %d"
                 % (len(abstract), self.MIN_ABSTRACT_CHARS)
             )
-
-        additional_info = None  # Just to see if it goes through QC
+        elif len(abstract) > self.MAX_ABSTRACT_CHARS:
+            self.errors.append(
+                "Collection 'abstract' field is too long (%d chars) to make a good EMLMeta abstract. Maximum is %d"
+                % (len(abstract), self.MAX_ABSTRACT_CHARS)
+            )
+        citation = self.the_collection.citation
+        if not citation:
+            self.errors.append("Collection 'citation' field is empty")
+        # elif len(citation) < self.MIN_CITATION_CHARS:
+        #    self.errors.append(
+        #        "Collection 'citation' field is too short (%d chars) to make a good EMLMeta citation. Minimum is %d"
+        #        % (len(citation), self.MIN_CITATION_CHARS)
+        #    )
+        # the description is the collection description field and is stored in EML additional_info
+        description = self.the_collection.description
+        # temporary add description in additional_info
+        additional_info = description  # Just to see if it goes through QC
         # additional_info = """  marine, harvested by iOBIS.
         # The OOV supported the financial effort of the survey.
         # We are grateful to the crew of the research boat at OOV that collected plankton during the temporal survey."""
@@ -483,7 +549,7 @@ class DarwinCoreExport(JobServiceBase):
                 'This work is licensed under a <ulink url="%s"><citetitle>%s</citetitle></ulink>.'
                 % (lic_url, lic_txt)
             )
-
+        publisher = self.PUBLISHER_ECOTAXA
         # Preferably one of https://www.emodnet-biology.eu/contribute?page=list&subject=thestdas&SpColID=552&showall=1#P
         keywords = EMLKeywordSet(
             keywords=[
@@ -498,7 +564,7 @@ class DarwinCoreExport(JobServiceBase):
         )
 
         now = now_time().replace(microsecond=0)
-        meta_plus = EMLAdditionalMeta(dateStamp=now.isoformat())
+        meta_plus = EMLAdditionalMeta(dateStamp=now.isoformat(), citation=citation)
 
         coll_title = self.the_collection.title
         info_url = (
@@ -547,19 +613,23 @@ class DarwinCoreExport(JobServiceBase):
             associatedParties=associates,
             pubDate=publication_date,
             abstract=[abstract],
+            description=[description],
             keywordSet=keywords,
             additionalInfo=additional_info,
             geographicCoverage=geo_cov,
             temporalCoverage=time_cov,
             taxonomicCoverage=taxo_cov,
             intellectualRights=licence,
+            publisher=publisher,
             # project=project,
             maintenance="periodic review of origin data",
             maintenanceUpdateFrequency="unknown",  # From XSD
             additionalMetadata=meta_plus,
             informationUrl=info_url,
         )
-        return ret, self.the_collection.get_institution_code()
+        return ret, self.the_collection.get_institution_code(
+            str(self.the_collection.code_provider_org)
+        )
 
     def get_taxo_coverage(self) -> List[EMLTaxonomicClassification]:
         """
@@ -567,9 +637,8 @@ class DarwinCoreExport(JobServiceBase):
         of their validation state.
         """
         ret: List[EMLTaxonomicClassification] = []
-
         # Coverage is from recast "space", the biggest one
-        worms_targets = self.recast_worms_ifier.get_worms_targets()
+        worms_targets = list(self.coverage_taxa.values())
         # Error out if nothing at all
         if len(worms_targets) == 0:
             self.errors.append(
@@ -654,12 +723,18 @@ class DarwinCoreExport(JobServiceBase):
                 added_occurences = self.add_occurrences_for_sample(
                     sample=a_sample, arch=arch, event_id=event_id, predicted=False
                 )
+                taxa_per_sample[event_id] = {
+                    val[1].taxo_id for val in added_occurences.values()
+                }
                 nb_added = len(added_occurences)
                 if self.include_predicted:
                     by_ml_added_occurences = self.add_occurrences_for_sample(
                         sample=a_sample, arch=arch, event_id=event_id, predicted=True
                     )
                     nb_added += len(by_ml_added_occurences)
+                    taxa_per_sample[event_id].update(
+                        {val[1].taxo_id for val in by_ml_added_occurences.values()}
+                    )
                 if nb_added == 0:
                     self.warnings.append(
                         "No occurrence added for sample %s"
@@ -836,7 +911,7 @@ class DarwinCoreExport(JobServiceBase):
         cls,
         ro_session: Session,
         sample: Sample,
-        morpho2phylo: TaxoRemappingT,
+        recast_occurrences: TaxoRemappingT,
         with_computations: List[SciExportTypeEnum],
         formulae: Dict[str, str],
         predicted: bool,
@@ -869,16 +944,21 @@ class DarwinCoreExport(JobServiceBase):
 
         # Abundances, 'simple' count but eventually with remapping
         counts = cls.abundances_for_sample(
-            ro_session, object_set, morpho2phylo, warnings
+            ro_session, object_set, recast_occurrences, warnings
         )
+
         for a_count in counts:
             txo_id, count = a_count["txo_id"], a_count["count"]
-            ret[txo_id] = SampleAggregForTaxon(count, None, None)
+            ret[txo_id] = SampleAggregForTaxon(txo_id, count, None, None)
 
         if SciExportTypeEnum.concentrations in with_computations:
             # Enrich with concentrations
             concentrations = cls.concentrations_for_sample(
-                ro_session, formulae, object_set, morpho2phylo, warnings
+                ro_session,
+                formulae,
+                object_set,
+                recast_occurrences,
+                warnings,
             )
             conc_wrn_txos = []
             for a_conc in concentrations:
@@ -895,7 +975,11 @@ class DarwinCoreExport(JobServiceBase):
         if SciExportTypeEnum.biovols in with_computations:
             # Enrich with biovolumes, note that we need previous formulae for scaling
             biovolumes = cls.biovolumes_for_sample(
-                ro_session, formulae, object_set, morpho2phylo, warnings
+                ro_session,
+                formulae,
+                object_set,
+                recast_occurrences,
+                warnings,
             )
             biovol_wrn_txos = []
             for a_biovol in biovolumes:
@@ -998,16 +1082,20 @@ class DarwinCoreExport(JobServiceBase):
         aggregs = self._aggregate_for_sample(
             ro_session=self.ro_session,
             sample=sample,
-            morpho2phylo=self.worms_ifier.morpho2phylo,
+            recast_occurrences=self.computations_occurrence,
             with_computations=[SciExportTypeEnum.abundances],
             # SciExportTypeEnum.abundances is needed for production of per aphia_id in present def.
             formulae=dict(),  # Nothing to compute
             predicted=predicted,
             warnings=self.warnings,
         )
+        mapping: Dict[ClassifIDT, WoRMSBO] = {}
+        for k, v in self.computations_occurrence.items():
+            if v is not None:
+                mapping.update({int(k): self.coverage_taxa[v]})
 
         by_abundance_desc, not_found = self._occurrences_from_aggregations(
-            aggregs, self.worms_ifier.phylo2worms, event_id, predicted, self.warnings
+            aggregs, mapping, event_id, predicted, self.warnings
         )
         for an_id in not_found:
             # Mapping failed, count how many of them
@@ -1121,16 +1209,21 @@ class DarwinCoreExport(JobServiceBase):
         aggregs = self._aggregate_for_sample(
             ro_session=self.ro_session,
             sample=sample,
-            morpho2phylo=self.recast_worms_ifier.morpho2phylo,
+            recast_occurrences=self.computations_emof,
             with_computations=self.with_computations,
             formulae=self.formulae,
             predicted=predicted,
             warnings=self.warnings,
         )
 
+        mapping: Dict[ClassifIDT, WoRMSBO] = {}
+        for k, v in self.computations_occurrence.items():
+            if v is not None:
+                mapping.update({int(k): self.coverage_taxa[v]})
+
         by_abundance_desc, not_found = self._occurrences_from_aggregations(
             aggregs,
-            self.recast_worms_ifier.phylo2worms,
+            mapping,
             event_id,
             predicted,
             self.warnings,
@@ -1289,8 +1382,110 @@ class DarwinCoreExport(JobServiceBase):
 
     def compute_taxo_spaces(self):
         """
-        We have taxo->worms and taxo->recast->worms "spaces"
+        We have occurrence and emof  "spaces"
         """
+        res = self.query_taxo_mapping(RecastOperation.dwca_export_occurrence)
+        if res is None:
+            msg = "Taxonomy renames is required. see Taxonomy recast"
+            logger.error(msg)
+            raise ValidationException(msg)
+        full_renames_occurrence = res
+
+        res = self.query_taxo_mapping(RecastOperation.dwca_export_emof)
+        if res is None:
+            full_renames_emof = full_renames_occurrence
+        else:
+            full_renames_emof = res
+        # verify if new taxa where added to the collection
+        keys = full_renames_occurrence.keys()
+        self.validate_taxa_list_throw([int(k) for k in keys])
+        emofkeys = full_renames_emof.keys()
+        # complete list with id of values missing in occurrences and remove if not wanted in occurrence and not wanted in emof
+        renames_occurrence = {
+            k: v
+            for k, v in full_renames_occurrence.items()
+            if (v != 0 or not (k in emofkeys and full_renames_emof[k] == 0))
+        }
+        renames_emof = {
+            k: v
+            for k, v in full_renames_emof.items()
+            if (v != 0 or not (k in keys and full_renames_occurrence[k] == 0))
+        }
+        # Args are serialized in JSON -> keys have become str and 0 val becomes None
+        self.computations_occurrence = {
+            int(k): v if v != 0 else None for k, v in renames_occurrence.items()
+        }
+        keys = self.computations_occurrence.keys()
+        for v in renames_occurrence.values():
+            if v != 0 and v not in keys:
+                self.computations_occurrence.update({int(v): v})
+        # complete list with id of values missing in occurrences keys
+        self.computations_emof = {
+            int(k): v if v != 0 else None for k, v in renames_emof.items()
+        }
+        emofkeys = self.computations_emof.keys()
+        for v in renames_emof.values():
+            if v != 0 and v not in emofkeys:
+                self.computations_emof.update({int(v): v})
+        coverage_taxa = list(self.computations_occurrence.copy().values())
+        coverage_taxa.extend(list(self.computations_emof.copy().values()))
+
+        self.coverage_taxa = WoRMSifier.do_wormsify(
+            self.ro_session, list(set(coverage_taxa).difference({None}))
+        )
+        # Prepare warnings for non-matches
+
+        for an_id in self.unreferenced_ids(
+            list(set(self.coverage_taxa.keys())), list(set(coverage_taxa))
+        ):
+            taxon = self.session.get(Taxonomy, an_id)
+            assert taxon is not None
+            self.ignored_taxa[an_id] = (an_id, taxon.name)
+            self.ignored_count[an_id] = 0
+
+    def query_taxo_mapping(
+        self,
+        operation: RecastOperation,
+    ) -> Optional[TaxoRemappingT]:
+        res = TaxoRecastBO.query_recast(
+            self.ro_session,
+            self.current_user_id,
+            self.collection.id,
+            operation,
+            True,
+            for_update=False,
+        ).all()
+        if res is None or len(res) != 1:
+            return None
+        the_one: TaxoRecast = res[0]
+        return json.loads(str(the_one.transforms))
+
+    def get_worms_targets(self, recastids: List[int]) -> List[WoRMSBO]:
+        taxa = TaxonBOSet(self.ro_session, recastids)
+        targets: List[WoRMSBO] = [
+            TaxoRecastBO.create_worms_bo(taxon) for taxon in taxa.as_list()
+        ]
+        return targets
+
+    @staticmethod
+    def unreferenced_ids(
+        ids: Iterable[ClassifIDT], refids: Iterable[ClassifIDT]
+    ) -> ClassifIDListT:
+        """Return the taxa from ids, not known in self"""
+        return [an_id for an_id in ids if an_id not in refids]
+
+    def validate_taxa_list_throw(self, taxakeys: ClassifIDListT):
+        usedtaxa = self._get_used_taxa()
+        newtaxa = list(set(usedtaxa).difference(set(taxakeys)))
+        if len(newtaxa) > 0:
+            msg = (
+                "Taxonomy renames is required. New taxa added since previous taxa renaming. %s "
+                % " , ".join([str(k) for k in newtaxa])
+            )
+            logger.error(msg)
+            raise ValidationException(msg)
+
+    def _get_used_taxa(self) -> List[ClassifIDT]:
         # TODO: This could be expressed directly in a join in below query
         project_ids = [a_project.projid for a_project in self.collection.projects]
         # Fetch the used taxa in the projects
@@ -1298,30 +1493,5 @@ class DarwinCoreExport(JobServiceBase):
         taxo_qry = taxo_qry.filter(ProjectTaxoStat.nbr > 0)
         taxo_qry = taxo_qry.filter(ProjectTaxoStat.id > 0)  # Exclude unclassified
         taxo_qry = taxo_qry.filter(ProjectTaxoStat.projid.in_(project_ids))
-        used_taxa = {an_id for an_id, in taxo_qry}
-
-        # Note: _All_ used taxa will appear in occurrences, recast does not
-        #     impact occurrences output, @see def add_occurrences_for_sample.
-        # OTOH, the recast target taxa will (likely) appear in coverage as it comes
-        # from computed quantities.
-        used_and_recasted_taxa = used_taxa.copy()
-        for from_, to_ in self.computations_taxo_recast.items():
-            if from_ in used_taxa and to_ is not None:
-                used_and_recasted_taxa.add(to_)
-
-        # Map all to WoRMS, the ones from projects and the recast target ones
-        # Note: It should now (Jan 2026) be straightforward as recast targets are all WoRMS
-        self.recast_worms_ifier.do_match(self.ro_session, list(used_and_recasted_taxa))
-
-        # Update recast to apply during calculations
-        self.recast_worms_ifier.apply_recast(self.computations_taxo_recast)
-
-        # Also prepare the recast-free version
-        self.worms_ifier.do_match(self.ro_session, list(used_taxa))
-
-        # Prepare warnings for non-matches
-        for an_id in self.recast_worms_ifier.unreferenced_ids(used_and_recasted_taxa):
-            taxon = self.session.get(Taxonomy, an_id)
-            assert taxon is not None
-            self.ignored_taxa[an_id] = (an_id, taxon.name)
-            self.ignored_count[an_id] = 0
+        used_taxa = [an_id for an_id, in taxo_qry]
+        return used_taxa

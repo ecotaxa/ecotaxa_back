@@ -87,7 +87,7 @@ class Vault(object):
             if r.status_code != 200:
                 return False
             with open(fout, "wb") as f:
-                for chunk in r.iter_content(1024):
+                for chunk in r.iter_content(65536):
                     f.write(chunk)
             f.close()
             img_id = int(sub_path[:-file_end].replace("/", ""))

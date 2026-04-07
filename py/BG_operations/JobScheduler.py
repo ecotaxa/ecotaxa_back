@@ -2,38 +2,54 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2021  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-import json
+import multiprocessing as mp
+import os
+import sys
 import threading
-import time
-from threading import Thread, Event
-from typing import Any, Optional, List, ClassVar, Callable
+from multiprocessing import Process
+from threading import Event, Thread
+from typing import Any, Optional, List, ClassVar, Callable, Type, Union
 
 from API_operations.helpers.JobService import JobServiceBase
 from API_operations.helpers.Service import Service
 from BO.Job import JobBO
 from DB.Job import Job, DBJobStateEnum, JobIDT
 from DB.helpers.ORM import clone_of
-from helpers.DynamicLogs import get_logger
+from helpers.DynamicLogs import (
+    get_logger,
+    LogsSwitcher,
+)
 
 logger = get_logger(__name__)
 
+mp.set_start_method("spawn", force=True)
 
-class JobRunner(Thread):
+
+class BaseJobRunner:
     """
-    Run background part of a job.
+    Common logic for running background part of a job.
     """
 
     def __init__(self, a_db_job: JobBO):
-        super().__init__(name="Job #%d" % a_db_job.id)
+        # Get class to run
+        sce_class = JobServiceBase.find_jobservice_class_by_type(a_db_job.type)
+        if sce_class is None:
+            msg = "Found %s in DB and could not match to a Service" % a_db_job.type
+            logger.error(msg)
+            assert sce_class is not None, msg
         self.db_job = a_db_job
+        self.sce_class = sce_class
 
-    def run(self) -> None:
+    def common_run(self, msg: str) -> None:
         """
-        Run the background part of the service.
+        Common run logic for both Thread and Process runners.
         """
         try:
-            sce = JobScheduler.instantiate(self.db_job)
-        except (AssertionError, TypeError, json.decoder.JSONDecodeError) as te:
+            sce = JobScheduler.instantiate(self.sce_class, self.db_job)
+            with LogsSwitcher(sce):
+                logger.info("Running in %s", msg)
+        except Exception as te:
+            logger.error(f"Error instantiating job {self.db_job.id}: {te}")
             self.tech_error(self.db_job.id, te)
             return
         with sce:
@@ -53,18 +69,72 @@ class JobRunner(Thread):
         session.commit()
 
 
+class ThreadJobRunner(Thread, BaseJobRunner):
+    """
+    Run background part of a job in a Thread.
+    """
+
+    def __init__(self, a_db_job: JobBO):
+        Thread.__init__(self, name="Job #%d" % a_db_job.id)
+        BaseJobRunner.__init__(self, a_db_job)
+
+    def run(self) -> None:
+        """
+        Run the background part of the service.
+        """
+        self.common_run(f"Thread {os.getpid()}/{threading.current_thread().ident}")
+
+
+class ProcessJobRunner(Process, BaseJobRunner):
+    """
+    Run background part of a job in a process.
+    """
+
+    def __init__(self, a_db_job: JobBO):
+        Process.__init__(self, name="Job #%d" % a_db_job.id)
+        BaseJobRunner.__init__(self, a_db_job)
+        self.daemon = False
+
+    def run(self) -> None:
+        """
+        Run the background part of the service.
+        """
+        # Detach from prent
+        os.setsid()
+        # Redirect all FDs
+        null_fd = os.open(os.devnull, os.O_RDWR)
+        os.dup2(null_fd, 0)
+        os.dup2(null_fd, 1)
+        os.dup2(null_fd, 2)
+        os.close(null_fd)
+        # Fork again
+        pid = os.fork()
+        if pid > 0:
+            os._exit(0)
+        # Launch the job
+        self.common_run(f"PID {os.getpid()}")
+
+
+JobRunnerType = Union[Type[ThreadJobRunner], Type[ProcessJobRunner]]
+JobRunner: JobRunnerType = ProcessJobRunner
+# Force thread in debug
+if sys.gettrace() is not None:
+    JobRunner = ThreadJobRunner
+
+
 class JobScheduler(Service):
     """
     In charge of launching/monitoring sub processes i.e. keep sync b/w processes and their images in jobs DB table.
-    These are not really processes, just threads, so far.
     """
 
     # Filter out these job types
     FILTER: ClassVar[List[str]] = []
     # Include only these job types
     INCLUDE: ClassVar[List[str]] = []
-    # A single runner per process
-    the_runner: Optional[JobRunner] = None  # Only written by JobTimer_s_
+    # A single runner per web process
+    the_runner: Optional[Union[ThreadJobRunner, ProcessJobRunner]] = (
+        None  # Only written by JobTimer_s_
+    )
     the_timer: Optional[threading.Timer] = None
     # First creation by Main, replacements by JobTimer_s_
     do_run: Event = Event()  # R/W by Main & JobTimer
@@ -107,8 +177,8 @@ class JobScheduler(Service):
         # Align DB job state
         the_job.state = DBJobStateEnum.Running
         self.session.commit()
-        # Detach the job DB line from session, as JobRunner is in another thread
-        # and SQLAlchemy objects are linked to sessions, and sessions cannot be shared b/w threads.
+        # Detach the job DB line from session, as JobRunner is in another process/thread
+        # and SQLAlchemy objects are linked to sessions, and sessions cannot be shared b/w processes.
         job_clone = clone_of(the_job)
         job_clone.id = the_job.id
         # Run the service background
@@ -116,18 +186,18 @@ class JobScheduler(Service):
         cls.the_runner.start()
 
     @staticmethod
-    def instantiate(a_job: JobBO):
-        sce_class = JobServiceBase.find_jobservice_class_by_type(
-            JobServiceBase, a_job.type
-        )
-        if sce_class is None:
-            msg = "Found %s in DB and could not match to a Service" % a_job.type
-            logger.error(msg)
-            assert sce_class is not None, msg
+    def instantiate(sce_class: Type["JobServiceBase"], a_job: JobBO):
         # Load the service creation arguments
         assert a_job.params is not None
         sce_class.deser_args(a_job.params)
-        sce = sce_class(**a_job.params)
+        # Check arguments against current PID if relevant
+        # Note: we do it here as it's common to all runners
+        params = a_job.params
+        try:
+            sce = sce_class(**params)
+        except Exception as e:
+            logger.error(f"Error instantiating {sce_class}: {e}")
+            raise
         # Inject the service state
         sce.load_state_from(a_job.inside)
         sce.load_reply_from(a_job.reply)
@@ -164,6 +234,7 @@ class JobScheduler(Service):
             logger.exception("Job run() exception: %s", e)
         if not cls.do_run.is_set():
             if cls.the_runner is not None:
+                # Wait for child process indefinitely before taking another task
                 cls.the_runner.join()
                 cls.the_runner = None
             cls.the_timer = None
@@ -173,13 +244,28 @@ class JobScheduler(Service):
     @classmethod
     def shutdown(cls) -> None:
         """
-        Clean close of multi-threading resources: Runner, Timer and Event
+        Clean close of multi-threading resources: Runner, Timer, and Event
         Restore class-loading time state.
         Current thread: Main
         """
         if cls.do_run.is_set():
             # Signal the timer to stop & cancel itself
             cls.do_run.clear()
-            # Wait for it gone
-            while cls.the_timer is not None:
-                time.sleep(1)
+            # Cancel the timer if it's waiting
+            if cls.the_timer:
+                cls.the_timer.cancel()
+                cls.the_timer = None
+
+        # Also ensure the runner is joined if it was finished or we are shutting down
+        if cls.the_runner is not None:
+            if not cls.the_runner.is_alive():
+                cls.the_runner.join(timeout=1)
+                cls.the_runner = None
+            else:
+                # If it's still alive, we might want to wait a bit or just leave it
+                # but for tests, we should probably try to join it
+                cls.the_runner.join(timeout=2)
+                if not cls.the_runner.is_alive():
+                    cls.the_runner = None
+                else:
+                    logger.warning("JobScheduler runner is still alive during shutdown")

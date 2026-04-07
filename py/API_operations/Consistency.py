@@ -10,11 +10,10 @@ from typing import List, Any
 from BO.ProjectTidying import ProjectTopology
 from BO.Rights import RightsBO, Action
 from DB import ObjectHeader, Acquisition, Sample, Project, ObjectFields
-from helpers.DynamicLogs import LogsSwitcher, LogEmitter
 from .helpers.Service import Service
 
 
-class ProjectConsistencyChecker(Service, LogEmitter):
+class ProjectConsistencyChecker(Service):
     """
     With time and bugs, some consistency problems could be introduced in projects.
     This service aims at listing them.
@@ -28,8 +27,7 @@ class ProjectConsistencyChecker(Service, LogEmitter):
         return "consistency_%d.log" % self.prj_id
 
     def run(self, current_user_id: int) -> List[str]:
-        with LogsSwitcher(self):
-            return self.do_run(current_user_id)
+        return self.do_run(current_user_id)
 
     def do_run(self, current_user_id: int) -> List[str]:
         # Security check

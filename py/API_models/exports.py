@@ -5,7 +5,7 @@
 from enum import Enum
 from typing import List, Dict, Optional, Union
 
-from pydantic import Extra, validator
+from pydantic import Extra
 
 from helpers.pydantic import BaseModel, Field
 
@@ -180,14 +180,6 @@ class ExportReq(ProjectIdReq):
         example="A",
         default=SummaryExportGroupingEnum.just_by_taxon,
     )
-    pre_mapping: Dict[int, Optional[int]] = Field(
-        title="Categories mapping",
-        description="For 'ABO', 'CNC' and 'BIV' types types, mapping "
-        "from present taxon (key) to output replacement one (value)."
-        " Use a null replacement to _discard_ the present taxon.",
-        example={456: 956, 2456: 213},
-        default={},
-    )
     formulae: Dict[str, str] = Field(
         title="Computation formulas",
         description="Transitory: For 'CNC' and 'BIV' type, how to get values from DB "
@@ -203,18 +195,10 @@ class ExportReq(ProjectIdReq):
     )
     out_to_ftp: bool = Field(
         title="Out to ftp",
-        description="Copy result file to FTP area. Original file is still available.",
+        description="Copy result file to FTP area (if configured). Original file is still available.",
         example=False,
         default=False,
     )
-
-    # noinspection PyMethodParameters
-    @validator("pre_mapping")
-    def username_alphanumeric(cls, v):
-        assert set(v.keys()).isdisjoint(
-            set(v.values())
-        ), "inconsistent pre_mapping, can't do remap chains or loops"
-        return v
 
     class Config:
         schema_extra = {"title": "Export request Model"}
@@ -255,27 +239,12 @@ class GeneralExportReq(ProjectIdReq):
         default=False,
         example=False,
     )
-    # taxo_mapping: Dict[int, Optional[int]] = Field(
-    #     title="Categories mapping",
-    #     description="Mapping from present taxon (key) to output replacement one (value)."
-    #     " Use a null replacement to _discard_ the present taxon.",
-    #     example={456: 956, 2456: 213, 734: None},
-    #     default={},
-    # )
     out_to_ftp: bool = Field(
         title="Out to ftp",
-        description="Copy result file to FTP area. Original file is still available.",
+        description="Copy result file to FTP area (if configured). Original file is still available.",
         default=False,
         example=False,
     )
-
-    # noinspection PyMethodParameters
-    # @validator("taxo_mapping")
-    # def ensure_sane_remap(cls, v):
-    #     assert set(v.keys()).isdisjoint(
-    #         set(v.values())
-    #     ), "inconsistent taxo_mapping, can't do remap chains or loops"
-    #     return v
 
     class Config:
         schema_extra = {"title": "General Export request Model"}
@@ -298,14 +267,6 @@ class SummaryExportReq(ProjectIdReq):
         example=SummaryExportSumOptionsEnum.acquisition,
         default=SummaryExportSumOptionsEnum.sample,
     )
-    taxo_mapping: Dict[int, Optional[int]] = Field(
-        title="Categories mapping",
-        description="Mapping "
-        "from present taxon (key) to output replacement one (value)."
-        " Use a 0 replacement to _discard_ the present taxon.",
-        example={456: 956, 2456: 213, 7153: 0},
-        default={},
-    )
     formulae: Dict[str, str] = Field(
         title="Computation formulas",
         description="Transitory: How to get values from DB "
@@ -321,21 +282,10 @@ class SummaryExportReq(ProjectIdReq):
     )
     out_to_ftp: bool = Field(
         title="Out to ftp",
-        description="Copy result file to FTP area. Original file is still available.",
+        description="Copy result file to FTP area (if configured). Original file is still available.",
         default=False,
         example=False,
     )
-
-    # noinspection PyMethodParameters
-    @validator("taxo_mapping")
-    def ensure_sane_remap(cls, v):
-        assert set(v.keys()).isdisjoint(
-            set(v.values())
-        ), "inconsistent pre_mapping, can't do remap chains or loops"
-        return v
-
-    class Config:
-        schema_extra = {"title": "Summary Export request Model"}
 
 
 class BackupExportReq(ProjectIdReq):
@@ -394,15 +344,6 @@ class DarwinCoreExportReq(BaseModel):
         example=["ABO"],
         default=[],
     )
-    # TODO: Is same as TaxonomyRecast below, should get type TaxoRemappingT (or define it here)
-    computations_pre_mapping: Dict[int, int] = Field(
-        title="Computation mapping",
-        description="Mapping from present taxon (key) to output replacement one (value), during computations."
-        " Use a 0 replacement to _discard_ the objects with present taxon."
-        " Note: These are EcoTaxa categories, WoRMS mapping happens after, whatever.",
-        example={456: 956, 2456: 213, 93672: 0},
-        default={},
-    )
     formulae: Dict[str, str] = Field(
         title="Computation formulas",
         description="Transitory: How to get values from DB free columns. "
@@ -428,19 +369,6 @@ class DarwinCoreExportReq(BaseModel):
         },
         default=[],
     )
-
-    # noinspection PyMethodParameters
-    @validator("computations_pre_mapping")
-    def ensure_consistent_mapping(cls, v):
-        vals_but_0 = set(v.values()).difference({0})
-        assert set(v.keys()).isdisjoint(
-            vals_but_0
-        ), "inconsistent pre_mapping, can't do remap chains or loops: common part is %s" % set(
-            v.keys()
-        ).intersection(
-            set(v.values())
-        )
-        return v
 
     class Config:
         extra = Extra.forbid
@@ -472,29 +400,3 @@ class ExportRsp(BaseModel):
         example=12376,
         default=0,
     )
-
-
-class TaxonomyRecast(BaseModel):
-    """
-    In various contexts, a taxo recast (from taxon -> to taxon) setting.
-    """
-
-    from_to: Dict[int, Optional[int]] = Field(
-        title="Categories mapping",
-        description="Mapping from seen taxon (key) to output replacement one (value)."
-        " Use a null replacement to _discard_ the present taxon. Note: keys are strings.",
-        example={"456": 956, "2456": 213, "9134": None},
-    )
-
-    doc: Optional[Dict[int, str]] = Field(
-        title="Mapping documentation",
-        description="To keep memory of the reasons for the above mapping. Note: keys are strings.",
-        example={
-            "456": "Up to species",
-            "2456": "Up to nearest non-morpho",
-            "9134": "Detritus",
-        },
-    )
-
-    class Config:
-        extra = Extra.forbid

@@ -7,6 +7,7 @@
 from typing import Dict, List, Optional
 
 from BO.DataLicense import DataLicense, AccessLevelEnum
+from DB.TaxoRecast import RecastOperation
 from DB.User import UserStatus, UserType, PeopleOrganizationDirectory
 from BO.User import (
     USER_PWD_REGEXP,
@@ -135,4 +136,19 @@ class Constants(BaseModel):
         title="EcoTaxoServer URL",
         description="url of taxonomy server ecotaxoserver",
         default="https://ecotaxoserver.obs-vlfr.fr/",
+    )
+    openid_configured: bool = Field(
+        title="OpenID configured",
+        description="Whether OpenID authentication is configured.",
+        default=False,
+    )
+    recast_operation: Dict[str, str] = Field(
+        title="Recast operation",
+        description="Taxonomy recast operation name",
+        default={st.name: st.value for st in RecastOperation},
+        example={
+            "prediction_input": "pre_predict",
+            "dwca_export_occurrence": "dwca_export_occurrence",
+            "dwca_export_emof": "dwca_export_emof",
+        },
     )

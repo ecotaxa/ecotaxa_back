@@ -6,19 +6,13 @@
 #
 import datetime
 import json
-import random
-import tempfile
-from collections import deque
-from typing import Dict, Set, List, Tuple, Any, Optional, Final, Deque
-
-from httpx import ReadTimeout, HTTPError
+from typing import Dict, List, Any, Final
 
 from BO.Classification import ClassifIDT
 from BO.Rights import RightsBO
 from BO.Taxonomy import TaxonomyBO
 from BO.User import UserIDT
 from DB.Taxonomy import Taxonomy
-from DB.User import User
 from helpers import DateTime
 from helpers.DynamicLogs import get_logger
 from providers.EcoTaxoServer import EcoTaxoServerClient

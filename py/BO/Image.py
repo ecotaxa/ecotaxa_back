@@ -58,7 +58,7 @@ class ImageBO(object):
         image_to_write.height = im.size[1]
         # Generate a thumbnail if image is too large
         if (im.size[0] > max_dim) or (im.size[1] > max_dim):
-            if im.mode == "P" or im.mode[0] == "I":
+            if im.mode == "P" or im.mode[0] == "I" or im.mode == "RGBA":
                 # (8-bit pixels, mapped to any other mode using a color palette)
                 # from https://pillow.readthedocs.io/en/latest/handbook/concepts.html#modes
                 # Tested using a PNG with palette

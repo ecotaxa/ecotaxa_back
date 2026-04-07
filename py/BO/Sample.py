@@ -23,7 +23,7 @@ from DB.helpers.Direct import text
 from DB.helpers.ORM import any_
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
-from .Classification import ClassifIDListT
+from .Classification import ClassifIDListT, ClassifIDT
 from .ColumnUpdate import ColUpdateList
 from .helpers.MappedEntity import MappedEntity
 from .helpers.MappedTable import MappedTable
@@ -55,6 +55,7 @@ class SampleAggregForTaxon:
     Aggregation for a given taxon, inside a sample.
     """
 
+    taxo_id: ClassifIDT
     abundance: int  # i.e. count of organisms
     concentration: Optional[float]
     biovolume: Optional[float]
