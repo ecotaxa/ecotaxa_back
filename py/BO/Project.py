@@ -67,6 +67,7 @@ from DB.helpers import Session, Result
 from DB.helpers.Bean import Bean
 from DB.helpers.Core import select
 from DB.helpers.Direct import text
+from DB.helpers.Hints import RECURS_HINT
 from DB.helpers.ORM import (
     Delete,
     Query,
@@ -376,11 +377,11 @@ class ProjectBO(object):
     @staticmethod
     def update_taxo_stats(session: Session, projid: int):
         sql = text(
-            """
+            f"""
         DELETE FROM projects_taxo_stat pts
          WHERE pts.projid = :prjid;
         INSERT INTO projects_taxo_stat(projid, id, nbr, nbr_v, nbr_d, nbr_p)
-        SELECT sam.projid, COALESCE(obh.classif_id, -1) id, COUNT(*) nbr,
+        SELECT {RECURS_HINT} sam.projid, COALESCE(obh.classif_id, -1) id, COUNT(*) nbr,
                COUNT(CASE WHEN obh.classif_qual = '"""
             + VALIDATED_CLASSIF_QUAL
             + """' THEN 1 END) nbr_v,
@@ -390,11 +391,10 @@ class ProjectBO(object):
                COUNT(CASE WHEN obh.classif_qual = '"""
             + PREDICTED_CLASSIF_QUAL
             + """' THEN 1 END) nbr_p
-          FROM %s obh
+          FROM obj_head obh
           JOIN acquisitions acq ON acq.acquisid = obh.acquisid
           JOIN samples sam ON sam.sampleid = acq.acq_sample_id AND sam.projid = :prjid
         GROUP BY sam.projid, obh.classif_id;"""
-            % ObjectHeader.__tablename__
         )
         session.execute(sql, {"prjid": projid})
 
@@ -697,11 +697,12 @@ class ProjectBO(object):
     def get_bounding_geo(
         cls, session: Session, project_ids: ProjectIDListT
     ) -> Iterable[float]:
-        # TODO: Why using the view?
         sql = (
-            "SELECT min(o.latitude), max(o.latitude), min(o.longitude), max(o.longitude)"
-            "  FROM objects o "
-            " WHERE o.projid = ANY(:prj)"
+            f"SELECT {RECURS_HINT} min(obh.latitude), max(obh.latitude), min(obh.longitude), max(obh.longitude)"
+            "  FROM obj_head obh "
+            "  JOIN acquisitions acq ON obh.acquisid = acq.acquisid "
+            "  JOIN samples sam ON acq.acq_sample_id = sam.sampleid "
+            " WHERE sam.projid = ANY(:prj)"
         )
         res: Result = session.execute(text(sql), {"prj": project_ids})
         vals = res.first()
@@ -712,11 +713,12 @@ class ProjectBO(object):
     def get_date_range(
         cls, session: Session, project_ids: ProjectIDListT
     ) -> Iterable[datetime]:
-        # TODO: Why using the view?
         sql = (
-            "SELECT min(o.objdate), max(o.objdate)"
-            "  FROM objects o "
-            " WHERE o.projid = ANY(:prj)"
+            f"SELECT {RECURS_HINT} min(obh.objdate), max(obh.objdate)"
+            "  FROM obj_head obh "
+            "  JOIN acquisitions acq ON obh.acquisid = acq.acquisid "
+            "  JOIN samples sam ON acq.acq_sample_id = sam.sampleid "
+            " WHERE sam.projid = ANY(:prj)"
         )
         res: Result = session.execute(text(sql), {"prj": project_ids})
         vals = res.first()

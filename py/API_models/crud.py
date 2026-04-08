@@ -4,11 +4,13 @@
 #
 #  Models used in CRUD API_operations.
 #
-from typing import Optional, Dict, List, Any, Union, Tuple
+from typing import Optional, Dict, List, Any, Union
+
+from API_models.constants import FORMULAE
+from BO.Collection import CollectionIDT
 from BO.ColumnUpdate import ColUpdate
 from BO.DataLicense import LicenseEnum, AccessLevelEnum
 from BO.Job import DBJobStateEnum
-from BO.Collection import CollectionIDT
 from BO.Project import ProjectUserStats, ProjectColumns
 from BO.ProjectSet import ProjectSetColumnStats
 from BO.Sample import SampleTaxoStats, SampleIDT
@@ -24,7 +26,6 @@ from DB.User import User, Guest, Organization, OrganizationIDT
 from helpers.pydantic import BaseModel, Field, DescriptiveModel
 from .helpers.DBtoModel import combine_models
 from .helpers.DataclassToModel import dataclass_to_model_with_suffix
-from API_models.constants import FORMULAE
 
 # Enriched model
 FreeColT = Dict[str, str]

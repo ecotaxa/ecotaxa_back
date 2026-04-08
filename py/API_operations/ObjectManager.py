@@ -31,6 +31,7 @@ from BO.Training import TrainingBO, PredictionBO
 from BO.User import UserIDT
 from DB import ObjectCNNFeatureVector
 from DB.Image import IMAGE_VIRTUAL_COLUMNS
+from DB.Object import ObjectIDListT
 from DB.Object import (
     VALIDATED_CLASSIF_QUAL,
     PREDICTED_CLASSIF_QUAL,
@@ -39,9 +40,9 @@ from DB.Object import (
     ObjectHeader,
 )
 from DB.Project import ProjectIDT, Project
-from DB.Object import ObjectIDListT
 from DB.helpers import Result
 from DB.helpers.Direct import text
+from DB.helpers.Hints import RECURS_HINT
 from DB.helpers.Postgres import db_server_now
 from DB.helpers.SQL import OrderClause
 from FS.VaultRemover import VaultRemover
@@ -50,9 +51,6 @@ from helpers.Timer import CodeTimer
 from .helpers.Service import Service
 
 logger = get_logger(__name__)
-
-# Basic hint preventing FTS on big tables
-HINT = "/*+ Leading(sam acq obh) NestLoop(sam acq obh) IndexOnlyScan(obh) IndexOnlyScan(obf) */"
 
 
 class ObjectManager(Service):
@@ -136,7 +134,7 @@ class ObjectManager(Service):
         total_col = "0 AS total"
 
         sql = f"""
-SELECT {HINT} obh.objid, acq.acquisid, sam.sampleid, %s%s
+SELECT {RECURS_HINT} obh.objid, acq.acquisid, sam.sampleid, %s%s
   FROM """ % (
             total_col,
             extra_cols,
@@ -321,7 +319,7 @@ SELECT {HINT} obh.objid, acq.acquisid, sam.sampleid, %s%s
         """
         from_, where, params = object_set.get_sql()
         sql = f"""
-SELECT {HINT} COUNT(*) nbr"""
+SELECT {RECURS_HINT} COUNT(*) nbr"""
         if only_total:
             sql += """, NULL nbr_v, NULL nbr_d, NULL nbr_p"""
         else:
