@@ -7,7 +7,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional, List, Dict, NamedTuple, Tuple
 
-from sqlalchemy import tuple_
+from sqlalchemy import tuple_, values, column, String, Integer, Date
 
 from BO.Classification import (
     HistoricalLastClassif,
@@ -259,6 +259,14 @@ class PredictionBO(object):
             for an_histo in histo
             if an_histo.histo_classif_qual == PREDICTED_CLASSIF_QUAL
         ]
+        if len(pred_histos) == 0:
+            return
+        pred_histos_vals = values(
+            column("objid", String),
+            column("histo_classif_date", Date),
+            column("histo_classif_id", Integer),
+            name="histo",
+        ).data(pred_histos)
         # Determine historized PredictionHisto rows to resurrect. A bit tricky as all we have is dates.
         histo_sel = select(
             PredictionHisto.training_id,
@@ -278,12 +286,14 @@ class PredictionBO(object):
                 ),
             ),
         )
-        histo_sel = histo_sel.where(
-            tuple_(  # type:ignore
-                ObjectsClassifHisto.objid,
-                ObjectsClassifHisto.classif_date,
-                ObjectsClassifHisto.classif_id,
-            ).in_(pred_histos)
+        histo_sel = histo_sel.join(
+            pred_histos_vals,
+            and_(
+                ObjectsClassifHisto.objid == pred_histos_vals.c.objid,
+                ObjectsClassifHisto.classif_date
+                == pred_histos_vals.c.histo_classif_date,
+                ObjectsClassifHisto.classif_id == pred_histos_vals.c.histo_classif_id,
+            ),
         )
         # Insert historized PredictionHisto into Prediction
         resurrect_qry = Prediction.__table__.insert().from_select(
@@ -296,38 +306,9 @@ class PredictionBO(object):
             histo_sel,
         )
         res = self.session.execute(resurrect_qry)
-
         # If nothing was resurrected from PredictionHisto, rebuild from Training matching dates
         if res.rowcount == 0:  # type:ignore  # case1
-            # Rebuild one prediction per object using the training that matches the date
-            # Note: histo_classif_score is already in histo
-            # We only do this for objects that have PREDICTED_CLASSIF_QUAL
-            preds_to_rebuild = []
-            for an_histo in histo:
-                if an_histo.histo_classif_qual != PREDICTED_CLASSIF_QUAL:
-                    continue
-                # Find matching training
-                matching_training = (
-                    self.session.query(Training.training_id)
-                    .filter(
-                        and_(
-                            Training.training_start <= an_histo.histo_classif_date,
-                            Training.training_end >= an_histo.histo_classif_date,
-                        )
-                    )
-                    .first()
-                )
-                if matching_training:
-                    preds_to_rebuild.append(
-                        {
-                            Prediction.training_id.name: matching_training.training_id,
-                            Prediction.object_id.name: an_histo.objid,
-                            Prediction.classif_id.name: an_histo.histo_classif_id,
-                            Prediction.score.name: an_histo.histo_classif_score,
-                        }
-                    )
-            if preds_to_rebuild:
-                self.session.bulk_insert_mappings(Prediction, preds_to_rebuild)
+            self.reconstruct_predictions(histo)
 
         # Remove history which is now current
         histo_pred_del_qry: Delete = PredictionHisto.__table__.delete()
@@ -340,3 +321,50 @@ class PredictionBO(object):
             ).in_(histo_sel)
         )
         self.session.execute(histo_pred_del_qry)
+
+    def reconstruct_predictions(self, histo: List[HistoricalLastClassif]):
+        # Rebuild one prediction per object using the training that matches the date
+        # We only do this for objects that have PREDICTED_CLASSIF_QUAL
+        preds_to_rebuild = []
+        new_training_bo = None
+        for an_histo in histo:
+            if an_histo.histo_classif_qual != PREDICTED_CLASSIF_QUAL:
+                continue
+            # Find matching training
+            matching_training = (
+                self.session.query(Training.training_id)
+                .filter(
+                    and_(
+                        Training.training_start <= an_histo.histo_classif_date,
+                        Training.training_end >= an_histo.histo_classif_date,
+                    )
+                )
+                .first()
+            )
+            training_id = matching_training.training_id if matching_training else None
+
+            if training_id is None:
+                if new_training_bo is None:
+                    # Create a single new training for all objects that have no matching training
+                    new_training_bo = TrainingBO.create_one(
+                        self.session,
+                        author=an_histo.histo_classif_who,
+                        reason="Reconstructed from history",
+                        training_start=an_histo.histo_classif_date,
+                    )
+                training_id = new_training_bo.training_id
+
+            preds_to_rebuild.append(
+                {
+                    Prediction.training_id.name: training_id,
+                    Prediction.object_id.name: an_histo.objid,
+                    Prediction.classif_id.name: an_histo.histo_classif_id,
+                    Prediction.score.name: an_histo.histo_classif_score,
+                }
+            )
+
+        if new_training_bo:
+            new_training_bo.advance()
+
+        if preds_to_rebuild:
+            self.session.bulk_insert_mappings(Prediction, preds_to_rebuild)
