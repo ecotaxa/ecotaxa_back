@@ -19,7 +19,6 @@ psql_bin = "psql"
 PG_HOST = environ.get("POSTGRES_HOST")
 PG_PORT = environ.get("POSTGRES_PORT")
 
-
 if PG_HOST and PG_PORT:
     PG_PORT = int(PG_PORT)
 else:
@@ -261,6 +260,8 @@ DIR_MAIL_TEMPLATES = {DIR_TEMPLATES}
 SERVERURL= https://my.real.site:443
 MAX_UPLOAD_SIZE = 681574400
 TIMETOLIVE = {TIMETOLIVE}
+ACCEPTED_MIME_TYPES = application/zip,application/gzip,application/x-tar,text/plain,text/csv,text/tab-separated-values,image/jpeg,image/png,image/x-png,image/gif,image/tiff
+ARCHIVE_EXTENSIONS = zip,tar,gzip,tar.gz,tar.bz2,tar.xz,gz
 OPENID_CLIENT_ID=ecotaxa
 OPENID_CLIENT_SECRET=ugrv75rZRlVvUdk4YJE58sJulITDo0c8
 OPENID_METADATA_URL=https://my.keycloack.com/realms/theia/.well-known/openid-configuration
