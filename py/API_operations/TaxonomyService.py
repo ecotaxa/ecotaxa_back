@@ -5,17 +5,23 @@
 # End-user services around taxonomy tree.
 #
 from datetime import datetime
+from fastapi import HTTPException
 from typing import List, Optional, Dict, Any, Union
 import json
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
-from API_models.taxonomy import TaxaSearchRsp, TaxonomyRecastReq, TaxoRecastRsp
+from API_models.taxonomy import (
+    TaxaSearchRsp,
+    TaxonomyRecastReq,
+    TaxoRecastRsp,
+)
 from API_operations.helpers.Service import Service
 from BO.Classification import ClassifIDT, ClassifIDListT
 from BO.Project import ProjectBOSet
 from BO.Collection import CollectionIDT
 from BO.ReClassifyLog import ReClassificationBO
-from BO.Taxonomy import TaxonomyBO, TaxonBO, TaxonBOSet
-from BO.WoRMSification import WoRMSifier, WoRMSBO
+from BO.Taxonomy import TaxonomyBO, TaxonBO, TaxonBOSet, WoRMSBO
+from BO.TaxoRecast import TaxoRecastBO
+from BO.WoRMSification import WoRMSifier
 from BO.User import UserIDT, UserBO
 from DB.Project import ProjectTaxoStat, Project, ProjectIDT
 from DB.Taxonomy import Taxonomy
@@ -150,25 +156,34 @@ class TaxonomyService(Service):
         ret = TaxonBOSet(self.ro_session, taxon_ids)
         return ret.as_list()
 
-    def wormsification_set(self, taxon_ids: ClassifIDListT) -> Dict[int, WoRMSBO]:
+    def wormsification_set(self, taxaids: ClassifIDListT) -> Dict[int, WoRMSBO]:
+        wormsauto = self.get_taxonomy_worms(taxaids)
+        targets = WoRMSifier.do_wormsify(self.ro_session, list(wormsauto.values()))
+        return targets
+
+    def get_taxonomy_worms(self, taxaids: ClassifIDListT) -> Dict[str, int]:
         wormsifier: WoRMSifier = WoRMSifier()
-        wormsifier.do_match(self.ro_session, taxon_ids)
-        worms_targets = wormsifier.phylo2worms.copy()
+        wormsifier.do_match(self.ro_session, taxaids)
+        taxo_worms_auto: Dict[str, int] = {}
+        for k, v in wormsifier.phylo2worms.items():
+            if v is not None:
+                taxo_worms_auto.update({str(k): v})
         for taxonid, to in wormsifier.morpho2phylo.items():
             if to is not None and taxonid > 0:
                 toworms = wormsifier.phylo2worms[int(to)]
-                if isinstance(toworms, WoRMSBO):
-                    worms_targets.update({taxonid: toworms})
-        return worms_targets
+                if toworms is not None:
+                    taxo_worms_auto.update({str(taxonid): toworms})
+        return taxo_worms_auto
 
     def update_taxonomy_recast(
         self, current_user_id: UserIDT, recast: TaxonomyRecastReq
     ):
         # Just remove and re-add
-        assert (
-            recast.operation in RecastOperation.__members__
-        ), HTTP_422_UNPROCESSABLE_ENTITY
-        qry = WoRMSifier.query_recast(
+        if recast.operation not in RecastOperation.__members__:
+            raise HTTPException(
+                HTTP_422_UNPROCESSABLE_ENTITY, detail="operation not supported"
+            )
+        qry = TaxoRecastBO.query_recast(
             self.session,
             current_user_id,
             target_id=recast.target_id,
@@ -176,13 +191,19 @@ class TaxonomyService(Service):
             is_collection=recast.is_collection,
             for_update=True,
         )
-        qry.delete()
+        if qry is not None:
+            qry.delete()
         new_recast = TaxoRecast()
         if recast.is_collection:
             new_recast.collection_id = recast.target_id
         else:
             new_recast.project_id = recast.target_id
         new_recast.operation = recast.operation
+        isworms = recast.operation in [
+            RecastOperation.dwca_export_occurrence,
+            RecastOperation.dwca_export_emof,
+        ]
+        self.validate_remapping_throw(recast.recast.from_to, isworms)
         new_recast.transforms = json.dumps(recast.recast.from_to)
         new_recast.documentation = (
             json.dumps(recast.recast.doc) if recast.recast.doc else {}
@@ -198,7 +219,7 @@ class TaxonomyService(Service):
         is_collection: bool = False,
     ) -> Optional[TaxoRecastRsp]:
         assert operation in RecastOperation.__members__, HTTP_422_UNPROCESSABLE_ENTITY
-        qry = WoRMSifier.query_recast(
+        qry = TaxoRecastBO.query_recast(
             self.ro_session,
             current_user_id,
             target_id,
@@ -238,3 +259,25 @@ class TaxonomyService(Service):
     ) -> List[Dict[str, Any]]:
         history = ReClassificationBO.history_for_project(self.ro_session, project_id)
         return history
+
+    def validate_remapping_throw(
+        self, remapping: Dict[str, Optional[int]], isWoRMS: bool
+    ):
+        resp = TaxoRecastBO.valid_remap(remapping)
+        if resp is not None:
+            raise HTTPException(HTTP_422_UNPROCESSABLE_ENTITY, detail=[resp])
+        if isWoRMS:
+            qry = (
+                self.ro_session.query(Taxonomy.id)
+                .filter(Taxonomy.id.in_(remapping.values()))
+                .filter(Taxonomy.aphia_id is None)
+            )
+            not_valid = [t.id for t in qry]
+            if len(not_valid):
+                raise HTTPException(
+                    HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=[
+                        " error  taxa recast is not WoRMS compatible "
+                        + ", ".join(not_valid)
+                    ],
+                )

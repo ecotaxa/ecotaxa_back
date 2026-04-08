@@ -5,6 +5,7 @@
 # Based on https://fastapi.tiangolo.com/
 #
 import os
+import re
 import time
 from logging import INFO
 from typing import Union, Tuple, List, Dict, Any, Optional
@@ -29,6 +30,8 @@ from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from fastapi_utils.timing import add_timing_middleware
 from sqlalchemy.sql.expression import null
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 
 from API_models.constants import Constants
 from API_models.crud import (
@@ -63,7 +66,6 @@ from API_models.exports import (
     SummaryExportReq,
     BackupExportReq,
 )
-from API_models.taxonomy import TaxoRecastRsp, TaxonomyRecastReq
 from API_models.filesystem import DirectoryModel
 from API_models.filters import ProjectFilters
 from API_models.helpers.Introspect import plain_columns
@@ -97,6 +99,8 @@ from API_models.taxonomy import (
     TaxonCentral,
     AddWormsTaxonModel,
 )
+from API_models.taxonomy import TaxoRecastRsp, TaxonomyRecastReq
+from API_operations.BigFiles import create_big_files_router
 from API_operations.CRUD.Collections import CollectionsService
 from API_operations.CRUD.Constants import ConstantsService
 from API_operations.CRUD.Guests import GuestService
@@ -118,6 +122,7 @@ from API_operations.DBSyncService import DBSyncService
 from API_operations.JsonDumper import JsonDumper
 from API_operations.Merge import MergeService
 from API_operations.ObjectManager import ObjectManager
+from API_operations.OpenID import router as openid_router, init_openid
 from API_operations.Prediction import PredictForProject, PredictionDataService
 from API_operations.SimilaritySearch import SimilaritySearchForProject
 from API_operations.Stats import ProjectStatsFetcher
@@ -139,7 +144,6 @@ from API_operations.exports.ForProject import (
 from API_operations.imports.Import import FileImport
 from API_operations.imports.SimpleImport import SimpleImport
 from BG_operations.JobScheduler import JobScheduler
-from BO.Acquisition import AcquisitionBO
 from BO.Classification import HistoricalClassification, ClassifIDT
 from BO.Collection import (
     CollectionBO,
@@ -148,18 +152,20 @@ from BO.Collection import (
 from BO.ColumnUpdate import ColUpdateList
 from BO.Job import JobBO
 from BO.Object import ObjectBO
-from BO.Process import ProcessBO
 from BO.Project import ProjectBO, ProjectUserStats, ProjectColumns
 from BO.ProjectSet import ProjectSetColumnStats
-from BO.Sample import SampleBO, SampleTaxoStats
+from BO.Sample import SampleTaxoStats
 from BO.Taxonomy import TaxonBO
-from BO.WoRMSification import WoRMSBO
 from BO.User import UserIDT, GuestIDT
+from BO.WoRMSification import WoRMSBO
 from DB import Sample
+from DB.Job import DBJobStateEnum
 from DB.Object import ObjectIDListT
 from DB.Project import ProjectTaxoStat, Project
 from DB.ProjectPrivilege import ProjectPrivilege
+from DB.TaxoRecast import RecastOperation
 from DB.User import User, OrganizationIDT
+from helpers.AppConfig import Config
 from helpers.DynamicLogs import get_logger, get_api_logger, MONITOR_LOG_PATH
 from helpers.fastApiUtils import (
     internal_server_error_handler,
@@ -186,7 +192,7 @@ api_logger = get_api_logger()
 
 app = FastAPI(
     title="EcoTaxa",
-    version="0.0.42",
+    version="0.0.43",
     # openapi URL as seen from navigator, this is included when /docs is required
     # which serves swagger-ui JS app. Stay in /api sub-path.
     openapi_url="/api/openapi.json",
@@ -198,8 +204,20 @@ app = FastAPI(
     # For later: Root path is in fact _removed_ from incoming requests, so not relevant here
 )
 
+init_openid()
+
+app.include_router(openid_router)
+
 # Instrument a bit
 add_timing_middleware(app, record=logger.info, prefix="app", exclude="untimed")
+
+app.add_middleware(
+    SessionMiddleware,
+    session_cookie="oid_session",
+    secret_key=Config().secret_key(),
+    same_site="lax",
+    https_only=False,
+)
 
 # 'Client disconnect kills running job' problem workaround. _Must_ be the _last_ added middleware in chain.
 # Update 08/03/2024: Bad diagnostic probably, workaround disabled.
@@ -208,6 +226,23 @@ add_timing_middleware(app, record=logger.info, prefix="app", exclude="untimed")
 # Optimize large responses -> Let's leave this task to some proxy coded in C
 # app.add_middleware(GZipMiddleware, minimum_size=1024)
 
+
+class FixLocationMiddleware(BaseHTTPMiddleware):
+    # Any redirect should point to the frontend, not the backend
+    FRONT_URL = Config().get_account_validation_url()
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        location = response.headers.get("location")
+        if location:
+            match = re.match(r"^http://[^/]+(/.*|$)", location)
+            if match:
+                path = match.group(1) or "/"
+                response.headers["location"] = f"{self.FRONT_URL}{path[1:]}"
+        return response
+
+
+app.add_middleware(FixLocationMiddleware)
 
 # HTML stuff
 # app.mount("/styles", StaticFiles(directory="pages/styles"), name="styles")
@@ -1157,18 +1192,19 @@ def darwin_core_format_export(
 
     Note: Only manageable collections can be exported.
     """
+
     with DarwinCoreExport(
         request.collection_id,
         request.dry_run,
-        request.computations_pre_mapping,
         request.include_predicted,
         request.with_absent,
         request.with_computations,
         request.formulae,
         request.extra_xml,
+        current_user,
     ) as sce:
-        with RightsThrower():
-            return sce.run(current_user)
+        with ValidityThrower(), RightsThrower():
+            return sce.run()
 
 
 @app.delete(
@@ -2078,7 +2114,7 @@ def samples_search(
         example="*",
     ),
     current_user: Optional[int] = Depends(get_optional_current_user),
-) -> List[SampleBO]:
+) -> List[SampleModel]:
     """
     **Search for samples.**
     """
@@ -2086,7 +2122,7 @@ def samples_search(
         proj_ids = _split_num_list(project_ids)
         with RightsThrower():
             ret = sce.search(current_user, proj_ids, id_pattern)
-        return ret
+        return [SampleModel.from_orm(sam) for sam in ret]
 
 
 @app.get(
@@ -2169,7 +2205,7 @@ def sample_query(
         ..., description="Internal, the unique numeric id of this sample.", example=1
     ),
     current_user: Optional[int] = Depends(get_optional_current_user),
-) -> SampleBO:
+) -> SampleModel:
     """
     Returns **information about the sample** corresponding to the given id.
     """
@@ -2178,7 +2214,7 @@ def sample_query(
             ret = sce.query(current_user, sample_id)
         if ret is None:
             raise HTTPException(status_code=404, detail="Sample not found")
-        return ret
+        return SampleModel.from_orm(ret)
 
 
 # ######################## END OF SAMPLE
@@ -2195,14 +2231,14 @@ def acquisitions_search(
         ..., title="Project id", description="The project id.", example=1
     ),
     current_user: Optional[int] = Depends(get_optional_current_user),
-) -> List[AcquisitionBO]:
+) -> List[AcquisitionModel]:
     """
     Returns the **list of all acquisitions for a given project**.
     """
     with AcquisitionsService() as sce:
         with RightsThrower():
             ret = sce.search(current_user, project_id)
-        return ret
+        return [AcquisitionModel.from_orm(acq) for acq in ret]
 
 
 @app.post(
@@ -2240,7 +2276,7 @@ def acquisition_query(
         example=1,
     ),
     current_user: Optional[int] = Depends(get_optional_current_user),
-) -> AcquisitionBO:
+) -> AcquisitionModel:
     """
     Returns **information about the acquisition** corresponding to the given id.
     """
@@ -2249,7 +2285,7 @@ def acquisition_query(
             ret = sce.query(current_user, acquisition_id)
         if ret is None:
             raise HTTPException(status_code=404, detail="Acquisition not found")
-        return ret
+        return AcquisitionModel.from_orm(ret)
 
 
 # ######################## END OF ACQUISITION
@@ -2323,7 +2359,7 @@ def process_query(
         ..., description="Internal, the unique numeric id of this process.", example=1
     ),
     current_user: Optional[int] = Depends(get_optional_current_user),
-) -> ProcessBO:
+) -> ProcessModel:
     """
     Returns **information about the process** corresponding to the given id.
     """
@@ -2332,7 +2368,7 @@ def process_query(
             ret = sce.query(current_user, process_id)
         if ret is None:
             raise HTTPException(status_code=404, detail="Process not found")
-        return ret
+        return ProcessModel.from_orm(ret)
 
 
 # ######################## END OF PROCESS
@@ -3451,12 +3487,8 @@ def update_taxonomy_recast(
     **Create or Update the collection or project taxonomy recast**.
      Note: The recast is updated only if manageable.
     """
-    print("recast  ----", recast.operation)
-    print("recast ---------", recast.recast)
-    print("reacst target", recast.target_id)
-    print("iscoll", recast.is_collection)
     with TaxonomyService() as sce:
-        with RightsThrower():
+        with ValidityThrower(), RightsThrower():
             sce.update_taxonomy_recast(current_user, recast)
 
 
@@ -3472,11 +3504,11 @@ def get_taxonomy_recast(
         description="Internal, the unique numeric id of this collection.",
         example=1,
     ),
-    operation: str = Query(
+    operation: RecastOperation = Query(
         default=None,
         title="Operation name",
         description="One of RecastOperation enum value",
-        example="settings",
+        example="dwca_export_occurrence",
     ),
     is_collection: bool = Query(
         default=False,
@@ -3492,11 +3524,38 @@ def get_taxonomy_recast(
     with TaxonomyService() as sce:
         with RightsThrower():
             ret = sce.get_taxonomy_recast(
-                current_user,
+                current_user_id=current_user,
                 target_id=target_id,
                 operation=operation,
                 is_collection=is_collection,
             )
+    return ret
+
+
+@app.get(
+    "/taxo_worms",
+    operation_id="get_taxonomy_worms",
+    tags=["Taxonomy Tree"],
+    response_model=Dict[str, int],
+)
+def get_taxonomy_worms(
+    taxaids: str = Query(
+        title="Taxa Ids",
+        description="taxon id separated by ,",
+        default="",
+        example="all",
+    ),
+    current_user: int = Depends(get_current_user),
+) -> Dict[str, int]:
+    """
+    **Read the collection or project taxonomy recast**.
+     Note: The data is returned only if manageable.
+    """
+    ids = _split_num_list(taxaids)
+    with TaxonomyService() as sce:
+        ret = sce.get_taxonomy_worms(
+            taxaids=ids,
+        )
     return ret
 
 
@@ -3659,19 +3718,32 @@ async def direct_db_query(  # MyORJSONResponse -> JSONResponse -> Response -> aw
 )
 def list_jobs(
     for_admin: bool = Query(
-        ...,
+        False,
         title="For admin",
         description="If FALSE return the jobs for current user, else return all of them.",
         example=False,
-    ),  # TODO: Could be optional default False
+    ),
+    job_type: Optional[str] = Query(
+        None,
+        title="Job type",
+        description="The job type, e.g. FileImport, BackupExport, Prediction...",
+        example="import",
+    ),
+    job_status: Optional[DBJobStateEnum] = Query(
+        None,
+        title="Job status",
+        description="The job status: P(ending), R(unning), A(sking), E(rror), F(inished).",
+        example=DBJobStateEnum.Finished,
+    ),
     current_user: int = Depends(get_current_user),
 ) -> List[JobBO]:
     """
     **Return the jobs** for current user, or all of them if admin is asked for.
+    Optional filters on type and status can be provided.
     """
     with JobCRUDService() as sce:
         with RightsThrower():
-            ret: List[JobBO] = sce.list(current_user, for_admin)
+            ret: List[JobBO] = sce.list(current_user, for_admin, job_type, job_status)
     return ret
 
 
@@ -4197,6 +4269,10 @@ def startup_event() -> None:
     # Small service construction & check, to ensure config and the DB are OK
     with ConstantsService() as sce:
         sce.config.validate()
+
+    # The router for big files needs a valid USERSFILESAREA config
+    app.include_router(create_big_files_router())
+
     # Clean memory every minute
     JobScheduler.todo_on_idle = regular_mem_cleanup
     # Don't run predictions, they are left to a specialized runner

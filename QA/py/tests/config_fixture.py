@@ -6,8 +6,11 @@ import shutil
 import sys
 from os.path import join, dirname, realpath
 from pathlib import Path
+from typing import Any, Generator
 
 import pytest
+
+from BG_operations import JobScheduler
 
 # Import services under test as a library
 # TODO: Not here
@@ -28,7 +31,7 @@ class EcoTaxaConfig(object):
 
 
 @pytest.fixture(scope="session")
-def config() -> EcoTaxaConfig:
+def config() -> Generator[EcoTaxaConfig, Any, None]:
     conf = EcoTaxaConfig()
     # Inject low values for covering, even with test small dataset
     DBWriter.SEQUENCE_CACHE_SIZE = 5
@@ -36,6 +39,10 @@ def config() -> EcoTaxaConfig:
     ProjectExport.ROWS_REPORT_EVERY = 5
     ProjectExport.IMAGES_REPORT_EVERY = 7
     NightlyJobService.REPORT_EVERY = 2
+    # Avoid testing time explosion.
+    # Comment for a better coverage of Process jobs. But some tests will fail
+    # due to the fresh process.
+    JobScheduler.JobRunner = JobScheduler.ThreadJobRunner
     # Empty Vault
     vault = Vault((HERE / "vault").as_posix())
     shutil.rmtree(vault.path.joinpath("0000").as_posix(), ignore_errors=True)

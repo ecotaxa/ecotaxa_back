@@ -78,7 +78,7 @@ def test_check_project_via_api(prj_id: int, fastapi):
 # Note: to go faster in a local dev environment, use "filled_database" instead of "database" below
 # BUT DON'T COMMIT THE CHANGE
 def test_subset_merge_uvp6(fastapi, tstlogs):
-    prj_id = do_import_uvp6(fastapi, "Test Subset Merge")
+    prj_id, _ = do_import_uvp6(fastapi, "Test Subset Merge")
     check_project(tstlogs, prj_id)
     # Dump the project
     with open(tstlogs / OUT_JSON, "w") as fd:
@@ -1405,7 +1405,7 @@ def test_merge_remap(fastapi, tstlogs):
 
 def test_empty_subset_uvp6(database, fastapi, caplog):
     with caplog.at_level(logging.ERROR):
-        prj_id = do_import_uvp6(fastapi, "Test empty Subset")
+        prj_id, _ = do_import_uvp6(fastapi, "Test empty Subset")
 
     subset_prj_id = create_project(ADMIN_USER_ID, "Empty subset")
     # OK this test is just for covering the code in filters
@@ -1459,7 +1459,7 @@ def test_empty_subset_uvp6(database, fastapi, caplog):
 
 def test_empty_subset_uvp6_other(fastapi, caplog):
     with caplog.at_level(logging.ERROR):
-        prj_id = do_import_uvp6(fastapi, "Test empty Subset")
+        prj_id, _ = do_import_uvp6(fastapi, "Test empty Subset")
 
     subset_prj_id = create_project(ADMIN_USER_ID, "Empty subset")
     # OK this test is just for covering (more) the code in filters

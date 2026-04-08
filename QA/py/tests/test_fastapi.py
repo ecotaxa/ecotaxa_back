@@ -1,8 +1,5 @@
-import logging
-
 from fastapi import status
 from fastapi.testclient import TestClient
-from main import app
 
 from tests.credentials import (
     ADMIN_AUTH,
@@ -169,6 +166,8 @@ def test_project_search(fastapi):
 
 
 def test_error(fastapi):
+    from main import app
+
     # We need a test client which does not catch exceptions
     client = TestClient(app, raise_server_exceptions=False)
     url = "/error"

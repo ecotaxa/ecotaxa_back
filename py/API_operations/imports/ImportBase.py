@@ -52,9 +52,10 @@ class ImportServiceBase(JobServiceOnProjectBase, ABC):
         else:
             # prevent directory escape trick
             assert ".." not in source_dir_or_zip
-            source_dir_or_zip = CommonFolder(self.config.common_folder()).path_to(
-                source_dir_or_zip
-            )
+            common_folder = self.config.common_folder()
+            if common_folder is None:
+                raise Exception("No common folder defined")
+            source_dir_or_zip = CommonFolder(common_folder).path_to(source_dir_or_zip)
         if source_dir_or_zip.lower().endswith(".zip"):
             logger.info("SubTask : Unzip File into temporary folder")
             self.update_progress(1, "Unzip File into temporary folder")
