@@ -49,8 +49,12 @@ class UserFilesDirectory(object):
     def __init__(self, user_id: UserIDT):
         config = Config()
         users_files_dir = config.get_users_files_dir()
-        self.accepted_mime_types: List[str] = config.get_accepted_mime_types()
-        self.archive_extensions: List[str] = config.get_archive_extensions()
+        self.accepted_mime_types: List[str] = [
+            t.strip() for t in config.get_accepted_mime_types().split(",")
+        ]
+        self.archive_extensions: List[str] = [
+            t.strip() for t in config.get_archive_extensions().split(",")
+        ]
         self.user_id = user_id
         self.list_errors: Dict[str, str] = {}
         self._root_path = Path(
