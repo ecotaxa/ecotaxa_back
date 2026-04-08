@@ -8,6 +8,7 @@ from .Project import Project, ProjectIDT
 from .helpers import Result
 from .helpers.DDL import Index, Sequence, Column, ForeignKey
 from .helpers.Direct import text
+from .helpers.Hints import RECURS_HINT
 from .helpers.ORM import Model, relationship, Session
 from .helpers.Postgres import VARCHAR, DOUBLE_PRECISION, INTEGER
 
@@ -54,10 +55,10 @@ class Sample(Model):
         TODO: Should be in a BO
         """
         sql = text(
-            """
+            f"""
         UPDATE samples usam
            SET latitude = sll.latitude, longitude = sll.longitude
-          FROM (SELECT sam.sampleid, MIN(obh.latitude) latitude, MIN(obh.longitude) longitude
+          FROM (SELECT {RECURS_HINT} sam.sampleid, MIN(obh.latitude) latitude, MIN(obh.longitude) longitude
                   FROM obj_head obh
                   JOIN acquisitions acq on acq.acquisid = obh.acquisid
                   JOIN samples sam on sam.sampleid = acq.acq_sample_id
@@ -74,8 +75,8 @@ class Sample(Model):
     @classmethod
     def get_sample_summary(cls, session: Session, sample_id: int) -> List:
         sql = text(
-            """
-            SELECT MIN(obh.objdate+obh.objtime), MAX(obh.objdate+obh.objtime), MIN(obh.depth_min), MAX(obh.depth_max)
+            f"""
+            SELECT {RECURS_HINT} MIN(obh.objdate+obh.objtime), MAX(obh.objdate+obh.objtime), MIN(obh.depth_min), MAX(obh.depth_max)
               FROM obj_head obh
               JOIN acquisitions acq on acq.acquisid = obh.acquisid
               JOIN samples sam on sam.sampleid = acq.acq_sample_id
