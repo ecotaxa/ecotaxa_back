@@ -116,8 +116,8 @@ class Connection(object):
             poolclass=TimeEvictedQueuePool,
             pool_use_lifo=True,
             # We have our own age-based eviction strategy, the pool below will contain invalidated connections
-            pool_size=16,
-            max_overflow=8,
+            pool_size=8,
+            max_overflow=4,
             # In case something goes unexpected, user will wait for this time for a free connection (or failure)
             pool_timeout=60,
             # This way we can restart the DB and sessions will re-establish themselves
