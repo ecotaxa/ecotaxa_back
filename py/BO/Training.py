@@ -298,7 +298,7 @@ class PredictionBO(object):
         res = self.session.execute(resurrect_qry)
 
         # If nothing was resurrected from PredictionHisto, rebuild from Training matching dates
-        if res.rowcount == 0:
+        if res.rowcount == 0:  # type:ignore  # case1
             # Rebuild one prediction per object using the training that matches the date
             # Note: histo_classif_score is already in histo
             # We only do this for objects that have PREDICTED_CLASSIF_QUAL
