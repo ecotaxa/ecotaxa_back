@@ -22,6 +22,7 @@ from .helpers.ORM import Model
 from .helpers.ORM import relationship
 
 TrainingIDT = int
+IN_PROGRESS_DATE = datetime.fromtimestamp(0)
 
 
 class Training(Model):

@@ -4,29 +4,31 @@
 #
 # Maintenance operations on the DB.
 #
-import os
-import time
-import shutil
 import datetime
-from glob import glob
+import os
+import shutil
+import time
 from dataclasses import dataclass
+from glob import glob
+from pathlib import Path
 from typing import Tuple, Any, List, Optional
 
 from API_operations.helpers.JobService import JobServiceBase, ArgsDict
-from FS.UserFilesDir import UserFilesDirectory
 from BO.Job import JobBO
 from BO.Project import ProjectBO
 from BO.Rights import RightsBO
 from BO.Taxonomy import TaxonomyBO
 from DB.Job import JobIDT, Job
+from DB.Prediction import PredictionHisto
 from DB.Project import Project, ProjectIDListT
+from DB.Training import Training, IN_PROGRESS_DATE
 from DB.User import Role
 from DB.helpers import Result
 from DB.helpers import Session
 from DB.helpers.Direct import text
 from FS.TempDirForTasks import TempDirForTasks
+from FS.UserFilesDir import UserFilesDirectory
 from helpers.DynamicLogs import get_logger, LogsSwitcher
-from pathlib import Path
 
 logger = get_logger(__name__)
 
@@ -81,10 +83,14 @@ class NightlyJobService(JobServiceBase):
         self.update_progress(0, "Starting")
         all_prj_ids = [proj_id for proj_id, in self.ro_session.query(Project.projid)]
         all_prj_ids.sort()
+        # Release transaction, otherwise (if idle_in_transaction_session_timeout is set) the connection could expire
+        self.ro_session.commit()
         self.compute_all_projects_taxo_stats(all_prj_ids, 0, 30)
         self.compute_all_projects_stats(all_prj_ids, 30, 60)
         self.refresh_taxo_tree_stats(60)
-        self.clean_old_jobs(75)
+        self.clean_old_jobs(70)
+        self.clean_old_prediction_histo(75)
+        self.clean_aborted_trainings(78)
         const_status = self.check_consistency(80, 90)
         self.users_files_maintenance(90, 100)
         if not const_status:
@@ -176,12 +182,78 @@ class NightlyJobService(JobServiceBase):
         to_clean = set(old_jobs).union(set(old_jobs_2))
         logger.info("About to clean %d jobs %s", len(to_clean), to_clean)
         temp_for_job = TempDirForTasks(self.config.jobs_dir())
+        chunk = []
         for job_id in to_clean:
             # Commit each job, a bit inefficient but in case of trouble we have less de-sync with filesystem
             with JobBO.get_for_update(self.session, job_id) as job_bo:
                 temp_for_job.archive_for(job_id, {JobServiceBase.JOB_LOG_FILE_NAME})
                 job_bo.archive()
+            chunk.append(job_id)
+            if len(chunk) == self.REPORT_EVERY:
+                logger.info("Done for jobs %s", chunk)
+                chunk = []
+        if chunk:
+            logger.info("Done for jobs %s", chunk)
         logger.info("Cleanup of old jobs done")
+
+    def clean_old_prediction_histo(self, start: int) -> None:
+        """
+        Remove entries from PredictionHisto corresponding to trainings which ended more than 3 months ago.
+        """
+        self.update_progress(start, "Cleaning old PredictionHisto")
+        logger.info("Starting cleanup of old PredictionHisto")
+        three_months_ago = datetime.datetime.today() - datetime.timedelta(days=90)
+        # Find training ids that ended more than 3 months ago
+        # We also check that they are actually in PredictionHisto to only log when we delete something
+        old_trainings_with_histo_qry = (
+            self.session.query(Training.training_id)
+            .join(PredictionHisto, Training.training_id == PredictionHisto.training_id)
+            .filter(Training.training_end < three_months_ago)
+            .distinct()
+        )
+        to_clean_ids = [t_id for t_id, in old_trainings_with_histo_qry]
+        if to_clean_ids:
+            logger.info(
+                "About to clean PredictionHisto for %d old trainings", len(to_clean_ids)
+            )
+            chunk = []
+            for trn_id in to_clean_ids:
+                self.session.query(PredictionHisto).filter(
+                    PredictionHisto.training_id == trn_id
+                ).delete(synchronize_session=False)
+                chunk.append(trn_id)
+                if len(chunk) == self.REPORT_EVERY:
+                    logger.info("Done for PredictionHisto %s", chunk)
+                    chunk = []
+            if chunk:
+                logger.info("Done for PredictionHisto %s", chunk)
+            self.session.commit()
+        logger.info("Cleanup of old PredictionHisto done")
+
+    def clean_aborted_trainings(self, start: int) -> None:
+        """
+        Remove aborted trainings. They have training_end remaining to IN_PROGRESS_DATE.
+        """
+        if self.job_id:
+            self.update_progress(start, "Cleaning aborted trainings")
+        logger.info("Starting cleanup of aborted trainings")
+        aborted_trainings_qry = self.session.query(Training).filter(
+            Training.training_end == IN_PROGRESS_DATE
+        )
+        to_clean = aborted_trainings_qry.all()
+        logger.info("About to clean %d aborted trainings", len(to_clean))
+        chunk = []
+        for trn in to_clean:
+            # TODO: Could use some returning clause
+            self.session.delete(trn)
+            chunk.append(trn.training_id)
+            if len(chunk) == self.REPORT_EVERY:
+                logger.info("Done for trainings %s", chunk)
+                chunk = []
+        if chunk:
+            logger.info("Done for trainings %s", chunk)
+        self.session.commit()
+        logger.info("Cleanup of aborted trainings done")
 
     def check_consistency(self, start: int, end: int, idle: bool = False) -> bool:
         """Ensure data is how it should be"""
