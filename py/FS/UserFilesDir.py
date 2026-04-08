@@ -29,19 +29,6 @@ from helpers.httpexception import (
 
 logger = get_logger(__name__)
 
-accepted_mime_types = [
-    "application/zip",
-    "application/gzip",
-    "application/x-tar",
-    "text/plain",
-    "text/csv",
-    "text/tab-separated-values",
-    "image/jpeg",
-    "image/png",
-    "image/x-png",
-    "image/tiff",
-]
-
 
 class DiskUsage(NamedTuple):
     total: int
@@ -57,11 +44,13 @@ class UserFilesDirectory(object):
     USER_DIR_PATTERN = "ecotaxa_user.%d"
     TRASH_DIRECTORY = "trash."
     COMPRESSED_PATTERN = "*"
-    ARCHIVE_EXTENSIONS = ["zip", "tar", "gzip", "tar.gz", "tar.bz2", "tar.xz", "gz"]
     TSV = ".tsv"
 
     def __init__(self, user_id: UserIDT):
-        users_files_dir = Config().get_users_files_dir()
+        config = Config()
+        users_files_dir = config.get_users_files_dir()
+        self.accepted_mime_types: List[str] = config.get_accepted_mime_types()
+        self.archive_extensions: List[str] = config.get_archive_extensions()
         self.user_id = user_id
         self.list_errors: Dict[str, str] = {}
         self._root_path = Path(
@@ -226,10 +215,10 @@ class UserFilesDirectory(object):
         }
         for filename in filenames:
             file_ext, compressed_path, mime_type = self._get_file_info(filename, path)
-            if mime_type in accepted_mime_types:
+            if mime_type in self.accepted_mime_types:
                 extracted.append(filename)
                 if (
-                    file_ext in self.ARCHIVE_EXTENSIONS
+                    file_ext in self.archive_extensions
                     and not compressed_path.is_dir()
                     and not self._is_trash_dir(str(path))
                 ):
@@ -271,7 +260,7 @@ class UserFilesDirectory(object):
             mime_type = py_magic.mime_type()
         except (CantMatchTypeError, Exception):
             mime_type = None
-        if mime_type in accepted_mime_types:
+        if mime_type in self.accepted_mime_types:
             return True
         logger.info(
             "File format not accepted '%s' '%s' , user_id '%s'",

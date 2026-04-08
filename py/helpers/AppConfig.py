@@ -10,7 +10,7 @@ import configparser
 import os
 import socket
 from pathlib import Path
-from typing import Optional, KeysView, Tuple, overload, Literal
+from typing import Optional, KeysView, Tuple, overload, Literal, List
 
 # Env. variable
 ENV_KEY = "APP_CONFIG"
@@ -154,6 +154,16 @@ class Config(object):
     def get_max_upload_size(self) -> int:
         return int(self._get("MAX_UPLOAD_SIZE", "665600"))
 
+    def get_accepted_mime_types(self) -> List[str]:
+        ret = self._get("ACCEPTED_MIME_TYPES", "")
+        mimes = [r.strip() for r in ret.split(",")]
+        return mimes
+
+    def get_archive_extensions(self) -> List[str]:
+        ret = self._get("ARCHIVE_EXTENSIONS", "")
+        extensions = [r.strip() for r in ret.split(",")]
+        return extensions
+
     def get_taxoserver_url(self) -> str:
         url = self._get("TAXOSERVER_URL", mandatory=True).strip()
         return url + ("/" if url[-1] != "/" else "")
@@ -242,3 +252,5 @@ class Config(object):
         self.get_max_upload_size()
         self.get_taxoserver_url()
         self.get_openid_config()
+        self.get_accepted_mime_types()
+        self.get_archive_extensions()
