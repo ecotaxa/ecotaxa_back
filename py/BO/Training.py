@@ -307,40 +307,8 @@ class PredictionBO(object):
         )
         res = self.session.execute(resurrect_qry)
         # If nothing was resurrected from PredictionHisto, rebuild from Training matching dates
-        if res.rowcount == 0:
-            self.reconstruct_predictions(histo)  # type:ignore  # case1
-
-        # If nothing was resurrected from PredictionHisto, rebuild from Training matching dates
         if res.rowcount == 0:  # type:ignore  # case1
-            # Rebuild one prediction per object using the training that matches the date
-            # Note: histo_classif_score is already in histo
-            # We only do this for objects that have PREDICTED_CLASSIF_QUAL
-            preds_to_rebuild = []
-            for an_histo in histo:
-                if an_histo.histo_classif_qual != PREDICTED_CLASSIF_QUAL:
-                    continue
-                # Find matching training
-                matching_training = (
-                    self.session.query(Training.training_id)
-                    .filter(
-                        and_(
-                            Training.training_start <= an_histo.histo_classif_date,
-                            Training.training_end >= an_histo.histo_classif_date,
-                        )
-                    )
-                    .first()
-                )
-                if matching_training:
-                    preds_to_rebuild.append(
-                        {
-                            Prediction.training_id.name: matching_training.training_id,
-                            Prediction.object_id.name: an_histo.objid,
-                            Prediction.classif_id.name: an_histo.histo_classif_id,
-                            Prediction.score.name: an_histo.histo_classif_score,
-                        }
-                    )
-            if preds_to_rebuild:
-                self.session.bulk_insert_mappings(Prediction, preds_to_rebuild)
+            self.reconstruct_predictions(histo)
 
         # Remove history which is now current
         histo_pred_del_qry: Delete = PredictionHisto.__table__.delete()
