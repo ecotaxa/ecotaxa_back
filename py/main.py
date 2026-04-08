@@ -159,6 +159,7 @@ from BO.Taxonomy import TaxonBO
 from BO.User import UserIDT, GuestIDT
 from BO.WoRMSification import WoRMSBO
 from DB import Sample
+from DB.Job import DBJobStateEnum
 from DB.Object import ObjectIDListT
 from DB.Project import ProjectTaxoStat, Project
 from DB.ProjectPrivilege import ProjectPrivilege
@@ -3717,19 +3718,32 @@ async def direct_db_query(  # MyORJSONResponse -> JSONResponse -> Response -> aw
 )
 def list_jobs(
     for_admin: bool = Query(
-        ...,
+        False,
         title="For admin",
         description="If FALSE return the jobs for current user, else return all of them.",
         example=False,
-    ),  # TODO: Could be optional default False
+    ),
+    job_type: Optional[str] = Query(
+        None,
+        title="Job type",
+        description="The job type, e.g. FileImport, BackupExport, Prediction...",
+        example="import",
+    ),
+    job_status: Optional[DBJobStateEnum] = Query(
+        None,
+        title="Job status",
+        description="The job status: P(ending), R(unning), A(sking), E(rror), F(inished).",
+        example=DBJobStateEnum.Finished,
+    ),
     current_user: int = Depends(get_current_user),
 ) -> List[JobBO]:
     """
     **Return the jobs** for current user, or all of them if admin is asked for.
+    Optional filters on type and status can be provided.
     """
     with JobCRUDService() as sce:
         with RightsThrower():
-            ret: List[JobBO] = sce.list(current_user, for_admin)
+            ret: List[JobBO] = sce.list(current_user, for_admin, job_type, job_status)
     return ret
 
 
