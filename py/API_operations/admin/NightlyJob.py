@@ -19,8 +19,8 @@ from BO.Project import ProjectBO
 from BO.Rights import RightsBO
 from BO.Taxonomy import TaxonomyBO
 from DB.Job import JobIDT, Job
-from DB.Project import Project, ProjectIDListT
 from DB.Prediction import PredictionHisto
+from DB.Project import Project, ProjectIDListT
 from DB.Training import Training, IN_PROGRESS_DATE
 from DB.User import Role
 from DB.helpers import Result
@@ -182,11 +182,18 @@ class NightlyJobService(JobServiceBase):
         to_clean = set(old_jobs).union(set(old_jobs_2))
         logger.info("About to clean %d jobs %s", len(to_clean), to_clean)
         temp_for_job = TempDirForTasks(self.config.jobs_dir())
+        chunk = []
         for job_id in to_clean:
             # Commit each job, a bit inefficient but in case of trouble we have less de-sync with filesystem
             with JobBO.get_for_update(self.session, job_id) as job_bo:
                 temp_for_job.archive_for(job_id, {JobServiceBase.JOB_LOG_FILE_NAME})
                 job_bo.archive()
+            chunk.append(job_id)
+            if len(chunk) == self.REPORT_EVERY:
+                logger.info("Done for jobs %s", chunk)
+                chunk = []
+        if chunk:
+            logger.info("Done for jobs %s", chunk)
         logger.info("Cleanup of old jobs done")
 
     def clean_old_prediction_histo(self, start: int) -> None:
@@ -209,11 +216,17 @@ class NightlyJobService(JobServiceBase):
             logger.info(
                 "About to clean PredictionHisto for %d old trainings", len(to_clean_ids)
             )
+            chunk = []
             for trn_id in to_clean_ids:
-                logger.info("Cleaning PredictionHisto for old training %d", trn_id)
                 self.session.query(PredictionHisto).filter(
                     PredictionHisto.training_id == trn_id
                 ).delete(synchronize_session=False)
+                chunk.append(trn_id)
+                if len(chunk) == self.REPORT_EVERY:
+                    logger.info("Done for PredictionHisto %s", chunk)
+                    chunk = []
+            if chunk:
+                logger.info("Done for PredictionHisto %s", chunk)
             self.session.commit()
         logger.info("Cleanup of old PredictionHisto done")
 
@@ -229,10 +242,16 @@ class NightlyJobService(JobServiceBase):
         )
         to_clean = aborted_trainings_qry.all()
         logger.info("About to clean %d aborted trainings", len(to_clean))
+        chunk = []
         for trn in to_clean:
             # TODO: Could use some returning clause
-            logger.info("Cleaning aborted training %d", trn.training_id)
             self.session.delete(trn)
+            chunk.append(trn.training_id)
+            if len(chunk) == self.REPORT_EVERY:
+                logger.info("Done for trainings %s", chunk)
+                chunk = []
+        if chunk:
+            logger.info("Done for trainings %s", chunk)
         self.session.commit()
         logger.info("Cleanup of aborted trainings done")
 
