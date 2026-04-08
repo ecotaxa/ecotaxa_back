@@ -28,7 +28,6 @@ QA/py/tests/*.log
 QA/py/tests/temptask
 QA/py/tests/vault
 QA/py/htmlcov
-QA/py/data/*
 docker/py
 #py/*.pem
 .idea

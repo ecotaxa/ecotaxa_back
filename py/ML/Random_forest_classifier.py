@@ -6,7 +6,7 @@
 #
 # @see README.md
 #
-from typing import List, Tuple
+from typing import List, Tuple, Union
 
 import numpy as np  # type: ignore
 from sklearn.ensemble import RandomForestClassifier  # type: ignore
@@ -36,7 +36,11 @@ class OurRandomForestClassifier(object):
             verbose=True,
         )  # TODO: verbose sends logs we can't see :(
 
-    def learn_from(self, training_samples: np.ndarray, target_values: np.ndarray):
+    def learn_from(
+        self,
+        training_samples: np.ndarray,
+        target_values: Union[np.ndarray, ClassifIDListT],
+    ):
         """
         Learn the classifier from given data.
         """
@@ -53,12 +57,14 @@ class OurRandomForestClassifier(object):
         classif_ids = [int(self.cls.classes_[mc]) for mc in max_proba]
         scores = [r[mc] for mc, r in zip(max_proba, predict_result)]
         return classif_ids, scores
-    
-    def predict_all(self, to_predict: np.ndarray) -> Tuple[List[ClassifIDListT], List[List[float]]]:
+
+    def predict_all(
+        self, to_predict: np.ndarray
+    ) -> Tuple[List[ClassifIDListT], List[List[float]]]:
         """
-            Predict, i.e. return all target values (classif_id) for the given objects in descending score order.
-            Input np array must have the same columns as in training samples during build.
-            For each input line, the returned array contains all guessed classification ID, and their scores.
+        Predict, i.e. return all target values (classif_id) for the given objects in descending score order.
+        Input np array must have the same columns as in training samples during build.
+        For each input line, the returned array contains all guessed classification ID, and their scores.
         """
         predict_result = self.cls.predict_proba(to_predict)
         classif_ids = list()
@@ -70,4 +76,3 @@ class OurRandomForestClassifier(object):
             classif_ids.append(self.cls.classes_[sorted_indexes].tolist())
             scores.append(obj_probas[sorted_indexes].tolist())
         return classif_ids, scores
-

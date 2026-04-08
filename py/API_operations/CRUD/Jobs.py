@@ -2,8 +2,11 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+import os
+import signal
+import time
 from pathlib import Path
-from typing import Tuple, List, Any, Dict, TextIO
+from typing import Tuple, List, Any, Dict, TextIO, Optional
 
 from BG_operations.JobScheduler import JobScheduler
 from BO.Job import JobBO
@@ -23,7 +26,13 @@ class JobCRUDService(Service):
     They share temporary space with historical jobs AKA tasks.
     """
 
-    def list(self, current_user_id: UserIDT, admin_mode: bool) -> List[JobBO]:
+    def list(
+        self,
+        current_user_id: UserIDT,
+        admin_mode: bool,
+        job_type: Optional[str] = None,
+        job_status: Optional[DBJobStateEnum] = None,
+    ) -> List[JobBO]:
         """
         List jobs, if administrator mode then list all of them (for monitoring) else only return the jobs
         owned by caller.
@@ -37,6 +46,10 @@ class JobCRUDService(Service):
         qry = self.ro_session.query(Job).filter(Job.id > 0)
         if not admin_mode:
             qry = qry.filter(Job.owner_id == current_user_id)
+        if job_type:
+            qry = qry.filter(Job.type == job_type)
+        if job_status:
+            qry = qry.filter(Job.state == job_status)
         ret = [JobBO(a_job) for a_job in qry]
         return ret
 
@@ -83,7 +96,12 @@ class JobCRUDService(Service):
             temp_for_job = TempDirForTasks(self.config.jobs_dir())
             temp_dir = temp_for_job.base_dir_for(job_id)
             # Get the job in its state...
-            with JobScheduler.instantiate(job_bo) as sce:
+            sce_class = JobServiceBase.find_jobservice_class_by_type(job_bo.type)
+            assert sce_class is not None, "Found unknown job type %s for id %d" % (
+                job_bo.type,
+                job_id,
+            )
+            with JobScheduler.instantiate(sce_class, job_bo) as sce:
                 out_file_name = sce.PRODUCED_FILE_NAME
                 assert out_file_name is not None
             # ...and the file in its temp directory
@@ -133,19 +151,56 @@ class JobCRUDService(Service):
         """
         Erase the job, from user's point of view.
         """
+        do_kill = False
         # Security check
         with self._query_for_update(current_user_id, job_id) as job_bo:
             temp_for_job = TempDirForTasks(self.config.jobs_dir())
             if job_bo.state in (
                 DBJobStateEnum.Finished,
                 DBJobStateEnum.Error,
-                DBJobStateEnum.Pending,
             ):
                 # TODO: Set the job to a state e.g. Trashed and erase in background, better for responsiveness
                 temp_for_job.archive_for(job_id, {JobServiceBase.JOB_LOG_FILE_NAME})
                 job_bo.archive()
-            elif job_bo.state == DBJobStateEnum.Running:
-                # Set the job to Killed
-                # TODO: It's not a _real_ kill, bg thread keeps running. It's just presentation
+            elif job_bo.state in (
+                DBJobStateEnum.Running,
+                DBJobStateEnum.Pending,
+                DBJobStateEnum.Asking,
+            ):
+                # Set the status in DB immediately before anything else
                 job_bo.state = DBJobStateEnum.Error
                 job_bo.progress_msg = JobBO.KILLED_MESSAGE
+                do_kill = True
+        if do_kill:
+            # Actually kill the background process, using the PID in log file.
+            self.kill_process(current_user_id, job_id)
+
+    def kill_process(self, current_user_id: UserIDT, job_id: JobIDT) -> None:
+        """
+        Actually kill the background process, using the PID in log file, and log who did it.
+        """
+        log_path = self.get_log_path(current_user_id, job_id)
+        if not log_path.exists():
+            return
+
+        last_pid: Optional[int] = None
+        with open(log_path, "r") as f:
+            for line in f:
+                if "Running in PID" in line:
+                    try:
+                        pid_str = line.split("in PID")[-1].strip()
+                        last_pid = int(pid_str)
+                    except (ValueError, IndexError):
+                        pass
+
+        if last_pid is not None:
+            try:
+                os.kill(last_pid, signal.SIGTERM)
+                # Wait a bit for the process to exit
+                time.sleep(0.5)
+            except ProcessLookupError:
+                pass
+
+        # Log who killed the process
+        with open(log_path, "a") as f:
+            f.write(f"\nProcess killed by user {current_user_id}\n")

@@ -12,7 +12,7 @@ from os.path import join, dirname, realpath
 from pathlib import Path
 
 from lib.processes import SyncSubProcess
-from tests.test_import import SHARED_DIR, FTP_DIR, TEST_DIR
+from tests.consts import SHARED_DIR, FTP_DIR, TEST_DIR
 
 psql_bin = "psql"
 # If we already have a server don't create one, e.g. in GitHub action
@@ -23,7 +23,7 @@ PG_PORT = environ.get("POSTGRES_PORT")
 if PG_HOST and PG_PORT:
     PG_PORT = int(PG_PORT)
 else:
-    pg_lib = "/usr/lib/postgresql/14/bin/"  # ============ 124 passed, 1 skipped, 4 warnings in 221.91s (0:03:41) ============
+    pg_lib = "/usr/lib/postgresql/18/bin/"  # ============ 124 passed, 1 skipped, 4 warnings in 221.91s (0:03:41) ============
     pgctl_bin = join(pg_lib, "pg_ctl")
     initdb_bin = join(pg_lib, "initdb")
     mustExist = [pgctl_bin, initdb_bin]
@@ -126,7 +126,10 @@ class EcoTaxaDBFrom0(object):
         # Produce connection sockets in a user-writable directory (linux)
         pg_opts = [
             "-o",
-            '-c unix_socket_directories="' + str(self.db_dir / "run") + '"',
+            '-c unix_socket_directories="'
+            + str(self.db_dir / "run")
+            + '" '  # Speed up DB operations
+            + "-c fsync=off -c synchronous_commit=off -c full_page_writes=off",
         ]
         pg_opts += ["-o", '"-p %d"' % PG_PORT]
         cmd = [pgctl_bin, "start", "-W"] + pg_opts
@@ -255,9 +258,12 @@ USER_EMAIL_VERIFICATION = off
 ACCOUNT_VALIDATION = off
 ADD_TICKET = ***
 DIR_MAIL_TEMPLATES = {DIR_TEMPLATES}
-SERVERURL= http://localhost:8000
+SERVERURL= https://my.real.site:443
 MAX_UPLOAD_SIZE = 681574400
 TIMETOLIVE = {TIMETOLIVE}
+OPENID_CLIENT_ID=ecotaxa
+OPENID_CLIENT_SECRET=ugrv75rZRlVvUdk4YJE58sJulITDo0c8
+OPENID_METADATA_URL=https://my.keycloack.com/realms/theia/.well-known/openid-configuration
 """
 
     def write_config(self):

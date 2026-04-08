@@ -9,7 +9,7 @@ CLEANUP_URL = "/admin/images/cleanup1?project_id={project_id}"
 
 def test_admin_images_cleanup(fastapi):
     # Prepare a project with some images
-    prj_id = do_import_uvp6(fastapi, "Test Project Admin Images Cleanup1")
+    prj_id, _ = do_import_uvp6(fastapi, "Test Project Admin Images Cleanup1")
 
     url = PROJECT_DIGEST_URL.format(project_id=prj_id)
     rsp = fastapi.get(url, headers=ADMIN_AUTH)

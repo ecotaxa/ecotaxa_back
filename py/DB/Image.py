@@ -10,6 +10,7 @@ from DB.helpers.DDL import Index, Column, ForeignKey, Sequence
 from DB.helpers.Direct import text
 from DB.helpers.Postgres import CHAR, BIGINT, VARCHAR, BYTEA, SMALLINT
 from .helpers import Result
+from .helpers.Hints import RECURS_HINT
 from .helpers.ORM import Model
 from .helpers.VirtualColumn import VirtualColumnSet, VirtualColumn
 
@@ -36,12 +37,13 @@ class Image(Model):
         Get all object/image pairs from the project
         """
         # Must be reloaded from DB, as phase 1 added all objects for duplicates checking
-        # TODO: Why using the view?
         sql = text(
-            "SELECT concat(o.orig_id,'*',i.orig_file_name) "
-            "  FROM images i "
-            "  JOIN objects o ON i.objid = o.objid "
-            " WHERE o.projid = :prj"
+            f"SELECT {RECURS_HINT} concat(obh.orig_id,'*',img.orig_file_name) "
+            "  FROM images img "
+            "  JOIN obj_head obh ON img.objid = obh.objid "
+            "  JOIN acquisitions acq ON obh.acquisid = acq.acquisid "
+            "  JOIN samples sam ON acq.acq_sample_id = sam.sampleid "
+            " WHERE sam.projid = :prj"
         )
         res: Result = session.execute(sql, {"prj": prj_id})
         ret = {img_id for img_id, in res}

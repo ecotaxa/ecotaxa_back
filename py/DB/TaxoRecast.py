@@ -17,14 +17,14 @@ class RecastOperation(str, Enum):
     prediction_input = "pre_predict"
     # Taxa are recast during Project prediction output phase (unused)
     prediction_output = "post_predict"
-    # Taxa are recast to be used in Collection DWCA export
-    dwca_export = "dwca_export"
-    # Taxa are recast during Project summary export
-    summary_export = "summary_export"
+    # Taxa are recast during Project summary export or Project general export
+    project_export = "project_export"
+    # Taxa are recast during Collection summary export or Collection general export
+    collection_export = "collection_export"
     # Taxa recast overwrite automatic worms recast
-    overwrite_auto = "overwrite_auto"
+    dwca_export_occurrence = "dwca_export_occurrence"
     # Taxa recast in settings
-    settings = "settings"
+    dwca_export_emof = "dwca_export_emof"
 
 
 class TaxoRecast(Model):
@@ -43,7 +43,7 @@ class TaxoRecast(Model):
         INTEGER, ForeignKey("projects.projid", ondelete="CASCADE"), nullable=True
     )
     # During this operation
-    operation: str = Column(VARCHAR(16), nullable=False)
+    operation: str = Column(VARCHAR(32), nullable=False)
     # Transforms in the form of a JSON object {from:to}, both taxa IDs, but from is a str
     # with 'to being null' means "filter out". Do some JSONB in case we need to query there.
     transforms = Column(JSONB, nullable=False)

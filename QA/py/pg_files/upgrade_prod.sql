@@ -3021,6 +3021,21 @@ ALTER TABLE collection_user_role ADD COLUMN display_order INTEGER;
 UPDATE alembic_version SET version_num='287303b6d65c' WHERE alembic_version.version_num = '08807338f98d';
 
 COMMIT;
+
+
+BEGIN;
+
+-- Running upgrade 287303b6d65c -> ca50a945b178
+
+ALTER TABLE taxo_recast ALTER COLUMN operation TYPE VARCHAR(32);
+
+ALTER TABLE taxo_recast ADD FOREIGN KEY(project_id) REFERENCES projects (projid) ON DELETE CASCADE;
+
+ALTER TABLE taxo_recast ADD FOREIGN KEY(collection_id) REFERENCES collection (id) ON DELETE CASCADE;
+
+UPDATE alembic_version SET version_num='ca50a945b178' WHERE alembic_version.version_num = '287303b6d65c';
+
+COMMIT;
 ------- Leave on tail
 
 ALTER TABLE alembic_version REPLICA IDENTITY FULL;

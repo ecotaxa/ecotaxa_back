@@ -6,23 +6,26 @@
 #
 import os
 
+from BG_operations import JobScheduler
+
 # We set this one in env. and anyway TF is not working without it
 os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
 
 import time
 
 from API_operations.GPU_Prediction import GPUPredictForProject
-from BG_operations.JobScheduler import JobScheduler
+from BG_operations.JobScheduler import JobScheduler as JobSchedulerClass
 from DB.helpers.Connection import Connection
 
 
 def main():
     Connection.APP_NAME = "ecotaxa_gpu_back"
-    JobScheduler.INCLUDE = [GPUPredictForProject.JOB_TYPE]
+    JobScheduler.JobRunner = JobScheduler.ThreadJobRunner
+    JobSchedulerClass.INCLUDE = [GPUPredictForProject.JOB_TYPE]
     # As soon as something is running, exit and free all resources
     # the 'exit' will wait for the thread, i.e. job, to finish.
-    while JobScheduler.the_runner is None:
-        with JobScheduler() as sce:
+    while JobSchedulerClass.the_runner is None:
+        with JobSchedulerClass() as sce:
             sce._run_one()
         time.sleep(10)
 

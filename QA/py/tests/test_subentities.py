@@ -43,7 +43,7 @@ def test_check_project_via_api(prj_id: int, fastapi):
 # BUT DON'T COMMIT THE CHANGE
 def test_subentities(database, fastapi, tstlogs):
 
-    prj_id = do_import_uvp6(fastapi, "Test Subset Merge")
+    prj_id, _ = do_import_uvp6(fastapi, "Test Subset Merge")
     check_project(tstlogs, prj_id)
 
     # Pick the first object

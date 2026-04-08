@@ -23,7 +23,8 @@ from API_operations.imports.SimpleImport import SimpleImport
 from starlette import status
 
 from tests.credentials import ADMIN_USER_ID, CREATOR_AUTH, CREATOR_USER_ID
-from tests.test_import import PLAIN_DIR, create_project, PLAIN_FILE_PATH
+from tests.consts import PLAIN_DIR, PLAIN_FILE_PATH
+from tests.test_import import create_project
 from tests.jobs import check_job_ok
 from tests.api_wrappers import api_wait_for_stable_job, MY_FILES_URL
 
