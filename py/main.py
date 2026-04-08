@@ -144,7 +144,6 @@ from API_operations.exports.ForProject import (
 from API_operations.imports.Import import FileImport
 from API_operations.imports.SimpleImport import SimpleImport
 from BG_operations.JobScheduler import JobScheduler
-from BO.Acquisition import AcquisitionBO
 from BO.Classification import HistoricalClassification, ClassifIDT
 from BO.Collection import (
     CollectionBO,
@@ -153,10 +152,9 @@ from BO.Collection import (
 from BO.ColumnUpdate import ColUpdateList
 from BO.Job import JobBO
 from BO.Object import ObjectBO
-from BO.Process import ProcessBO
 from BO.Project import ProjectBO, ProjectUserStats, ProjectColumns
 from BO.ProjectSet import ProjectSetColumnStats
-from BO.Sample import SampleBO, SampleTaxoStats
+from BO.Sample import SampleTaxoStats
 from BO.Taxonomy import TaxonBO
 from BO.User import UserIDT, GuestIDT
 from BO.WoRMSification import WoRMSBO
@@ -167,7 +165,6 @@ from DB.ProjectPrivilege import ProjectPrivilege
 from DB.TaxoRecast import RecastOperation
 from DB.User import User, OrganizationIDT
 from helpers.AppConfig import Config
-from helpers.Asyncio import async_bg_run, log_streamer
 from helpers.DynamicLogs import get_logger, get_api_logger, MONITOR_LOG_PATH
 from helpers.fastApiUtils import (
     internal_server_error_handler,
@@ -2116,7 +2113,7 @@ def samples_search(
         example="*",
     ),
     current_user: Optional[int] = Depends(get_optional_current_user),
-) -> List[SampleBO]:
+) -> List[SampleModel]:
     """
     **Search for samples.**
     """
@@ -2124,7 +2121,7 @@ def samples_search(
         proj_ids = _split_num_list(project_ids)
         with RightsThrower():
             ret = sce.search(current_user, proj_ids, id_pattern)
-        return ret
+        return [SampleModel.from_orm(sam) for sam in ret]
 
 
 @app.get(
@@ -2207,7 +2204,7 @@ def sample_query(
         ..., description="Internal, the unique numeric id of this sample.", example=1
     ),
     current_user: Optional[int] = Depends(get_optional_current_user),
-) -> SampleBO:
+) -> SampleModel:
     """
     Returns **information about the sample** corresponding to the given id.
     """
@@ -2216,7 +2213,7 @@ def sample_query(
             ret = sce.query(current_user, sample_id)
         if ret is None:
             raise HTTPException(status_code=404, detail="Sample not found")
-        return ret
+        return SampleModel.from_orm(ret)
 
 
 # ######################## END OF SAMPLE
@@ -2233,14 +2230,14 @@ def acquisitions_search(
         ..., title="Project id", description="The project id.", example=1
     ),
     current_user: Optional[int] = Depends(get_optional_current_user),
-) -> List[AcquisitionBO]:
+) -> List[AcquisitionModel]:
     """
     Returns the **list of all acquisitions for a given project**.
     """
     with AcquisitionsService() as sce:
         with RightsThrower():
             ret = sce.search(current_user, project_id)
-        return ret
+        return [AcquisitionModel.from_orm(acq) for acq in ret]
 
 
 @app.post(
@@ -2278,7 +2275,7 @@ def acquisition_query(
         example=1,
     ),
     current_user: Optional[int] = Depends(get_optional_current_user),
-) -> AcquisitionBO:
+) -> AcquisitionModel:
     """
     Returns **information about the acquisition** corresponding to the given id.
     """
@@ -2287,7 +2284,7 @@ def acquisition_query(
             ret = sce.query(current_user, acquisition_id)
         if ret is None:
             raise HTTPException(status_code=404, detail="Acquisition not found")
-        return ret
+        return AcquisitionModel.from_orm(ret)
 
 
 # ######################## END OF ACQUISITION
@@ -2361,7 +2358,7 @@ def process_query(
         ..., description="Internal, the unique numeric id of this process.", example=1
     ),
     current_user: Optional[int] = Depends(get_optional_current_user),
-) -> ProcessBO:
+) -> ProcessModel:
     """
     Returns **information about the process** corresponding to the given id.
     """
@@ -2370,7 +2367,7 @@ def process_query(
             ret = sce.query(current_user, process_id)
         if ret is None:
             raise HTTPException(status_code=404, detail="Process not found")
-        return ret
+        return ProcessModel.from_orm(ret)
 
 
 # ######################## END OF PROCESS
