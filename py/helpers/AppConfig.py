@@ -154,13 +154,17 @@ class Config(object):
     def get_max_upload_size(self) -> int:
         return int(self._get("MAX_UPLOAD_SIZE", "665600"))
 
+    DEFAULT_MIMETYPES = "application/zip,application/gzip,application/x-tar,text/plain,text/csv,text/tab-separated-values,image/jpeg,image/png,image/x-png,image/gif,image/tiff"
+
     def get_accepted_mime_types(self) -> List[str]:
-        ret = self._get("ACCEPTED_MIME_TYPES", "")
+        ret = self._get("ACCEPTED_MIME_TYPES", self.DEFAULT_MIMETYPES)
         mimes = [r.strip() for r in ret.split(",")]
         return mimes
 
+    DEFAULT_ARCHIVES = "zip,tar,gzip,tar.gz,tar.bz2,tar.xz,gz"
+
     def get_archive_extensions(self) -> List[str]:
-        ret = self._get("ARCHIVE_EXTENSIONS", "")
+        ret = self._get("ARCHIVE_EXTENSIONS", self.DEFAULT_ARCHIVES)
         extensions = [r.strip() for r in ret.split(",")]
         return extensions
 
