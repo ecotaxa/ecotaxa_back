@@ -6207,19 +6207,48 @@
           "jobs"
         ],
         "summary":"List Jobs",
-        "description":"**Return the jobs** for current user, or all of them if admin is asked for.",
+        "description":"**Return the jobs** for current user, or all of them if admin is asked for.\nOptional filters on type and status can be provided.",
         "operationId":"list_jobs",
         "parameters":[
           {
             "description":"If FALSE return the jobs for current user, else return all of them.",
-            "required":true,
+            "required":false,
             "schema":{
               "title":"For admin",
               "type":"boolean",
-              "description":"If FALSE return the jobs for current user, else return all of them."
+              "description":"If FALSE return the jobs for current user, else return all of them.",
+              "default":false
             },
             "example":false,
             "name":"for_admin",
+            "in":"query"
+          },
+          {
+            "description":"The job type, e.g. FileImport, BackupExport, Prediction...",
+            "required":false,
+            "schema":{
+              "title":"Job type",
+              "type":"string",
+              "description":"The job type, e.g. FileImport, BackupExport, Prediction..."
+            },
+            "example":"import",
+            "name":"job_type",
+            "in":"query"
+          },
+          {
+            "description":"The job status: P(ending), R(unning), A(sking), E(rror), F(inished).",
+            "required":false,
+            "schema":{
+              "title":"Job status",
+              "allOf":[
+                {
+                  "$ref":"#/components/schemas/DBJobStateEnum"
+                }
+              ],
+              "description":"The job status: P(ending), R(unning), A(sking), E(rror), F(inished)."
+            },
+            "example":"F",
+            "name":"job_status",
             "in":"query"
           }
         ],
@@ -8044,7 +8073,7 @@
             "title":"Password regexp",
             "type":"string",
             "description":"8 char. minimum, at least one uppercase, one lowercase, one number and one special char in '#?!@%^&*-+' ",
-            "default":"^(?:(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#?%^&*-+])).{8,20}$"
+            "default":"^(?:(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#?%^&+*-])).{8,20}$"
           },
           "email_verification":{
             "title":"Account email verification",
@@ -8098,6 +8127,24 @@
             "title":"Time to live",
             "type":"string",
             "description":"My Files number of days before deleting directories"
+          },
+          "accepted_mime_types":{
+            "title":"Accepted mime types",
+            "type":"array",
+            "items":{
+              "type":"string"
+            },
+            "description":"File import and My Files, list of accepted mime types",
+            "default":[]
+          },
+          "archive_extensions":{
+            "title":"Accepted archive extensions",
+            "type":"array",
+            "items":{
+              "type":"string"
+            },
+            "description":"File import and My Files, list of accepted archive extensions",
+            "default":[]
           },
           "all_in_one":{
             "title":"All in One",
@@ -8207,6 +8254,18 @@
             "example":"1"
           }
         }
+      },
+      "DBJobStateEnum":{
+        "title":"DBJobStateEnum",
+        "enum":[
+          "P",
+          "R",
+          "A",
+          "E",
+          "F"
+        ],
+        "type":"string",
+        "description":"An enumeration."
       },
       "DarwinCoreExportReq":{
         "title":"DarwinCoreExportReq",
