@@ -75,6 +75,11 @@ USERSFILESAREA = /eco_users_files
 MAX_UPLOAD_SIZE = 681574400
 # number of days before deleting my files directories
 TIMETOLIVE = 60
+
+# accepted mime types
+ACCEPTED_MIME_TYPES = application/zip,application/gzip,application/x-tar,text/plain,text/csv,text/tab-separated-values,image/jpeg,image/png,image/x-png,image/gif,image/tiff
+#archive extensions
+ARCHIVE_EXTENSIONS = zip,tar,gzip,tar.gz,tar.bz2,tar.xz,gz
 # OpenID Connect configuration
 OPENID_CLIENT_ID =
 OPENID_CLIENT_SECRET =
