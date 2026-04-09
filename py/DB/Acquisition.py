@@ -71,3 +71,13 @@ Index(
     ],  # For Index Only scans during recursive descent
     unique=True,
 )
+
+
+Index(
+    "is_acquis_sample",
+    Acquisition.__table__.c.acq_sample_id,
+    postgresql_include=[
+        Acquisition.__table__.c.acquisid
+    ],  # For Index Only scans during recursive descent
+    unique=False,
+)

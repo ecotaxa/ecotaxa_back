@@ -3036,6 +3036,17 @@ ALTER TABLE taxo_recast ADD FOREIGN KEY(collection_id) REFERENCES collection (id
 UPDATE alembic_version SET version_num='ca50a945b178' WHERE alembic_version.version_num = '287303b6d65c';
 
 COMMIT;
+
+-- Running upgrade ca50a945b178 -> 9bf6b31796a2
+
+CREATE INDEX is_acquis_sample ON acquisitions (acq_sample_id) INCLUDE (acquisid);
+
+CREATE INDEX is_samples_project ON samples (projid) INCLUDE (sampleid);
+
+UPDATE alembic_version SET version_num='9bf6b31796a2' WHERE alembic_version.version_num = 'ca50a945b178';
+
+COMMIT;
+
 ------- Leave on tail
 
 ALTER TABLE alembic_version REPLICA IDENTITY FULL;

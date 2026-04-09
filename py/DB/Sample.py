@@ -104,3 +104,12 @@ Index(
     ],  # For Index Only scans during recursive descent
     unique=True,
 )
+
+Index(
+    "is_samples_project",
+    Sample.__table__.c.projid,
+    postgresql_include=[
+        Sample.__table__.c.sampleid
+    ],  # For Index Only scans during recursive descent
+    unique=False,
+)
