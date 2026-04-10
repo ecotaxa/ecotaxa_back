@@ -51,6 +51,7 @@ def test_collection_lifecycle(fastapi, who):
         "CytoSense",
         "FastCam",
         "FlowCam",
+        "FlowCam macro",
         "IFCB",
         "ISIIS",
         "LISST-Holo",
