@@ -101,12 +101,12 @@ class DeepFeatures(object):
         return ret
 
     @classmethod
-    def save(cls, session: Session, features: Any) -> int:
+    def save(cls, session: Session, proj_id: ProjectIDT, features: Any) -> int:
         """
         Insert CNN features to DB.
         Features is an iterable dict-like, a pandas dataframe for the moment.
         """
-        writer = DBWriter(session)
+        writer = DBWriter(session, proj_id)
         nb_rows = 0
         # for a_rec in features.to_records(index=True): # This is nice and can produce tuple()
         # but I found no way to feed them into DBWriter without going low-level.

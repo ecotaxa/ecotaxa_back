@@ -5,6 +5,7 @@
 import hashlib
 from pathlib import Path
 from typing import List, Dict, Optional
+
 from API_models.imports import SimpleImportReq, SimpleImportRsp, SimpleImportFields
 from BO.Bundle import InBundle
 from BO.Mappings import ProjectMapping
@@ -77,7 +78,7 @@ class SimpleImport(ImportServiceBase):
         source_bundle.remove_all_tsvs()
         images = source_bundle.list_image_files()
         # Configure the import to come, destination
-        db_writer = DBWriter(self.session)
+        db_writer = DBWriter(self.session, self.prj_id)
         import_where = ImportWhere(
             db_writer, self.vault, self.temp_for_jobs.base_dir_for(self.job_id)
         )

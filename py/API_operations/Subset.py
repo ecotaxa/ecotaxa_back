@@ -41,7 +41,13 @@ logger = get_logger(__name__)
 # Useful typings
 # TODO: Put somewhere else if reused in other classes
 DBObjectTupleT = Tuple[
-    ObjectHeader, ObjectFields, ObjectCNNFeatureVector, Image, Sample, Acquisition, Process
+    ObjectHeader,
+    ObjectFields,
+    ObjectCNNFeatureVector,
+    Image,
+    Sample,
+    Acquisition,
+    Process,
 ]
 DBObjectTupleListT = List[DBObjectTupleT]
 
@@ -131,11 +137,11 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         used_columns = set(obj_mapping.real_cols_to_tsv.keys())
         used_columns.add("orig_id")  # By safety
         # Create a DB writer
-        writer = DBWriter(self.session)
+        dest_prj_id = self.dest_prj.projid
+        writer = DBWriter(self.session, dest_prj_id)
         # Narrow the writes in ObjectFields thanks to mappings of original project
         writer.narrow_to(used_columns)
         # Use import helpers
-        dest_prj_id = self.dest_prj.projid
         import_how = ImportHow(
             prj_id=dest_prj_id,
             update_mode="No",
@@ -220,7 +226,13 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
                 assert an_histo.objid is not None
                 db_histo_dict.setdefault(an_histo.objid, list()).append(an_histo)
             # Send each 'line'
+            # Grouping images by object as the fetch can join multiple images for the same object
+            last_objid = None
             for a_db_tuple in db_tuples:
+                obj_orm = a_db_tuple[0]
+                if obj_orm.objid == last_objid:
+                    continue
+                last_objid = obj_orm.objid
                 self._send_to_writer(
                     import_how, writer, a_db_tuple, db_histo_dict, training_provider
                 )

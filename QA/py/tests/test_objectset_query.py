@@ -44,7 +44,7 @@ def test_queries(fastapi):
     # Add a sample spanning 2 days
     do_import_a_bit_more_skipping(fastapi, "Queries test project")
 
-    ref = [6, 7, 8, 11, 12, 13, 1, 2, 3, 4, 5]
+    ref = [6, 7, 8, 9, 10, 11, 1, 2, 3, 4, 5]  # No gap as no DB sequence anymore
     all = _prj_query(fastapi, CREATOR_AUTH, prj_id, order="obj.depth_min")
     # we must offset expected by first actual objID as they vary, run to run
     min_objid = min(all)

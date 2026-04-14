@@ -1025,6 +1025,27 @@ ALTER TABLE public.obj_field
 
 GRANT SELECT ON TABLE public.obj_field TO readerole;
 
+ALTER TABLE obj_field
+    SET TABLESPACE pg_default;
+
+---- OBJ
+-- Durée : 1096484,603 ms (18:16,485)
+CREATE TABLE objid_mapping TABLESPACE home_tables AS
+SELECT objid as old_id,
+       (projid * 1e8::bigint) + ROW_NUMBER() OVER (
+        PARTITION BY projid
+        ORDER BY objid
+           )    AS new_id
+	 FROM obj_head obh
+	 JOIN acquisitions acq ON acq.acquisid = obh.acquisid
+	 JOIN samples sam ON sam.sampleid = acq.acq_sample_id;
+
+-- Durée : 528378,732 ms (08:48,379)
+CREATE UNIQUE INDEX objid_mapping_old_to_new ON objid_mapping (old_id);
+
+-- Durée : 453830,658 ms (07:33,831)
+CREATE UNIQUE INDEX objid_mapping_new_to_old ON objid_mapping (new_id);
+
 
 -- Recreate objects view
 CREATE VIEW objects AS

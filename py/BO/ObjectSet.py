@@ -148,7 +148,17 @@ class DescribedObjectSet(object):
             f"(select (:projid) as projid) prjs"
         )  # Prepare a future _set_ of projects
 
-        selected_tables += f"{ObjectHeader.__tablename__} obh ON obh.acquisid between prjs.projid*1e7::bigint AND (prjs.projid+1)*1e7::bigint"
+        obj_field_joined = "obf." in column_referencing_sql
+        if obj_field_joined and self.driving_table_is_obj_field(
+            obj_where.get_sql(),
+            order_clause.get_sql(),
+        ):
+            selected_tables += f"{ObjectFields.__tablename__} obf ON obf.acquis_id between prjs.projid*1e7::bigint AND (prjs.projid+1)*1e7::bigint"
+            selected_tables += f"{ObjectHeader.__tablename__} obh ON obh.objid = obf.objfid AND obh.acquisid = obf.acquis_id"
+        else:
+            selected_tables += f"{ObjectHeader.__tablename__} obh ON obh.acquisid between prjs.projid*1e7::bigint AND (prjs.projid+1)*1e7::bigint"
+            if obj_field_joined:
+                selected_tables += f"{ObjectFields.__tablename__} obf ON obf.objfid = obh.objid AND obf.acquis_id = obh.acquisid"
         selected_tables += (
             f"{Acquisition.__tablename__} acq ON acq.acquisid = obh.acquisid"
         )
@@ -162,21 +172,6 @@ class DescribedObjectSet(object):
         if "prj." in column_referencing_sql:
             selected_tables += f"{Project.__tablename__} prj ON prj.projid = sam.projid"
         # else:
-        if "obf." in column_referencing_sql:
-            selected_tables += f"{ObjectFields.__tablename__} obf ON obf.objfid = obh.objid AND obf.acquis_id = obh.acquisid"
-        # obj_field_joined = "obf." in column_referencing_sql
-        # if obj_field_joined and self.driving_table_is_obj_field(
-        #     obj_where.get_sql(),
-        #     order_clause.get_sql(),
-        # ):
-        #     selected_tables += (
-        #         f"{ObjectFields.__tablename__} obf ON obf.acquis_id = acq.acquisid"
-        #     )
-        #     selected_tables += f"{ObjectHeader.__tablename__} obh ON obh.objid = obf.objfid AND obh.acquisid = acq.acquisid"
-        # else:
-        #
-        #     if obj_field_joined:
-        #         selected_tables += f"{ObjectFields.__tablename__} obf ON obf.objfid = obh.objid AND obf.acquis_id = acq.acquisid"
         if "cnn." in column_referencing_sql:
             selected_tables += f"{ObjectCNNFeatureVector.__tablename__} cnn ON cnn.objcnnid = obh.objid"
         # if "prd." in column_referencing_sql:
@@ -1316,9 +1311,7 @@ class DescribedObjectBOSet(object):
         # The filters on objects
         obj_where = WhereClause()
 
-        params: SQLParamDict = {
-            "projid": ",".join([str(project_id) for project_id in self.project_ids])
-        }
+        params: SQLParamDict = {"projid": self.project_ids}
 
         self.filters.get_sql_filter(
             obj_where, params, self.user_id, self.mapping.object_mappings
@@ -1327,36 +1320,32 @@ class DescribedObjectBOSet(object):
             select_list + obj_where.get_sql() + order_clause.get_sql()
         )
         # TODO better select clause  to avoid a replace later in code
-        selected_tables = FromClause(f"(select :projid as projid) prjs")
-        if "prj." in column_referencing_sql:
-            selected_tables += (
-                f"{Project.__tablename__} prj ON prj.projid = prjs.projid"
-            )
-            selected_tables += f"{Sample.__tablename__} sam ON sam.projid = prj.projid"
-        else:
-            selected_tables += f"{Sample.__tablename__} sam ON sam.projid = prjs.projid"
-        selected_tables += (
-            f"{Acquisition.__tablename__} acq ON acq.acq_sample_id = sam.sampleid"
-        )
-        if "prc." in column_referencing_sql:
-            selected_tables += (
-                f"{Process.__tablename__} prc ON prc.processid = acq.acquisid"
-            )
+        selected_tables = FromClause(f"(select unnest(ARRAY[:projid]) as projid) prjs")
         obj_field_joined = "obf." in column_referencing_sql
         if obj_field_joined and self.driving_table_is_obj_field(
             obj_where.get_sql(),
             order_clause.get_sql(),
         ):
-            selected_tables += (
-                f"{ObjectFields.__tablename__} obf ON obf.acquis_id = acq.acquisid"
-            )
-            selected_tables += f"{ObjectHeader.__tablename__} obh ON obh.objid = obf.objfid AND obh.acquisid = acq.acquisid"
+            selected_tables += f"{ObjectFields.__tablename__} obf ON obf.acquis_id between prjs.projid*1e7::bigint AND (prjs.projid+1)*1e7::bigint"
+            selected_tables += f"{ObjectHeader.__tablename__} obh ON obh.objid = obf.objfid AND obh.acquisid = obf.acquis_id"
         else:
-            selected_tables += (
-                f"{ObjectHeader.__tablename__} obh ON obh.acquisid = acq.acquisid"
-            )
+            selected_tables += f"{ObjectHeader.__tablename__} obh ON obh.acquisid between prjs.projid*1e7::bigint AND (prjs.projid+1)*1e7::bigint"
             if obj_field_joined:
-                selected_tables += f"{ObjectFields.__tablename__} obf ON obf.objfid = obh.objid AND obf.acquis_id = acq.acquisid"
+                selected_tables += f"{ObjectFields.__tablename__} obf ON obf.objfid = obh.objid AND obf.acquis_id = obh.acquisid"
+        selected_tables += (
+            f"{Acquisition.__tablename__} acq ON acq.acquisid = obh.acquisid"
+        )
+        if "prc." in column_referencing_sql:
+            selected_tables += (
+                f"{Process.__tablename__} prc ON prc.processid = obh.acquisid"
+            )
+        selected_tables += (
+            f"{Sample.__tablename__} sam ON sam.sampleid = acq.acq_sample_id"
+        )
+        if "prj." in column_referencing_sql:
+            selected_tables += f"{Project.__tablename__} prj ON prj.projid = sam.projid"
+        if "cnn." in column_referencing_sql:
+            selected_tables += f"{ObjectCNNFeatureVector.__tablename__} cnn ON cnn.objcnnid = obh.objid"
         # if "prd." in column_referencing_sql:
         #     preds_ref = Prediction.__tablename__ + " prd"
         #     selected_tables += (

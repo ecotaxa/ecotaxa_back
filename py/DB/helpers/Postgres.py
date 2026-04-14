@@ -62,6 +62,34 @@ class SequenceCache(object):
             return self.next()
 
 
+class LocalSequenceCache(object):
+    """
+    Generate and keep in memory some valid sequence numbers, from a project-local generator.
+    """
+
+    def __init__(self, session: Session, size: int, generator_def):
+        self.sess = session
+        self.size = size
+        self.generator_def = generator_def
+        self.store: List[int] = []
+
+    def populate(self):
+        # We assume the generator is re-entrant or at least safe to call multiple times
+        # Here we just call it once to get the first one, then we just increment.
+        with self.sess.no_autoflush:
+            next_id = self.generator_def()
+            for _ in range(self.size):
+                self.store.append(next_id)
+                next_id += 1
+
+    def next(self):
+        try:
+            return self.store.pop(0)
+        except IndexError:
+            self.populate()
+            return self.next()
+
+
 def db_server_now(session: Session) -> datetime:
     """
     Return the current time on DB server.

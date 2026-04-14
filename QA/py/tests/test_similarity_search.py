@@ -59,7 +59,7 @@ def test_similarity_search(fastapi):
 
     # Insert dummy features
     with SamplesService() as sce:
-        n_inserts = DeepFeatures.save(sce.session, features_df)
+        n_inserts = DeepFeatures.save(sce.session, prj_id, features_df)
         assert n_inserts == 8
         sce.session.commit()
 

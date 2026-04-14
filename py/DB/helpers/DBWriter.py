@@ -2,13 +2,13 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import Dict, Tuple, List, Type, Optional, ClassVar
+from typing import List, Optional, ClassVar
 
 from helpers.DynamicLogs import get_logger
 from .Bean import Bean
 from .Direct import text
-from .ORM import Session, Table, MetaData, minimal_table_of
-from .Postgres import SequenceCache
+from .ORM import Session, MetaData, minimal_table_of
+from .Postgres import SequenceCache, LocalSequenceCache
 from .. import Prediction
 from ..CNNFeatureVector import ObjectCNNFeatureVector
 from ..Image import Image
@@ -30,7 +30,7 @@ class DBWriter(object):
 
     SEQUENCE_CACHE_SIZE: ClassVar = 100
 
-    def __init__(self, session: Session):
+    def __init__(self, session: Session, prj_id: int):
         self.session = session
 
         self.obj_tbl = ObjectHeader.__table__
@@ -46,11 +46,15 @@ class DBWriter(object):
         self.obj_cnn_bulks: List[Bean] = []
         self.obj_history_bulks: List[Bean] = []
         self.pred_bulks: List[Bean] = []
+        # Track assigned object IDs within this writer to avoid duplicates in a batch
+        self._assigned_objids: set = set()
 
         # Save a bit of time for commit
         self.session.execute(text("SET synchronous_commit TO OFF;"))
-        self.obj_seq_cache = SequenceCache(
-            self.session, "seq_objects", self.SEQUENCE_CACHE_SIZE
+        self.obj_seq_cache = LocalSequenceCache(
+            self.session,
+            self.SEQUENCE_CACHE_SIZE,
+            lambda: ObjectHeader.get_next_pk(self.session, prj_id),
         )
         self.img_seq_cache = SequenceCache(
             self.session, "seq_images", self.SEQUENCE_CACHE_SIZE
@@ -108,8 +112,12 @@ class DBWriter(object):
             # There is a new image and more
             # assert object_head_to_write.projid is not None
             assert object_head_to_write.orig_id is not None
-            # Default value from sequences
-            object_head_to_write.objid = self.obj_seq_cache.next()
+            # Default value from sequences (ensure uniqueness within this writer)
+            next_id = self.obj_seq_cache.next()
+            while next_id in self._assigned_objids:
+                next_id = self.obj_seq_cache.next()
+            object_head_to_write.objid = next_id
+            self._assigned_objids.add(next_id)
             object_fields_to_write.objfid = object_head_to_write.objid
             object_fields_to_write.acquis_id = object_head_to_write.acquisid
             if prediction_to_write:

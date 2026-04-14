@@ -9,7 +9,7 @@ import datetime
 from typing import Dict, Set, Iterable, TYPE_CHECKING, List
 
 # noinspection PyPackageRequirements
-from sqlalchemy import Index, Column, ForeignKey, Sequence, Integer  # fmt:skip
+from sqlalchemy import Index, Column, ForeignKey, Integer, desc, text  # fmt:skip
 # noinspection PyPackageRequirements
 from sqlalchemy.dialects.postgresql import (
     BIGINT,
@@ -38,6 +38,8 @@ from .helpers.ORM import Model
 ObjectIDT = int
 ObjectIDListT = List[int]
 
+OBJ_PRJ_OFFSET = 100_000_000  # AKA 1e8
+
 if TYPE_CHECKING:
     pass
     # from .Image import Image
@@ -62,7 +64,7 @@ for k, v in classif_qual_labels.items():
 class ObjectHeader(Model):
     __tablename__ = "obj_head"
     # Self
-    objid = Column(BIGINT, Sequence("seq_objects"), primary_key=True)  # 8 bytes align d
+    objid = Column(BIGINT, primary_key=True, autoincrement=False)  # 8 bytes align d
     # Parent
     acquisid = Column(
         BIGINT, ForeignKey("acquisitions.acquisid", ondelete="CASCADE"), nullable=False
@@ -112,6 +114,19 @@ class ObjectHeader(Model):
     all_images: Iterable[Image]
     acquisition: relationship
     history: relationship
+
+    @classmethod
+    def get_next_pk(cls, session: Session, prj_id: int) -> int:
+        """
+        Return the next available primary key for a new Object in the given project.
+        """
+        session.execute(text("SELECT pg_advisory_xact_lock(1000, :id)"), {"id": prj_id})
+        res = session.query(ObjectHeader.objid)
+        res = res.join(Acquisition)
+        res = res.join(Sample)
+        res = res.filter(Sample.projid == prj_id)
+        res = res.order_by(desc(ObjectHeader.objid)).limit(1).scalar()
+        return res + 1 if res else prj_id * OBJ_PRJ_OFFSET + 1
 
     @classmethod
     def fetch_existing_objects(

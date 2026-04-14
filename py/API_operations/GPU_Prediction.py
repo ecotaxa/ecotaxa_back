@@ -337,6 +337,6 @@ In second step 'Choice of Learning Set categories and size', where the learning 
             features = extractor.run(chunk, model_name)
             # Save CNN
             with CodeTimer("Saving %d new CNN " % self.DEEP_EXTRACT_CHUNK, logger):
-                nb_rows += DeepFeatures.save(self.session, features)
+                nb_rows += DeepFeatures.save(self.session, proj_id, features)
             self.session.commit()
         return "OK, %d CNN features computed and written for %d" % (nb_rows, proj_id)
