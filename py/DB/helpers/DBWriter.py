@@ -114,10 +114,10 @@ class DBWriter(object):
             assert object_head_to_write.orig_id is not None
             # Default value from sequences (ensure uniqueness within this writer)
             next_id = self.obj_seq_cache.next()
-            while next_id in self._assigned_objids:
-                next_id = self.obj_seq_cache.next()
+            # while next_id in self._assigned_objids:
+            #     next_id = self.obj_seq_cache.next()
             object_head_to_write.objid = next_id
-            self._assigned_objids.add(next_id)
+            # self._assigned_objids.add(next_id)
             object_fields_to_write.objfid = object_head_to_write.objid
             object_fields_to_write.acquis_id = object_head_to_write.acquisid
             if prediction_to_write:

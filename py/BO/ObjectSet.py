@@ -153,10 +153,10 @@ class DescribedObjectSet(object):
             obj_where.get_sql(),
             order_clause.get_sql(),
         ):
-            selected_tables += f"{ObjectFields.__tablename__} obf ON obf.acquis_id between prjs.projid*1e7::bigint AND (prjs.projid+1)*1e7::bigint"
+            selected_tables += f"{ObjectFields.__tablename__} obf ON obf.objfid between prjs.projid*1e8::bigint AND (prjs.projid+1)*1e8::bigint"
             selected_tables += f"{ObjectHeader.__tablename__} obh ON obh.objid = obf.objfid AND obh.acquisid = obf.acquis_id"
         else:
-            selected_tables += f"{ObjectHeader.__tablename__} obh ON obh.acquisid between prjs.projid*1e7::bigint AND (prjs.projid+1)*1e7::bigint"
+            selected_tables += f"{ObjectHeader.__tablename__} obh ON obh.objid between prjs.projid*1e8::bigint AND (prjs.projid+1)*1e8::bigint"
             if obj_field_joined:
                 selected_tables += f"{ObjectFields.__tablename__} obf ON obf.objfid = obh.objid AND obf.acquis_id = obh.acquisid"
         selected_tables += (
@@ -1326,10 +1326,10 @@ class DescribedObjectBOSet(object):
             obj_where.get_sql(),
             order_clause.get_sql(),
         ):
-            selected_tables += f"{ObjectFields.__tablename__} obf ON obf.acquis_id between prjs.projid*1e7::bigint AND (prjs.projid+1)*1e7::bigint"
+            selected_tables += f"{ObjectFields.__tablename__} obf ON obf.objfid between prjs.projid*1e8::bigint AND (prjs.projid+1)*1e8::bigint"
             selected_tables += f"{ObjectHeader.__tablename__} obh ON obh.objid = obf.objfid AND obh.acquisid = obf.acquis_id"
         else:
-            selected_tables += f"{ObjectHeader.__tablename__} obh ON obh.acquisid between prjs.projid*1e7::bigint AND (prjs.projid+1)*1e7::bigint"
+            selected_tables += f"{ObjectHeader.__tablename__} obh ON obh.objid between prjs.projid*1e8::bigint AND (prjs.projid+1)*1e8::bigint"
             if obj_field_joined:
                 selected_tables += f"{ObjectFields.__tablename__} obf ON obf.objfid = obh.objid AND obf.acquis_id = obh.acquisid"
         selected_tables += (
