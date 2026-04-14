@@ -46,14 +46,11 @@ class DBWriter(object):
         self.obj_cnn_bulks: List[Bean] = []
         self.obj_history_bulks: List[Bean] = []
         self.pred_bulks: List[Bean] = []
-        # Track assigned object IDs within this writer to avoid duplicates in a batch
-        self._assigned_objids: set = set()
 
         # Save a bit of time for commit
         self.session.execute(text("SET synchronous_commit TO OFF;"))
         self.obj_seq_cache = LocalSequenceCache(
             self.session,
-            self.SEQUENCE_CACHE_SIZE,
             lambda: ObjectHeader.get_next_pk(self.session, prj_id),
         )
         self.img_seq_cache = SequenceCache(
@@ -112,12 +109,8 @@ class DBWriter(object):
             # There is a new image and more
             # assert object_head_to_write.projid is not None
             assert object_head_to_write.orig_id is not None
-            # Default value from sequences (ensure uniqueness within this writer)
-            next_id = self.obj_seq_cache.next()
-            # while next_id in self._assigned_objids:
-            #     next_id = self.obj_seq_cache.next()
-            object_head_to_write.objid = next_id
-            # self._assigned_objids.add(next_id)
+            # Default value from sequences
+            object_head_to_write.objid = self.obj_seq_cache.next()
             object_fields_to_write.objfid = object_head_to_write.objid
             object_fields_to_write.acquis_id = object_head_to_write.acquisid
             if prediction_to_write:

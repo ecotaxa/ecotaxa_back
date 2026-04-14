@@ -227,12 +227,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
                 db_histo_dict.setdefault(an_histo.objid, list()).append(an_histo)
             # Send each 'line'
             # Grouping images by object as the fetch can join multiple images for the same object
-            last_objid = None
             for a_db_tuple in db_tuples:
-                obj_orm = a_db_tuple[0]
-                if obj_orm.objid == last_objid:
-                    continue
-                last_objid = obj_orm.objid
                 self._send_to_writer(
                     import_how, writer, a_db_tuple, db_histo_dict, training_provider
                 )

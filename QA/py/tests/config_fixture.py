@@ -23,6 +23,7 @@ from BO.TSVFile import TSVFile
 from FS.Vault import Vault
 from API_operations.exports.ForProject import ProjectExport
 from API_operations.admin.NightlyJob import NightlyJobService
+from API_operations.Subset import SubsetServiceOnProject
 
 
 class EcoTaxaConfig(object):
@@ -35,6 +36,7 @@ def config() -> Generator[EcoTaxaConfig, Any, None]:
     conf = EcoTaxaConfig()
     # Inject low values for covering, even with test small dataset
     DBWriter.SEQUENCE_CACHE_SIZE = 5
+    SubsetServiceOnProject.CHUNK_SIZE = 4
     TSVFile.REPORT_EVERY = 5
     ProjectExport.ROWS_REPORT_EVERY = 5
     ProjectExport.IMAGES_REPORT_EVERY = 7
