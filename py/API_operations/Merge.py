@@ -2,7 +2,7 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import List, Dict, Union, Any
+from typing import List, Dict, Union
 
 from API_models.merge import MergeRsp
 from BO.Acquisition import AcquisitionIDT
@@ -13,11 +13,12 @@ from BO.ProjectPrivilege import ProjectPrivilegeBO
 from BO.Rights import RightsBO, Action
 from BO.Sample import SampleIDT
 from DB.Acquisition import Acquisition
-from DB.Object import ObjectHeader, ObjectFields
+from DB.Object import ObjectHeader
+from DB.Process import Process
 from DB.Project import Project
 from DB.Sample import Sample
-from DB.helpers.ORM import orm_equals, any_, all_, func
-from DB.helpers.Postgres import values_cte
+from DB.helpers.ORM import orm_equals, any_, all_, clone_of
+from DB.helpers.Postgres import text
 from helpers.DynamicLogs import get_logger
 from .helpers.Service import Service
 
@@ -165,106 +166,166 @@ class MergeService(Service):
             dest_acquisitions, src_acquisitions
         )
 
-        # Align foreign keys, to Project, Sample and Acquisition
-        upd_values: Dict[str, Any] = {}
-        for a_fk_to_proj_tbl in [Sample, Acquisition, ObjectHeader, ObjectFields]:
-            upd = self.session.query(a_fk_to_proj_tbl)
-            if a_fk_to_proj_tbl == Sample:
-                # Move (i.e. change project) samples which are 'new' from merged project,
-                #    so take all of them from src project...
-                upd = upd.filter(a_fk_to_proj_tbl.projid == self.src_prj_id)  # type: ignore
-                # ...but not the ones with same orig_id, which will be merged below with Acquisition
-                upd = upd.filter(Sample.sampleid != all_(list(common_samples.keys())))
-                # And update the column
-                upd_values = {"projid": self.prj_id}
-            elif a_fk_to_proj_tbl == Acquisition:
-                if len(common_samples) == 0:
-                    # Nothing to do. There were only new samples, all of them moved to self.
-                    continue
-                # Acquisitions which were created, in source, under new samples, will 'follow'
-                #    them during above move, thanks to the FK on acq_sample_id.
-                # BUT some acquisitions were potentially created in source project, inside
-                #    forked samples. They need to be attached to the dest (self) corresponding sample.
-                # Build a CTE with values for the update
-                smp_cte = values_cte(
-                    "upd_smp",
-                    ("src_id", "dst_id"),
-                    [(k, v) for k, v in common_samples.items()],
-                )
-                smp_subqry = self.session.query(smp_cte.c.column2).filter(
-                    smp_cte.c.column1 == Acquisition.acq_sample_id
-                )
-                upd_values = {
-                    "acq_sample_id": func.coalesce(
-                        smp_subqry.scalar_subquery(),  # type: ignore
-                        Acquisition.acq_sample_id,
+        # Identify all acquisitions from src project that are NOT in common_acquisitions
+        # We fetch them BEFORE moving samples to keep src_prj_id filter working .
+        # Let's use src_samples keys (which are orig_ids) to be safe.
+        acqs_to_move = (
+            self.session.query(Acquisition)
+            .join(Sample)
+            .filter(Sample.projid == self.src_prj_id)
+            .filter(Acquisition.acquisid != all_(list(common_acquisitions.keys())))
+            .order_by(Acquisition.acquisid)
+            .all()
+        )
+
+        # Fetch all objects from src project that are NOT under common acquisitions
+        # (Those under common acquisitions will be handled later)
+        objs_to_move = (
+            self.session.query(ObjectHeader.objid)
+            .join(Acquisition)
+            .join(Sample)
+            .filter(Sample.projid == self.src_prj_id)
+            .filter(Acquisition.acquisid != all_(list(common_acquisitions.keys())))
+            .order_by(ObjectHeader.objid)
+            .all()
+        )
+        objs_to_move = [o.objid for o in objs_to_move]
+
+        # 1. Renumber samples
+        # Identify samples from src project that are NOT in common_samples
+        samples_to_move = (
+            self.session.query(Sample)
+            .filter(Sample.projid == self.src_prj_id)
+            .filter(Sample.sampleid != all_(list(common_samples.keys())))
+            .order_by(Sample.sampleid)
+            .all()
+        )
+        if samples_to_move:
+            for smp in samples_to_move:
+                old_sampleid = smp.sampleid
+                new_sampleid = Sample.get_next_pk(self.session, self.prj_id)
+                logger.info("Moving sample %d to %d", old_sampleid, new_sampleid)
+
+                # 1. Create a new record in samples with the new ID and project ID
+                new_smp = clone_of(smp)
+                new_smp.sampleid = new_sampleid
+                new_smp.projid = self.prj_id
+                self.session.add(new_smp)
+
+        # 2. Renumber acquisitions
+        # Identify acquisitions that now belong to dest project (either moved with sample or moved below)
+        # We renumber ALL acquisitions from the source project that are NOT in common_acquisitions
+        if acqs_to_move:
+            for acq in acqs_to_move:
+                old_acquisid = acq.acquisid
+                new_acquisid = Acquisition.get_next_pk(self.session, self.prj_id)
+                logger.info("Moving acquisition %d to %d", old_acquisid, new_acquisid)
+
+                # 1. Create a new record in acquisitions with the new ID
+                # We also need to get the NEW sample ID if it was renumbered
+                # Or use the old one if it was common.
+                old_s_id = acq.acq_sample_id
+                # Check if it was renumbered
+                new_s_id_res = (
+                    self.session.query(Sample.sampleid)
+                    .filter(Sample.projid == self.prj_id)
+                    .filter(
+                        Sample.orig_id
+                        == self.session.query(Sample.orig_id)
+                        .filter(Sample.sampleid == old_s_id)
+                        .scalar_subquery()
                     )
-                }
-                upd = upd.filter(
-                    Acquisition.acq_sample_id == any_(list(common_samples.keys()))
+                    .scalar()
                 )
-                upd = upd.filter(
-                    Acquisition.acquisid != all_(list(common_acquisitions.keys()))
+
+                new_acq = clone_of(acq)
+                new_acq.acquisid = new_acquisid
+                new_acq.acq_sample_id = new_s_id_res
+                self.session.add(new_acq)
+
+                # 2. Create a new record in process (twin table)
+                # Need to fetch the old process record
+                old_proc = self.session.query(Process).get(old_acquisid)
+                if old_proc:
+                    new_proc = clone_of(old_proc)
+                    new_proc.processid = new_acquisid
+                    self.session.add(new_proc)
+
+        # 3. Move objects
+        if objs_to_move:
+            for old_objid in objs_to_move:
+                # 1. Find new acquisid in destination project
+                old_a_id_res = self.session.execute(
+                    text("SELECT acquisid FROM obj_head WHERE objid = :old_objid"),
+                    {"old_objid": old_objid},
+                ).scalar()
+
+                new_a_id_res = self.session.execute(
+                    text(
+                        "SELECT a.acquisid FROM acquisitions a JOIN samples s ON a.acq_sample_id = s.sampleid "
+                        "WHERE s.projid = :prj_id AND a.orig_id = (SELECT orig_id FROM acquisitions WHERE acquisid = :old_a_id) "
+                        "AND s.orig_id = (SELECT s2.orig_id FROM samples s2 JOIN acquisitions a2 ON a2.acq_sample_id = s2.sampleid WHERE a2.acquisid = :old_a_id)"
+                    ),
+                    {"prj_id": self.prj_id, "old_a_id": old_a_id_res},
+                ).scalar()
+
+                # 2. Update obj_head to point to the new acquisid
+                # objid remains the same, preserving consistency in all other tables
+                self.session.execute(
+                    text(
+                        "UPDATE obj_head SET acquisid = :new_a_id WHERE objid = :old_id"
+                    ),
+                    {"new_a_id": new_a_id_res, "old_id": old_objid},
                 )
-            elif a_fk_to_proj_tbl == ObjectHeader:
-                if len(common_acquisitions) == 0:
-                    # Nothing to do. There were only new acquisitions, all of them moved to self.
-                    continue
-                # Generated SQL looks like:
-                # with upd_acq (src_id, dst_id) as (values (5,6), (7,8))
-                # update obj_head
-                #    set acquisid = coalesce((select dst_id from upd_acq where acquisid=src_id), acquisid)
-                #  where acquisid in (select src_id from upd_acq)
-                # Object must follow its acquisition
-                acq_cte = values_cte(
-                    "upd_acq",
-                    ("src_id", "dst_id"),
-                    [(k, v) for k, v in common_acquisitions.items()],
+
+                # 3. Update redundant acquis_id in obj_field
+                self.session.execute(
+                    text(
+                        "UPDATE obj_field SET acquis_id = :new_a_id WHERE objfid = :old_id"
+                    ),
+                    {"new_a_id": new_a_id_res, "old_id": old_objid},
                 )
-                acq_subqry = self.session.query(acq_cte.c.column2).filter(
-                    acq_cte.c.column1 == ObjectHeader.acquisid
+
+        # 4. Final alignment for objects whose acquisitions were common
+        if common_acquisitions:
+            for src_id, dst_id in common_acquisitions.items():
+                self.session.execute(
+                    text(
+                        "UPDATE obj_head SET acquisid = :dst_id WHERE acquisid = :src_id"
+                    ),
+                    {"dst_id": dst_id, "src_id": src_id},
                 )
-                upd_values = {
-                    "acquisid": func.coalesce(
-                        acq_subqry.scalar_subquery(), ObjectHeader.acquisid
-                    )
-                }
-                upd = upd.filter(
-                    ObjectHeader.acquisid == any_(list(common_acquisitions.keys()))
+                self.session.execute(
+                    text(
+                        "UPDATE obj_field SET acquis_id = :dst_id WHERE acquis_id = :src_id"
+                    ),
+                    {"dst_id": dst_id, "src_id": src_id},
                 )
-            elif a_fk_to_proj_tbl == ObjectFields:
-                if len(common_acquisitions) == 0:
-                    # Nothing to do. There were only new acquisitions, all of them moved to self.
-                    continue
-                # Generated SQL looks like:
-                # with upd_acq (src_id, dst_id) as (values (5,6), (7,8))
-                # update obj_field
-                #    set acquis_id = coalesce((select dst_id from upd_acq where acquisid=src_id), acquis_id)
-                #  where acquis_id in (select src_id from upd_acq)
-                # ObjectField must follow its acquisition
-                acq_cte = values_cte(
-                    "upd_acq",
-                    ("src_id", "dst_id"),
-                    [(k, v) for k, v in common_acquisitions.items()],
-                )
-                acq_subqry = self.session.query(acq_cte.c.column2).filter(
-                    acq_cte.c.column1 == ObjectFields.acquis_id
-                )
-                upd_values = {
-                    "acquis_id": func.coalesce(
-                        acq_subqry.scalar_subquery(), ObjectFields.acquis_id
-                    )
-                }
-                upd = upd.filter(
-                    ObjectFields.acquis_id == any_(list(common_acquisitions.keys()))
-                )
-            rowcount = upd.update(values=upd_values, synchronize_session=False)
-            table_name = a_fk_to_proj_tbl.__tablename__  # type: ignore
-            logger.info("Update in %s: %s rows", table_name, rowcount)
+
+        # 5. Cleanup: Delete all old records in reverse order
+        # Objects were UPDATED, so we don't delete them from obj_head/obj_field
+        # We only delete old acquisitions and samples
+        if acqs_to_move:
+            old_acq_ids = [acq.acquisid for acq in acqs_to_move]
+            self.session.execute(
+                text("DELETE FROM process WHERE processid = ANY(:old_ids)"),
+                {"old_ids": old_acq_ids},
+            )
+            self.session.execute(
+                text("DELETE FROM acquisitions WHERE acquisid = ANY(:old_ids)"),
+                {"old_ids": old_acq_ids},
+            )
+
+        if samples_to_move:
+            old_sam_ids = [smp.sampleid for smp in samples_to_move]
+            self.session.execute(
+                text("DELETE FROM samples WHERE sampleid = ANY(:old_ids)"),
+                {"old_ids": old_sam_ids},
+            )
 
         # Acquisition & twin Process have followed their enclosing Sample
-
         # Remove the parents which are duplicate from orig_id point of view
+        # (This is redundant with cleanup above for non-common ones, but safe for common ones)
         for a_fk_to_proj_tbl in [Acquisition, Sample]:
             to_del = self.session.query(a_fk_to_proj_tbl)
             if a_fk_to_proj_tbl == Acquisition:
@@ -299,15 +360,20 @@ class MergeService(Service):
             E.g. sample 'moose2015_ge_leg2_026' is present in source with ID 15482
                 and also in destination with ID 84678
             -> return {15482:84678}, to read 15482->84678
-        :param a_parent_class: Sample/Acquisition
-        :param dest_parents:
-        :param src_parents:
+        :param dst_orig_ids:
+        :param src_orig_ids:
         :return:
         """
         ret = {}
         common_orig_ids = set(dst_orig_ids.keys()).intersection(src_orig_ids.keys())
         for a_common_orig_id in common_orig_ids:
-            src_orig_id = src_orig_ids[a_common_orig_id].pk()
-            dst_orig_id = dst_orig_ids[a_common_orig_id].pk()
-            ret[src_orig_id] = dst_orig_id
+            # Check if it's Acquisition, if so, we need to compare Sample orig_id too
+            src_obj = src_orig_ids[a_common_orig_id]
+            dst_obj = dst_orig_ids[a_common_orig_id]
+            if isinstance(src_obj, Acquisition):
+                # We need to check if the parent sample has the same orig_id
+                if src_obj.sample.orig_id == dst_obj.sample.orig_id:
+                    ret[src_obj.pk()] = dst_obj.pk()
+            else:
+                ret[src_obj.pk()] = dst_obj.pk()
         return ret

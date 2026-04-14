@@ -6,19 +6,21 @@ from typing import List, Dict
 
 from .Project import Project, ProjectIDT
 from .helpers import Result
-from .helpers.DDL import Index, Sequence, Column, ForeignKey
+from .helpers.DDL import Index, Column, ForeignKey
 from .helpers.Direct import text
 from .helpers.Hints import RECURS_HINT
-from .helpers.ORM import Model, relationship, Session
-from .helpers.Postgres import VARCHAR, DOUBLE_PRECISION, INTEGER
+from .helpers.ORM import Model, relationship, Session, desc
+from .helpers.Postgres import VARCHAR, DOUBLE_PRECISION, INTEGER, BIGINT
 
 SAMPLE_FREE_COLUMNS = 61
+
+SAM_PRJ_OFFSET = 1_000_000  # AKA 1e6
 
 
 class Sample(Model):
     # Historical (plural) name of the table
     __tablename__ = "samples"
-    sampleid: int = Column(INTEGER, Sequence("seq_samples"), primary_key=True)
+    sampleid: int = Column(BIGINT, primary_key=True, autoincrement=False)
     projid: int = Column(INTEGER, ForeignKey("projects.projid"), nullable=False)
     # i.e. sample_id from TSV
     orig_id: str = Column(VARCHAR(255), nullable=False)
@@ -32,6 +34,23 @@ class Sample(Model):
 
     def pk(self) -> int:
         return self.sampleid
+
+    @classmethod
+    def get_next_pk(cls, session: Session, prj_id: ProjectIDT) -> int:
+        """
+        Return the next available primary key for a new Sample in the given project.
+        """
+        session.execute(text("SELECT pg_advisory_xact_lock(1001, :id)"), {"id": prj_id})
+        res = session.query(Sample.sampleid)
+        res = res.filter(Sample.projid == prj_id)
+        res = res.order_by(desc(Sample.sampleid)).limit(1).scalar()
+        return res + 1 if res else prj_id * SAM_PRJ_OFFSET + 1
+
+    def set_next_pk(self, session: Session, prj_id: ProjectIDT) -> None:
+        """
+        Set the next available primary key for this Sample instance.
+        """
+        self.sampleid = self.get_next_pk(session, prj_id)
 
     @classmethod
     def get_orig_id_and_model(

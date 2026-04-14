@@ -9,20 +9,23 @@ from sqlalchemy.orm import relationship, Session
 
 from .Project import Project
 from .Sample import Sample
-from .helpers.DDL import Column, ForeignKey, Sequence, Index
-from .helpers.ORM import Model
-from .helpers.Postgres import VARCHAR, INTEGER
+from .helpers.DDL import Column, ForeignKey, Index
+from .helpers.Direct import text
+from .helpers.ORM import Model, desc
+from .helpers.Postgres import VARCHAR, BIGINT
 
 ACQUISITION_FREE_COLUMNS = 31
+
+ACQ_PRJ_OFFSET = 10_000_000  # AKA 1e7
 
 
 class Acquisition(Model):
     # Historical (plural) name of the table
     __tablename__ = "acquisitions"
     # Self ID
-    acquisid: int = Column(INTEGER, Sequence("seq_acquisitions"), primary_key=True)
+    acquisid: int = Column(BIGINT, primary_key=True, autoincrement=False)
     # Parent ID
-    acq_sample_id: int = Column(INTEGER, ForeignKey("samples.sampleid"), nullable=False)
+    acq_sample_id: int = Column(BIGINT, ForeignKey("samples.sampleid"), nullable=False)
     # i.e. acq_id from TSV
     orig_id: str = Column(VARCHAR(255), nullable=False)
     # TODO: Put into a dedicated table
@@ -35,6 +38,24 @@ class Acquisition(Model):
 
     def pk(self) -> int:
         return self.acquisid
+
+    @classmethod
+    def get_next_pk(cls, session: Session, prj_id: int) -> int:
+        """
+        Return the next available primary key for a new Acquisition in the given project.
+        """
+        session.execute(text("SELECT pg_advisory_xact_lock(1000, :id)"), {"id": prj_id})
+        res = session.query(Acquisition.acquisid)
+        res = res.join(Sample)
+        res = res.filter(Sample.projid == prj_id)
+        res = res.order_by(desc(Acquisition.acquisid)).limit(1).scalar()
+        return res + 1 if res else prj_id * ACQ_PRJ_OFFSET + 1
+
+    def set_next_pk(self, session: Session, prj_id: int) -> None:
+        """
+        Set the next available primary key for this Acquisition instance.
+        """
+        self.acquisid = self.get_next_pk(session, prj_id)
 
     @classmethod
     def get_orig_id_and_model(

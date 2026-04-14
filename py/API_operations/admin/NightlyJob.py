@@ -18,9 +18,11 @@ from BO.Job import JobBO
 from BO.Project import ProjectBO
 from BO.Rights import RightsBO
 from BO.Taxonomy import TaxonomyBO
+from DB.Acquisition import ACQ_PRJ_OFFSET
 from DB.Job import JobIDT, Job
 from DB.Prediction import PredictionHisto
 from DB.Project import Project, ProjectIDListT
+from DB.Sample import SAM_PRJ_OFFSET
 from DB.Training import Training, IN_PROGRESS_DATE
 from DB.User import Role
 from DB.helpers import Result
@@ -513,6 +515,18 @@ where classif_qual is null and classif_id is null and classif_score is not null"
         """
         --- find root cause & re-predict
         """,
+    ),
+    ConsistencyCheckAndFix(
+        f"Samples IDs match project ones with offset {SAM_PRJ_OFFSET}",
+        f"select sampleid, projid from samples where floor(sampleid / {SAM_PRJ_OFFSET}) != projid limit 100",
+        [],
+        "need investigation",
+    ),
+    ConsistencyCheckAndFix(
+        f"Acquisitions IDs match project ones with offset {ACQ_PRJ_OFFSET}",
+        f"select acquisid, projid from acquisitions acq join samples sam on sam.sampleid = acq.acq_sample_id where floor(acquisid / {ACQ_PRJ_OFFSET}) != projid limit 100",
+        [],
+        "need investigation",
     ),
     ConsistencyCheckAndFix(
         "All obj_fields have same acquisid as object",

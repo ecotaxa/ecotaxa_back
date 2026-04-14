@@ -5,3 +5,4 @@
 
 # Hint preventing FTS on big tables
 RECURS_HINT = "/*+ Leading(sam acq obh) NestLoop(sam acq obh) IndexOnlyScan(obh) IndexOnlyScan(obf) */"
+RECURS_HINT = "/*+ */"

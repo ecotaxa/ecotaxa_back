@@ -147,35 +147,36 @@ class DescribedObjectSet(object):
         selected_tables = FromClause(
             f"(select (:projid) as projid) prjs"
         )  # Prepare a future _set_ of projects
-        if "prj." in column_referencing_sql:
-            selected_tables += (
-                f"{Project.__tablename__} prj ON prj.projid = prjs.projid"
-            )
-            selected_tables += f"{Sample.__tablename__} sam ON sam.projid = prj.projid"
-        else:
-            selected_tables += f"{Sample.__tablename__} sam ON sam.projid = prjs.projid"
+
+        selected_tables += f"{ObjectHeader.__tablename__} obh ON obh.acquisid between prjs.projid*1e7::bigint AND (prjs.projid+1)*1e7::bigint"
         selected_tables += (
-            f"{Acquisition.__tablename__} acq ON acq.acq_sample_id = sam.sampleid"
+            f"{Acquisition.__tablename__} acq ON acq.acquisid = obh.acquisid"
         )
         if "prc." in column_referencing_sql:
             selected_tables += (
-                f"{Process.__tablename__} prc ON prc.processid = acq.acquisid"
+                f"{Process.__tablename__} prc ON prc.processid = obh.acquisid"
             )
-        obj_field_joined = "obf." in column_referencing_sql
-        if obj_field_joined and self.driving_table_is_obj_field(
-            obj_where.get_sql(),
-            order_clause.get_sql(),
-        ):
-            selected_tables += (
-                f"{ObjectFields.__tablename__} obf ON obf.acquis_id = acq.acquisid"
-            )
-            selected_tables += f"{ObjectHeader.__tablename__} obh ON obh.objid = obf.objfid AND obh.acquisid = acq.acquisid"
-        else:
-            selected_tables += (
-                f"{ObjectHeader.__tablename__} obh ON obh.acquisid = acq.acquisid"
-            )
-            if obj_field_joined:
-                selected_tables += f"{ObjectFields.__tablename__} obf ON obf.objfid = obh.objid AND obf.acquis_id = acq.acquisid"
+        selected_tables += (
+            f"{Sample.__tablename__} sam ON sam.sampleid = acq.acq_sample_id"
+        )
+        if "prj." in column_referencing_sql:
+            selected_tables += f"{Project.__tablename__} prj ON prj.projid = sam.projid"
+        # else:
+        if "obf." in column_referencing_sql:
+            selected_tables += f"{ObjectFields.__tablename__} obf ON obf.objfid = obh.objid AND obf.acquis_id = obh.acquisid"
+        # obj_field_joined = "obf." in column_referencing_sql
+        # if obj_field_joined and self.driving_table_is_obj_field(
+        #     obj_where.get_sql(),
+        #     order_clause.get_sql(),
+        # ):
+        #     selected_tables += (
+        #         f"{ObjectFields.__tablename__} obf ON obf.acquis_id = acq.acquisid"
+        #     )
+        #     selected_tables += f"{ObjectHeader.__tablename__} obh ON obh.objid = obf.objfid AND obh.acquisid = acq.acquisid"
+        # else:
+        #
+        #     if obj_field_joined:
+        #         selected_tables += f"{ObjectFields.__tablename__} obf ON obf.objfid = obh.objid AND obf.acquis_id = acq.acquisid"
         if "cnn." in column_referencing_sql:
             selected_tables += f"{ObjectCNNFeatureVector.__tablename__} cnn ON cnn.objcnnid = obh.objid"
         # if "prd." in column_referencing_sql:

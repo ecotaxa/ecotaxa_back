@@ -24,13 +24,12 @@ from sqlalchemy import (
     Integer,
     Float,
     FLOAT,
+    desc,
 )
-
 # For exporting
 # noinspection PyUnresolvedReferences
 from sqlalchemy.engine.row import Row
 from sqlalchemy.ext.declarative import declarative_base
-
 # noinspection PyUnresolvedReferences
 from sqlalchemy.orm import (
     Query,
@@ -40,19 +39,14 @@ from sqlalchemy.orm import (
     subqueryload,
     selectinload,
 )
-
 # noinspection PyUnresolvedReferences
 from sqlalchemy.orm import relationship, RelationshipProperty, aliased, Mapped
-
 # noinspection PyUnresolvedReferences
 from sqlalchemy.sql import Delete, Update, Insert, ColumnElement
-
 # noinspection PyUnresolvedReferences
 from sqlalchemy.sql.elements import Label
-
 # noinspection PyUnresolvedReferences
 from sqlalchemy.sql.functions import concat
-
 # noinspection PyUnresolvedReferences
 from sqlalchemy.sql.selectable import Alias
 

@@ -65,8 +65,10 @@ class ObjectHeader(Model):
     objid = Column(BIGINT, Sequence("seq_objects"), primary_key=True)  # 8 bytes align d
     # Parent
     acquisid = Column(
-        INTEGER, ForeignKey("acquisitions.acquisid", ondelete="CASCADE"), nullable=False
-    )  # 4 bytes align i
+        BIGINT, ForeignKey("acquisitions.acquisid", ondelete="CASCADE"), nullable=False
+    )  # 8 bytes align d
+    # Author of last change in/to 'V' or 'D'
+    classif_who = Column(Integer, ForeignKey(User.id))  # 4 bytes align i
     # User-visible classification
     classif_id = Column(INTEGER, ForeignKey(Taxonomy.id))  # 4 bytes align i
 
@@ -91,8 +93,6 @@ class ObjectHeader(Model):
     classif_date = Column(TIMESTAMP)  # 8 bytes align d
     # If the object is Predicted, its score
     classif_score = Column(DOUBLE_PRECISION)  # 8 bytes align d
-    # Author of last change in/to 'V' or 'D'
-    classif_who = Column(Integer, ForeignKey(User.id))  # 4 bytes align i
 
     # User-provided identifier
     orig_id = Column(
@@ -199,7 +199,8 @@ class ObjectFields(Model):
         BIGINT, ForeignKey(ObjectHeader.objid, ondelete="CASCADE"), primary_key=True
     )
     # Not a real FK, this is used for a cluster which groups together data blocks by acquisition
-    acquis_id = Column(INTEGER, nullable=False)
+    # TODO: Remove in favor of PK projid header
+    acquis_id = Column(BIGINT, nullable=False)
     # The relationships are created in Relations.py but the typing here helps the IDE
     object: relationship
 

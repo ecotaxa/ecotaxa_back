@@ -7,7 +7,7 @@ from .Acquisition import Acquisition
 from .helpers.DDL import Column, ForeignKey
 from .helpers.ORM import Model
 from .helpers.ORM import relationship
-from .helpers.Postgres import VARCHAR, INTEGER
+from .helpers.Postgres import VARCHAR, BIGINT
 
 PROCESS_FREE_COLUMNS = 31
 
@@ -17,7 +17,7 @@ class Process(Model):
     __tablename__ = "process"
     # Twin table with Acquisitions
     processid: int = Column(
-        INTEGER, ForeignKey(Acquisition.acquisid, ondelete="CASCADE"), primary_key=True
+        BIGINT, ForeignKey(Acquisition.acquisid, ondelete="CASCADE"), primary_key=True
     )
     # i.e. process_id from TSV
     orig_id = Column(VARCHAR(255), nullable=False)
