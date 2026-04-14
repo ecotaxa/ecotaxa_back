@@ -169,13 +169,17 @@ class DescribedObjectSet(object):
             selected_tables += (
                 f"{ObjectFields.__tablename__} obf ON obf.acquis_id = acq.acquisid"
             )
-            selected_tables += f"{ObjectHeader.__tablename__} obh ON obh.objid = obf.objfid AND obh.acquisid = acq.acquisid"
+            selected_tables += (
+                f"{ObjectHeader.__tablename__} obh ON obh.objid = obf.objfid"
+            )
         else:
             selected_tables += (
                 f"{ObjectHeader.__tablename__} obh ON obh.acquisid = acq.acquisid"
             )
             if obj_field_joined:
-                selected_tables += f"{ObjectFields.__tablename__} obf ON obf.objfid = obh.objid AND obf.acquis_id = acq.acquisid"
+                selected_tables += (
+                    f"{ObjectFields.__tablename__} obf ON obf.objfid = obh.objid"
+                )
         if "cnn." in column_referencing_sql:
             selected_tables += f"{ObjectCNNFeatureVector.__tablename__} cnn ON cnn.objcnnid = obh.objid"
         # if "prd." in column_referencing_sql:
@@ -1349,13 +1353,17 @@ class DescribedObjectBOSet(object):
             selected_tables += (
                 f"{ObjectFields.__tablename__} obf ON obf.acquis_id = acq.acquisid"
             )
-            selected_tables += f"{ObjectHeader.__tablename__} obh ON obh.objid = obf.objfid AND obh.acquisid = acq.acquisid"
+            selected_tables += (
+                f"{ObjectHeader.__tablename__} obh ON obh.objid = obf.objfid"
+            )
         else:
             selected_tables += (
                 f"{ObjectHeader.__tablename__} obh ON obh.acquisid = acq.acquisid"
             )
             if obj_field_joined:
-                selected_tables += f"{ObjectFields.__tablename__} obf ON obf.objfid = obh.objid AND obf.acquis_id = acq.acquisid"
+                selected_tables += (
+                    f"{ObjectFields.__tablename__} obf ON obf.objfid = obh.objid"
+                )
         # if "prd." in column_referencing_sql:
         #     preds_ref = Prediction.__tablename__ + " prd"
         #     selected_tables += (
