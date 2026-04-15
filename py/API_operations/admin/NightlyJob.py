@@ -20,6 +20,7 @@ from BO.Rights import RightsBO
 from BO.Taxonomy import TaxonomyBO
 from DB.Acquisition import ACQ_PRJ_OFFSET
 from DB.Job import JobIDT, Job
+from DB.Object import OBJ_PRJ_OFFSET
 from DB.Prediction import PredictionHisto
 from DB.Project import Project, ProjectIDListT
 from DB.Sample import SAM_PRJ_OFFSET
@@ -518,13 +519,19 @@ where classif_qual is null and classif_id is null and classif_score is not null"
     ),
     ConsistencyCheckAndFix(
         f"Samples IDs match project ones with offset {SAM_PRJ_OFFSET}",
-        f"select sampleid, projid from samples where floor(sampleid / {SAM_PRJ_OFFSET}) != projid limit 100",
+        f"select sampleid, projid from samples where (sampleid / {SAM_PRJ_OFFSET}) != projid limit 100",
         [],
         "need investigation",
     ),
     ConsistencyCheckAndFix(
         f"Acquisitions IDs match project ones with offset {ACQ_PRJ_OFFSET}",
-        f"select acquisid, projid from acquisitions acq join samples sam on sam.sampleid = acq.acq_sample_id where floor(acquisid / {ACQ_PRJ_OFFSET}) != projid limit 100",
+        f"select acquisid, acq_sample_id from acquisitions where (acquisid / {ACQ_PRJ_OFFSET}) != (acq_sample_id / {SAM_PRJ_OFFSET}) limit 100",
+        [],
+        "need investigation",
+    ),
+    ConsistencyCheckAndFix(
+        f"Objects IDs match project ones with offset {OBJ_PRJ_OFFSET}",
+        f"select objid, acquisid from obj_head where (objid / {OBJ_PRJ_OFFSET}) != (acquisid / {ACQ_PRJ_OFFSET}) limit 100",
         [],
         "need investigation",
     ),

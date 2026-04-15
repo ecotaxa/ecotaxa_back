@@ -101,7 +101,7 @@ ALTER TABLE acquisitions
         FOREIGN KEY (acq_sample_id) REFERENCES samples (sampleid);
 
 -- 1. Create a mapping table to hold old and new IDs
-CREATE TABLE sampleid_mapping AS
+CREATE UNLOGGED TABLE sampleid_mapping AS
 SELECT sampleid                                                                           AS old_id,
        (projid * 1e6::bigint) + ROW_NUMBER() OVER (PARTITION BY projid ORDER BY sampleid) AS new_id
 FROM samples;
@@ -140,7 +140,7 @@ vacuum (verbose, full) acquisitions;
 
 -- 1. Create a mapping table to hold old and new IDs
 -- Ordered by sample ID and then by the original ID (alphabetical)
-CREATE TABLE acquisid_mapping AS
+CREATE UNLOGGED TABLE acquisid_mapping AS
 WITH acq_proj AS (SELECT acquisid,
                          (acq_sample_id / 1e6::bigint) AS projid
                   FROM acquisitions)
@@ -192,7 +192,7 @@ vacuum (verbose, full) process;
 
 -- Make space in the old table namespace
 -- Primary Key
-ALTER TABLE ONLY public.obj_head
+ALTER TABLE ONLY obj_head
     RENAME CONSTRAINT obj_head_pkey TO obj_head_pkey_old;
 -- Indexes:
 ALTER INDEX is_obj_head_acquisid_objid RENAME TO is_obj_head_acquisid_objid_old;
@@ -201,30 +201,30 @@ ALTER INDEX is_objectsdepth RENAME TO is_objectsdepth_old;
 ALTER INDEX is_objectslatlong RENAME TO is_objectslatlong_old;
 ALTER INDEX is_objectstime RENAME TO is_objectstime_old;
 -- Foreign-key constraints:
-ALTER TABLE ONLY public.obj_head
+ALTER TABLE ONLY obj_head
     RENAME CONSTRAINT obj_head_acquisid_fkey TO obj_head_acquisid_fkey_old;
-ALTER TABLE ONLY public.obj_head
+ALTER TABLE ONLY obj_head
     RENAME CONSTRAINT obj_head_classif_id_fkey TO obj_head_classif_id_fkey_old;
-ALTER TABLE ONLY public.obj_head
+ALTER TABLE ONLY obj_head
     RENAME CONSTRAINT obj_head_classif_who_fkey TO obj_head_classif_who_fkey_old;
 -- Referenced by:
-ALTER TABLE ONLY public.obj_field
+ALTER TABLE ONLY obj_field
     DROP CONSTRAINT obj_field_objfid_fkey;
-ALTER TABLE ONLY public.images
+ALTER TABLE ONLY images
     DROP CONSTRAINT images_objid_fkey;
-ALTER TABLE ONLY public.objectsclassifhisto
+ALTER TABLE ONLY objectsclassifhisto
     DROP CONSTRAINT objectsclassifhisto_objid_fkey;
-ALTER TABLE ONLY public.prediction
+ALTER TABLE ONLY prediction
     DROP CONSTRAINT prediction_object_id_fkey;
-ALTER TABLE ONLY public.prediction_histo
+ALTER TABLE ONLY prediction_histo
     DROP CONSTRAINT prediction_histo_object_id_fkey;
-ALTER TABLE ONLY public.obj_cnn_features_vector
+ALTER TABLE ONLY obj_cnn_features_vector
     DROP CONSTRAINT obj_cnn_features_vector_objcnnid_fkey;
 
-ALTER TABLE public.obj_head
+ALTER TABLE obj_head
     RENAME TO obj_head_old;
 
-CREATE TABLE public.obj_head
+CREATE TABLE obj_head
 (
     objid           bigint                 NOT NULL,
     acquisid        bigint                 NOT NULL,
@@ -257,7 +257,7 @@ $$
     begin
         for mpg in (select * from acquisid_mapping order by new_id)
             loop
-                insert into public.obj_head (objid,
+                insert into obj_head (objid,
                                              acquisid,
                                              classif_who,
                                              classif_id,
@@ -315,33 +315,33 @@ ALTER TABLE process
     ADD CONSTRAINT process_pkey PRIMARY KEY (processid),
     ADD CONSTRAINT process_processid_fkey FOREIGN KEY (processid) REFERENCES acquisitions (acquisid) ON DELETE CASCADE;
 
-ALTER TABLE ONLY public.obj_head
+ALTER TABLE ONLY obj_head
     ADD CONSTRAINT obj_head_pkey PRIMARY KEY (objid),
-    ADD CONSTRAINT obj_head_acquisid_fkey FOREIGN KEY (acquisid) REFERENCES public.acquisitions (acquisid) ON DELETE CASCADE,
-    ADD CONSTRAINT obj_head_classif_id_fkey FOREIGN KEY (classif_id) REFERENCES public.taxonomy (id),
-    ADD CONSTRAINT obj_head_classif_who_fkey FOREIGN KEY (classif_who) REFERENCES public.users (id);
+    ADD CONSTRAINT obj_head_acquisid_fkey FOREIGN KEY (acquisid) REFERENCES acquisitions (acquisid) ON DELETE CASCADE,
+    ADD CONSTRAINT obj_head_classif_id_fkey FOREIGN KEY (classif_id) REFERENCES taxonomy (id),
+    ADD CONSTRAINT obj_head_classif_who_fkey FOREIGN KEY (classif_who) REFERENCES users (id);
 
-CREATE INDEX is_obj_head_acquisid_objid ON public.obj_head USING btree (acquisid, classif_qual) INCLUDE (classif_id);
-CREATE INDEX is_objectsdate ON public.obj_head USING btree (objdate) INCLUDE (acquisid);
-CREATE INDEX is_objectsdepth ON public.obj_head USING btree (depth_max, depth_min) INCLUDE (acquisid);
-CREATE INDEX is_objectslatlong ON public.obj_head USING btree (latitude, longitude) INCLUDE (acquisid);
-CREATE INDEX is_objectstime ON public.obj_head USING btree (objtime) INCLUDE (acquisid);
+CREATE INDEX is_obj_head_acquisid_objid ON obj_head USING btree (acquisid, classif_qual) INCLUDE (classif_id);
+CREATE INDEX is_objectsdate ON obj_head USING btree (objdate) INCLUDE (acquisid);
+CREATE INDEX is_objectsdepth ON obj_head USING btree (depth_max, depth_min) INCLUDE (acquisid);
+CREATE INDEX is_objectslatlong ON obj_head USING btree (latitude, longitude) INCLUDE (acquisid);
+CREATE INDEX is_objectstime ON obj_head USING btree (objtime) INCLUDE (acquisid);
 
-ALTER TABLE public.obj_head
+ALTER TABLE obj_head
     CLUSTER ON is_obj_head_acquisid_objid;
 
-ALTER TABLE ONLY public.obj_field
-    ADD CONSTRAINT obj_field_objfid_fkey FOREIGN KEY (objfid) REFERENCES public.obj_head (objid) ON DELETE CASCADE;
-ALTER TABLE ONLY public.images
-    ADD CONSTRAINT images_objid_fkey FOREIGN KEY (objid) REFERENCES public.obj_head (objid) ON DELETE CASCADE;
-ALTER TABLE ONLY public.objectsclassifhisto
-    ADD CONSTRAINT objectsclassifhisto_objid_fkey FOREIGN KEY (objid) REFERENCES public.obj_head (objid) ON DELETE CASCADE;
-ALTER TABLE ONLY public.prediction
-    ADD CONSTRAINT prediction_object_id_fkey FOREIGN KEY (object_id) REFERENCES public.obj_head (objid) ON DELETE CASCADE;
-ALTER TABLE ONLY public.prediction_histo
-    ADD CONSTRAINT prediction_histo_object_id_fkey FOREIGN KEY (object_id) REFERENCES public.obj_head (objid) ON DELETE CASCADE;
-ALTER TABLE ONLY public.obj_cnn_features_vector
-    ADD CONSTRAINT obj_cnn_features_vector_objcnnid_fkey FOREIGN KEY (objcnnid) REFERENCES public.obj_head (objid) ON DELETE CASCADE;
+ALTER TABLE ONLY obj_field
+    ADD CONSTRAINT obj_field_objfid_fkey FOREIGN KEY (objfid) REFERENCES obj_head (objid) ON DELETE CASCADE;
+ALTER TABLE ONLY images
+    ADD CONSTRAINT images_objid_fkey FOREIGN KEY (objid) REFERENCES obj_head (objid) ON DELETE CASCADE;
+ALTER TABLE ONLY objectsclassifhisto
+    ADD CONSTRAINT objectsclassifhisto_objid_fkey FOREIGN KEY (objid) REFERENCES obj_head (objid) ON DELETE CASCADE;
+ALTER TABLE ONLY prediction
+    ADD CONSTRAINT prediction_object_id_fkey FOREIGN KEY (object_id) REFERENCES obj_head (objid) ON DELETE CASCADE;
+ALTER TABLE ONLY prediction_histo
+    ADD CONSTRAINT prediction_histo_object_id_fkey FOREIGN KEY (object_id) REFERENCES obj_head (objid) ON DELETE CASCADE;
+ALTER TABLE ONLY obj_cnn_features_vector
+    ADD CONSTRAINT obj_cnn_features_vector_objcnnid_fkey FOREIGN KEY (objcnnid) REFERENCES obj_head (objid) ON DELETE CASCADE;
 
 ALTER TABLE obj_head
     SET TABLESPACE pg_default;
@@ -357,16 +357,16 @@ DROP SEQUENCE seq_acquisitions;
 
 ALTER INDEX obj_field_acquisid_objfid_idx RENAME TO obj_field_acquisid_objfid_idx_old;
 
-ALTER TABLE ONLY public.obj_field
+ALTER TABLE ONLY obj_field
     RENAME CONSTRAINT obj_field_pk TO obj_field_pk_old;
 
-ALTER TABLE ONLY public.obj_field
+ALTER TABLE ONLY obj_field
     RENAME CONSTRAINT obj_field_objfid_fkey TO obj_field_objfid_fkey_old;
 
-ALTER TABLE public.obj_field
+ALTER TABLE obj_field
     RENAME TO obj_field_old;
 
-CREATE TABLE public.obj_field
+CREATE TABLE obj_field
 (
     objfid    bigint NOT NULL,
     acquis_id bigint NOT NULL,
@@ -894,7 +894,7 @@ CREATE TABLE public.obj_field
     WITH (autovacuum_vacuum_scale_factor = '0.01', fillfactor = '98', autovacuum_enabled = 'true')
     TABLESPACE home_tables;
 
-ALTER TABLE ONLY public.obj_field
+ALTER TABLE ONLY obj_field
     ALTER COLUMN acquis_id SET STATISTICS 10000;
 
 -- Durée : 19536610,045 ms (05:25:36,610) (nvme)
@@ -907,7 +907,7 @@ $$
     begin
         for mpg in (select * from acquisid_mapping order by new_id)
             loop
-                insert into public.obj_field (objfid, acquis_id, n01, n02, n03, n04, n05, n06, n07, n08,
+                insert into obj_field (objfid, acquis_id, n01, n02, n03, n04, n05, n06, n07, n08,
                                            n09, n10, n11,
                                            n12,
                                            n13, n14, n15, n16, n17, n18, n19, n20, n21, n22, n23, n24, n25, n26,
@@ -1081,21 +1081,21 @@ $$
     end;
 $$;
 
-ALTER TABLE public.obj_field
+ALTER TABLE obj_field
     OWNER TO postgres;
 
-ALTER TABLE ONLY public.obj_field
+ALTER TABLE obj_field
     ADD CONSTRAINT obj_field_pk PRIMARY KEY (objfid) WITH (fillfactor ='98');
 
-ALTER TABLE ONLY public.obj_field
-    ADD CONSTRAINT obj_field_objfid_fkey FOREIGN KEY (objfid) REFERENCES public.obj_head (objid) ON DELETE CASCADE;
+ALTER TABLE obj_field
+    ADD CONSTRAINT obj_field_objfid_fkey FOREIGN KEY (objfid) REFERENCES obj_head (objid) ON DELETE CASCADE;
 
-CREATE INDEX obj_field_acquisid_objfid_idx ON public.obj_field USING btree (acquis_id, objfid) WITH (fillfactor ='98');
+CREATE INDEX obj_field_acquisid_objfid_idx ON obj_field USING btree (acquis_id, objfid) WITH (fillfactor ='98');
 
-ALTER TABLE public.obj_field
+ALTER TABLE obj_field
     CLUSTER ON obj_field_acquisid_objfid_idx;
 
-GRANT SELECT ON TABLE public.obj_field TO readerole;
+GRANT SELECT ON TABLE obj_field TO readerole;
 
 ALTER TABLE obj_field
     SET TABLESPACE pg_default;
@@ -1103,7 +1103,7 @@ ALTER TABLE obj_field
 ---- OBJ
 -- Durée : 1013986,567 ms (16:53,987) NVME drive
 -- PROD: Durée : 1740768,903 ms (29:00,769)
-CREATE TABLE objid_old_2_new TABLESPACE home_tables AS
+CREATE UNLOGGED TABLE objid_old_2_new TABLESPACE home_tables AS
 SELECT objid AS old_id,
        (projid * 1e8::bigint) + ROW_NUMBER() OVER (
         PARTITION BY projid
@@ -1118,7 +1118,7 @@ CREATE UNIQUE INDEX objid_mapping_old_to_new ON objid_old_2_new (old_id);
 -- Durée : 453830,658 ms (07:33,831)
 CREATE UNIQUE INDEX objid_mapping_new_to_old ON objid_old_2_new (new_id);
 
-CREATE TABLE public.obj_head
+CREATE TABLE obj_head
 (
     objid           bigint                 NOT NULL,
     acquisid        bigint                 NOT NULL,
@@ -1203,7 +1203,7 @@ $$
     begin
         for acq_mpg in (select * from acquisid_mapping order by new_id)
             loop
-                insert into public.obj_head (objid,
+                insert into obj_head (objid,
                                              acquisid,
                                              classif_who,
                                              classif_id,
@@ -1255,18 +1255,18 @@ $$
 $$;
 
 ------------------------ OBJ_FIELD -------------------
-ALTER TABLE ONLY public.obj_field
+ALTER TABLE ONLY obj_field
     RENAME CONSTRAINT obj_field_pk TO obj_field_pk_old;
 
-ALTER TABLE public.obj_field
+ALTER TABLE obj_field
     RENAME TO obj_field_old;
 
 ALTER INDEX obj_field_acquisid_objfid_idx RENAME TO obj_field_acquisid_objfid_idx_old;
 
-ALTER TABLE ONLY public.obj_field
+ALTER TABLE ONLY obj_field
     RENAME CONSTRAINT obj_field_objfid_fkey TO obj_field_objfid_fkey_old;
 
-CREATE TABLE public.obj_field
+CREATE TABLE obj_field
 (
     objfid    bigint NOT NULL,
     acquis_id bigint NOT NULL,
@@ -1853,7 +1853,7 @@ $$
     begin
         for acq_mpg in (select * from acquisid_mapping order by new_id)
             loop
-                insert into public.obj_field (objfid, acquis_id, n01, n02, n03, n04, n05, n06, n07, n08,
+                insert into obj_field (objfid, acquis_id, n01, n02, n03, n04, n05, n06, n07, n08,
                                            n09, n10, n11,
                                            n12,
                                            n13, n14, n15, n16, n17, n18, n19, n20, n21, n22, n23, n24, n25, n26,
@@ -2031,11 +2031,11 @@ $$;
 
 ------------------------ IMAGES ----------------------
 
-ALTER TABLE public.images RENAME TO images_old;
+ALTER TABLE images RENAME TO images_old;
 ALTER INDEX images_pkey RENAME TO images_pkey_old;
 ALTER INDEX images_objid_fkey RENAME TO images_objid_fkey_old;
 
-CREATE TABLE public.images (
+CREATE TABLE images (
     imgid bigint NOT NULL,
     objid bigint NOT NULL,
     imgrank smallint NOT NULL,
@@ -2046,7 +2046,7 @@ CREATE TABLE public.images (
     thumb_height smallint
 ) TABLESPACE home_indexes;
 
-INSERT INTO public.images
+INSERT INTO images
 SELECT imgid,
        mpg_obj.new_id,
        imgrank,
@@ -2058,27 +2058,27 @@ SELECT imgid,
   FROM images_old
   JOIN objid_old_2_new mpg_obj ON mpg_obj.old_id = objid;
 
-ALTER TABLE ONLY public.images ALTER COLUMN objid SET STATISTICS 10000;
+ALTER TABLE ONLY images ALTER COLUMN objid SET STATISTICS 10000;
 
-ALTER TABLE public.images OWNER TO postgres;
+ALTER TABLE images OWNER TO postgres;
 
-ALTER TABLE ONLY public.images
+ALTER TABLE ONLY images
     ADD CONSTRAINT images_pkey PRIMARY KEY (objid, imgrank);
 
-ALTER TABLE ONLY public.images
-    ADD CONSTRAINT images_objid_fkey FOREIGN KEY (objid) REFERENCES public.obj_head(objid);
+ALTER TABLE ONLY images
+    ADD CONSTRAINT images_objid_fkey FOREIGN KEY (objid) REFERENCES obj_head(objid);
 
-GRANT SELECT ON TABLE public.images TO readerole;
-GRANT SELECT ON TABLE public.images TO zoo;
+GRANT SELECT ON TABLE images TO readerole;
+GRANT SELECT ON TABLE images TO zoo;
 
 VACUUM VERBOSE images;
 
 --------------------------- HISTO --------------------------
 
-ALTER TABLE public.objectsclassifhisto RENAME TO objectsclassifhisto_old;
+ALTER TABLE objectsclassifhisto RENAME TO objectsclassifhisto_old;
 ALTER INDEX objectsclassifhisto_pkey RENAME TO objectsclassifhisto_pkey_old;
 
-CREATE TABLE public.objectsclassifhisto (
+CREATE TABLE objectsclassifhisto (
     objid bigint NOT NULL,
     classif_date timestamp without time zone NOT NULL,
     classif_score double precision,
@@ -2087,7 +2087,7 @@ CREATE TABLE public.objectsclassifhisto (
     classif_qual character(1) NOT NULL
 ) TABLESPACE home_indexes;
 
-INSERT INTO public.objectsclassifhisto
+INSERT INTO objectsclassifhisto
 SELECT mpg_obj.new_id,
        classif_date,
        classif_score,
@@ -2097,17 +2097,17 @@ SELECT mpg_obj.new_id,
   FROM objectsclassifhisto_old
   JOIN objid_old_2_new mpg_obj ON mpg_obj.old_id = objid;
 
-ALTER TABLE ONLY public.objectsclassifhisto ALTER COLUMN classif_date SET STATISTICS 10000;
+ALTER TABLE ONLY objectsclassifhisto ALTER COLUMN classif_date SET STATISTICS 10000;
 
-ALTER TABLE public.objectsclassifhisto OWNER TO postgres;
+ALTER TABLE objectsclassifhisto OWNER TO postgres;
 
-ALTER TABLE ONLY public.objectsclassifhisto
+ALTER TABLE ONLY objectsclassifhisto
     ADD CONSTRAINT objectsclassifhisto_pkey PRIMARY KEY (objid, classif_date);
 
-ALTER TABLE ONLY public.objectsclassifhisto
-    ADD CONSTRAINT objectsclassifhisto_classif_id_fkey FOREIGN KEY (classif_id) REFERENCES public.taxonomy(id) ON DELETE CASCADE,
-    ADD CONSTRAINT objectsclassifhisto_classif_who_fkey FOREIGN KEY (classif_who) REFERENCES public.users(id),
-    ADD CONSTRAINT objectsclassifhisto_objid_fkey FOREIGN KEY (objid) REFERENCES public.obj_head(objid) ON DELETE CASCADE;
+ALTER TABLE ONLY objectsclassifhisto
+    ADD CONSTRAINT objectsclassifhisto_classif_id_fkey FOREIGN KEY (classif_id) REFERENCES taxonomy(id) ON DELETE CASCADE,
+    ADD CONSTRAINT objectsclassifhisto_classif_who_fkey FOREIGN KEY (classif_who) REFERENCES users(id),
+    ADD CONSTRAINT objectsclassifhisto_objid_fkey FOREIGN KEY (objid) REFERENCES obj_head(objid) ON DELETE CASCADE;
 
 VACUUM VERBOSE objectsclassifhisto;
 
@@ -2117,14 +2117,14 @@ ALTER TABLE prediction RENAME TO prediction_old;
 ALTER INDEX prediction_pkey RENAME TO prediction_pkey_old;
 ALTER INDEX is_prediction_training RENAME TO is_prediction_training_old;
 
-CREATE TABLE public.prediction (
+CREATE TABLE prediction (
     object_id bigint NOT NULL,
     training_id integer NOT NULL,
     classif_id integer NOT NULL,
     score double precision NOT NULL
 ) TABLESPACE home_indexes;
 
-INSERT INTO public.prediction
+INSERT INTO prediction
 SELECT mpg_obj.new_id,
        training_id,
        classif_id,
@@ -2132,19 +2132,19 @@ SELECT mpg_obj.new_id,
   FROM prediction_old
   JOIN objid_old_2_new mpg_obj ON mpg_obj.old_id = object_id;
 
-ALTER TABLE public.prediction OWNER TO postgres;
+ALTER TABLE prediction OWNER TO postgres;
 
-ALTER TABLE ONLY public.prediction
+ALTER TABLE ONLY prediction
     ADD CONSTRAINT prediction_pkey PRIMARY KEY (object_id, classif_id);
 
-ALTER TABLE ONLY public.prediction
-    ADD CONSTRAINT prediction_classif_id_fkey FOREIGN KEY (classif_id) REFERENCES public.taxonomy(id) ON DELETE CASCADE,
-    ADD CONSTRAINT prediction_object_id_fkey FOREIGN KEY (object_id) REFERENCES public.obj_head(objid) ON DELETE CASCADE,
-    ADD CONSTRAINT prediction_training_id_fkey FOREIGN KEY (training_id) REFERENCES public.training(training_id) ON DELETE CASCADE;
+ALTER TABLE ONLY prediction
+    ADD CONSTRAINT prediction_classif_id_fkey FOREIGN KEY (classif_id) REFERENCES taxonomy(id) ON DELETE CASCADE,
+    ADD CONSTRAINT prediction_object_id_fkey FOREIGN KEY (object_id) REFERENCES obj_head(objid) ON DELETE CASCADE,
+    ADD CONSTRAINT prediction_training_id_fkey FOREIGN KEY (training_id) REFERENCES training(training_id) ON DELETE CASCADE;
 
-CREATE INDEX is_prediction_training ON public.prediction USING btree (training_id);
+CREATE INDEX is_prediction_training ON prediction USING btree (training_id);
 
-GRANT SELECT ON TABLE public.prediction TO readerole;
+GRANT SELECT ON TABLE prediction TO readerole;
 
 ---------------------- PREDICTION HISTO ------------------
 
@@ -2152,14 +2152,14 @@ ALTER TABLE prediction_histo RENAME TO prediction_histo_old;
 ALTER INDEX prediction_histo_pkey RENAME TO prediction_histo_pkey_old;
 ALTER INDEX is_prediction_histo_object RENAME TO is_prediction_histo_object_old;
 
-CREATE TABLE public.prediction_histo (
+CREATE TABLE prediction_histo (
     object_id bigint NOT NULL,
     training_id integer NOT NULL,
     classif_id integer NOT NULL,
     score double precision NOT NULL
 );
 
-INSERT INTO public.prediction_histo
+INSERT INTO prediction_histo
 SELECT mpg_obj.new_id,
        training_id,
        classif_id,
@@ -2167,19 +2167,19 @@ SELECT mpg_obj.new_id,
   FROM prediction_histo_old
   JOIN objid_old_2_new mpg_obj ON mpg_obj.old_id = object_id;
 
-ALTER TABLE public.prediction_histo OWNER TO postgres;
+ALTER TABLE prediction_histo OWNER TO postgres;
 
-ALTER TABLE ONLY public.prediction_histo
+ALTER TABLE ONLY prediction_histo
     ADD CONSTRAINT prediction_histo_pkey PRIMARY KEY (training_id, object_id, classif_id);
 
-CREATE INDEX is_prediction_histo_object ON public.prediction_histo USING btree (object_id);
+CREATE INDEX is_prediction_histo_object ON prediction_histo USING btree (object_id);
 
-ALTER TABLE ONLY public.prediction_histo
-    ADD CONSTRAINT prediction_histo_classif_id_fkey FOREIGN KEY (classif_id) REFERENCES public.taxonomy(id) ON DELETE CASCADE,
-    ADD CONSTRAINT prediction_histo_object_id_fkey FOREIGN KEY (object_id) REFERENCES public.obj_head(objid) ON DELETE CASCADE,
-    ADD CONSTRAINT prediction_histo_training_id_fkey FOREIGN KEY (training_id) REFERENCES public.training(training_id) ON DELETE CASCADE;
+ALTER TABLE ONLY prediction_histo
+    ADD CONSTRAINT prediction_histo_classif_id_fkey FOREIGN KEY (classif_id) REFERENCES taxonomy(id) ON DELETE CASCADE,
+    ADD CONSTRAINT prediction_histo_object_id_fkey FOREIGN KEY (object_id) REFERENCES obj_head(objid) ON DELETE CASCADE,
+    ADD CONSTRAINT prediction_histo_training_id_fkey FOREIGN KEY (training_id) REFERENCES training(training_id) ON DELETE CASCADE;
 
-GRANT SELECT ON TABLE public.prediction_histo TO readerole;
+GRANT SELECT ON TABLE prediction_histo TO readerole;
 
 ---------------------- CNN FEATURES ------------------
 
@@ -2187,30 +2187,30 @@ ALTER TABLE obj_cnn_features_vector RENAME TO obj_cnn_features_vector_old;
 ALTER INDEX obj_cnn_features_vector_pkey RENAME TO obj_cnn_features_vector_pkey_old;
 ALTER INDEX obj_cnn_features_vector_hv_ivfflat_l2_5k_idx RENAME TO obj_cnn_features_vector_hv_ivfflat_l2_5k_idx_old;
 
-CREATE TABLE public.obj_cnn_features_vector (
+CREATE TABLE obj_cnn_features_vector (
     objcnnid bigint NOT NULL,
-    features public.vector(50)
+    features vector(50)
 );
-ALTER TABLE ONLY public.obj_cnn_features_vector ALTER COLUMN features SET STORAGE EXTENDED;
+ALTER TABLE ONLY obj_cnn_features_vector ALTER COLUMN features SET STORAGE EXTENDED;
 
-INSERT INTO public.obj_cnn_features_vector
+INSERT INTO obj_cnn_features_vector
 SELECT mpg_obj.new_id,
        features
   FROM obj_cnn_features_vector_old
   JOIN objid_old_2_new mpg_obj ON mpg_obj.old_id = objcnnid;
 
-ALTER TABLE public.obj_cnn_features_vector OWNER TO postgres;
+ALTER TABLE obj_cnn_features_vector OWNER TO postgres;
 
-ALTER TABLE ONLY public.obj_cnn_features_vector
+ALTER TABLE ONLY obj_cnn_features_vector
     ADD CONSTRAINT obj_cnn_features_vector_pkey PRIMARY KEY (objcnnid);
 
-CREATE INDEX obj_cnn_features_vector_hv_ivfflat_l2_5k_idx ON public.obj_cnn_features_vector USING ivfflat (((features)::public.halfvec(50)) public.halfvec_l2_ops) WITH (lists='5000');
+CREATE INDEX obj_cnn_features_vector_hv_ivfflat_l2_5k_idx ON obj_cnn_features_vector USING ivfflat (((features)::halfvec(50)) halfvec_l2_ops) WITH (lists='5000');
 
-ALTER TABLE ONLY public.obj_cnn_features_vector
-    ADD CONSTRAINT obj_cnn_features_vector_objcnnid_fkey FOREIGN KEY (objcnnid) REFERENCES public.obj_head(objid) ON DELETE CASCADE;
+ALTER TABLE ONLY obj_cnn_features_vector
+    ADD CONSTRAINT obj_cnn_features_vector_objcnnid_fkey FOREIGN KEY (objcnnid) REFERENCES obj_head(objid) ON DELETE CASCADE;
 
-GRANT SELECT ON TABLE public.obj_cnn_features_vector TO readerole;
-GRANT SELECT ON TABLE public.obj_cnn_features_vector TO zoo;
+GRANT SELECT ON TABLE obj_cnn_features_vector TO readerole;
+GRANT SELECT ON TABLE obj_cnn_features_vector TO zoo;
 
 
 -- Recreate objects view
