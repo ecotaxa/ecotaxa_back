@@ -208,7 +208,7 @@ class CollectionsService(Service):
     def _exclusive_creator_associate(req):
         if "creator_users" not in req or "associate_users" not in req:
             return
-        if req["creator_users"] is not None and req["associate_users"] is not None:
+        if len(req["creator_users"]) > 0 and len(req["associate_users"]) > 0:
             commonusers = [
                 usr for usr in req["creator_users"] if usr in req["associate_users"]
             ] + [usr for usr in req["associate_users"] if usr in req["creator_users"]]
