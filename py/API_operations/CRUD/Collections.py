@@ -212,9 +212,9 @@ class CollectionsService(Service):
             commonusers = [
                 usr for usr in req["creator_users"] if usr in req["associate_users"]
             ] + [usr for usr in req["associate_users"] if usr in req["creator_users"]]
-        if len(commonusers) > 0:
-            raise HTTPException(
-                HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=[DETAIL_EXCLUSIVE_CREATOR_ASSOCIATE],
-            )
+            if len(commonusers) > 0:
+                raise HTTPException(
+                    HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=[DETAIL_EXCLUSIVE_CREATOR_ASSOCIATE],
+                )
         return
