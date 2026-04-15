@@ -3047,6 +3047,20 @@ UPDATE alembic_version SET version_num='9bf6b31796a2' WHERE alembic_version.vers
 
 COMMIT;
 
+-- Running upgrade 9bf6b31796a2 -> acf6f3fcb35c
+
+CREATE TABLE user_quality (
+    user_id INTEGER NOT NULL,
+    password_strong BOOLEAN NOT NULL,
+    check_date TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL,
+    PRIMARY KEY (user_id),
+    CONSTRAINT user_quality_user_id_fkey FOREIGN KEY(user_id) REFERENCES users (id) ON DELETE CASCADE
+);
+
+UPDATE alembic_version SET version_num='acf6f3fcb35c' WHERE alembic_version.version_num = '9bf6b31796a2';
+
+COMMIT;
+
 ------- Leave on tail
 
 ALTER TABLE alembic_version REPLICA IDENTITY FULL;
