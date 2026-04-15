@@ -1085,7 +1085,9 @@ ALTER TABLE public.obj_field
     OWNER TO postgres;
 
 ALTER TABLE ONLY public.obj_field
-    ADD CONSTRAINT obj_field_pk PRIMARY KEY (objfid) WITH (fillfactor ='98'),
+    ADD CONSTRAINT obj_field_pk PRIMARY KEY (objfid) WITH (fillfactor ='98');
+
+ALTER TABLE ONLY public.obj_field
     ADD CONSTRAINT obj_field_objfid_fkey FOREIGN KEY (objfid) REFERENCES public.obj_head (objid) ON DELETE CASCADE;
 
 CREATE INDEX obj_field_acquisid_objfid_idx ON public.obj_field USING btree (acquis_id, objfid) WITH (fillfactor ='98');
@@ -2061,7 +2063,9 @@ ALTER TABLE ONLY public.images ALTER COLUMN objid SET STATISTICS 10000;
 ALTER TABLE public.images OWNER TO postgres;
 
 ALTER TABLE ONLY public.images
-    ADD CONSTRAINT images_pkey PRIMARY KEY (objid, imgrank),
+    ADD CONSTRAINT images_pkey PRIMARY KEY (objid, imgrank);
+
+ALTER TABLE ONLY public.images
     ADD CONSTRAINT images_objid_fkey FOREIGN KEY (objid) REFERENCES public.obj_head(objid);
 
 GRANT SELECT ON TABLE public.images TO readerole;
@@ -2098,7 +2102,9 @@ ALTER TABLE ONLY public.objectsclassifhisto ALTER COLUMN classif_date SET STATIS
 ALTER TABLE public.objectsclassifhisto OWNER TO postgres;
 
 ALTER TABLE ONLY public.objectsclassifhisto
-    ADD CONSTRAINT objectsclassifhisto_pkey PRIMARY KEY (objid, classif_date),
+    ADD CONSTRAINT objectsclassifhisto_pkey PRIMARY KEY (objid, classif_date);
+
+ALTER TABLE ONLY public.objectsclassifhisto
     ADD CONSTRAINT objectsclassifhisto_classif_id_fkey FOREIGN KEY (classif_id) REFERENCES public.taxonomy(id) ON DELETE CASCADE,
     ADD CONSTRAINT objectsclassifhisto_classif_who_fkey FOREIGN KEY (classif_who) REFERENCES public.users(id),
     ADD CONSTRAINT objectsclassifhisto_objid_fkey FOREIGN KEY (objid) REFERENCES public.obj_head(objid) ON DELETE CASCADE;
@@ -2129,7 +2135,9 @@ SELECT mpg_obj.new_id,
 ALTER TABLE public.prediction OWNER TO postgres;
 
 ALTER TABLE ONLY public.prediction
-    ADD CONSTRAINT prediction_pkey PRIMARY KEY (object_id, classif_id),
+    ADD CONSTRAINT prediction_pkey PRIMARY KEY (object_id, classif_id);
+
+ALTER TABLE ONLY public.prediction
     ADD CONSTRAINT prediction_classif_id_fkey FOREIGN KEY (classif_id) REFERENCES public.taxonomy(id) ON DELETE CASCADE,
     ADD CONSTRAINT prediction_object_id_fkey FOREIGN KEY (object_id) REFERENCES public.obj_head(objid) ON DELETE CASCADE,
     ADD CONSTRAINT prediction_training_id_fkey FOREIGN KEY (training_id) REFERENCES public.training(training_id) ON DELETE CASCADE;
@@ -2137,6 +2145,72 @@ ALTER TABLE ONLY public.prediction
 CREATE INDEX is_prediction_training ON public.prediction USING btree (training_id);
 
 GRANT SELECT ON TABLE public.prediction TO readerole;
+
+---------------------- PREDICTION HISTO ------------------
+
+ALTER TABLE prediction_histo RENAME TO prediction_histo_old;
+ALTER INDEX prediction_histo_pkey RENAME TO prediction_histo_pkey_old;
+ALTER INDEX is_prediction_histo_object RENAME TO is_prediction_histo_object_old;
+
+CREATE TABLE public.prediction_histo (
+    object_id bigint NOT NULL,
+    training_id integer NOT NULL,
+    classif_id integer NOT NULL,
+    score double precision NOT NULL
+);
+
+INSERT INTO public.prediction_histo
+SELECT mpg_obj.new_id,
+       training_id,
+       classif_id,
+       score
+  FROM prediction_histo_old
+  JOIN objid_old_2_new mpg_obj ON mpg_obj.old_id = object_id;
+
+ALTER TABLE public.prediction_histo OWNER TO postgres;
+
+ALTER TABLE ONLY public.prediction_histo
+    ADD CONSTRAINT prediction_histo_pkey PRIMARY KEY (training_id, object_id, classif_id);
+
+CREATE INDEX is_prediction_histo_object ON public.prediction_histo USING btree (object_id);
+
+ALTER TABLE ONLY public.prediction_histo
+    ADD CONSTRAINT prediction_histo_classif_id_fkey FOREIGN KEY (classif_id) REFERENCES public.taxonomy(id) ON DELETE CASCADE,
+    ADD CONSTRAINT prediction_histo_object_id_fkey FOREIGN KEY (object_id) REFERENCES public.obj_head(objid) ON DELETE CASCADE,
+    ADD CONSTRAINT prediction_histo_training_id_fkey FOREIGN KEY (training_id) REFERENCES public.training(training_id) ON DELETE CASCADE;
+
+GRANT SELECT ON TABLE public.prediction_histo TO readerole;
+
+---------------------- CNN FEATURES ------------------
+
+ALTER TABLE obj_cnn_features_vector RENAME TO obj_cnn_features_vector_old;
+ALTER INDEX obj_cnn_features_vector_pkey RENAME TO obj_cnn_features_vector_pkey_old;
+ALTER INDEX obj_cnn_features_vector_hv_ivfflat_l2_5k_idx RENAME TO obj_cnn_features_vector_hv_ivfflat_l2_5k_idx_old;
+
+CREATE TABLE public.obj_cnn_features_vector (
+    objcnnid bigint NOT NULL,
+    features public.vector(50)
+);
+ALTER TABLE ONLY public.obj_cnn_features_vector ALTER COLUMN features SET STORAGE EXTENDED;
+
+INSERT INTO public.obj_cnn_features_vector
+SELECT mpg_obj.new_id,
+       features
+  FROM obj_cnn_features_vector_old
+  JOIN objid_old_2_new mpg_obj ON mpg_obj.old_id = objcnnid;
+
+ALTER TABLE public.obj_cnn_features_vector OWNER TO postgres;
+
+ALTER TABLE ONLY public.obj_cnn_features_vector
+    ADD CONSTRAINT obj_cnn_features_vector_pkey PRIMARY KEY (objcnnid);
+
+CREATE INDEX obj_cnn_features_vector_hv_ivfflat_l2_5k_idx ON public.obj_cnn_features_vector USING ivfflat (((features)::public.halfvec(50)) public.halfvec_l2_ops) WITH (lists='5000');
+
+ALTER TABLE ONLY public.obj_cnn_features_vector
+    ADD CONSTRAINT obj_cnn_features_vector_objcnnid_fkey FOREIGN KEY (objcnnid) REFERENCES public.obj_head(objid) ON DELETE CASCADE;
+
+GRANT SELECT ON TABLE public.obj_cnn_features_vector TO readerole;
+GRANT SELECT ON TABLE public.obj_cnn_features_vector TO zoo;
 
 
 -- Recreate objects view
