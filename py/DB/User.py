@@ -212,3 +212,20 @@ class TempPasswordReset(Model):
     )
     temp_password = Column(String(255), nullable=False)
     creation_date = Column(TIMESTAMP, default=func.now(), nullable=False)
+
+
+class UserQuality(Model):
+    """
+    Store user password quality.
+    """
+
+    __tablename__ = "user_quality"
+    user_id = Column(
+        Integer(),
+        ForeignKey("users.id", name="user_quality_user_id_fkey", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    password_strong = Column(Boolean(), nullable=False)
+    check_date = Column(
+        TIMESTAMP, default=func.now(), onupdate=func.now(), nullable=False
+    )
