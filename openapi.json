@@ -2,7 +2,7 @@
   "openapi":"3.0.2",
   "info":{
     "title":"EcoTaxa",
-    "version":"0.0.43"
+    "version":"0.0.44"
   },
   "servers":[
     {
@@ -7781,6 +7781,12 @@
                 "3_u"
               ]
             }
+          },
+          "is_private":{
+            "title":"Is the collection private.",
+            "type":"boolean",
+            "description":"The most restrictive access among the projects in the collection",
+            "default":false
           }
         },
         "description":"Basic and computed information about the Collection."

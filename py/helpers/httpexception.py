@@ -20,6 +20,15 @@ DETAIL_SMTP_RESPONSE_ERROR = "SMTP Server response error"
 DETAIL_IMAP4_ERROR = "IMAP4 error"
 DETAIL_UNKNOWN_ERROR = "Unknown error"
 DETAIL_NOT_FOUND = "item not found"
+# projects & collections
+DETAIL_NODELETE_BELONGS_TO_COLLECTION = (
+    "This project cannot be deleted as it belongs to one or more collections"
+)
+DETAIL_ONE_OR_MORE_PRIVATE = (
+    "One or more  project in the collection has a private access"
+)
+DETAIL_EXPORT_PREVENTED = "Export operation prevented."
+DETAIL_EXCLUSIVE_CREATOR_ASSOCIATE = "A user cannot be in both the “creator” and “associate” categories at the same time."
 # unpack
 DETAIL_INVALID_ZIP_FILE = "zipfile is corrupt"
 DETAIL_INVALID_LARGE_ZIP_FILE = "big zipfile not zip64 encoded"

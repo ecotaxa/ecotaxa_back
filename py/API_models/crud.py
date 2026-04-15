@@ -801,6 +801,11 @@ class _AddedToCollection(BaseModel):
             "associates": ["13_u", "823_o", "3_u"],
         },
     )
+    is_private: bool = Field(
+        title="Is the collection private.",
+        description="The most restrictive access among the projects in the collection",
+        default=False,
+    )
 
 
 class CollectionModel(_AddedToCollection, _CollectionModelFromDB):
