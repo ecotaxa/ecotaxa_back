@@ -207,7 +207,7 @@ class DarwinCoreExport(JobServiceBase):
                 + ": "
                 + ", ".join(
                     [
-                        prj.title + "(" + str(prj.id) + ")"
+                        prj.title + "(" + str(prj.projid) + ")"
                         for prj in self.collection.projects
                         if (prj.access == AccessLevelEnum.PRIVATE.value)
                     ]
