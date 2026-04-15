@@ -32,9 +32,7 @@ def fastapi(config, database, tstlogs, request) -> Generator[TestClient, Any, No
     fastApiUtils._serializer.loads = lambda s, max_age: {"user_id": s}
 
     client = TestClient(main.app)
-    # Check if we should NOT set the JOB_INTERVAL
-    if "no_job_interval" not in request.fixturenames:
-        main.JOB_INTERVAL = 0.01
+    main.JOB_INTERVAL = 0.01
 
     with client:  # Trigger the fastapi 'startup' event -> launches the JobScheduler
         yield client

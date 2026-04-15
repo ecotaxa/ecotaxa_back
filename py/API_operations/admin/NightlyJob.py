@@ -237,8 +237,10 @@ class NightlyJobService(JobServiceBase):
         if self.job_id:
             self.update_progress(start, "Cleaning aborted trainings")
         logger.info("Starting cleanup of aborted trainings")
+        limit_date = datetime.datetime.now() - datetime.timedelta(days=1)
         aborted_trainings_qry = self.session.query(Training).filter(
-            Training.training_end == IN_PROGRESS_DATE
+            Training.training_end == IN_PROGRESS_DATE,
+            Training.training_start < limit_date,
         )
         to_clean = aborted_trainings_qry.all()
         logger.info("About to clean %d aborted trainings", len(to_clean))
@@ -588,6 +590,7 @@ where classif_qual is null and classif_id is null and classif_score is not null"
         """select trn.*
     from training trn
     where trn.training_end < trn.training_start
+      and trn.training_start < now() - interval '1 day'
       limit 100
         """,
         [],
