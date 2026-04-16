@@ -1,3 +1,8 @@
+\set SAM_MULT 1000000::bigint
+\set ACQ_MULT 10000000::bigint
+\set OBJ_MULT 100000000::bigint
+\set OTHER_TBLSPC home_tables
+
 -- 1. Drop the view that depends on the affected tables
 DROP VIEW IF EXISTS objects;
 
@@ -95,9 +100,9 @@ ALTER TABLE acquisitions
         FOREIGN KEY (acq_sample_id) REFERENCES samples (sampleid);
 
 -- 1. Create a mapping table to hold old and new IDs
-CREATE UNLOGGED TABLE sampleid_mapping AS
+CREATE UNLOGGED TABLE samid_old_2_new AS
 SELECT sampleid                                                                           AS old_id,
-       (projid * 1e6::bigint) + ROW_NUMBER() OVER (PARTITION BY projid ORDER BY sampleid) AS new_id
+       (projid * :SAM_MULT) + ROW_NUMBER() OVER (PARTITION BY projid ORDER BY sampleid) AS new_id
 FROM samples;
 
 ALTER TABLE acquisitions
@@ -105,7 +110,7 @@ ALTER TABLE acquisitions
 
 UPDATE samples
 SET sampleid = mapping.new_id
-FROM sampleid_mapping mapping
+FROM samid_old_2_new mapping
 WHERE samples.sampleid = mapping.old_id;
 
 -- 2. Update the referencing table(s).
@@ -114,7 +119,7 @@ WHERE samples.sampleid = mapping.old_id;
 -- Note: 'part_samples' was used in older versions but has been removed in recent ones.
 UPDATE acquisitions
 SET acq_sample_id = mapping.new_id
-FROM sampleid_mapping mapping
+FROM samid_old_2_new mapping
 WHERE acquisitions.acq_sample_id = mapping.old_id;
 
 -- 4. Re-create the primary key and foreign keys
@@ -129,24 +134,23 @@ vacuum (verbose, full) samples;
 vacuum (verbose, full) acquisitions;
 
 -- 6. Cleanup
--- DROP TABLE sampleid_mapping;
+-- DROP TABLE samid_old_2_new;
 
 
 -- 1. Create a mapping table to hold old and new IDs
--- Ordered by sample ID and then by the original ID (alphabetical)
-CREATE UNLOGGED TABLE acquisid_mapping AS
-WITH acq_proj AS (SELECT acquisid,
-                         (acq_sample_id / 1e6::bigint) AS projid
-                  FROM acquisitions)
+-- Ordered by sample ID and then by the original ID
+CREATE UNLOGGED TABLE acqid_old_2_new AS
 SELECT acquisid AS old_id,
-       (projid * 1e7::bigint) +
+       (projid * :ACQ_MULT) +
        ROW_NUMBER() OVER (
            PARTITION BY projid
            ORDER BY acquisid
            )    AS new_id
-FROM acq_proj;
+	 FROM acquisitions acq
+	 JOIN samples sam ON sam.sampleid = acq.acq_sample_id;
 
-CREATE INDEX acquisid_mapping_idx ON acquisid_mapping (new_id);
+CREATE INDEX acquisid_mapping_idx ON acqid_old_2_new (new_id) INCLUDE (old_id);
+CREATE INDEX acquisid_mapping_idx2 ON acqid_old_2_new (old_id) INCLUDE (new_id);
 
 -- 2. Drop constraints to allow updating primary keys and foreign keys
 -- This includes foreign keys from 'obj_head' and 'process'
@@ -167,7 +171,7 @@ ALTER TABLE acquisitions
 -- 3. Update the 'acquisitions' table
 UPDATE acquisitions
 SET acquisid = mapping.new_id
-FROM acquisid_mapping mapping
+FROM acqid_old_2_new mapping
 WHERE acquisitions.acquisid = mapping.old_id;
 
 -- 4. Update the 'process' table
@@ -177,7 +181,7 @@ ALTER TABLE process
 
 UPDATE process
 SET processid = mapping.new_id
-FROM acquisid_mapping mapping
+FROM acqid_old_2_new mapping
 WHERE process.processid = mapping.old_id;
 
 vacuum (verbose, full) acquisitions;
@@ -239,7 +243,7 @@ CREATE TABLE obj_head
     complement_info character varying
 )
     WITH (autovacuum_vacuum_scale_factor = '0.01', fillfactor = '98')
-    TABLESPACE home_tables;
+    TABLESPACE :OTHER_TBLSPC;
 
 -- 11:33 -> 13:12
 do
@@ -249,7 +253,7 @@ $$
         o_count integer;
         sum_o   integer = 0;
     begin
-        for mpg in (select * from acquisid_mapping order by new_id)
+        for mpg in (select * from acqid_old_2_new order by new_id)
             loop
                 insert into obj_head (objid,
                                              acquisid,
@@ -345,7 +349,7 @@ DROP SEQUENCE seq_acquisitions;
 
 -- 9. Cleanup
 
--- DROP TABLE acquisid_mapping;
+-- DROP TABLE acqid_old_2_new;
 
 ALTER INDEX obj_field_acquisid_objfid_idx RENAME TO obj_field_acquisid_objfid_idx_old;
 
@@ -884,7 +888,7 @@ CREATE TABLE obj_field
     t20       character varying(250)
 )
     WITH (autovacuum_vacuum_scale_factor = '0.01', fillfactor = '98', autovacuum_enabled = 'true')
-    TABLESPACE home_tables;
+    TABLESPACE :OTHER_TBLSPC;
 
 ALTER TABLE obj_field
     ALTER COLUMN acquis_id SET STATISTICS 10000;
@@ -897,7 +901,7 @@ $$
         o_count integer;
         sum_o   integer = 0;
     begin
-        for mpg in (select * from acquisid_mapping order by new_id)
+        for mpg in (select * from acqid_old_2_new order by new_id)
             loop
                 insert into obj_field (objfid, acquis_id, n01, n02, n03, n04, n05, n06, n07, n08,
                                            n09, n10, n11,
@@ -1092,9 +1096,9 @@ ALTER TABLE obj_field
 ---- OBJ
 -- Durée : 1013986,567 ms (16:53,987) NVME drive
 -- PROD: Durée : 1740768,903 ms (29:00,769)
-CREATE UNLOGGED TABLE objid_old_2_new TABLESPACE home_tables AS
+CREATE UNLOGGED TABLE objid_old_2_new TABLESPACE :OTHER_TBLSPC AS
 SELECT objid AS old_id,
-       (projid * 1e8::bigint) + ROW_NUMBER() OVER (
+       (projid * :OBJ_MULT) + ROW_NUMBER() OVER (
         PARTITION BY projid
         ORDER BY objid) AS new_id
 	 FROM obj_head obh
@@ -1130,58 +1134,58 @@ CREATE TABLE obj_head
     PARTITION BY RANGE (objid);
 
 CREATE TABLE obj_head_p1 PARTITION OF obj_head
-    FOR VALUES FROM (0) TO (923*1e8::bigint)
-    TABLESPACE home_tables;
+    FOR VALUES FROM (0) TO (923*:OBJ_MULT)
+    TABLESPACE :OTHER_TBLSPC;
 CREATE TABLE obj_head_p2 PARTITION OF obj_head
-    FOR VALUES FROM (923*1e8::bigint) TO (3118*1e8::bigint)
-    TABLESPACE home_tables;
+    FOR VALUES FROM (923*:OBJ_MULT) TO (3118*:OBJ_MULT)
+    TABLESPACE :OTHER_TBLSPC;
 CREATE TABLE obj_head_p3 PARTITION OF obj_head
-    FOR VALUES FROM (3118*1e8::bigint) TO (4591*1e8::bigint)
-    TABLESPACE home_tables;
+    FOR VALUES FROM (3118*:OBJ_MULT) TO (4591*:OBJ_MULT)
+    TABLESPACE :OTHER_TBLSPC;
 CREATE TABLE obj_head_p4 PARTITION OF obj_head
-    FOR VALUES FROM (4591*1e8::bigint) TO (5976*1e8::bigint)
-    TABLESPACE home_tables;
+    FOR VALUES FROM (4591*:OBJ_MULT) TO (5976*:OBJ_MULT)
+    TABLESPACE :OTHER_TBLSPC;
 CREATE TABLE obj_head_p5 PARTITION OF obj_head
-    FOR VALUES FROM (5976*1e8::bigint) TO (7380*1e8::bigint)
-    TABLESPACE home_tables;
+    FOR VALUES FROM (5976*:OBJ_MULT) TO (7380*:OBJ_MULT)
+    TABLESPACE :OTHER_TBLSPC;
 CREATE TABLE obj_head_p6 PARTITION OF obj_head
-    FOR VALUES FROM (7380*1e8::bigint) TO (9107*1e8::bigint)
-    TABLESPACE home_tables;
+    FOR VALUES FROM (7380*:OBJ_MULT) TO (9107*:OBJ_MULT)
+    TABLESPACE :OTHER_TBLSPC;
 CREATE TABLE obj_head_p7 PARTITION OF obj_head
-    FOR VALUES FROM (9107*1e8::bigint) TO (10956*1e8::bigint)
-    TABLESPACE home_tables;
+    FOR VALUES FROM (9107*:OBJ_MULT) TO (10956*:OBJ_MULT)
+    TABLESPACE :OTHER_TBLSPC;
 CREATE TABLE obj_head_p8 PARTITION OF obj_head
-    FOR VALUES FROM (10956*1e8::bigint) TO (12308*1e8::bigint)
-    TABLESPACE home_tables;
+    FOR VALUES FROM (10956*:OBJ_MULT) TO (12308*:OBJ_MULT)
+    TABLESPACE :OTHER_TBLSPC;
 CREATE TABLE obj_head_p9 PARTITION OF obj_head
-    FOR VALUES FROM (12308*1e8::bigint) TO (14077*1e8::bigint)
-    TABLESPACE home_tables;
+    FOR VALUES FROM (12308*:OBJ_MULT) TO (14077*:OBJ_MULT)
+    TABLESPACE :OTHER_TBLSPC;
 CREATE TABLE obj_head_p10 PARTITION OF obj_head
-    FOR VALUES FROM (14077*1e8::bigint) TO (15239*1e8::bigint)
-    TABLESPACE home_tables;
+    FOR VALUES FROM (14077*:OBJ_MULT) TO (15239*:OBJ_MULT)
+    TABLESPACE :OTHER_TBLSPC;
 CREATE TABLE obj_head_p11 PARTITION OF obj_head
-    FOR VALUES FROM (15239*1e8::bigint) TO (16517*1e8::bigint)
-    TABLESPACE home_tables;
+    FOR VALUES FROM (15239*:OBJ_MULT) TO (16517*:OBJ_MULT)
+    TABLESPACE :OTHER_TBLSPC;
 CREATE TABLE obj_head_p12 PARTITION OF obj_head
-    FOR VALUES FROM (16517*1e8::bigint) TO (17161*1e8::bigint)
-    TABLESPACE home_tables;
+    FOR VALUES FROM (16517*:OBJ_MULT) TO (17161*:OBJ_MULT)
+    TABLESPACE :OTHER_TBLSPC;
 CREATE TABLE obj_head_p13 PARTITION OF obj_head
-    FOR VALUES FROM (17161*1e8::bigint) TO (17794*1e8::bigint)
-    TABLESPACE home_tables;
+    FOR VALUES FROM (17161*:OBJ_MULT) TO (17794*:OBJ_MULT)
+    TABLESPACE :OTHER_TBLSPC;
 CREATE TABLE obj_head_p14 PARTITION OF obj_head
-    FOR VALUES FROM (17794*1e8::bigint) TO (19042*1e8::bigint)
-    TABLESPACE home_tables;
+    FOR VALUES FROM (17794*:OBJ_MULT) TO (19042*:OBJ_MULT)
+    TABLESPACE :OTHER_TBLSPC;
 CREATE TABLE obj_head_p15 PARTITION OF obj_head
-    FOR VALUES FROM (19042*1e8::bigint) TO (20422*1e8::bigint)
-    TABLESPACE home_tables;
+    FOR VALUES FROM (19042*:OBJ_MULT) TO (20422*:OBJ_MULT)
+    TABLESPACE :OTHER_TBLSPC;
 CREATE TABLE obj_head_p16 PARTITION OF obj_head
-    FOR VALUES FROM (20422*1e8::bigint) TO (21431*1e8::bigint)
-    TABLESPACE home_tables;
+    FOR VALUES FROM (20422*:OBJ_MULT) TO (21431*:OBJ_MULT)
+    TABLESPACE :OTHER_TBLSPC;
 CREATE TABLE obj_head_default PARTITION OF obj_head DEFAULT
-    TABLESPACE home_tables;
+    TABLESPACE :OTHER_TBLSPC;
 
 --    WITH (autovacuum_vacuum_scale_factor = '0.01', fillfactor = '98');
---    TABLESPACE home_tables;
+--    TABLESPACE :OTHER_TBLSPC;
 
 do
 $$
@@ -1190,7 +1194,7 @@ $$
         o_count integer;
         sum_o   integer = 0;
     begin
-        for acq_mpg in (select * from acquisid_mapping order by new_id)
+        for acq_mpg in (select * from acqid_old_2_new order by new_id)
             loop
                 insert into obj_head (objid,
                                              acquisid,
@@ -1254,6 +1258,13 @@ CREATE INDEX is_objectsdate ON obj_head USING btree (objdate) INCLUDE (acquisid)
 CREATE INDEX is_objectsdepth ON obj_head USING btree (depth_max, depth_min) INCLUDE (acquisid);
 CREATE INDEX is_objectslatlong ON obj_head USING btree (latitude, longitude) INCLUDE (acquisid);
 CREATE INDEX is_objectstime ON obj_head USING btree (objtime) INCLUDE (acquisid);
+
+CREATE STATISTICS obj_head_classif_if_qual ON classif_id, classif_qual FROM obj_head;
+ALTER STATISTICS obj_head_classif_if_qual OWNER TO postgres;
+CREATE STATISTICS obj_head_score_if_p ON classif_qual, classif_score FROM obj_head;
+ALTER STATISTICS obj_head_score_if_p OWNER TO postgres;
+CREATE STATISTICS obj_head_user_if_v_d ON classif_qual, classif_who FROM obj_head;
+ALTER STATISTICS obj_head_user_if_v_d OWNER TO postgres;
 
 
 ------------------------ OBJ_FIELD -------------------
@@ -1796,52 +1807,52 @@ CREATE TABLE obj_field
 PARTITION BY RANGE (objfid);
 
 CREATE TABLE obj_field_p1 PARTITION OF obj_field
-    FOR VALUES FROM (0) TO (923*1e8::bigint)
+    FOR VALUES FROM (0) TO (923*:OBJ_MULT)
     /*TABLESPACE default*/;
 CREATE TABLE obj_field_p2 PARTITION OF obj_field
-    FOR VALUES FROM (923*1e8::bigint) TO (3118*1e8::bigint)
+    FOR VALUES FROM (923*:OBJ_MULT) TO (3118*:OBJ_MULT)
     /*TABLESPACE default*/;
 CREATE TABLE obj_field_p3 PARTITION OF obj_field
-    FOR VALUES FROM (3118*1e8::bigint) TO (4591*1e8::bigint)
+    FOR VALUES FROM (3118*:OBJ_MULT) TO (4591*:OBJ_MULT)
     /*TABLESPACE default*/;
 CREATE TABLE obj_field_p4 PARTITION OF obj_field
-    FOR VALUES FROM (4591*1e8::bigint) TO (5976*1e8::bigint)
+    FOR VALUES FROM (4591*:OBJ_MULT) TO (5976*:OBJ_MULT)
     /*TABLESPACE default*/;
 CREATE TABLE obj_field_p5 PARTITION OF obj_field
-    FOR VALUES FROM (5976*1e8::bigint) TO (7380*1e8::bigint)
+    FOR VALUES FROM (5976*:OBJ_MULT) TO (7380*:OBJ_MULT)
     /*TABLESPACE default*/;
 CREATE TABLE obj_field_p6 PARTITION OF obj_field
-    FOR VALUES FROM (7380*1e8::bigint) TO (9107*1e8::bigint)
+    FOR VALUES FROM (7380*:OBJ_MULT) TO (9107*:OBJ_MULT)
     /*TABLESPACE default*/;
 CREATE TABLE obj_field_p7 PARTITION OF obj_field
-    FOR VALUES FROM (9107*1e8::bigint) TO (10956*1e8::bigint)
+    FOR VALUES FROM (9107*:OBJ_MULT) TO (10956*:OBJ_MULT)
     /*TABLESPACE default*/;
 CREATE TABLE obj_field_p8 PARTITION OF obj_field
-    FOR VALUES FROM (10956*1e8::bigint) TO (12308*1e8::bigint)
+    FOR VALUES FROM (10956*:OBJ_MULT) TO (12308*:OBJ_MULT)
     /*TABLESPACE default*/;
 CREATE TABLE obj_field_p9 PARTITION OF obj_field
-    FOR VALUES FROM (12308*1e8::bigint) TO (14077*1e8::bigint)
+    FOR VALUES FROM (12308*:OBJ_MULT) TO (14077*:OBJ_MULT)
     /*TABLESPACE default*/;
 CREATE TABLE obj_field_p10 PARTITION OF obj_field
-    FOR VALUES FROM (14077*1e8::bigint) TO (15239*1e8::bigint)
+    FOR VALUES FROM (14077*:OBJ_MULT) TO (15239*:OBJ_MULT)
     /*TABLESPACE default*/;
 CREATE TABLE obj_field_p11 PARTITION OF obj_field
-    FOR VALUES FROM (15239*1e8::bigint) TO (16517*1e8::bigint)
+    FOR VALUES FROM (15239*:OBJ_MULT) TO (16517*:OBJ_MULT)
     /*TABLESPACE default*/;
 CREATE TABLE obj_field_p12 PARTITION OF obj_field
-    FOR VALUES FROM (16517*1e8::bigint) TO (17161*1e8::bigint)
+    FOR VALUES FROM (16517*:OBJ_MULT) TO (17161*:OBJ_MULT)
     /*TABLESPACE default*/;
 CREATE TABLE obj_field_p13 PARTITION OF obj_field
-    FOR VALUES FROM (17161*1e8::bigint) TO (17794*1e8::bigint)
+    FOR VALUES FROM (17161*:OBJ_MULT) TO (17794*:OBJ_MULT)
     /*TABLESPACE default*/;
 CREATE TABLE obj_field_p14 PARTITION OF obj_field
-    FOR VALUES FROM (17794*1e8::bigint) TO (19042*1e8::bigint)
+    FOR VALUES FROM (17794*:OBJ_MULT) TO (19042*:OBJ_MULT)
     /*TABLESPACE default*/;
 CREATE TABLE obj_field_p15 PARTITION OF obj_field
-    FOR VALUES FROM (19042*1e8::bigint) TO (20422*1e8::bigint)
+    FOR VALUES FROM (19042*:OBJ_MULT) TO (20422*:OBJ_MULT)
     /*TABLESPACE default*/;
 CREATE TABLE obj_field_p16 PARTITION OF obj_field
-    FOR VALUES FROM (20422*1e8::bigint) TO (21431*1e8::bigint)
+    FOR VALUES FROM (20422*:OBJ_MULT) TO (21431*:OBJ_MULT)
     /*TABLESPACE default*/;
 CREATE TABLE obj_field_default PARTITION OF obj_field DEFAULT
     /*TABLESPACE default*/;
@@ -1853,7 +1864,7 @@ $$
         o_count integer;
         sum_o   integer = 0;
     begin
-        for acq_mpg in (select * from acquisid_mapping order by new_id)
+        for acq_mpg in (select * from acqid_old_2_new order by new_id)
             loop
                 insert into obj_field (objfid, acquis_id, n01, n02, n03, n04, n05, n06, n07, n08,
                                            n09, n10, n11,
@@ -2037,8 +2048,8 @@ ALTER TABLE obj_field
 ALTER TABLE obj_field
     ADD CONSTRAINT obj_field_pk PRIMARY KEY (objfid) WITH (fillfactor ='98');
 
-ALTER TABLE public.obj_field
-    ADD CONSTRAINT obj_field_objfid_fkey FOREIGN KEY (objfid) REFERENCES public.obj_head(objid) ON DELETE CASCADE;
+ALTER TABLE obj_field
+    ADD CONSTRAINT obj_field_objfid_fkey FOREIGN KEY (objfid) REFERENCES obj_head(objid) ON DELETE CASCADE;
 
 CREATE INDEX obj_field_acquisid_objfid_idx ON obj_field USING btree (acquis_id, objfid) WITH (fillfactor ='98');
 

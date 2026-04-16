@@ -9,7 +9,7 @@ import datetime
 from typing import Dict, Set, Iterable, TYPE_CHECKING, List
 
 # noinspection PyPackageRequirements
-from sqlalchemy import Index, Column, ForeignKey, Integer, desc, text  # fmt:skip
+from sqlalchemy import Index, Column, ForeignKey, Integer, desc, text, func  # fmt:skip
 # noinspection PyPackageRequirements
 from sqlalchemy.dialects.postgresql import (
     BIGINT,
@@ -125,6 +125,7 @@ class ObjectHeader(Model):
         res = res.join(Acquisition)
         res = res.join(Sample)
         res = res.filter(Sample.projid == prj_id)
+        res = res.filter(func.floor(ObjectHeader.objid / OBJ_PRJ_OFFSET) == prj_id)
         res = res.order_by(desc(ObjectHeader.objid)).limit(1).scalar()
         return res + 1 if res else prj_id * OBJ_PRJ_OFFSET + 1
 

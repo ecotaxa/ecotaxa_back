@@ -4,6 +4,7 @@
 #
 from typing import Dict, Tuple
 
+from sqlalchemy import func
 # noinspection PyProtectedMember
 from sqlalchemy.orm import relationship, Session
 
@@ -48,6 +49,7 @@ class Acquisition(Model):
         res = session.query(Acquisition.acquisid)
         res = res.join(Sample)
         res = res.filter(Sample.projid == prj_id)
+        res = res.filter(func.floor(Acquisition.acquisid / ACQ_PRJ_OFFSET) == prj_id)
         res = res.order_by(desc(Acquisition.acquisid)).limit(1).scalar()
         return res + 1 if res else prj_id * ACQ_PRJ_OFFSET + 1
 

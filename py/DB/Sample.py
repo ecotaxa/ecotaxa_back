@@ -4,6 +4,8 @@
 #
 from typing import List, Dict
 
+from sqlalchemy import func
+
 from .Project import Project, ProjectIDT
 from .helpers import Result
 from .helpers.DDL import Index, Column, ForeignKey
@@ -43,6 +45,7 @@ class Sample(Model):
         session.execute(text("SELECT pg_advisory_xact_lock(1001, :id)"), {"id": prj_id})
         res = session.query(Sample.sampleid)
         res = res.filter(Sample.projid == prj_id)
+        res = res.filter(func.floor(Sample.sampleid / SAM_PRJ_OFFSET) == prj_id)
         res = res.order_by(desc(Sample.sampleid)).limit(1).scalar()
         return res + 1 if res else prj_id * SAM_PRJ_OFFSET + 1
 
