@@ -383,6 +383,8 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
             part_key = "sam.sampleid"
         elif req.group_type == GroupDefinitions.acquisitions:
             part_key = "acq.acquisid"
+        elif req.group_type == GroupDefinitions.internal_ids:
+            part_key = "obh.objid"
         else:
             part_key = "???"
 

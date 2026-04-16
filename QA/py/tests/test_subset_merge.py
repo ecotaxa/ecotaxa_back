@@ -4,8 +4,11 @@
 #
 import json
 import logging
+from pathlib import Path
+from typing import Any, Union, Tuple
 
 import pytest
+from starlette.testclient import TestClient
 
 # noinspection PyPackageRequirements
 from API_models.merge import MergeRsp
@@ -77,59 +80,11 @@ def test_check_project_via_api(prj_id: int, fastapi):
 
 # Note: to go faster in a local dev environment, use "filled_database" instead of "database" below
 # BUT DON'T COMMIT THE CHANGE
-def test_subset_merge_uvp6(fastapi, tstlogs):
-    prj_id, _ = do_import_uvp6(fastapi, "Test Subset Merge")
-    check_project(tstlogs, prj_id)
-    # Dump the project
-    with open(tstlogs / OUT_JSON, "w") as fd:
-        dump_project(ADMIN_USER_ID, prj_id, fd)
+def test_subset_merge_uvp6(fastapi, tstlogs, ccheck):
+    prj_id, subset_prj_id = test_identical_subset(fastapi, tstlogs, ccheck)
 
-    # Subset in full, i.e. clone
-    subset_prj_id = create_project(ADMIN_USER_ID, "Subset of UVP6", "UVP6")
-    filters = {"freenum": "n01", "freenumst": "0"}
-    params = SubsetReq(
-        dest_prj_id=subset_prj_id,
-        filters=filters,
-        group_type="C",
-        limit_type="P",
-        limit_value=100.0,
-        do_images=True,
-    )
-    with SubsetServiceOnProject(prj_id=prj_id, req=params) as sce:
-        rsp: SubsetRsp = sce.run(ADMIN_USER_ID)
-    job = api_wait_for_stable_job(fastapi, rsp.job_id)
-    check_job_ok(job)
-
-    # Dump the subset
-    with open(tstlogs / OUT_SUBS_JSON, "w") as fd:
-        dump_project(ADMIN_USER_ID, subset_prj_id, fd)
-
-    # Json diff
-    with open(tstlogs / OUT_JSON) as fd1:
-        json_src = json.load(fd1)
-    with open(tstlogs / OUT_SUBS_JSON) as fd2:
-        json_subset = json.load(fd2)
-    diffs = DeepDiff(json_src, json_subset)
-    # Validate by removing all know differences b/w source and subset
-    assert "iterable_item_added" not in diffs
-    assert "iterable_item_removed" not in diffs
-    assert "dictionary_item_added" not in diffs
-    assert "dictionary_item_removed" not in diffs
-    changed_values = diffs["values_changed"]
-    # Title is !=
-    del changed_values["root['ttl']"]
-    # IDs have changed
-    del changed_values["root['samples'][0]['id']"]
-    del changed_values["root['samples'][0]['acquisitions'][0]['id']"]
-    del changed_values["root['samples'][0]['acquisitions'][0]['processings'][0]['id']"]
-    for obj in range(0, 15):
-        for img in range(0, 2):
-            key = (
-                "root['samples'][0]['acquisitions'][0]['objects'][%d]['images'][%d]['fil']"
-                % (obj, img)
-            )
-            del changed_values[key]
-    assert changed_values == {}
+    with open(tstlogs / OUT_JSON) as fd:
+        json_src = json.load(fd)
 
     # Add a numerical feature into the subset
     with ProjectsService() as sce:
@@ -164,7 +119,7 @@ def test_subset_merge_uvp6(fastapi, tstlogs):
 
     check_project(tstlogs, prj_id)
 
-    # Dump the subset which should be just gone
+    # Dump the subset, source of merge so it should be just gone
     with open(tstlogs / SUBS_AFTER_MERGE_JSON, "w") as fd:
         dump_project(ADMIN_USER_ID, subset_prj_id, fd)
     with open(tstlogs / SUBS_AFTER_MERGE_JSON) as fd:
@@ -177,11 +132,13 @@ def test_subset_merge_uvp6(fastapi, tstlogs):
     with open(tstlogs / ORIGIN_AFTER_MERGE_JSON) as fd:
         origin_after_merge = json.load(fd)
 
-    # Samples have the same or_ig so they got merged
+    # Samples have the same orig_id so they got merged.
+    # The new ones should be after the old ones which haven't changed
     diffs = DeepDiff(json_src["samples"][0], origin_after_merge["samples"][0])
     assert "iterable_item_removed" not in diffs
     assert "dictionary_item_removed" not in diffs
-    assert "values_changed" not in diffs
+    values_changed = diffs.get("values_changed", "")
+    assert values_changed == ""
 
     items_added = diffs["iterable_item_added"]
     # Remove image ids which change depending on the run
@@ -1337,13 +1294,72 @@ def test_subset_merge_uvp6(fastapi, tstlogs):
     # assert added_values == {}
 
 
+def test_identical_subset(
+    fastapi: TestClient, tstlogs: Path, ccheck
+) -> Tuple[Any, Any]:
+    prj_id, _ = do_import_uvp6(fastapi, "Test Subset Merge")
+    check_project(tstlogs, prj_id)
+    # Dump the project
+    with open(tstlogs / OUT_JSON, "w") as fd:
+        dump_project(ADMIN_USER_ID, prj_id, fd)
+
+    # Subset in full, i.e. clone
+    subset_prj_id = create_project(ADMIN_USER_ID, "Subset of UVP6", "UVP6")
+    filters = {"freenum": "n01", "freenumst": "0"}
+    params = SubsetReq(
+        dest_prj_id=subset_prj_id,
+        filters=filters,
+        group_type="I",  # Get a subset in same order
+        limit_type="P",
+        limit_value=100.0,
+        do_images=True,
+    )
+    with SubsetServiceOnProject(prj_id=prj_id, req=params) as sce:
+        rsp: SubsetRsp = sce.run(ADMIN_USER_ID)
+    job = api_wait_for_stable_job(fastapi, rsp.job_id)
+    check_job_ok(job)
+
+    # Dump the subset
+    with open(tstlogs / OUT_SUBS_JSON, "w") as fd:
+        dump_project(ADMIN_USER_ID, subset_prj_id, fd)
+
+    # Json diff
+    with open(tstlogs / OUT_JSON) as fd1:
+        json_src = json.load(fd1)
+    with open(tstlogs / OUT_SUBS_JSON) as fd2:
+        json_subset = json.load(fd2)
+
+    diffs = DeepDiff(json_src, json_subset)
+    # Validate by removing all know differences b/w source and subset
+    assert "iterable_item_added" not in diffs
+    assert "iterable_item_removed" not in diffs
+    assert "dictionary_item_added" not in diffs
+    assert "dictionary_item_removed" not in diffs
+    changed_values = diffs["values_changed"]
+    # Title is !=
+    del changed_values["root['ttl']"]
+    # IDs have changed
+    del changed_values["root['samples'][0]['id']"]
+    del changed_values["root['samples'][0]['acquisitions'][0]['id']"]
+    del changed_values["root['samples'][0]['acquisitions'][0]['processings'][0]['id']"]
+    for obj in range(0, 15):
+        for img in range(0, 2):
+            key = (
+                "root['samples'][0]['acquisitions'][0]['objects'][%d]['images'][%d]['fil']"
+                % (obj, img)
+            )
+            del changed_values[key]
+    assert changed_values == {}
+    return prj_id, subset_prj_id
+
+
 MERGE_DIR_1 = DATA_DIR / "merge_test" / "lots_of_cols"
 MERGE_DIR_2 = DATA_DIR / "merge_test" / "more_cols"
 MERGE_DIR_3 = DATA_DIR / "merge_test" / "even_more_cols"
 MERGE_DIR_4 = DATA_DIR / "merge_test" / "second_merge"
 
 
-def test_merge_remap(fastapi, tstlogs):
+def test_merge_remap(fastapi, tstlogs, ccheck):
     # Project 1, usual columns
     prj_id = create_project(CREATOR_USER_ID, "Merge Dest project")
     do_import(fastapi, prj_id, MERGE_DIR_1, CREATOR_AUTH)
@@ -1366,7 +1382,8 @@ def test_merge_remap(fastapi, tstlogs):
     # Dump the dest
     with open(tstlogs / OUT_MERGE_REMAP_JSON, "w") as fd:
         dump_project(ADMIN_USER_ID, prj_id, fd)
-    # Grab all median_mean free col values
+    # Grab all median_mean free col values.
+    # 3 objects + 8 merged objects have this free col
     all_lats = []
     with open(tstlogs / OUT_MERGE_REMAP_JSON) as fd:
         for a_line in fd.readlines():

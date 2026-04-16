@@ -48,7 +48,6 @@ class JsonDumper(Service):
         self.mapping = ProjectMapping()
         if self.prj:
             self.mapping.load_from_project(self.prj)
-        self.ids_to_dump: List[int] = []
         self.already_dumped: Set[Model] = set()
         self.first_query = True
 
@@ -60,11 +59,12 @@ class JsonDumper(Service):
         if self.prj is None:
             to_stream = {}
         else:
-            self._find_what_to_dump()
-            # TODO: The result seems unneeded so far, we just need the stuff loaded in SQLA session
-            _to_dump = self._db_fetch(self.ids_to_dump)
+            ids_to_dump = self._find_what_to_dump()  # Filtered IDs
+            _to_dump = self._db_fetch(
+                ids_to_dump
+            )  # Load into SQLA only filtered-in ones
             # prj = to_dump[0][0]
-            if len(self.ids_to_dump) == 0 or len(_to_dump) == 0:
+            if len(ids_to_dump) == 0 or len(_to_dump) == 0:
                 to_stream = {}
             else:
                 to_stream = self.dump_row(out_stream, self.prj)
@@ -101,7 +101,18 @@ class JsonDumper(Service):
                 # Serialize the list of child entities, ordinary relationship
                 children: List[Dict[str, Any]] = []
                 tgt_dict[how] = children
-                for a_child_row in sorted(attr):
+
+                # Sort to have a stable output
+                def dump_sort_key(obj):
+                    if hasattr(obj, "objid"):
+                        return obj.objid
+                    if hasattr(obj, "sampleid"):
+                        return obj.sampleid
+                    if hasattr(obj, "acquisid"):
+                        return obj.acquisid
+                    return obj
+
+                for a_child_row in sorted(attr, key=dump_sort_key):
                     child_obj = self.dump_row(out_stream, a_child_row)
                     children.append(child_obj)
             elif isinstance(attr, Model):
@@ -127,18 +138,28 @@ class JsonDumper(Service):
                 if attr is not None:
                     tgt_dict[a_tsv_col] = attr
 
-    def _find_what_to_dump(self) -> None:
+    def _find_what_to_dump(self) -> List[int]:
         """
         Determine the objects to dump.
         """
         assert self.prj is not None
         # Prepare a where clause and parameters from filter
-        object_set: DescribedObjectSet = DescribedObjectSet(
-            self.session, self.prj, self.requester_id, self.filters
-        )
-        from_, where, params = object_set.get_sql()
+        if len(self.filters) == 0:
+            sql = (
+                "SELECT obh.objid"
+                "  FROM obj_head obh "
+                "  JOIN acquisitions acq ON obh.acquisid = acq.acquisid "
+                "  JOIN samples sam ON acq.acq_sample_id = sam.sampleid "
+                " WHERE sam.projid = :prj"
+            )
+            params = {"prj": self.prj.projid}
+        else:
+            object_set: DescribedObjectSet = DescribedObjectSet(
+                self.session, self.prj, self.requester_id, self.filters
+            )
+            from_, where, params = object_set.get_sql()
 
-        sql = """ SELECT objid FROM """ + from_.get_sql() + where.get_sql()
+            sql = """ SELECT objid FROM """ + from_.get_sql() + where.get_sql()
 
         logger.info("SQL=%s", sql)
         logger.info("SQLParam=%s", params)
@@ -149,7 +170,7 @@ class JsonDumper(Service):
 
         logger.info("NB OBJIDS=%d", len(ids))
 
-        self.ids_to_dump = ids
+        return ids
 
     def _db_fetch(self, objids: List[int]) -> List[DBObjectTupleT]:
         """
@@ -173,8 +194,6 @@ class JsonDumper(Service):
             contains_eager(ObjectHeader.all_images)
         )
         ret = ret.filter(ObjectHeader.objid == any_(objids))
-        ret = ret.order_by(ObjectHeader.objid)
-        ret = ret.order_by(Image.imgrank)
 
         if self.first_query:
             logger.info("Query: %s", str(ret))

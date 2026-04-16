@@ -264,7 +264,8 @@ class MergeService(Service):
 
         # Acquisition & twin Process have followed their enclosing Sample
 
-        # Remove the parents which are duplicate from orig_id point of view
+        # Remove the parents which are duplicate from orig_id point of view.
+        # They should be empty due to transfers above.
         for a_fk_to_proj_tbl in [Acquisition, Sample]:
             to_del = self.session.query(a_fk_to_proj_tbl)
             if a_fk_to_proj_tbl == Acquisition:

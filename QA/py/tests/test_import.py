@@ -3,8 +3,6 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 import logging
-from os.path import dirname, realpath
-from pathlib import Path
 
 import pytest
 from starlette import status
@@ -21,7 +19,6 @@ from API_operations.JsonDumper import JsonDumper
 
 # noinspection PyPackageRequirements
 from DB.Job import DBJobStateEnum
-from tests.consts import *
 from tests.api_wrappers import (
     api_file_import,
     api_wait_for_stable_job,
@@ -30,6 +27,7 @@ from tests.api_wrappers import (
     api_upload_file,
     api_get_log_file,
 )
+from tests.consts import *
 from tests.credentials import ADMIN_AUTH, ADMIN_USER_ID, CREATOR_USER_ID, CREATOR_AUTH
 from tests.jobs import (
     check_job_ok,

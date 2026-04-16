@@ -17,6 +17,7 @@ class GroupDefinitions(str, Enum):
     categories = "C"
     samples = "S"
     acquisitions = "A"
+    internal_ids = "I"
 
 
 class SubsetReq(BaseModel):

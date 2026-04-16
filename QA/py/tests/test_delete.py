@@ -1,21 +1,18 @@
 #
 # TODO: Ensure https://github.com/ecotaxa/ecotaxa_back/commit/4f36584ac53fb01d9bb7a835f1b4c90238b86791 not again
 #
+import io
 import logging
 
 from starlette import status
-from API_operations.JsonDumper import JsonDumper
-from BO.Project import ProjectBO
 
-from tests.credentials import CREATOR_AUTH, ADMIN_AUTH, ADMIN_USER_ID
 from test_fastapi import PROJECT_QUERY_URL
+from tests.credentials import CREATOR_AUTH, ADMIN_AUTH
 from tests.test_import import dump_project
 from tests.test_import_simple import (
-    test_api_simple_import_images,
     do_simple_import_images,
 )
 from tests.test_update_prj import PROJECT_UPDATE_URL
-import io
 
 PROJECT_DELETE_URL = "/projects/{project_id}?only_objects={only_objects}"
 OBJECT_SET_DELETE_URL = "/object_set/"
