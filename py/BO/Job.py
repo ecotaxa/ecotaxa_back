@@ -113,7 +113,7 @@ class JobBO(object):
         Return a single JobBO. If used in a 'with' context, the session will commit on context exit.
         Note: it's not only the Job which will be committed, but the _whole_ session.
         """
-        job = session.query(Job).get(job_id)
+        job = session.query(Job).with_for_update().get(job_id)
         if job is None:
             raise ValueError(f"Missing job {job_id}")
         job.updated_on = DateTime.now_time()

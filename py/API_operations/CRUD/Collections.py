@@ -4,6 +4,7 @@
 #
 from typing import List, Union, Optional, Dict, Any
 from fastapi import HTTPException
+from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 from API_models.crud import CreateCollectionReq, CollectionAggregatedRsp
 from BO.Collection import CollectionBO, CollectionIDT
 from BO.ProjectSet import PermissionConsistentProjectSet
@@ -14,6 +15,7 @@ from DB.Project import ProjectIDListT
 from DB.Collection import Collection
 from helpers.DynamicLogs import get_logger
 from ..helpers.Service import Service
+from helpers.httpexception import DETAIL_EXCLUSIVE_CREATOR_ASSOCIATE
 
 logger = get_logger(__name__)
 
@@ -57,6 +59,7 @@ class CollectionsService(Service):
         present_collection = self.query(current_user_id, collection_id, for_update=True)
         if present_collection is None:
             raise HTTPException(status_code=404, detail="Collection not found")
+        self._exclusive_creator_associate(req)
         res = present_collection.update(session=self.session, collection_update=req)
         if isinstance(res, str):
             raise HTTPException(
@@ -75,7 +78,7 @@ class CollectionsService(Service):
         for a_rec in qry:
             coll_bo = CollectionBO(a_rec)
             coll_bo._read_composing_projects()
-            checked = self._check_access(current_user_id, coll_bo.project_ids)
+            checked = self._check_permission(current_user_id, coll_bo.project_ids)
             if checked is None:
                 continue
             coll_bo.enrich()
@@ -88,7 +91,7 @@ class CollectionsService(Service):
         for a_rec in qry:
             coll_bo = CollectionBO(a_rec)
             coll_bo._read_composing_projects()
-            checked = self._check_access(current_user_id, coll_bo.project_ids)
+            checked = self._check_permission(current_user_id, coll_bo.project_ids)
             if checked is None:
                 continue
             coll_bo.enrich()
@@ -103,7 +106,7 @@ class CollectionsService(Service):
         )
         if ret is None:
             return ret
-        check = self._check_access(current_user_id, ret.project_ids)
+        check = self._check_permission(current_user_id, ret.project_ids)
         if check is None:
             return None
         return ret
@@ -131,7 +134,7 @@ class CollectionsService(Service):
         else:
             raise HTTPException(status_code=409, detail=DETAIL_COLLECTION_PUBLISHED)
 
-    def _check_access(
+    def _check_permission(
         self, user_id: UserIDT, project_ids: ProjectIDListT
     ) -> Optional[ProjectIDListT]:
         """
@@ -200,3 +203,18 @@ class CollectionsService(Service):
             excluded=excluded,
         )
         return aggregated
+
+    @staticmethod
+    def _exclusive_creator_associate(req):
+        if "creator_users" not in req or "associate_users" not in req:
+            return
+        if len(req["creator_users"]) > 0 and len(req["associate_users"]) > 0:
+            commonusers = [
+                usr for usr in req["creator_users"] if usr in req["associate_users"]
+            ] + [usr for usr in req["associate_users"] if usr in req["creator_users"]]
+            if len(commonusers) > 0:
+                raise HTTPException(
+                    HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=[DETAIL_EXCLUSIVE_CREATOR_ASSOCIATE],
+                )
+        return

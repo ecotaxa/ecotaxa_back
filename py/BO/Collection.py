@@ -27,6 +27,7 @@ from DB.ProjectPrivilege import ProjectPrivilege
 from DB.Sample import Sample
 from DB.User import User, Person, Organization, OrganizationIDT
 from DB.helpers.ORM import contains_eager, func, any_
+from BO.DataLicense import AccessLevelEnum
 from helpers.DynamicLogs import get_logger
 
 logger = get_logger(__name__)
@@ -76,6 +77,16 @@ class CollectionBO(object):
         self.associate_organisations: List[Organization] = []
         self.code_provider_org: Optional[str] = None
         self.display_order: Dict[str, Any] = {creators_key: [], associates_key: []}
+        self.is_private: bool = (
+            len(
+                [
+                    prj.projid
+                    for prj in self._collection.projects
+                    if prj.access == AccessLevelEnum.PRIVATE.value
+                ]
+            )
+            > 0
+        )
 
     def enrich(self) -> "CollectionBO":
         """
@@ -284,7 +295,7 @@ class CollectionBO(object):
             COLLECTION_ROLE_ASSOCIATED_PERSON: associates_key,
         }
         if "user" in by_role:
-            _ = (
+            _usrs = (
                 session.query(CollectionUserRole)
                 .filter(CollectionUserRole.collection_id == coll_id)
                 .delete()

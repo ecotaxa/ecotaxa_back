@@ -12,9 +12,10 @@
 import datetime
 import re
 import json
+from fastapi import HTTPException
 from collections import OrderedDict
 from functools import lru_cache
-from typing import Dict, List, Optional, Tuple, cast, Set, Any, Iterable
+from typing import Dict, List, Optional, Tuple, cast, Set, Any, Iterable, Union
 from urllib.parse import quote_plus
 from helpers.CustomException import ValidationException
 import BO.ProjectVarsDefault as DefaultVars
@@ -29,7 +30,7 @@ from BO.Collection import (
     user_order_type,
 )
 from BO.CommonObjectSets import CommonObjectSets
-from BO.DataLicense import LicenseEnum, DataLicense
+from BO.DataLicense import LicenseEnum, DataLicense, AccessLevelEnum
 from BO.ObjectSet import DescribedObjectSet
 from BO.ObjectSetQueryPlus import (
     ResultGrouping,
@@ -85,6 +86,7 @@ from formats.DarwinCore.models import (
 )
 from helpers.DateTime import now_time
 from helpers.DynamicLogs import get_logger, LogsSwitcher
+from helpers.httpexception import DETAIL_ONE_OR_MORE_PRIVATE, DETAIL_EXPORT_PREVENTED
 from providers.NERC import NERCFetcher
 from ..helpers.JobService import JobServiceBase, ArgsDict
 
@@ -192,9 +194,27 @@ class DarwinCoreExport(JobServiceBase):
         Initial run, basically just create the job, after permission check.
         """
         project_ids = [a_project.projid for a_project in self.collection.projects]
+        logger.info("---------- verify collection permission -----------")
         PermissionConsistentProjectSet(
             self.session, project_ids
         ).can_be_administered_by(self.current_user_id)
+        logger.info("---------- verify collection access -----------")
+        if self.the_collection.is_private:
+            detail = (
+                DETAIL_EXPORT_PREVENTED
+                + " "
+                + DETAIL_ONE_OR_MORE_PRIVATE
+                + ": "
+                + ", ".join(
+                    [
+                        prj.title + "(" + str(prj.projid) + ")"
+                        for prj in self.collection.projects
+                        if (prj.access == AccessLevelEnum.PRIVATE.value)
+                    ]
+                )
+            )
+            raise HTTPException(status_code=422, detail=detail)
+        logger.info("---------- create job -----------")
         # Security OK, create pending job
         self.create_job(self.JOB_TYPE, self.current_user_id)
         ret = ExportRsp(job_id=self.job_id)

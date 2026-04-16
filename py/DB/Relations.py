@@ -146,9 +146,7 @@ if True:
     ObjectHeader.history = relationship(ObjectsClassifHisto, viewonly=True)
     ObjectsClassifHisto.object = relationship(ObjectHeader)
 
-    Training.predictions = relationship(
-        Prediction,
-    )
+    Training.predictions = relationship(Prediction, passive_deletes=True)
     Training.project = relationship(
         Project,
     )

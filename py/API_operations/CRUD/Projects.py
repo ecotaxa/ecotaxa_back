@@ -4,6 +4,7 @@
 #
 from typing import List, Union, Tuple, Optional, Dict
 from API_models.crud import CreateProjectReq
+from fastapi import HTTPException
 from BO.Classification import ClassifIDListT, ClassifIDT
 from BO.Collection import MinimalCollectionBO
 from BO.ObjectSet import EnumeratedObjectSet
@@ -24,6 +25,7 @@ from DB.helpers.ORM import clone_of
 from FS.VaultRemover import VaultRemover
 from helpers.DynamicLogs import get_logger
 from helpers.FieldListType import FieldListType
+from helpers.httpexception import DETAIL_NODELETE_BELONGS_TO_COLLECTION
 from ..helpers.Service import Service
 
 logger = get_logger(__name__)
@@ -181,14 +183,24 @@ class ProjectsService(Service):
     DELETE_CHUNK_SIZE = 400
 
     def delete(
-        self, current_user_id: int, prj_id: int, only_objects: bool
+        self, current_user_id: int, projid: int, only_objects: bool
     ) -> Tuple[int, int, int, int]:
         # Security barrier
         _current_user, _project = RightsBO.user_wants(
-            self.session, current_user_id, Action.ADMINISTRATE, prj_id
+            self.session, current_user_id, Action.ADMINISTRATE, projid
         )
+        incolls = ProjectBO.in_collections(self.ro_session, projid)
+        if len(incolls) > 0:
+            detail = (
+                DETAIL_NODELETE_BELONGS_TO_COLLECTION
+                + ": "
+                + ", ".join(
+                    [incoll.title + "( " + str(incoll.id) + ")" for incoll in incolls]
+                )
+            )
+            raise HTTPException(status_code=422, detail=[detail])
         # Troll-ish way of erasing
-        all_object_ids = ProjectBO.get_all_object_ids(self.session, prj_id=prj_id)
+        all_object_ids = ProjectBO.get_all_object_ids(self.session, prj_id=projid)
         # Build a big set
         obj_set = EnumeratedObjectSet(self.session, all_object_ids)
 
@@ -199,15 +211,15 @@ class ProjectsService(Service):
             self.DELETE_CHUNK_SIZE, remover.add_files
         )
 
-        ProjectBO.delete_object_parents(self.session, prj_id)
+        ProjectBO.delete_object_parents(self.session, projid)
 
         if only_objects:
             # Update stats, should all be 0...
-            ProjectBO.update_taxo_stats(self.session, prj_id)
+            ProjectBO.update_taxo_stats(self.session, projid)
             # Stats depend on taxo stats
-            ProjectBO.update_stats(self.session, prj_id)
+            ProjectBO.update_stats(self.session, projid)
         else:
-            ProjectBO.delete(self.session, prj_id)
+            ProjectBO.delete(self.session, projid)
 
         self.session.commit()
         # Wait for the files handled

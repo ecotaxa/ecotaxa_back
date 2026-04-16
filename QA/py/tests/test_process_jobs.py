@@ -4,8 +4,8 @@ import time
 import pytest
 
 from API_operations.helpers.JobService import JobServiceBase, ArgsDict
-from BG_operations import JobScheduler
-from BG_operations.JobScheduler import ProcessJobRunner
+from BG_operations import JobScheduler as JobSchedulerMod
+from BG_operations.JobScheduler import ProcessJobRunner, JobScheduler
 from helpers.DynamicLogs import LogsSwitcher, get_logger
 from tests.api_wrappers import (
     api_wait_for_stable_job,
@@ -23,10 +23,10 @@ def jobs_as_process():
     """
     Switch JobScheduler to ProcessJobRunner for the duration of the test.
     """
-    old_runner = JobScheduler.JobRunner
-    JobScheduler.JobRunner = ProcessJobRunner
+    old_runner = JobSchedulerMod.JobRunner
+    JobSchedulerMod.JobRunner = ProcessJobRunner
     yield
-    JobScheduler.JobRunner = old_runner
+    JobSchedulerMod.JobRunner = old_runner
 
 
 # Define a job that reports its PID in the result
@@ -106,7 +106,7 @@ def test_job_process_behavior(fastapi, jobs_as_process):
 
     # Check if we are in a state where processes are expected
     assert (
-        JobScheduler.JobRunner == ProcessJobRunner
+        JobSchedulerMod.JobRunner == ProcessJobRunner
     ), "JobRunner should be ProcessJobRunner when not debugging"
 
     # Retrieve the PID reported by the job from its results
@@ -219,14 +219,18 @@ def test_job_kill(fastapi, jobs_as_process):
 
 
 @pytest.fixture
-def no_job_interval():
+def no_scheduler():
     """
-    Dummy fixture to tell fastapi fixture NOT to set JOB_INTERVAL.
+    Disable the JobScheduler during the test.
     """
-    pass
+    JobScheduler.shutdown()
+    yield
+    import main
+
+    JobScheduler.launch_at_interval(main.JOB_INTERVAL)
 
 
-def test_job_delete_pending(fastapi, no_job_interval, jobs_as_process):
+def test_job_delete_pending(fastapi, no_scheduler, jobs_as_process):
     """
     Verify that a pending job can be deleted and it goes to Error state with Killed message.
     """
@@ -252,7 +256,7 @@ def test_job_delete_pending(fastapi, no_job_interval, jobs_as_process):
     assert job_info["state"] == "E"
     assert job_info["progress_msg"] == "Killed"
 
-    # 6. Verify the log file contains the "Process killed by" line
+    # 5. Verify the log file contains the "Process killed by" line
     log_lines = api_get_log_file(fastapi, job_id)
     print(f"Log lines after kill: {log_lines}")
     assert any(
