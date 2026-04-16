@@ -77,8 +77,6 @@ SET project_id = m.new_id
 FROM projid_old_2_new m
 WHERE taxo_change_log.project_id = m.old_id;
 
-SET LOCAL session_replication_role = 'origin';
-
 COMMIT;
 
 -- 2. Drop the foreign key constraint from acquisitions to samples
@@ -90,10 +88,6 @@ ALTER TABLE samples
     ALTER COLUMN sampleid TYPE bigint;
 ALTER TABLE acquisitions
     ALTER COLUMN acq_sample_id TYPE bigint;
--- ALTER TABLE obj_head
---     ALTER COLUMN acquisid TYPE bigint;
--- ALTER TABLE obj_field
---     ALTER COLUMN acquisid TYPE bigint;
 
 -- 4. Re-create the foreign key constraint
 ALTER TABLE acquisitions
@@ -192,7 +186,7 @@ vacuum (verbose, full) process;
 
 -- Make space in the old table namespace
 -- Primary Key
-ALTER TABLE ONLY obj_head
+ALTER TABLE obj_head
     RENAME CONSTRAINT obj_head_pkey TO obj_head_pkey_old;
 -- Indexes:
 ALTER INDEX is_obj_head_acquisid_objid RENAME TO is_obj_head_acquisid_objid_old;
@@ -201,14 +195,14 @@ ALTER INDEX is_objectsdepth RENAME TO is_objectsdepth_old;
 ALTER INDEX is_objectslatlong RENAME TO is_objectslatlong_old;
 ALTER INDEX is_objectstime RENAME TO is_objectstime_old;
 -- Foreign-key constraints:
-ALTER TABLE ONLY obj_head
+ALTER TABLE obj_head
     RENAME CONSTRAINT obj_head_acquisid_fkey TO obj_head_acquisid_fkey_old;
-ALTER TABLE ONLY obj_head
+ALTER TABLE obj_head
     RENAME CONSTRAINT obj_head_classif_id_fkey TO obj_head_classif_id_fkey_old;
-ALTER TABLE ONLY obj_head
+ALTER TABLE obj_head
     RENAME CONSTRAINT obj_head_classif_who_fkey TO obj_head_classif_who_fkey_old;
 -- Referenced by:
-ALTER TABLE ONLY obj_field
+ALTER TABLE obj_field
     DROP CONSTRAINT obj_field_objfid_fkey;
 ALTER TABLE ONLY images
     DROP CONSTRAINT images_objid_fkey;
@@ -315,7 +309,7 @@ ALTER TABLE process
     ADD CONSTRAINT process_pkey PRIMARY KEY (processid),
     ADD CONSTRAINT process_processid_fkey FOREIGN KEY (processid) REFERENCES acquisitions (acquisid) ON DELETE CASCADE;
 
-ALTER TABLE ONLY obj_head
+ALTER TABLE obj_head
     ADD CONSTRAINT obj_head_pkey PRIMARY KEY (objid),
     ADD CONSTRAINT obj_head_acquisid_fkey FOREIGN KEY (acquisid) REFERENCES acquisitions (acquisid) ON DELETE CASCADE,
     ADD CONSTRAINT obj_head_classif_id_fkey FOREIGN KEY (classif_id) REFERENCES taxonomy (id),
@@ -327,10 +321,8 @@ CREATE INDEX is_objectsdepth ON obj_head USING btree (depth_max, depth_min) INCL
 CREATE INDEX is_objectslatlong ON obj_head USING btree (latitude, longitude) INCLUDE (acquisid);
 CREATE INDEX is_objectstime ON obj_head USING btree (objtime) INCLUDE (acquisid);
 
-ALTER TABLE obj_head
-    CLUSTER ON is_obj_head_acquisid_objid;
 
-ALTER TABLE ONLY obj_field
+ALTER TABLE obj_field
     ADD CONSTRAINT obj_field_objfid_fkey FOREIGN KEY (objfid) REFERENCES obj_head (objid) ON DELETE CASCADE;
 ALTER TABLE ONLY images
     ADD CONSTRAINT images_objid_fkey FOREIGN KEY (objid) REFERENCES obj_head (objid) ON DELETE CASCADE;
@@ -357,10 +349,10 @@ DROP SEQUENCE seq_acquisitions;
 
 ALTER INDEX obj_field_acquisid_objfid_idx RENAME TO obj_field_acquisid_objfid_idx_old;
 
-ALTER TABLE ONLY obj_field
+ALTER TABLE obj_field
     RENAME CONSTRAINT obj_field_pk TO obj_field_pk_old;
 
-ALTER TABLE ONLY obj_field
+ALTER TABLE obj_field
     RENAME CONSTRAINT obj_field_objfid_fkey TO obj_field_objfid_fkey_old;
 
 ALTER TABLE obj_field
@@ -894,7 +886,7 @@ CREATE TABLE obj_field
     WITH (autovacuum_vacuum_scale_factor = '0.01', fillfactor = '98', autovacuum_enabled = 'true')
     TABLESPACE home_tables;
 
-ALTER TABLE ONLY obj_field
+ALTER TABLE obj_field
     ALTER COLUMN acquis_id SET STATISTICS 10000;
 
 -- Durée : 19536610,045 ms (05:25:36,610) (nvme)
@@ -1092,9 +1084,6 @@ ALTER TABLE obj_field
 
 CREATE INDEX obj_field_acquisid_objfid_idx ON obj_field USING btree (acquis_id, objfid) WITH (fillfactor ='98');
 
-ALTER TABLE obj_field
-    CLUSTER ON obj_field_acquisid_objfid_idx;
-
 GRANT SELECT ON TABLE obj_field TO readerole;
 
 ALTER TABLE obj_field
@@ -1113,10 +1102,10 @@ SELECT objid AS old_id,
 	 JOIN samples sam ON sam.sampleid = acq.acq_sample_id;
 
 -- Durée : 528378,732 ms (08:48,379)
-CREATE UNIQUE INDEX objid_mapping_old_to_new ON objid_old_2_new (old_id);
+CREATE UNIQUE INDEX objid_mapping_old_to_new ON objid_old_2_new (old_id) INCLUDE (new_id);
 
 -- Durée : 453830,658 ms (07:33,831)
-CREATE UNIQUE INDEX objid_mapping_new_to_old ON objid_old_2_new (new_id);
+CREATE UNIQUE INDEX objid_mapping_new_to_old ON objid_old_2_new (new_id) INCLUDE (old_id);
 
 CREATE TABLE obj_head
 (
@@ -1254,8 +1243,21 @@ $$
     end;
 $$;
 
+ALTER TABLE obj_head
+    ADD CONSTRAINT obj_head_pkey PRIMARY KEY (objid),
+    ADD CONSTRAINT obj_head_acquisid_fkey FOREIGN KEY (acquisid) REFERENCES acquisitions (acquisid) ON DELETE CASCADE,
+    ADD CONSTRAINT obj_head_classif_id_fkey FOREIGN KEY (classif_id) REFERENCES taxonomy (id),
+    ADD CONSTRAINT obj_head_classif_who_fkey FOREIGN KEY (classif_who) REFERENCES users (id);
+
+CREATE INDEX is_obj_head_acquisid_objid ON obj_head USING btree (acquisid, classif_qual) INCLUDE (classif_id);
+CREATE INDEX is_objectsdate ON obj_head USING btree (objdate) INCLUDE (acquisid);
+CREATE INDEX is_objectsdepth ON obj_head USING btree (depth_max, depth_min) INCLUDE (acquisid);
+CREATE INDEX is_objectslatlong ON obj_head USING btree (latitude, longitude) INCLUDE (acquisid);
+CREATE INDEX is_objectstime ON obj_head USING btree (objtime) INCLUDE (acquisid);
+
+
 ------------------------ OBJ_FIELD -------------------
-ALTER TABLE ONLY obj_field
+ALTER TABLE obj_field
     RENAME CONSTRAINT obj_field_pk TO obj_field_pk_old;
 
 ALTER TABLE obj_field
@@ -1263,7 +1265,7 @@ ALTER TABLE obj_field
 
 ALTER INDEX obj_field_acquisid_objfid_idx RENAME TO obj_field_acquisid_objfid_idx_old;
 
-ALTER TABLE ONLY obj_field
+ALTER TABLE obj_field_old
     RENAME CONSTRAINT obj_field_objfid_fkey TO obj_field_objfid_fkey_old;
 
 CREATE TABLE obj_field
@@ -2028,6 +2030,19 @@ $$
         COMMIT;
     end;
 $$;
+
+ALTER TABLE obj_field
+    OWNER TO postgres;
+
+ALTER TABLE obj_field
+    ADD CONSTRAINT obj_field_pk PRIMARY KEY (objfid) WITH (fillfactor ='98');
+
+ALTER TABLE public.obj_field
+    ADD CONSTRAINT obj_field_objfid_fkey FOREIGN KEY (objfid) REFERENCES public.obj_head(objid) ON DELETE CASCADE;
+
+CREATE INDEX obj_field_acquisid_objfid_idx ON obj_field USING btree (acquis_id, objfid) WITH (fillfactor ='98');
+
+GRANT SELECT ON TABLE obj_field TO readerole;
 
 ------------------------ IMAGES ----------------------
 

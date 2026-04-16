@@ -125,7 +125,11 @@ class Connection(object):
             # Important: The invalidation mechanism now depends on it.
             pool_pre_ping=True,
             execution_options=exec_options,
-            connect_args={"application_name": self.APP_NAME},
+            connect_args={
+                "application_name": self.APP_NAME,
+                # Big data options
+                "options": "-c enable_partitionwise_join=on -c enable_partitionwise_aggregate=on",
+            },
             future=True,
             query_cache_size=64,
             # Default cache_size is up to 500*1.5, but we have big text in queries, e.g. all obj_field columns

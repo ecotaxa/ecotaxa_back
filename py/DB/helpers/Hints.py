@@ -5,4 +5,5 @@
 
 # Hint preventing FTS on big tables
 # Kills performance on some projects: "/*+ Leading(sam acq obh) NestLoop(sam acq obh) IndexOnlyScan(obh) IndexOnlyScan(obf) */"
-RECURS_HINT = "/*+ IndexOnlyScan(obh) IndexOnlyScan(obf) */"
+# RECURS_HINT = "/*+ IndexOnlyScan(obh) IndexOnlyScan(obf) */"
+RECURS_HINT = ""

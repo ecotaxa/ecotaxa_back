@@ -226,7 +226,6 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
                 assert an_histo.objid is not None
                 db_histo_dict.setdefault(an_histo.objid, list()).append(an_histo)
             # Send each 'line'
-            # Grouping images by object as the fetch can join multiple images for the same object
             for a_db_tuple in db_tuples:
                 self._send_to_writer(
                     import_how, writer, a_db_tuple, db_histo_dict, training_provider

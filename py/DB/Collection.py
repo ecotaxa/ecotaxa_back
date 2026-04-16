@@ -102,6 +102,7 @@ class CollectionOrgaRole(Model):
         primary_key=True,
     )
     display_order: int = Column(INTEGER)
+
     @property
     def organisation(self):
         return self.organization.name
