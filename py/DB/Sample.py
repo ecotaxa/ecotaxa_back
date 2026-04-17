@@ -4,7 +4,7 @@
 #
 from typing import List, Dict
 
-from sqlalchemy import func, cast
+from sqlalchemy import func
 
 from .Project import Project, ProjectIDT
 from .helpers import Result
@@ -36,9 +36,6 @@ class Sample(Model):
     project: Project
     all_acquisitions: relationship
 
-    # Embedded key
-    proj_id = sampleid / cast(SAM_PRJ_OFFSET, BIGINT)
-
     def pk(self) -> int:
         return self.sampleid
 
@@ -48,8 +45,12 @@ class Sample(Model):
         Return the next available primary key for a new Sample in the given project.
         """
         session.execute(text("SELECT pg_advisory_xact_lock(1001, :id)"), {"id": prj_id})
-        res = session.query(func.max(Sample.sampleid))
-        res = res.filter(Sample.proj_id == prj_id).scalar()
+        res = (
+            session.query(func.max(cls.sampleid))
+            .filter(cls.sampleid >= prj_id * SAM_PRJ_OFFSET)
+            .filter(cls.sampleid < (prj_id + 1) * SAM_PRJ_OFFSET)
+            .scalar()
+        )
         return res + 1 if res else prj_id * SAM_PRJ_OFFSET + 1
 
     def set_next_pk(self, session: Session, prj_id: ProjectIDT) -> None:

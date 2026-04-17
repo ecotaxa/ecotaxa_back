@@ -9,7 +9,7 @@ import datetime
 from typing import Dict, Set, Iterable, TYPE_CHECKING, List
 
 # noinspection PyPackageRequirements
-from sqlalchemy import Index, Column, ForeignKey, Integer, text, func, cast  # fmt:skip
+from sqlalchemy import Index, Column, ForeignKey, Integer, text, func  # fmt:skip
 # noinspection PyPackageRequirements
 from sqlalchemy.dialects.postgresql import (
     BIGINT,
@@ -117,17 +117,18 @@ class ObjectHeader(Model):
     acquisition: relationship
     history: relationship
 
-    # Partition key
-    proj_id = objid / cast(OBJ_PRJ_OFFSET, BIGINT)
-
     @classmethod
     def get_next_pk(cls, session: Session, prj_id: int) -> int:
         """
         Return the next available primary key for a new Object in the given project.
         """
         session.execute(text("SELECT pg_advisory_xact_lock(1000, :id)"), {"id": prj_id})
-        res = session.query(func.max(ObjectHeader.objid))
-        res = res.filter(ObjectHeader.proj_id == prj_id).scalar()
+        res = (
+            session.query(func.max(cls.objid))
+            .filter(cls.objid >= prj_id * OBJ_PRJ_OFFSET)
+            .filter(cls.objid < (prj_id + 1) * OBJ_PRJ_OFFSET)
+            .scalar()
+        )
         return res + 1 if res else prj_id * OBJ_PRJ_OFFSET + 1
 
     @classmethod

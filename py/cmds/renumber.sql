@@ -276,7 +276,8 @@ BEGIN
     END LOOP;
 END $$;
 
-CREATE TABLE obj_head_default PARTITION OF obj_head DEFAULT
+CREATE TABLE obj_head_default PARTITION OF obj_head
+FOR VALUES FROM (21431*:OBJ_MULT::bigint) TO (9223372036854775807)
     TABLESPACE :OTHER_TBLSPC;
 
 \d+ obj_head;
@@ -931,6 +932,10 @@ BEGIN
         RAISE NOTICE 'Created obj_field partition for [% - %]', ranges[i], ranges[i+1]-1;
     END LOOP;
 END $$;
+
+CREATE TABLE obj_field_default PARTITION OF obj_field
+FOR VALUES FROM (21431*:OBJ_MULT::bigint) TO (9223372036854775807)
+    TABLESPACE :OTHER_TBLSPC;
 
 \d+ obj_field
 

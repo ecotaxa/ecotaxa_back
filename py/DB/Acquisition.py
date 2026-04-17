@@ -4,7 +4,7 @@
 #
 from typing import Dict, Tuple
 
-from sqlalchemy import func, cast
+from sqlalchemy import func
 # noinspection PyProtectedMember
 from sqlalchemy.orm import relationship, Session
 
@@ -39,9 +39,6 @@ class Acquisition(Model):
     process: relationship
     all_objects: relationship
 
-    # Embedded key
-    proj_id = acquisid / cast(ACQ_PRJ_OFFSET, BIGINT)
-
     def pk(self) -> int:
         return self.acquisid
 
@@ -51,8 +48,12 @@ class Acquisition(Model):
         Return the next available primary key for a new Acquisition in the given project.
         """
         session.execute(text("SELECT pg_advisory_xact_lock(1000, :id)"), {"id": prj_id})
-        res = session.query(func.max(Acquisition.acquisid))
-        res = res.filter(Acquisition.proj_id == prj_id).scalar()
+        res = (
+            session.query(func.max(cls.acquisid))
+            .filter(cls.acquisid >= prj_id * ACQ_PRJ_OFFSET)
+            .filter(cls.acquisid < (prj_id + 1) * ACQ_PRJ_OFFSET)
+            .scalar()
+        )
         return res + 1 if res else prj_id * ACQ_PRJ_OFFSET + 1
 
     def set_next_pk(self, session: Session, prj_id: int) -> None:
@@ -72,7 +73,7 @@ class Acquisition(Model):
         res = session.query(Acquisition, Sample.orig_id)
         res = res.join(Sample)
         res = res.join(Project)
-        res = res.filter(Acquisition.proj_id == prj_id)
+        res = res.filter(Project.projid == prj_id)
         res = res.order_by(Sample.orig_id, Acquisition.orig_id)
         ret = {(sample_orig_id, r.orig_id): r for r, sample_orig_id in res}
         return ret

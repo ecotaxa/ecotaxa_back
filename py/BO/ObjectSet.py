@@ -133,6 +133,24 @@ class DescribedObjectSet(object):
         :param all_images: If not set (default), only return the lowest rank, i.e. visible, image
         :return:
         """
+        """
+        TODO E.G. when sort or paging:
+            SELECT obf.acquis_id, obf.objfid, obf.n01
+    FROM obj_field_p7 obf
+    WHERE (obf.acquis_id / 1e7::bigint) = 9279
+    ORDER BY obf.n01 DESC, obf.objfid DESC
+    LIMIT 100
+) SELECT obh.objid, acq.acquisid, sam.sampleid, 0 AS total,
+        obh.objid, obh.classif_qual, (SELECT COUNT(img2.imgrank) FROM images img2 WHERE img2.objid = obh.objid) AS imgcount, obh.complement_info, img.height, img.width, (img.thumb_height,img.imgid) AS thumb_file_name, img.thumb_height, img.thumb_width, (img.imgid,img.orig_file_name) AS file_name, txo.name, txo.display_name, txo.taxostatus, obf.n01
+          FROM (select (9279) as projid) prjs
+         JOIN samples sam ON sam.projid = prjs.projid
+         JOIN acquisitions acq ON acq.acq_sample_id = sam.sampleid
+         JOIN top_ids obf ON obf.acquis_id = acq.acquisid
+         JOIN obj_head_p7 obh ON obh.objid = obf.objfid
+         LEFT JOIN taxonomy txo ON txo.id = obh.classif_id
+         JOIN LATERAL (select * from images img2 where obh.objid = img2.objid order by imgrank limit 1) img ON true  
+        ORDER BY obf.n01 DESC, obf.objfid DESC OFFSET 0 LIMIT 100
+"""
         if order_clause is None:
             order_clause = OrderClause()
         # The filters on objects
