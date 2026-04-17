@@ -776,19 +776,20 @@ class UserService(Service):
     def _conditional_email_verification(
         self, update_src, user_to_update, action_type
     ) -> None:
-        if (
-            self.verify_email
-            and update_src.status == False
-            and user_to_update.mail_status == False
-        ):
-            assistance_email = self._get_assistance_email()
-            self._uservalidation.request_email_verification(
-                update_src.email,
-                assistance_email,
-                action_type,
-                user_to_update.id,
-                user_to_update.email,
-            )
+        if self._uservalidation:
+            if (
+                self.verify_email
+                and update_src.status == False
+                and user_to_update.mail_status == False
+            ):
+                assistance_email = self._get_assistance_email()
+                self._uservalidation.request_email_verification(
+                    update_src.email,
+                    assistance_email,
+                    action_type,
+                    user_to_update.id,
+                    user_to_update.email,
+                )
 
     def _conditional_validation(
         self,
