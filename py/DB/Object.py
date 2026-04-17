@@ -9,7 +9,7 @@ import datetime
 from typing import Dict, Set, Iterable, TYPE_CHECKING, List
 
 # noinspection PyPackageRequirements
-from sqlalchemy import Index, Column, ForeignKey, Integer, text, func  # fmt:skip
+from sqlalchemy import Index, Column, ForeignKey, Integer, text, func, event, DDL  # fmt:skip
 # noinspection PyPackageRequirements
 from sqlalchemy.dialects.postgresql import (
     BIGINT,
@@ -312,3 +312,31 @@ class ObjectsClassifHisto(Model):
     object: relationship
     classif: relationship
     classifier: relationship
+
+
+# Usage, e.g.
+# SQL: SELECT count(*) FROM obj_head WHERE objid <@ obj_in_prj(9279);
+# SQLA Core: query = select(cls).where(cls.objid.op("<@")(func.project_range(21433)))
+# SQLA Query: stmt = select(ObjectHeader).where(
+#     ObjectHeader.objid.op("<@")(func.project_range(21433))
+# )
+_create_func_ddl = DDL(
+    f"""
+CREATE OR REPLACE FUNCTION obj_in_prj(prj_id int)
+RETURNS int8range AS $$
+  SELECT int8range(
+    prj_id * {OBJ_PRJ_OFFSET}::bigint,
+    (prj_id + 1) * {OBJ_PRJ_OFFSET}::bigint,
+    '[)'
+  );
+$$ LANGUAGE sql IMMUTABLE;
+
+GRANT EXECUTE ON FUNCTION obj_in_prj(int) TO PUBLIC;
+"""
+)
+
+event.listen(
+    ObjectHeader.__table__,
+    "after_create",
+    _create_func_ddl.execute_if(dialect="postgresql"),
+)
