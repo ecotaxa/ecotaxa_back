@@ -267,12 +267,12 @@ BEGIN
              FOR VALUES FROM (%L) TO (%L)
              TABLESPACE %I',
             ranges[i],
-            ranges[i+1],
+            ranges[i+1]-1,
             ranges[i]*v_mult,
             ranges[i+1]*v_mult,
             v_tblspc
         );
-        RAISE NOTICE 'Created obj_head partition for [% - %]', ranges[i], ranges[i+1];
+        RAISE NOTICE 'Created obj_head partition for [% - %]', ranges[i], ranges[i+1]-1;
     END LOOP;
 END $$;
 
@@ -923,12 +923,12 @@ BEGIN
              FOR VALUES FROM (%L) TO (%L)
              TABLESPACE %I',
             ranges[i],
-            ranges[i+1],
+            ranges[i+1]-1,
             ranges[i]*v_mult,
             ranges[i+1]*v_mult,
             v_tblspc
         );
-        RAISE NOTICE 'Created obj_field partition for [% - %]', ranges[i], ranges[i+1];
+        RAISE NOTICE 'Created obj_field partition for [% - %]', ranges[i], ranges[i+1]-1;
     END LOOP;
 END $$;
 
