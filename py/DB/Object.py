@@ -9,7 +9,7 @@ import datetime
 from typing import Dict, Set, Iterable, TYPE_CHECKING, List
 
 # noinspection PyPackageRequirements
-from sqlalchemy import Index, Column, ForeignKey, Integer, desc, text, func  # fmt:skip
+from sqlalchemy import Index, Column, ForeignKey, Integer, text, func, cast  # fmt:skip
 # noinspection PyPackageRequirements
 from sqlalchemy.dialects.postgresql import (
     BIGINT,
@@ -67,7 +67,9 @@ class ObjectHeader(Model):
     objid = Column(BIGINT, primary_key=True, autoincrement=False)  # 8 bytes align d
     # Parent
     acquisid = Column(
-        BIGINT, ForeignKey("acquisitions.acquisid", ondelete="CASCADE"), nullable=False
+        BIGINT,
+        ForeignKey("acquisitions.acquisid", ondelete="CASCADE", onupdate="CASCADE"),
+        nullable=False,
     )  # 8 bytes align d
     # Author of last change in/to 'V' or 'D'
     classif_who = Column(Integer, ForeignKey(User.id))  # 4 bytes align i
@@ -115,18 +117,17 @@ class ObjectHeader(Model):
     acquisition: relationship
     history: relationship
 
+    # Partition key
+    proj_id = objid / cast(OBJ_PRJ_OFFSET, BIGINT)
+
     @classmethod
     def get_next_pk(cls, session: Session, prj_id: int) -> int:
         """
         Return the next available primary key for a new Object in the given project.
         """
         session.execute(text("SELECT pg_advisory_xact_lock(1000, :id)"), {"id": prj_id})
-        res = session.query(ObjectHeader.objid)
-        res = res.join(Acquisition)
-        res = res.join(Sample)
-        res = res.filter(Sample.projid == prj_id)
-        res = res.filter(func.floor(ObjectHeader.objid / OBJ_PRJ_OFFSET) == prj_id)
-        res = res.order_by(desc(ObjectHeader.objid)).limit(1).scalar()
+        res = session.query(func.max(ObjectHeader.objid))
+        res = res.filter(ObjectHeader.proj_id == prj_id).scalar()
         return res + 1 if res else prj_id * OBJ_PRJ_OFFSET + 1
 
     @classmethod
@@ -212,7 +213,9 @@ NON_UPDATABLE_VIA_API = USED_FIELDS_FOR_CLASSIF.union(HIDDEN_FIELDS_FOR_CLASSIF)
 class ObjectFields(Model):
     __tablename__ = "obj_field"
     objfid = Column(
-        BIGINT, ForeignKey(ObjectHeader.objid, ondelete="CASCADE"), primary_key=True
+        BIGINT,
+        ForeignKey(ObjectHeader.objid, ondelete="CASCADE", onupdate="CASCADE"),
+        primary_key=True,
     )
     # Not a real FK, this is used for a cluster which groups together data blocks by acquisition
     # TODO: Remove in favor of PK projid header
@@ -288,7 +291,9 @@ DEFAULT_CLASSIF_HISTORY_DATE = "TO_TIMESTAMP(0)"
 class ObjectsClassifHisto(Model):
     __tablename__ = "objectsclassifhisto"
     objid = Column(
-        BIGINT, ForeignKey(ObjectHeader.objid, ondelete="CASCADE"), primary_key=True
+        BIGINT,
+        ForeignKey(ObjectHeader.objid, ondelete="CASCADE", onupdate="CASCADE"),
+        primary_key=True,
     )  # 8 bytes align d
     # Date of manual setting of 'V' or 'D', training date for 'P'
     classif_date = Column(TIMESTAMP, primary_key=True)  # 8 bytes align d

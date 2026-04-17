@@ -18,7 +18,9 @@ N_DEEP_FEATURES = 50
 class ObjectCNNFeatureVector(Model):
     __tablename__ = "obj_cnn_features_vector"
     objcnnid: int = Column(
-        BIGINT, ForeignKey("obj_head.objid", ondelete="CASCADE"), primary_key=True
+        BIGINT,
+        ForeignKey("obj_head.objid", ondelete="CASCADE", onupdate="CASCADE"),
+        primary_key=True,
     )
     features: Vector = Column(Vector(N_DEEP_FEATURES))
     # The relationships are created in Relations.py but the typing here helps the IDE

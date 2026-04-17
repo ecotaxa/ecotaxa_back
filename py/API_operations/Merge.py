@@ -139,16 +139,14 @@ class MergeService(Service):
         verif(Acquisition.__tablename__, src_acquisitions, dest_acquisitions)
         return ret
 
-    def fix_foreign_ids(self, session: Session, prj_id: int) -> None:
+    @staticmethod
+    def fix_foreign_ids(session: Session, prj_id: int) -> None:
         """
         Fix in-place the given project foreign ID after a merge.
         Samples which don't match the project ID in their IDs should receive new ones.
         In OK Samples, Acquisitions which don't match the project ID in their IDs should receive new ones.
         In OK Acquisitions, Objects which don't match the project ID in their IDs should receive new ones.
         """
-        # TODO: Maybe better with onupdate="CASCADE" ?
-        session.execute(text("SET LOCAL session_replication_role = 'replica'"))
-
         # 1. Fix Samples
         samples = (
             session.query(Sample)
@@ -168,7 +166,6 @@ class MergeService(Service):
             # Update Sample itself and Acquisitions pointing to it
             for sql in [
                 "UPDATE samples SET sampleid = :new WHERE sampleid = :old",
-                "UPDATE acquisitions SET acq_sample_id = :new WHERE acq_sample_id = :old",
             ]:
                 session.execute(text(sql), sam_updates)
 
@@ -189,11 +186,9 @@ class MergeService(Service):
             new_acq_id += 1
 
         if acq_updates:
-            # Update Acquisition itself, Process, Objects and ObjectFields
+            # Update Acquisition itself, Process, Objects (via cascade) and ObjectFields (not a declared FK)
             for sql in [
                 "UPDATE acquisitions SET acquisid = :new WHERE acquisid = :old",
-                "UPDATE process SET processid = :new WHERE processid = :old",
-                "UPDATE obj_head SET acquisid = :new WHERE acquisid = :old",
                 "UPDATE obj_field SET acquis_id = :new WHERE acquis_id = :old",
             ]:
                 session.execute(text(sql), acq_updates)
@@ -216,20 +211,14 @@ class MergeService(Service):
 
         if obj_updates:
             logger.info("Renaming %d Objects", len(obj_updates))
-            # Update ObjectHeader, ObjectFields, ObjectsClassifHisto, Prediction, PredictionHisto and Image
+            # Update ObjectHeader, ObjectFields, ObjectsClassifHisto, Prediction, PredictionHisto and Image (via cascade)
             for sql in [
                 "UPDATE obj_head SET objid = :new WHERE objid = :old",
-                "UPDATE obj_field SET objfid = :new WHERE objfid = :old",
-                "UPDATE objectsclassifhisto SET objid = :new WHERE objid = :old",
-                "UPDATE prediction SET object_id = :new WHERE object_id = :old",
-                "UPDATE prediction_histo SET object_id = :new WHERE object_id = :old",
-                "UPDATE images SET objid = :new WHERE objid = :old",
             ]:
                 session.execute(text(sql), obj_updates)
 
         session.expire_all()
         session.commit()
-        session.execute(text("SET LOCAL session_replication_role = 'origin'"))
 
     def _do_merge(self, dest_prj: Project) -> None:
         """

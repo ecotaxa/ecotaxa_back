@@ -27,7 +27,9 @@ class ProjectPrivilege(Model):
 
     # links
     projid: int = Column(
-        INTEGER, ForeignKey("projects.projid", ondelete="CASCADE"), nullable=False
+        INTEGER,
+        ForeignKey("projects.projid", ondelete="CASCADE", onupdate="CASCADE"),
+        nullable=False,
     )
     # TODO: Same as project: if a user is gone, no interest in keeping its privileges.
     # OTOH we don't so far (17 Aug 2020) delete users.

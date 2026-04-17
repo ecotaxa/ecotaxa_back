@@ -4,7 +4,9 @@
 #
 
 from __future__ import annotations
+
 from enum import Enum
+
 from sqlalchemy import Identity
 
 from DB.helpers.ORM import Model
@@ -40,7 +42,9 @@ class TaxoRecast(Model):
     )
     # The context is: this specific project
     project_id: int = Column(
-        INTEGER, ForeignKey("projects.projid", ondelete="CASCADE"), nullable=True
+        INTEGER,
+        ForeignKey("projects.projid", ondelete="CASCADE", onupdate="CASCADE"),
+        nullable=True,
     )
     # During this operation
     operation: str = Column(VARCHAR(32), nullable=False)

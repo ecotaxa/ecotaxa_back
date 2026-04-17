@@ -18,6 +18,8 @@ class UserPreferences(Model):
         Integer(), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
     )
     project_id: int = Column(
-        Integer(), ForeignKey("projects.projid", ondelete="CASCADE"), primary_key=True
+        Integer(),
+        ForeignKey("projects.projid", ondelete="CASCADE", onupdate="CASCADE"),
+        primary_key=True,
     )
     json_prefs: str = Column(String(4096), nullable=False)

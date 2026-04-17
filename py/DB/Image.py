@@ -21,7 +21,9 @@ class Image(Model):
     __tablename__ = "images"
     imgid = Column(BIGINT, Sequence("seq_images", start=MIN_IMGID), nullable=False)
     # The Object that this image belongs to, with its rank inside
-    objid = Column(BIGINT, ForeignKey("obj_head.objid"), primary_key=True)
+    objid = Column(
+        BIGINT, ForeignKey("obj_head.objid", onupdate="CASCADE"), primary_key=True
+    )
     imgrank = Column(SMALLINT, primary_key=True)
     width = Column(SMALLINT, nullable=False)
     height = Column(SMALLINT, nullable=False)

@@ -4,7 +4,7 @@
 #
 from typing import Dict, Tuple
 
-from sqlalchemy import func
+from sqlalchemy import func, cast
 # noinspection PyProtectedMember
 from sqlalchemy.orm import relationship, Session
 
@@ -12,7 +12,7 @@ from .Project import Project
 from .Sample import Sample
 from .helpers.DDL import Column, ForeignKey, Index
 from .helpers.Direct import text
-from .helpers.ORM import Model, desc
+from .helpers.ORM import Model
 from .helpers.Postgres import VARCHAR, BIGINT
 
 ACQUISITION_FREE_COLUMNS = 31
@@ -26,7 +26,9 @@ class Acquisition(Model):
     # Self ID
     acquisid: int = Column(BIGINT, primary_key=True, autoincrement=False)
     # Parent ID
-    acq_sample_id: int = Column(BIGINT, ForeignKey("samples.sampleid"), nullable=False)
+    acq_sample_id: int = Column(
+        BIGINT, ForeignKey("samples.sampleid", onupdate="CASCADE"), nullable=False
+    )
     # i.e. acq_id from TSV
     orig_id: str = Column(VARCHAR(255), nullable=False)
     # TODO: Put into a dedicated table
@@ -37,6 +39,9 @@ class Acquisition(Model):
     process: relationship
     all_objects: relationship
 
+    # Embedded key
+    proj_id = acquisid / cast(ACQ_PRJ_OFFSET, BIGINT)
+
     def pk(self) -> int:
         return self.acquisid
 
@@ -46,11 +51,8 @@ class Acquisition(Model):
         Return the next available primary key for a new Acquisition in the given project.
         """
         session.execute(text("SELECT pg_advisory_xact_lock(1000, :id)"), {"id": prj_id})
-        res = session.query(Acquisition.acquisid)
-        res = res.join(Sample)
-        res = res.filter(Sample.projid == prj_id)
-        res = res.filter(func.floor(Acquisition.acquisid / ACQ_PRJ_OFFSET) == prj_id)
-        res = res.order_by(desc(Acquisition.acquisid)).limit(1).scalar()
+        res = session.query(func.max(Acquisition.acquisid))
+        res = res.filter(Acquisition.proj_id == prj_id).scalar()
         return res + 1 if res else prj_id * ACQ_PRJ_OFFSET + 1
 
     def set_next_pk(self, session: Session, prj_id: int) -> None:
@@ -70,7 +72,7 @@ class Acquisition(Model):
         res = session.query(Acquisition, Sample.orig_id)
         res = res.join(Sample)
         res = res.join(Project)
-        res = res.filter(Project.projid == prj_id)
+        res = res.filter(Acquisition.proj_id == prj_id)
         res = res.order_by(Sample.orig_id, Acquisition.orig_id)
         ret = {(sample_orig_id, r.orig_id): r for r, sample_orig_id in res}
         return ret

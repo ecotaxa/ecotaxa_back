@@ -2,8 +2,9 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import List
 from enum import Enum
+from typing import List
+
 from .helpers.DDL import Index, Column, Sequence, ForeignKey
 from .helpers.Direct import func
 from .helpers.ORM import Model
@@ -113,7 +114,7 @@ class TaxonomyChangeLog(Model):
     # ...in this project...
     project_id = Column(
         INTEGER,
-        ForeignKey("projects.projid", ondelete="CASCADE"),
+        ForeignKey("projects.projid", ondelete="CASCADE", onupdate="CASCADE"),
         nullable=False,
         primary_key=True,
     )

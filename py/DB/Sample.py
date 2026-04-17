@@ -4,14 +4,14 @@
 #
 from typing import List, Dict
 
-from sqlalchemy import func
+from sqlalchemy import func, cast
 
 from .Project import Project, ProjectIDT
 from .helpers import Result
 from .helpers.DDL import Index, Column, ForeignKey
 from .helpers.Direct import text
 from .helpers.Hints import RECURS_HINT
-from .helpers.ORM import Model, relationship, Session, desc
+from .helpers.ORM import Model, relationship, Session
 from .helpers.Postgres import VARCHAR, DOUBLE_PRECISION, INTEGER, BIGINT
 
 SAMPLE_FREE_COLUMNS = 61
@@ -23,7 +23,9 @@ class Sample(Model):
     # Historical (plural) name of the table
     __tablename__ = "samples"
     sampleid: int = Column(BIGINT, primary_key=True, autoincrement=False)
-    projid: int = Column(INTEGER, ForeignKey("projects.projid"), nullable=False)
+    projid: int = Column(
+        INTEGER, ForeignKey("projects.projid", onupdate="CASCADE"), nullable=False
+    )
     # i.e. sample_id from TSV
     orig_id: str = Column(VARCHAR(255), nullable=False)
     latitude = Column(DOUBLE_PRECISION)
@@ -34,6 +36,9 @@ class Sample(Model):
     project: Project
     all_acquisitions: relationship
 
+    # Embedded key
+    proj_id = sampleid / cast(SAM_PRJ_OFFSET, BIGINT)
+
     def pk(self) -> int:
         return self.sampleid
 
@@ -43,10 +48,8 @@ class Sample(Model):
         Return the next available primary key for a new Sample in the given project.
         """
         session.execute(text("SELECT pg_advisory_xact_lock(1001, :id)"), {"id": prj_id})
-        res = session.query(Sample.sampleid)
-        res = res.filter(Sample.projid == prj_id)
-        res = res.filter(func.floor(Sample.sampleid / SAM_PRJ_OFFSET) == prj_id)
-        res = res.order_by(desc(Sample.sampleid)).limit(1).scalar()
+        res = session.query(func.max(Sample.sampleid))
+        res = res.filter(Sample.proj_id == prj_id).scalar()
         return res + 1 if res else prj_id * SAM_PRJ_OFFSET + 1
 
     def set_next_pk(self, session: Session, prj_id: ProjectIDT) -> None:

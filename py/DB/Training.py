@@ -29,9 +29,11 @@ class Training(Model):
     __tablename__ = "training"
     # Below, SQLA/Alembic automatically makes column SERIAL, sequence from PG is 'training_training_id_seq'
     training_id: int = Column(INTEGER, primary_key=True)
-    # The target project, used only during migration.
+    # The target project.
     projid: int = Column(
-        INTEGER, ForeignKey(Project.projid, ondelete="CASCADE"), nullable=True
+        INTEGER,
+        ForeignKey(Project.projid, ondelete="CASCADE", onupdate="CASCADE"),
+        nullable=True,
     )
     # Who launched or is responsible for the training operation
     training_author: str = Column(INTEGER, ForeignKey(User.id), nullable=False)

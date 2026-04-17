@@ -21,7 +21,9 @@ class ProjectVariables(Model):
 
     __tablename__ = "projects_variables"
     project_id: int = Column(
-        INTEGER, ForeignKey("projects.projid", ondelete="CASCADE"), primary_key=True
+        INTEGER,
+        ForeignKey("projects.projid", ondelete="CASCADE", onupdate="CASCADE"),
+        primary_key=True,
     )
 
     # Python expression, the calculation result complies to http://vocab.nerc.ac.uk/collection/P01/current/SSAMPC01/1/

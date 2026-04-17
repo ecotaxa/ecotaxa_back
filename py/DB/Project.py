@@ -6,10 +6,10 @@ from __future__ import annotations
 
 from typing import List, TYPE_CHECKING, Iterable
 
-from BO.DataLicense import LicenseEnum, AccessLevelEnum
+from BO.DataLicense import AccessLevelEnum
 from DB.helpers.ORM import Model
 from .Instrument import Instrument
-from .helpers.DDL import Column, Sequence, Boolean, ForeignKey
+from .helpers.DDL import Column, Sequence, ForeignKey
 from .helpers.ORM import relationship
 from .helpers.Postgres import VARCHAR, INTEGER, DOUBLE_PRECISION
 
@@ -97,7 +97,9 @@ class ProjectTaxoStat(Model):
 
     __tablename__ = "projects_taxo_stat"
     projid = Column(
-        INTEGER, ForeignKey("projects.projid", ondelete="CASCADE"), primary_key=True
+        INTEGER,
+        ForeignKey("projects.projid", ondelete="CASCADE", onupdate="CASCADE"),
+        primary_key=True,
     )
     # FK to Taxonomy, but there is the special "-1" value (for unclassified) preventing an official FK
     id = Column(INTEGER, primary_key=True)

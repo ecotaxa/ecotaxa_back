@@ -17,7 +17,9 @@ class Process(Model):
     __tablename__ = "process"
     # Twin table with Acquisitions
     processid: int = Column(
-        BIGINT, ForeignKey(Acquisition.acquisid, ondelete="CASCADE"), primary_key=True
+        BIGINT,
+        ForeignKey(Acquisition.acquisid, ondelete="CASCADE", onupdate="CASCADE"),
+        primary_key=True,
     )
     # i.e. process_id from TSV
     orig_id = Column(VARCHAR(255), nullable=False)
