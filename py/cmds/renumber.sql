@@ -1294,31 +1294,31 @@ CREATE INDEX obj_cnn_features_vector_hv_ivfflat_l2_5k_idx ON obj_cnn_features_ve
 
 -- Foreign keys
 ALTER TABLE acquisitions
-    ADD CONSTRAINT acquisitions_sampleid_fkey FOREIGN KEY (acq_sample_id) REFERENCES samples (sampleid);
+    ADD CONSTRAINT acquisitions_sampleid_fkey FOREIGN KEY (acq_sample_id) REFERENCES samples (sampleid) ON UPDATE CASCADE;
 ALTER TABLE process
-    ADD CONSTRAINT process_processid_fkey FOREIGN KEY (processid) REFERENCES acquisitions (acquisid) ON DELETE CASCADE;
+    ADD CONSTRAINT process_processid_fkey FOREIGN KEY (processid) REFERENCES acquisitions (acquisid) ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE obj_head
-    ADD CONSTRAINT obj_head_acquisid_fkey FOREIGN KEY (acquisid) REFERENCES acquisitions (acquisid) ON DELETE CASCADE,
+    ADD CONSTRAINT obj_head_acquisid_fkey FOREIGN KEY (acquisid) REFERENCES acquisitions (acquisid) ON DELETE CASCADE ON UPDATE CASCADE,
     ADD CONSTRAINT obj_head_classif_id_fkey FOREIGN KEY (classif_id) REFERENCES taxonomy (id),
     ADD CONSTRAINT obj_head_classif_who_fkey FOREIGN KEY (classif_who) REFERENCES users (id);
 ALTER TABLE obj_field
-    ADD CONSTRAINT obj_field_objfid_fkey FOREIGN KEY (objfid) REFERENCES obj_head (objid) ON DELETE CASCADE;
+    ADD CONSTRAINT obj_field_objfid_fkey FOREIGN KEY (objfid) REFERENCES obj_head (objid) ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE images
-    ADD CONSTRAINT images_objid_fkey FOREIGN KEY (objid) REFERENCES obj_head(objid) ON DELETE CASCADE;
+    ADD CONSTRAINT images_objid_fkey FOREIGN KEY (objid) REFERENCES obj_head(objid) ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE objectsclassifhisto
-    ADD CONSTRAINT objectsclassifhisto_objid_fkey FOREIGN KEY (objid) REFERENCES obj_head(objid) ON DELETE CASCADE,
+    ADD CONSTRAINT objectsclassifhisto_objid_fkey FOREIGN KEY (objid) REFERENCES obj_head(objid) ON DELETE CASCADE ON UPDATE CASCADE,
     ADD CONSTRAINT objectsclassifhisto_classif_id_fkey FOREIGN KEY (classif_id) REFERENCES taxonomy(id) ON DELETE CASCADE,
     ADD CONSTRAINT objectsclassifhisto_classif_who_fkey FOREIGN KEY (classif_who) REFERENCES users(id);
 ALTER TABLE prediction
-    ADD CONSTRAINT prediction_object_id_fkey FOREIGN KEY (object_id) REFERENCES obj_head(objid) ON DELETE CASCADE,
+    ADD CONSTRAINT prediction_object_id_fkey FOREIGN KEY (object_id) REFERENCES obj_head(objid) ON DELETE CASCADE ON UPDATE CASCADE,
     ADD CONSTRAINT prediction_classif_id_fkey FOREIGN KEY (classif_id) REFERENCES taxonomy(id) ON DELETE CASCADE,
     ADD CONSTRAINT prediction_training_id_fkey FOREIGN KEY (training_id) REFERENCES training(training_id) ON DELETE CASCADE;
 ALTER TABLE prediction_histo
-    ADD CONSTRAINT prediction_histo_object_id_fkey FOREIGN KEY (object_id) REFERENCES obj_head(objid) ON DELETE CASCADE,
+    ADD CONSTRAINT prediction_histo_object_id_fkey FOREIGN KEY (object_id) REFERENCES obj_head(objid) ON DELETE CASCADE ON UPDATE CASCADE,
     ADD CONSTRAINT prediction_histo_classif_id_fkey FOREIGN KEY (classif_id) REFERENCES taxonomy(id) ON DELETE CASCADE,
     ADD CONSTRAINT prediction_histo_training_id_fkey FOREIGN KEY (training_id) REFERENCES training(training_id) ON DELETE CASCADE;
 ALTER TABLE obj_cnn_features_vector
-    ADD CONSTRAINT obj_cnn_features_vector_objcnnid_fkey FOREIGN KEY (objcnnid) REFERENCES obj_head(objid) ON DELETE CASCADE;
+    ADD CONSTRAINT obj_cnn_features_vector_objcnnid_fkey FOREIGN KEY (objcnnid) REFERENCES obj_head(objid) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- Recreate objects view
 CREATE VIEW objects AS
