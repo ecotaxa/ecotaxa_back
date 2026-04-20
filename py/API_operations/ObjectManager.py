@@ -146,13 +146,18 @@ class ObjectManager(Service):
             for a_line in joins:
                 keep = True
                 if a_line.find("taxonomy txo") != -1:
-                    if "txo." not in ordr and a_line.strip().endswith(
+                    if "txo." not in sort_val and a_line.strip().endswith(
                         "ON txo.id = obh.classif_id"
                     ):
                         keep = False
                 elif a_line.find("images img") != -1:
-                    if "img." not in ordr and a_line.strip().endswith(
+                    if "img." not in sort_val and a_line.strip().endswith(
                         "imgrank limit 1) img ON true"
+                    ):
+                        keep = False
+                elif a_line.find("obj_field obf") != -1:
+                    if "obf." not in sort_val and a_line.strip().endswith(
+                        "<@ obj_in_prj(prjs.projid)"
                     ):
                         keep = False
                 if keep:
