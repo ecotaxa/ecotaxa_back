@@ -4,7 +4,7 @@
 #
 from typing import Dict, Tuple
 
-from sqlalchemy import func, event, DDL
+from sqlalchemy import func, event, DDL  # fmt: skip
 # noinspection PyProtectedMember
 from sqlalchemy.orm import relationship, Session
 

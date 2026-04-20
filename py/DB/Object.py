@@ -225,19 +225,6 @@ class ObjectFields(Model):
     object: relationship
 
 
-Index(  # We CLUSTER using this one, object ids tend to be consecutively read
-    "obj_field_acquisid_objfid_idx",
-    ObjectFields.__table__.c.acquis_id,
-    ObjectFields.__table__.c.objfid,
-    postgresql_include=[  # With luck, users have set their sort options to most important ones first
-        ObjectFields.__table__.c.n01,
-        ObjectFields.__table__.c.n02,
-        ObjectFields.__table__.c.n03,
-        ObjectFields.__table__.c.n04,
-    ],
-    unique=True,
-)
-
 # TODO
 # event.listen(
 #     ObjectsFields.__table__,
@@ -252,6 +239,20 @@ for i in range(1, 501):
     setattr(ObjectFields, "n%02d" % i, Column(FLOAT))
 for i in range(1, 21):
     setattr(ObjectFields, "t%02d" % i, Column(VARCHAR(250)))
+
+
+Index(  # We CLUSTER using this one, object ids tend to be consecutively read
+    "obj_field_acquisid_objfid_idx",
+    ObjectFields.__table__.c.acquis_id,
+    ObjectFields.__table__.c.objfid,
+    postgresql_include=[  # With luck, users have set their sort options to most important ones first
+        ObjectFields.__table__.c.n01,
+        ObjectFields.__table__.c.n02,
+        ObjectFields.__table__.c.n03,
+        ObjectFields.__table__.c.n04,
+    ],
+    unique=True,
+)
 
 # Nearly-always used index for recursive descent into object tree, e.g. in manual classification page.
 # Also for FK checks during deletion.

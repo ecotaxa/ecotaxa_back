@@ -539,7 +539,6 @@ where classif_qual is null and classif_id is null and classif_score is not null"
     ),
     ConsistencyCheckAndFix(
         "All obj_fields have same acquisid as object",
-        "select count(1) from obj_head obh join obj_field obf on obf.objfid = obh.objid where obh.acquisid != obf.acquis_id",
         "SELECT count(1) FROM obj_head obh LEFT JOIN obj_field obf ON obf.objfid = obh.objid AND obf.acquis_id = obh.acquisid WHERE obf.objfid IS NULL;",
         0,
         """
