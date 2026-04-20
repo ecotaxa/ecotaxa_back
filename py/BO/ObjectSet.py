@@ -24,6 +24,7 @@ from typing import (
     OrderedDict as OrderedDictT,
     cast,
     Final,
+    Union,
 )
 
 # A Postgresl insert generator, needed for the key conflict clause
@@ -115,6 +116,7 @@ class BaseDescribedObjectSet(object):
         """
         self.user_id = user_id
         self.filters = ObjectSetFilter(session, filters)
+        self.mapping: Union[ProjectMapping, ProjectSetMapping]
 
     def get_sql(
         self,
