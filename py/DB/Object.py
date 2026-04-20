@@ -229,6 +229,13 @@ Index(  # We CLUSTER using this one, object ids tend to be consecutively read
     "obj_field_acquisid_objfid_idx",
     ObjectFields.__table__.c.acquis_id,
     ObjectFields.__table__.c.objfid,
+    postgresql_include=[  # With luck, users have set their sort options to most important ones first
+        ObjectFields.__table__.c.n01,
+        ObjectFields.__table__.c.n02,
+        ObjectFields.__table__.c.n03,
+        ObjectFields.__table__.c.n04,
+    ],
+    unique=True,
 )
 
 # TODO
@@ -251,13 +258,12 @@ for i in range(1, 21):
 Index(
     "is_objectsacqclassifqual",
     ObjectHeader.__table__.c.acquisid,
-    ObjectHeader.__table__.c.classif_qual,
-    postgresql_include=[ObjectHeader.classif_id.name],
-)
-Index(  # We CLUSTER on this one # TODO: Any way to declare the cluster here?
-    "is_obj_head_acquisid_objid",
-    ObjectHeader.__table__.c.acquisid,
     ObjectHeader.__table__.c.objid,
+    postgresql_include=[
+        ObjectHeader.__table__.c.classif_qual,
+        ObjectHeader.__table__.c.classif_id,
+    ],
+    unique=True,
 )
 
 # For finding globally objects in some depth range
@@ -316,9 +322,9 @@ class ObjectsClassifHisto(Model):
 
 # Usage, e.g.
 # SQL: SELECT count(*) FROM obj_head WHERE objid <@ obj_in_prj(9279);
-# SQLA Core: query = select(cls).where(cls.objid.op("<@")(func.project_range(21433)))
+# SQLA Core: query = select(cls).where(cls.objid.op("<@")(func.obj_in_prj(21433)))
 # SQLA Query: stmt = select(ObjectHeader).where(
-#     ObjectHeader.objid.op("<@")(func.project_range(21433))
+#     ObjectHeader.objid.op("<@")(func.obj_in_prj(21433))
 # )
 _create_func_ddl = DDL(
     f"""

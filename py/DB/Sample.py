@@ -91,6 +91,7 @@ class Sample(Model):
                  WHERE sam.projid = :projid
                    AND obh.latitude IS NOT NULL
                    AND obh.longitude IS NOT NULL
+                   AND obh.objid <@ obj_in_prj(:projid)
               GROUP BY sam.sampleid) sll
          WHERE usam.sampleid = sll.sampleid
            AND projid = :projid """

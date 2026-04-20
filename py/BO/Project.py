@@ -77,6 +77,9 @@ from DB.helpers.ORM import (
     joinedload,
     minimal_table_of,
     func,
+    column,
+    Integer,
+    values,
 )
 from helpers.DynamicLogs import get_logger
 from helpers.FieldListType import FieldListType
@@ -391,9 +394,10 @@ class ProjectBO(object):
                COUNT(CASE WHEN obh.classif_qual = '"""
             + PREDICTED_CLASSIF_QUAL
             + """' THEN 1 END) nbr_p
-          FROM obj_head obh
-          JOIN acquisitions acq ON acq.acquisid = obh.acquisid
+          FROM obj_head obh 
+          JOIN acquisitions acq ON acq.acquisid = obh.acquisid AND acq.acquisid <@ acq_in_prj(:prjid)
           JOIN samples sam ON sam.sampleid = acq.acq_sample_id AND sam.projid = :prjid
+         WHERE obh.objid <@ obj_in_prj(:prjid)
         GROUP BY sam.projid, obh.classif_id;"""
         )
         session.execute(sql, {"prjid": projid})
@@ -456,21 +460,30 @@ class ProjectBO(object):
         """
         # Activity count: Count 1 for present classification for a user per object.
         #  Of course, the classification date is the latest for the user.
+        prjs_vals = values(column("projid", Integer), name="prjs").data(
+            [(pid,) for pid in prj_ids]
+        )
         pqry = session.query(
-            Project.projid,
+            prjs_vals.c.projid,
             User.id,
             User.name,
             func.count(ObjectHeader.objid),
             func.max(
                 ObjectHeader.classif_date
             ),  # OK we filter manual action via user id below
-        )
+        ).select_from(prjs_vals)
+        pqry = pqry.join(Project, Project.projid == prjs_vals.c.projid)
         pqry = pqry.join(Sample).join(Acquisition).join(ObjectHeader)
         pqry = pqry.join(User, User.id == ObjectHeader.classif_who)
-        pqry = pqry.filter(Project.projid == any_(prj_ids))
         pqry = pqry.filter(ObjectHeader.classif_who == User.id)
-        pqry = pqry.group_by(Project.projid, User.id)
-        pqry = pqry.order_by(Project.projid, User.name)
+        pqry = pqry.group_by(prjs_vals.c.projid, User.id)
+        pqry = pqry.order_by(prjs_vals.c.projid, User.name)
+        pqry = pqry.where(
+            ObjectHeader.objid.op("<@")(func.obj_in_prj(prjs_vals.c.projid))
+        )
+        pqry = pqry.where(
+            Acquisition.acquisid.op("<@")(func.acq_in_prj(prjs_vals.c.projid))
+        )
         ret = []
         user_activities: Dict[UserIDT, UserActivity] = {}
         user_activities_per_project = {}
@@ -501,22 +514,26 @@ class ProjectBO(object):
         # Activity count update: Add 1 for each entry in history for each user.
         # The dates in history are ignored, except for users which do not appear in first resultset.
         hqry = session.query(
-            Project.projid,
+            prjs_vals.c.projid,
             User.id,
             User.name,
             func.count(ObjectsClassifHisto.objid),
             func.max(ObjectsClassifHisto.classif_date),
-        )
-        hqry = (
-            hqry.join(Sample)
-            .join(Acquisition)
-            .join(ObjectHeader)
-            .join(ObjectsClassifHisto)
-        )
+        ).select_from(prjs_vals)
+        hqry = hqry.join(Project, Project.projid == prjs_vals.c.projid)
+        hqry = hqry.join(Sample)
+        hqry = hqry.join(Acquisition)
+        hqry = hqry.join(ObjectHeader)
+        hqry = hqry.join(ObjectsClassifHisto)
         hqry = hqry.join(User, User.id == ObjectsClassifHisto.classif_who)
-        hqry = hqry.filter(Project.projid == any_(prj_ids))
-        hqry = hqry.group_by(Project.projid, User.id)
-        hqry = hqry.order_by(Project.projid, User.name)
+        hqry = hqry.group_by(prjs_vals.c.projid, User.id)
+        hqry = hqry.order_by(prjs_vals.c.projid, User.name)
+        hqry = hqry.where(
+            ObjectHeader.objid.op("<@")(func.obj_in_prj(prjs_vals.c.projid))
+        )
+        hqry = hqry.where(
+            Acquisition.acquisid.op("<@")(func.acq_in_prj(prjs_vals.c.projid))
+        )
         with CodeTimer(
             "user history stats for %d projects, qry: %s:" % (len(prj_ids), str(hqry)),
             logger,
@@ -879,7 +896,7 @@ class ProjectBO(object):
                 + PREDICTED_CLASSIF_QUAL
                 + """' THEN 1 END) nbr_p
                            FROM %s obh
-                           JOIN acquisitions acq ON acq.acquisid = obh.acquisid
+                           JOIN acquisitions acq ON acq.acquisid = obh.acquisid AND acq.acquisid <@ acq_in_prj(:prj)
                            JOIN samples sam ON sam.sampleid = acq.acq_sample_id AND sam.projid = :prj
                           WHERE COALESCE(obh.classif_id, -1) = ANY(:ids)
                        GROUP BY obh.classif_id"""

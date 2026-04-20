@@ -130,20 +130,65 @@ class ObjectManager(Service):
 
         from_, where_clause, params = object_set.get_sql(order_clause, extra_cols)
 
+        cte = ""
+        if (
+            order_clause.get_sql().strip("\n")
+            and order_field is not None
+            and sim_search_seed is None
+        ):
+            ordr = order_field[1:] if order_field.startswith("-") else order_field
+            # Select only object ID and sort columns
+            sort_val = ObjectBO.resolve_fields([ordr], free_columns_mappings)[0]
+            # Keep only useful (for filtering and sorting) JOINS
+            joins = from_.get_sql().splitlines()
+            from_sql = ""
+            # Eliminate costly but useless (in this context) joins
+            for a_line in joins:
+                keep = True
+                if a_line.find("taxonomy txo") != -1:
+                    if "txo." not in ordr and a_line.strip().endswith(
+                        "ON txo.id = obh.classif_id"
+                    ):
+                        keep = False
+                elif a_line.find("images img") != -1:
+                    if "img." not in ordr and a_line.strip().endswith(
+                        "imgrank limit 1) img ON true"
+                    ):
+                        keep = False
+                if keep:
+                    from_sql += a_line
+            cte = (
+                f"""
+    WITH relevant_objs AS ( SELECT obh.objid AS object_id, {sort_val} \n FROM """
+                + from_sql
+                + where_clause.get_sql()
+                + order_clause.get_sql()
+                + ")"
+            )
+            # It's absorbed in CTE
+            order_clause.set_window(None, None)
+            # TODO: We could enable below, but it goes with a JOIN we would have to remove as well
+            # It's in the case "filter on annotator"
+            # where_clause.clear()
+
         # Compute the total in a second step (_summarize)
         total_col = "0 AS total"
-
-        sql = f"""
+        sql = (
+            cte
+            + f"""
 SELECT {RECURS_HINT} obh.objid, acq.acquisid, sam.sampleid, %s%s
-  FROM """ % (
-            total_col,
-            extra_cols,
+  FROM """
+            % (
+                total_col,
+                extra_cols,
+            )
         )
-        sql += from_.get_sql() + " " + where_clause.get_sql()
-
-        # Add order & window if relevant
-        if order_clause is not None:
-            sql += order_clause.get_sql()
+        sql += from_.get_sql()
+        if cte:
+            sql += "\nJOIN relevant_objs rel ON obh.objid = rel.object_id "
+        sql += where_clause.get_sql()
+        # Add order & window, if empty it's just a \n
+        sql += order_clause.get_sql()
 
         with CodeTimer("Query: SQL: %s PARAMS: %s: " % (sql, params), logger, 1):
             res: Result = self.ro_session.execute(text(sql), params)

@@ -4,7 +4,7 @@
 #
 from typing import Dict, Tuple
 
-from sqlalchemy import func
+from sqlalchemy import func, event, DDL
 # noinspection PyProtectedMember
 from sqlalchemy.orm import relationship, Session
 
@@ -106,4 +106,26 @@ Index(
         Acquisition.__table__.c.acquisid
     ],  # For Index Only scans during recursive descent
     unique=False,
+)
+
+_create_func_ddl = DDL(
+    f"""
+CREATE OR REPLACE FUNCTION acq_in_prj(prj_id int)
+RETURNS int8range AS $$
+  SELECT int8range(
+    prj_id * {ACQ_PRJ_OFFSET}::bigint,
+    (prj_id + 1) * {ACQ_PRJ_OFFSET}::bigint,
+    '[)'
+  );
+$$ LANGUAGE sql IMMUTABLE;
+
+GRANT EXECUTE ON FUNCTION acq_in_prj(int) TO PUBLIC;
+"""
+)
+
+
+event.listen(
+    Acquisition.__table__,
+    "after_create",
+    _create_func_ddl.execute_if(dialect="postgresql"),
 )

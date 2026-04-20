@@ -7,7 +7,7 @@
 #
 import re
 from decimal import Decimal
-from typing import Union, List, Dict, Optional, Set, Generator, Tuple
+from typing import Union, List, Dict, Optional, Set, Generator, Tuple, Any
 
 # A dict for sending parametrized SQL to the engine
 SQLParamDict = Dict[str, Union[int, float, Decimal, str, List[int], List[str]]]
@@ -111,13 +111,22 @@ class WhereClause(object):
     A 'where' clause in SQL. List of 'and' clauses.
     """
 
-    __slots__ = ("ands",)
+    __slots__ = ("ands", "params")
 
     def __init__(self) -> None:
         self.ands: List[str] = []
+        self.params: SQLParamDict = {}
 
     def __mul__(self, other) -> "WhereClause":
         self.ands.append(other)
+        return self
+
+    def chain(self, other) -> "WhereClause":
+        self.ands.append(other)
+        return self
+
+    def add_param(self, name: str, value: Any) -> "WhereClause":
+        self.params[name] = value
         return self
 
     def get_sql(self) -> str:
@@ -136,6 +145,10 @@ class WhereClause(object):
         for a_cond in self.ands:
             refs = set([a_match.group(0) for a_match in self.COL_RE.finditer(a_cond)])
             yield a_cond, refs
+
+    def clear(self):
+        self.ands.clear()
+        self.params.clear()
 
 
 class OrderClause(object):

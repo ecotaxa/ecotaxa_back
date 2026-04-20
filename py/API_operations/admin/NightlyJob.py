@@ -487,7 +487,7 @@ NightlyJobService.NIGHTLY_CHECKS = [
         """,
     ),
     ConsistencyCheckAndFix(
-        "The must be no score information for manual states",
+        "There must be no score information for manual states",
         "select objid from obj_head where classif_qual in ('V','D') and classif_score is not null limit 100",
         [],
         """
@@ -540,6 +540,7 @@ where classif_qual is null and classif_id is null and classif_score is not null"
     ConsistencyCheckAndFix(
         "All obj_fields have same acquisid as object",
         "select count(1) from obj_head obh join obj_field obf on obf.objfid = obh.objid where obh.acquisid != obf.acquis_id",
+        "SELECT count(1) FROM obj_head obh LEFT JOIN obj_field obf ON obf.objfid = obh.objid AND obf.acquis_id = obh.acquisid WHERE obf.objfid IS NULL;",
         0,
         """
         -- find root cause
@@ -598,7 +599,7 @@ where classif_qual is null and classif_id is null and classif_score is not null"
         "An object cannot be in a prediction and historical same prediction",
         """select * from prediction_histo prh
      join prediction prd on prh.training_id = prd.training_id
-                     and prh.object_id = prd.object_id
+                        and prh.object_id = prd.object_id
       limit 100
         """,
         [],

@@ -2,7 +2,7 @@
 \set ACQ_MULT 10000000::bigint
 \set OBJ_MULT 100000000
 \set OTHER_TBLSPC home_tables
-\set OTHER_TBLSPC pg_default
+-- \set OTHER_TBLSPC pg_default
 
 -- Bump the first projects which collide
 CREATE UNLOGGED TABLE projid_old_2_new AS
@@ -15,46 +15,11 @@ SELECT * FROM (VALUES
     (10, 21)
 ) AS t(old_id, new_id);
 
-CREATE UNLOGGED TABLE samid_old_2_new AS
-SELECT sampleid                                                                           AS old_id,
-       (projid * :SAM_MULT) + ROW_NUMBER() OVER (PARTITION BY projid ORDER BY sampleid) AS new_id
-FROM samples;
-
-CREATE UNLOGGED TABLE acqid_old_2_new AS
-SELECT acquisid AS old_id,
-       (projid * :ACQ_MULT) +
-       ROW_NUMBER() OVER (
-           PARTITION BY projid
-           ORDER BY acquisid
-           )    AS new_id
-	 FROM acquisitions acq
-	 JOIN samples sam ON sam.sampleid = acq.acq_sample_id;
-CREATE INDEX acquisid_mapping_idx ON acqid_old_2_new (new_id) INCLUDE (old_id);
-CREATE INDEX acquisid_mapping_idx2 ON acqid_old_2_new (old_id) INCLUDE (new_id);
-
----- OBJ
--- Durée : 1013986,567 ms (16:53,987) NVME drive
--- PROD: Durée : 1740768,903 ms (29:00,769)
-CREATE UNLOGGED TABLE objid_old_2_new TABLESPACE :OTHER_TBLSPC AS
-SELECT objid AS old_id,
-       (projid * :OBJ_MULT::bigint) + ROW_NUMBER() OVER (
-        PARTITION BY projid
-        ORDER BY objid) AS new_id
-	 FROM obj_head obh
-	 JOIN acquisitions acq ON acq.acquisid = obh.acquisid
-	 JOIN samples sam ON sam.sampleid = acq.acq_sample_id;
--- Durée : 528378,732 ms (08:48,379)
-CREATE UNIQUE INDEX objid_mapping_old_to_new ON objid_old_2_new (old_id) INCLUDE (new_id);
--- Durée : 453830,658 ms (07:33,831)
-CREATE UNIQUE INDEX objid_mapping_new_to_old ON objid_old_2_new (new_id) INCLUDE (old_id);
-
-
 -- 1. Drop the view that depends on the affected tables
 DROP VIEW IF EXISTS objects;
 
 -- Experiment
 DROP VIEW IF EXISTS hierarchy;
-
 
 BEGIN;
 
@@ -122,6 +87,41 @@ FROM projid_old_2_new m
 WHERE taxo_change_log.project_id = m.old_id;
 
 COMMIT;
+
+
+CREATE UNLOGGED TABLE samid_old_2_new AS
+SELECT sampleid                                                                           AS old_id,
+       (projid * :SAM_MULT) + ROW_NUMBER() OVER (PARTITION BY projid ORDER BY sampleid) AS new_id
+FROM samples;
+
+CREATE UNLOGGED TABLE acqid_old_2_new AS
+SELECT acquisid AS old_id,
+       (projid * :ACQ_MULT) +
+       ROW_NUMBER() OVER (
+           PARTITION BY projid
+           ORDER BY acquisid
+           )    AS new_id
+	 FROM acquisitions acq
+	 JOIN samples sam ON sam.sampleid = acq.acq_sample_id;
+CREATE INDEX acquisid_mapping_idx ON acqid_old_2_new (new_id) INCLUDE (old_id);
+CREATE INDEX acquisid_mapping_idx2 ON acqid_old_2_new (old_id) INCLUDE (new_id);
+
+---- OBJ
+-- Durée : 1013986,567 ms (16:53,987) NVME drive
+-- PROD: Durée : 1740768,903 ms (29:00,769)
+CREATE UNLOGGED TABLE objid_old_2_new TABLESPACE :OTHER_TBLSPC AS
+SELECT objid AS old_id,
+       (projid * :OBJ_MULT::bigint) + ROW_NUMBER() OVER (
+        PARTITION BY projid
+        ORDER BY objid) AS new_id
+	 FROM obj_head obh
+	 JOIN acquisitions acq ON acq.acquisid = obh.acquisid
+	 JOIN samples sam ON sam.sampleid = acq.acq_sample_id;
+-- Durée : 528378,732 ms (08:48,379)
+CREATE UNIQUE INDEX objid_mapping_old_to_new ON objid_old_2_new (old_id) INCLUDE (new_id);
+-- Durée : 453830,658 ms (07:33,831)
+CREATE UNIQUE INDEX objid_mapping_new_to_old ON objid_old_2_new (new_id) INCLUDE (old_id);
+
 
 -- 2. Drop the foreign key constraint from acquisitions to samples
 ALTER TABLE acquisitions
@@ -354,7 +354,7 @@ ALTER TABLE process
 ALTER TABLE obj_head
     ADD CONSTRAINT obj_head_pkey PRIMARY KEY (objid);
 
-CREATE INDEX is_objectsacqclassifqual ON obj_head USING btree (acquisid, classif_qual) INCLUDE (classif_id);
+CREATE UNIQUE INDEX is_objectsacqclassifqual ON obj_head USING btree (acquisid, objid) INCLUDE (classif_qual, classif_id);
 CREATE INDEX is_objectsdate ON obj_head USING btree (objdate) INCLUDE (acquisid);
 CREATE INDEX is_objectsdepth ON obj_head USING btree (depth_max, depth_min) INCLUDE (acquisid);
 CREATE INDEX is_objectslatlong ON obj_head USING btree (latitude, longitude) INCLUDE (acquisid);
@@ -1132,9 +1132,9 @@ ALTER TABLE obj_field
     OWNER TO postgres;
 
 ALTER TABLE obj_field
-    ADD CONSTRAINT obj_field_pk PRIMARY KEY (objfid) WITH (fillfactor ='98');
+    ADD CONSTRAINT obj_field_pk PRIMARY KEY (objfid);
 
-CREATE INDEX obj_field_acquisid_objfid_idx ON obj_field USING btree (acquis_id, objfid) WITH (fillfactor ='98');
+CREATE UNIQUE INDEX obj_field_acquisid_objfid_idx ON obj_field USING btree (acquis_id, objfid) INCLUDE (n01, n02, n03, n04);
 
 --    WITH (autovacuum_vacuum_scale_factor = '0.01', fillfactor = '98');
 --    TABLESPACE :OTHER_TBLSPC;
@@ -1325,9 +1325,31 @@ ALTER TABLE prediction_histo
 ALTER TABLE obj_cnn_features_vector
     ADD CONSTRAINT obj_cnn_features_vector_objcnnid_fkey FOREIGN KEY (objcnnid) REFERENCES obj_head(objid) ON DELETE CASCADE ON UPDATE CASCADE;
 
+CREATE OR REPLACE FUNCTION acq_in_prj(prj_id int)
+RETURNS int8range AS $$
+  SELECT int8range(
+    prj_id * :ACQ_MULT::bigint,
+    (prj_id + 1) * :ACQ_MULT::bigint,
+    '[)'
+  );
+$$ LANGUAGE sql IMMUTABLE;
+
+GRANT EXECUTE ON FUNCTION acq_in_prj(int) TO PUBLIC;
+
+CREATE OR REPLACE FUNCTION obj_in_prj(prj_id int)
+RETURNS int8range AS $$
+  SELECT int8range(
+    prj_id * :OBJ_MULT::bigint,
+    (prj_id + 1) * :OBJ_MULT::bigint,
+    '[)'
+  );
+$$ LANGUAGE sql IMMUTABLE;
+
+GRANT EXECUTE ON FUNCTION obj_in_prj(int) TO PUBLIC;
+
 -- Recreate objects view
-CREATE VIEW objects AS
-SELECT sam.projid,
+CREATE OR REPLACE VIEW objects AS
+SELECT prj.projid,
        sam.sampleid,
        obh.objid,
        obh.latitude,
@@ -1353,10 +1375,12 @@ SELECT sam.projid,
        obh.orig_id,
        obh.acquisid                                                       AS processid,
        ofi.*
-FROM obj_head obh
-         JOIN acquisitions acq ON obh.acquisid = acq.acquisid
-         JOIN samples sam ON acq.acq_sample_id = sam.sampleid
-         LEFT JOIN obj_field ofi ON obh.objid = ofi.objfid;
+    FROM projects prj
+    JOIN samples sam ON sam.projid = prj.projid
+    JOIN acquisitions acq ON acq.acq_sample_id = sam.sampleid AND acq.acquisid <@ acq_in_prj(prj.projid)
+    JOIN obj_head obh ON obh.acquisid = acq.acquisid AND obh.objid <@ obj_in_prj(prj.projid)
+    LEFT JOIN obj_field ofi ON obh.objid = ofi.objfid
+;
 
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO readerole;
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO zoo;

@@ -133,65 +133,100 @@ class DescribedObjectSet(object):
         :param all_images: If not set (default), only return the lowest rank, i.e. visible, image
         :return:
         """
-        """
-        TODO E.G. when sort or paging:
-            SELECT obf.acquis_id, obf.objfid, obf.n01
-    FROM obj_field_p7 obf
-    WHERE (obf.acquis_id / 1e7::bigint) = 9279
-    ORDER BY obf.n01 DESC, obf.objfid DESC
-    LIMIT 100
-) SELECT obh.objid, acq.acquisid, sam.sampleid, 0 AS total,
-        obh.objid, obh.classif_qual, (SELECT COUNT(img2.imgrank) FROM images img2 WHERE img2.objid = obh.objid) AS imgcount, obh.complement_info, img.height, img.width, (img.thumb_height,img.imgid) AS thumb_file_name, img.thumb_height, img.thumb_width, (img.imgid,img.orig_file_name) AS file_name, txo.name, txo.display_name, txo.taxostatus, obf.n01
-          FROM (select (9279) as projid) prjs
-         JOIN samples sam ON sam.projid = prjs.projid
-         JOIN acquisitions acq ON acq.acq_sample_id = sam.sampleid
-         JOIN top_ids obf ON obf.acquis_id = acq.acquisid
-         JOIN obj_head_p7 obh ON obh.objid = obf.objfid
-         LEFT JOIN taxonomy txo ON txo.id = obh.classif_id
-         JOIN LATERAL (select * from images img2 where obh.objid = img2.objid order by imgrank limit 1) img ON true  
-        ORDER BY obf.n01 DESC, obf.objfid DESC OFFSET 0 LIMIT 100
-"""
         if order_clause is None:
             order_clause = OrderClause()
+
         # The filters on objects
+        filter_clauses = self.filters.get_sql_filter(
+            self.user_id, self.mapping.object_mappings
+        )
+        acq_part = "AND acq.acquisid <@ acq_in_prj(prjs.projid)"
+        obh_part = "AND obh.objid <@ obj_in_prj(prjs.projid)"
+        obf_part = "AND obf.objfid <@ obj_in_prj(prjs.projid)"
+        cnn_part = "AND cnn.objcnnid <@ obj_in_prj(prjs.projid)"
+
         obj_where = WhereClause()
         params: SQLParamDict = {"projid": self.prj.projid}
-        self.filters.get_sql_filter(
-            obj_where, params, self.user_id, self.mapping.object_mappings
-        )
+        used_prefixes = set()
+
+        def push_where(prefix: str) -> str:
+            if prefix in filter_clauses:
+                used_prefixes.add(prefix)
+                params.update(filter_clauses[prefix].params)
+                return " AND " + " AND ".join(filter_clauses[prefix].ands)
+            return ""
+
         column_referencing_sql = (
-            select_list + obj_where.get_sql() + order_clause.get_sql()
+            select_list
+            + "\n".join(
+                [
+                    " ".join(a_where.ands)
+                    for a_where in filter_clauses.values()
+                    if a_where.ands
+                ]
+            )
+            + order_clause.get_sql()
         )
         selected_tables = FromClause(
-            f"(select (:projid) as projid) prjs"
+            f"(VALUES (:projid)) AS prjs(projid)"
         )  # Prepare a future _set_ of projects
-
-        obj_field_joined = "obf." in column_referencing_sql
-        if obj_field_joined and self.driving_table_is_obj_field(
-            obj_where.get_sql(),
-            order_clause.get_sql(),
-        ):
-            selected_tables += f"{ObjectFields.__tablename__} obf ON obf.objfid <@ obj_in_prj(prjs.projid)"
-            selected_tables += f"{ObjectHeader.__tablename__} obh ON obh.objid = obf.objfid AND obh.acquisid = obf.acquis_id"
+        if "prj." in column_referencing_sql:
+            selected_tables += (
+                f"{Project.__tablename__} prj ON prj.projid = prjs.projid"
+                + push_where("prj")
+            )
+            selected_tables += (
+                f"{Sample.__tablename__} sam ON sam.projid = prj.projid"
+                + push_where("sam")
+            )
         else:
-            selected_tables += f"{ObjectHeader.__tablename__} obh ON obh.objid <@ obj_in_prj(prjs.projid)"
-            if obj_field_joined:
-                selected_tables += f"{ObjectFields.__tablename__} obf ON obf.objfid = obh.objid AND obf.acquis_id = obh.acquisid"
+            selected_tables += (
+                f"{Sample.__tablename__} sam ON sam.projid = prjs.projid"
+                + push_where("sam")
+            )
         selected_tables += (
-            f"{Acquisition.__tablename__} acq ON acq.acquisid = obh.acquisid"
+            f"{Acquisition.__tablename__} acq ON acq.acq_sample_id = sam.sampleid {acq_part}"
+            + push_where("acq")
         )
         if "prc." in column_referencing_sql:
             selected_tables += (
-                f"{Process.__tablename__} prc ON prc.processid = obh.acquisid"
+                f"{Process.__tablename__} prc ON prc.processid = acq.acquisid"
+                + push_where("prc")
             )
-        selected_tables += (
-            f"{Sample.__tablename__} sam ON sam.sampleid = acq.acq_sample_id"
-        )
-        if "prj." in column_referencing_sql:
-            selected_tables += f"{Project.__tablename__} prj ON prj.projid = sam.projid"
-        # else:
+        obj_field_joined = "obf." in column_referencing_sql
+        if obj_field_joined and self.driving_table_is_obj_field(
+            "\n".join(
+                [
+                    " ".join(a_where.ands)
+                    for a_where in filter_clauses.values()
+                    if a_where.ands
+                ]
+            ),
+            order_clause.get_sql(),
+        ):
+            selected_tables += (
+                f"{ObjectFields.__tablename__} obf ON obf.acquis_id = acq.acquisid {obf_part}"
+                + push_where("obf")
+            )
+            selected_tables += (
+                f"{ObjectHeader.__tablename__} obh ON obh.objid = obf.objfid {obh_part}"
+                + push_where("obh")
+            )
+        else:
+            selected_tables += (
+                f"{ObjectHeader.__tablename__} obh ON obh.acquisid = acq.acquisid {obh_part}"
+                + push_where("obh")
+            )
+            if obj_field_joined:
+                selected_tables += (
+                    f"{ObjectFields.__tablename__} obf ON obf.objfid = obh.objid {obf_part}"
+                    + push_where("obf")
+                )
         if "cnn." in column_referencing_sql:
-            selected_tables += f"{ObjectCNNFeatureVector.__tablename__} cnn ON cnn.objcnnid = obh.objid"
+            selected_tables += (
+                f"{ObjectCNNFeatureVector.__tablename__} cnn ON cnn.objcnnid = obh.objid {cnn_part}"
+                + push_where("cnn")
+            )
         # if "prd." in column_referencing_sql:
         #     preds_ref = Prediction.__tablename__ + " prd"
         #     selected_tables += (
@@ -215,6 +250,7 @@ class DescribedObjectSet(object):
         if "txo." in column_referencing_sql or "txp." in column_referencing_sql:
             selected_tables += (
                 f"{Taxonomy.__tablename__} txo ON txo.id = obh.classif_id"
+                + push_where("txo")
             )
             if (
                 self.filters.status_filter not in MEANS_CLASSIF_ID_EXIST
@@ -222,18 +258,36 @@ class DescribedObjectSet(object):
             ):
                 selected_tables.set_outer(f"{Taxonomy.__tablename__} txo ")
         if "img." in column_referencing_sql:
-            selected_tables += (
-                f"{Image.__tablename__} img ON obh.objid = img.objid "
-                if all_images
-                else f"(select * from {Image.__tablename__} img2 where obh.objid = img2.objid order by imgrank limit 1) img ON true"
-            )
-            selected_tables.set_lateral(f"(select * from {Image.__tablename__}")
+            if all_images:
+                selected_tables += (
+                    f"{Image.__tablename__} img ON obh.objid = img.objid"
+                    + push_where("img")
+                )
+            else:
+                selected_tables += (
+                    f"(select * from {Image.__tablename__} img2 where obh.objid = img2.objid order by imgrank limit 1) img ON true"
+                    + push_where("img")
+                )
+                selected_tables.set_lateral(f"(select * from {Image.__tablename__}")
         if "usr." in column_referencing_sql:
-            selected_tables += f"{User.__tablename__} usr ON obh.classif_who = usr.id"
+            selected_tables += (
+                f"{User.__tablename__} usr ON obh.classif_who = usr.id"
+                + push_where("usr")
+            )
             selected_tables.set_outer(f"{User.__tablename__} usr ")
         if "txp." in column_referencing_sql:
-            selected_tables += f"{Taxonomy.__tablename__} txp ON txp.id = txo.parent_id"
+            selected_tables += (
+                f"{Taxonomy.__tablename__} txp ON txp.id = txo.parent_id"
+                + push_where("txp")
+            )
             selected_tables.set_outer(f"{Taxonomy.__tablename__} txp ")
+
+        # Collect remaining filters
+        for prefix, a_where in filter_clauses.items():
+            if prefix not in used_prefixes:
+                obj_where.ands.extend(a_where.ands)
+                params.update(a_where.params)
+
         return selected_tables, obj_where, params
 
     def without_filtering_taxo(self):
@@ -1072,79 +1126,99 @@ class ObjectSetFilter(object):
 
     def get_sql_filter(
         self,
-        where_clause: WhereClause,
-        params: SQLParamDict,
         user_id: Optional[UserIDT],
         object_mappings: TableMapping,
-    ) -> None:
+    ) -> Dict[str, WhereClause]:
         """
             The generated SQL assumes that, in the query:
                 'obh' is the alias for object_head aka ObjectHeader
                 'obf' the alias for ObjectFields, if relevant to mapping system
                 'acq' is the alias for Acquisition
                 'sam' is the alias for Sample
+                'prj' is the alias for Project
+                'prc' is the alias for Process
+                'och' is the alias for historical Classification Histo (ObjectsClassifHisto)
         :param user_id: For filtering validators.
-        :param where_clause: SQL filtering clauses on objects will be added there.
         :param params: SQL params will be added there.
         :param object_mappings: Free field mappings from project.
-        :return:
+        :return: A dictionary of where clauses, per table prefix.
         """
+
+        where_clauses: Dict[str, WhereClause] = OrderedDict()
+
+        def prfx_where_clause(prefix: str) -> WhereClause:
+            if prefix not in where_clauses:
+                where_clauses[prefix] = WhereClause()
+            return where_clauses[prefix]
 
         # Hierarchy first
         if self.samples:
             samples_ids = [int(x) for x in self.samples.split(",")]
-            where_clause *= "sam.sampleid = ANY (:samples)"
-            params["samples"] = samples_ids
+            prfx_where_clause("sam").chain("sam.sampleid = ANY (:samples)").add_param(
+                "samples", samples_ids
+            )
 
         if self.taxo:
             if self.taxo_child:
                 # TODO: In this case a single taxon is allowed. Not very consistent
-                where_clause *= (
+                prfx_where_clause("obh").chain(
                     "obh.classif_id IN ("
                     + TaxonomyBO.RQ_CHILDREN.replace(":ids", ":taxo")
                     + ")"
-                )
-                params["taxo"] = [int(self.taxo)]
+                ).add_param("taxo", [int(self.taxo)])
             else:
                 taxa = [int(x) for x in self.taxo.split(",") if x != "None"]
                 if len(taxa) == 1:
-                    where_clause *= "obh.classif_id = :taxo"
-                    params["taxo"] = taxa[0]
+                    prfx_where_clause("obh").chain("obh.classif_id = :taxo").add_param(
+                        "taxo", taxa[0]
+                    )
                 else:
-                    where_clause *= "obh.classif_id = ANY (:taxo)"
-                    params["taxo"] = taxa
+                    prfx_where_clause("obh").chain(
+                        "obh.classif_id = ANY (:taxo)"
+                    ).add_param("taxo", taxa)
 
         if self.status_filter:
             if self.status_filter == "NV":
                 # Not Validated, better to enumerate the _other_ states
                 cond = f"obh.classif_qual in ('{DUBIOUS_CLASSIF_QUAL}','{PREDICTED_CLASSIF_QUAL}')"
-                if "taxo" not in params:
-                    where_clause *= f"({cond} OR obh.classif_qual IS NULL)"
+                if "taxo" not in prfx_where_clause("obh").params:
+                    prfx_where_clause("obh").chain(
+                        f"({cond} OR obh.classif_qual IS NULL)"
+                    )
                 else:  # classif_qual cannot be null if a category is present
                     # E.g. Not Validated Chaetognatha
-                    where_clause *= cond
+                    prfx_where_clause("obh").chain(cond)
             elif self.status_filter == "PV":
-                where_clause *= "obh.classif_qual IN ('%s','%s')" % (
-                    VALIDATED_CLASSIF_QUAL,
-                    PREDICTED_CLASSIF_QUAL,
+                prfx_where_clause("obh").chain(
+                    "obh.classif_qual IN ('%s','%s')"
+                    % (
+                        VALIDATED_CLASSIF_QUAL,
+                        PREDICTED_CLASSIF_QUAL,
+                    )
                 )
             elif self.status_filter == "NVM":
-                where_clause *= "obh.classif_qual = '%s'" % VALIDATED_CLASSIF_QUAL
-                where_clause *= "obh.classif_who != " + str(user_id)
+                prfx_where_clause("obh").chain(
+                    "obh.classif_qual = '%s'" % VALIDATED_CLASSIF_QUAL
+                )
+                prfx_where_clause("obh").chain("obh.classif_who != " + str(user_id))
             elif self.status_filter == "VM":
-                where_clause *= "obh.classif_qual = '%s'" % VALIDATED_CLASSIF_QUAL
-                where_clause *= "obh.classif_who = " + str(user_id)
+                prfx_where_clause("obh").chain(
+                    "obh.classif_qual = '%s'" % VALIDATED_CLASSIF_QUAL
+                )
+                prfx_where_clause("obh").chain("obh.classif_who = " + str(user_id))
             elif self.status_filter == "U":
-                where_clause *= "obh.classif_qual IS NULL"
+                prfx_where_clause("obh").chain("obh.classif_qual IS NULL")
             elif self.status_filter == "UP":  # Updatable by Prediction
-                where_clause *= (
+                prfx_where_clause("obh").chain(
                     "(obh.classif_qual = '%s' OR obh.classif_qual IS NULL)"
                     % PREDICTED_CLASSIF_QUAL
                 )
             elif self.status_filter == "PVD":
-                where_clause *= "obh.classif_qual IS NOT NULL"
+                prfx_where_clause("obh").chain("obh.classif_qual IS NOT NULL")
             else:
-                where_clause *= "obh.classif_qual = '" + self.status_filter[:3] + "'"
+                prfx_where_clause("obh").chain(
+                    "obh.classif_qual = '" + self.status_filter[:3] + "'"
+                )
 
         if (
             self.MapN is not None
@@ -1152,65 +1226,76 @@ class ObjectSetFilter(object):
             and self.MapE is not None
             and self.MapS is not None
         ):
-            where_clause *= "obh.latitude BETWEEN :MapS AND :MapN"
-            where_clause *= "obh.longitude BETWEEN :MapW AND :MapE"
-            params["MapN"] = self.MapN
-            params["MapW"] = self.MapW
-            params["MapE"] = self.MapE
-            params["MapS"] = self.MapS
+            prfx_where_clause("obh").chain("obh.latitude BETWEEN :MapS AND :MapN")
+            prfx_where_clause("obh").chain(
+                "obh.longitude BETWEEN :MapW AND :MapE"
+            ).add_param("MapN", self.MapN).add_param("MapW", self.MapW).add_param(
+                "MapE", self.MapE
+            ).add_param(
+                "MapS", self.MapS
+            )
 
         if self.depth_min is not None and self.depth_max is not None:
-            where_clause *= "obh.depth_min BETWEEN :depthmin AND :depthmax"
-            where_clause *= "obh.depth_max BETWEEN :depthmin AND :depthmax"
-            params["depthmin"] = self.depth_min
-            params["depthmax"] = self.depth_max
+            prfx_where_clause("obh").chain(
+                "obh.depth_min BETWEEN :depthmin AND :depthmax"
+            )
+            prfx_where_clause("obh").chain(
+                "obh.depth_max BETWEEN :depthmin AND :depthmax"
+            ).add_param("depthmin", self.depth_min).add_param(
+                "depthmax", self.depth_max
+            )
 
         if self.instrument:
-            where_clause *= "prj.instrument_id ILIKE :instrum "
-            params["instrum"] = "%" + self.instrument + "%"
+            prfx_where_clause("prj").chain(
+                "prj.instrument_id ILIKE :instrum "
+            ).add_param("instrum", "%" + self.instrument + "%")
 
         if self.daytime:
-            where_clause *= "obh.sunpos = ANY (:daytime)"
-            params["daytime"] = [x for x in self.daytime.split(",")]
+            prfx_where_clause("obh").chain("obh.sunpos = ANY (:daytime)").add_param(
+                "daytime", [x for x in self.daytime.split(",")]
+            )
 
         if self.months:
-            where_clause *= "EXTRACT(month FROM obh.objdate) = ANY (:month)"
-            params["month"] = [int(x) for x in self.months.split(",")]
+            prfx_where_clause("obh").chain(
+                "EXTRACT(month FROM obh.objdate) = ANY (:month)"
+            ).add_param("month", [int(x) for x in self.months.split(",")])
 
         if self.from_date:
-            where_clause *= "obh.objdate >= TO_DATE(:fromdate,'YYYY-MM-DD')"
-            params["fromdate"] = self.from_date
+            prfx_where_clause("obh").chain(
+                "obh.objdate >= TO_DATE(:fromdate,'YYYY-MM-DD')"
+            ).add_param("fromdate", self.from_date)
 
         if self.to_date:
-            where_clause *= "obh.objdate <= TO_DATE(:todate,'YYYY-MM-DD')"
-            params["todate"] = self.to_date
+            prfx_where_clause("obh").chain(
+                "obh.objdate <= TO_DATE(:todate,'YYYY-MM-DD')"
+            ).add_param("todate", self.to_date)
 
         if self.invert_time:
             if self.from_time and self.to_time:
-                where_clause *= (
+                prfx_where_clause("obh").chain(
                     "(obh.objtime <= time :fromtime OR obh.objtime >= time :totime)"
+                ).add_param("fromtime", self.from_time).add_param(
+                    "totime", self.to_time
                 )
-                params["fromtime"] = self.from_time
-                params["totime"] = self.to_time
         else:
             if self.from_time:
-                where_clause *= "obh.objtime >= time :fromtime"
-                params["fromtime"] = self.from_time
+                prfx_where_clause("obh").chain(
+                    "obh.objtime >= time :fromtime"
+                ).add_param("fromtime", self.from_time)
             if self.to_time:
-                where_clause *= "obh.objtime <= time :totime"
-                params["totime"] = self.to_time
+                prfx_where_clause("obh").chain("obh.objtime <= time :totime").add_param(
+                    "totime", self.to_time
+                )
 
         if self.validated_from:
-            where_clause *= (  # TODO: not 100% accurate
+            prfx_where_clause("obh").chain(  # TODO: not 100% accurate
                 "obh.classif_date >= TO_TIMESTAMP(:validfromdate,'YYYY-MM-DD HH24:MI')"
-            )
-            params["validfromdate"] = self.validated_from
+            ).add_param("validfromdate", self.validated_from)
 
         if self.validated_to:
-            where_clause *= (
+            prfx_where_clause("obh").chain(
                 "obh.classif_date <= TO_TIMESTAMP(:validtodate,'YYYY-MM-DD HH24:MI')"
-            )
-            params["validtodate"] = self.validated_to
+            ).add_param("validtodate", self.validated_to)
 
         if self.free_num and (
             self.free_num_start is not None or self.free_num_end is not None
@@ -1225,44 +1310,59 @@ class ObjectSetFilter(object):
             try:
                 criteria_col = "n%02d" % int(self.free_num[2:])
                 is_split, real_col = object_mappings.phy_lookup(criteria_col)
-                col_ref = ("obf" if is_split else "obh") + "." + real_col
-                where_clause *= col_ref + comp_op + ":freenumbnd"
+                prefix = "obf" if is_split else "obh"
+                col_ref = prefix + "." + real_col
+                prfx_where_clause(prefix).chain(
+                    col_ref + comp_op + ":freenumbnd"
+                ).add_param("freenumbnd", bound)
             except ValueError:
                 # For some (probably) historical reason, Score is part of free_cols in UI
                 # Assume it's the current prediction which is asked for
                 criteria_col = self.COL_IN_FREE_NUM.get(self.free_num[1:], "?")
-                where_clause *= "obh." + criteria_col + comp_op + ":freenumbnd"
-            params["freenumbnd"] = bound
+                prfx_where_clause("obh").chain(
+                    "obh." + criteria_col + comp_op + ":freenumbnd"
+                ).add_param("freenumbnd", bound)
 
         if self.free_text and self.free_text_val:
             criteria_tbl = self.free_text[0]
             criteria_col = "t%02d" % int(self.free_text[2:])
-            if criteria_tbl == "o":
-                is_split, real_col = object_mappings.phy_lookup(criteria_col)
-                col_ref = ("obf" if is_split else "obh") + "." + real_col
-                where_clause *= col_ref + " ILIKE :freetxtval"
-            elif criteria_tbl == "a":
-                where_clause *= "acq." + criteria_col + " ILIKE :freetxtval"
-            elif criteria_tbl == "s":
-                where_clause *= "sam." + criteria_col + " ILIKE :freetxtval "
-            elif criteria_tbl == "p":
-                where_clause *= "prc." + criteria_col + " ILIKE :freetxtval "
             like_exp = "%" + self.free_text_val + "%"
             # Apply standard BOL/EOL regexp markers
             if like_exp[:2] == "%^":  # Exact match at beginning
                 like_exp = like_exp[2:]
             if like_exp[-2:] == "$%":  # Exact match at end
                 like_exp = like_exp[:-2]
-            params["freetxtval"] = like_exp
+
+            if criteria_tbl == "o":
+                is_split, real_col = object_mappings.phy_lookup(criteria_col)
+                prefix = "obf" if is_split else "obh"
+                col_ref = prefix + "." + real_col
+                prfx_where_clause(prefix).chain(
+                    col_ref + " ILIKE :freetxtval"
+                ).add_param("freetxtval", like_exp)
+            elif criteria_tbl == "a":
+                prfx_where_clause("acq").chain(
+                    "acq." + criteria_col + " ILIKE :freetxtval"
+                ).add_param("freetxtval", like_exp)
+            elif criteria_tbl == "s":
+                prfx_where_clause("sam").chain(
+                    "sam." + criteria_col + " ILIKE :freetxtval "
+                ).add_param("freetxtval", like_exp)
+            elif criteria_tbl == "p":
+                prfx_where_clause("prc").chain(
+                    "prc." + criteria_col + " ILIKE :freetxtval "
+                ).add_param("freetxtval", like_exp)
 
         if self.annotators:
-            where_clause *= (
+            prfx_where_clause("ohu").chain(
                 "(obh.classif_who = ANY (:filt_annot) OR ohu.in_annots IS NOT NULL)"
-            )
-            params["filt_annot"] = [int(x) for x in self.annotators.split(",")]
+            ).add_param("filt_annot", [int(x) for x in self.annotators.split(",")])
         elif self.last_annotators:
-            where_clause *= "obh.classif_who = ANY (:filt_annot)"
-            params["filt_annot"] = [int(x) for x in self.last_annotators.split(",")]
+            prfx_where_clause("obh").chain(
+                "obh.classif_who = ANY (:filt_annot)"
+            ).add_param("filt_annot", [int(x) for x in self.last_annotators.split(",")])
+
+        return where_clauses
 
     def filters_without_taxo(self) -> ProjectFiltersDict:
         """
@@ -1327,43 +1427,95 @@ class DescribedObjectBOSet(object):
         if order_clause is None:
             order_clause = OrderClause()
         # The filters on objects
-        obj_where = WhereClause()
-
-        params: SQLParamDict = {"projid": self.project_ids}
-
-        self.filters.get_sql_filter(
-            obj_where, params, self.user_id, self.mapping.object_mappings
+        filter_clauses = self.filters.get_sql_filter(
+            self.user_id, self.mapping.object_mappings
         )
+        acq_part = "AND acq.acquisid <@ acq_in_prj(prjs.projid)"
+        obh_part = "AND obh.objid <@ obj_in_prj(prjs.projid)"
+        obf_part = "AND obf.objfid <@ obj_in_prj(prjs.projid)"
+        cnn_part = "AND cnn.objcnnid <@ obj_in_prj(prjs.projid)"
+
+        obj_where = WhereClause()
+        params: SQLParamDict = {"projid": self.project_ids}
+        used_prefixes = set()
+
+        def push_where(prefix: str) -> str:
+            if prefix in filter_clauses:
+                used_prefixes.add(prefix)
+                params.update(filter_clauses[prefix].params)
+                return " AND " + " AND ".join(filter_clauses[prefix].ands)
+            return ""
+
         column_referencing_sql = (
-            select_list + obj_where.get_sql() + order_clause.get_sql()
+            select_list
+            + "\n".join(
+                [
+                    " ".join(a_where.ands)
+                    for a_where in filter_clauses.values()
+                    if a_where.ands
+                ]
+            )
+            + order_clause.get_sql()
         )
         # TODO better select clause  to avoid a replace later in code
         selected_tables = FromClause(f"(select unnest(ARRAY[:projid]) as projid) prjs")
-        obj_field_joined = "obf." in column_referencing_sql
-        if obj_field_joined and self.driving_table_is_obj_field(
-            obj_where.get_sql(),
-            order_clause.get_sql(),
-        ):
-            selected_tables += f"{ObjectFields.__tablename__} obf ON obf.objfid <@ obj_in_prj(prjs.projid)"
-            selected_tables += f"{ObjectHeader.__tablename__} obh ON obh.objid = obf.objfid AND obh.acquisid = obf.acquis_id"
+        if "prj." in column_referencing_sql:
+            selected_tables += (
+                f"{Project.__tablename__} prj ON prj.projid = prjs.projid"
+                + push_where("prj")
+            )
+            selected_tables += (
+                f"{Sample.__tablename__} sam ON sam.projid = prj.projid"
+                + push_where("sam")
+            )
         else:
-            selected_tables += f"{ObjectHeader.__tablename__} obh ON obh.objid <@ obj_in_prj(prjs.projid)"
-            if obj_field_joined:
-                selected_tables += f"{ObjectFields.__tablename__} obf ON obf.objfid = obh.objid AND obf.acquis_id = obh.acquisid"
+            selected_tables += (
+                f"{Sample.__tablename__} sam ON sam.projid = prjs.projid"
+                + push_where("sam")
+            )
         selected_tables += (
-            f"{Acquisition.__tablename__} acq ON acq.acquisid = obh.acquisid"
+            f"{Acquisition.__tablename__} acq ON acq.acq_sample_id = sam.sampleid {acq_part}"
+            + push_where("acq")
         )
         if "prc." in column_referencing_sql:
             selected_tables += (
-                f"{Process.__tablename__} prc ON prc.processid = obh.acquisid"
+                f"{Process.__tablename__} prc ON prc.processid = acq.acquisid"
+                + push_where("prc")
             )
-        selected_tables += (
-            f"{Sample.__tablename__} sam ON sam.sampleid = acq.acq_sample_id"
-        )
-        if "prj." in column_referencing_sql:
-            selected_tables += f"{Project.__tablename__} prj ON prj.projid = sam.projid"
+        obj_field_joined = "obf." in column_referencing_sql
+        if obj_field_joined and self.driving_table_is_obj_field(
+            "\n".join(
+                [
+                    " ".join(a_where.ands)
+                    for a_where in filter_clauses.values()
+                    if a_where.ands
+                ]
+            ),
+            order_clause.get_sql(),
+        ):
+            selected_tables += (
+                f"{ObjectFields.__tablename__} obf ON obf.acquis_id = acq.acquisid {obf_part}"
+                + push_where("obf")
+            )
+            selected_tables += (
+                f"{ObjectHeader.__tablename__} obh ON obh.objid = obf.objfid {obh_part}"
+                + push_where("obh")
+            )
+        else:
+            selected_tables += (
+                f"{ObjectHeader.__tablename__} obh ON obh.acquisid = acq.acquisid {obh_part}"
+                + push_where("obh")
+            )
+            if obj_field_joined:
+                selected_tables += (
+                    f"{ObjectFields.__tablename__} obf ON obf.objfid = obh.objid {obf_part}"
+                    + push_where("obf")
+                )
         if "cnn." in column_referencing_sql:
-            selected_tables += f"{ObjectCNNFeatureVector.__tablename__} cnn ON cnn.objcnnid = obh.objid"
+            selected_tables += (
+                f"{ObjectCNNFeatureVector.__tablename__} cnn ON cnn.objcnnid = obh.objid {cnn_part}"
+                + push_where("cnn")
+            )
         # if "prd." in column_referencing_sql:
         #     preds_ref = Prediction.__tablename__ + " prd"
         #     selected_tables += (
@@ -1387,6 +1539,7 @@ class DescribedObjectBOSet(object):
         if "txo." in column_referencing_sql or "txp." in column_referencing_sql:
             selected_tables += (
                 f"{Taxonomy.__tablename__} txo ON txo.id = obh.classif_id"
+                + push_where("txo")
             )
             if (
                 self.filters.status_filter not in MEANS_CLASSIF_ID_EXIST
@@ -1394,18 +1547,36 @@ class DescribedObjectBOSet(object):
             ):
                 selected_tables.set_outer(f"{Taxonomy.__tablename__} txo ")
         if "img." in column_referencing_sql:
-            selected_tables += (
-                f"{Image.__tablename__} img ON obh.objid = img.objid "
-                if all_images
-                else f"(select * from {Image.__tablename__} img2 where obh.objid = img2.objid order by imgrank limit 1) img ON true"
-            )
-            selected_tables.set_lateral(f"(select * from {Image.__tablename__}")
+            if all_images:
+                selected_tables += (
+                    f"{Image.__tablename__} img ON obh.objid = img.objid"
+                    + push_where("img")
+                )
+            else:
+                selected_tables += (
+                    f"(select * from {Image.__tablename__} img2 where obh.objid = img2.objid order by imgrank limit 1) img ON true"
+                    + push_where("img")
+                )
+                selected_tables.set_lateral(f"(select * from {Image.__tablename__}")
         if "usr." in column_referencing_sql:
-            selected_tables += f"{User.__tablename__} usr ON obh.classif_who = usr.id"
+            selected_tables += (
+                f"{User.__tablename__} usr ON obh.classif_who = usr.id"
+                + push_where("usr")
+            )
             selected_tables.set_outer(f"{User.__tablename__} usr ")
         if "txp." in column_referencing_sql:
-            selected_tables += f"{Taxonomy.__tablename__} txp ON txp.id = txo.parent_id"
+            selected_tables += (
+                f"{Taxonomy.__tablename__} txp ON txp.id = txo.parent_id"
+                + push_where("txp")
+            )
             selected_tables.set_outer(f"{Taxonomy.__tablename__} txp ")
+
+        # Collect remaining filters
+        for prefix, a_where in filter_clauses.items():
+            if prefix not in used_prefixes:
+                obj_where.ands.extend(a_where.ands)
+                params.update(a_where.params)
+
         return selected_tables, obj_where, params
 
     def without_filtering_taxo(self):
