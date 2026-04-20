@@ -24,6 +24,7 @@ from typing import (
     OrderedDict as OrderedDictT,
     cast,
     Final,
+    Union,
 )
 
 # A Postgresl insert generator, needed for the key conflict clause
@@ -96,28 +97,26 @@ MEANS_CLASSIF_ID_EXIST = ("P", "V", "D", "PV", "PVD", "NVM", "VM")
 NO_HISTO = "n"
 
 
-class DescribedObjectSet(object):
+class BaseDescribedObjectSet(object):
     """
-    A (potentially large) set of objects, described by a base rule (all objects in project XXX)
+    A (potentially large) set of objects, described by a base rule
     and filtered by exclusion conditions.
     """
 
-    __slots__ = ("prj", "user_id", "mapping", "filters")
+    __slots__ = ("user_id", "mapping", "filters")
 
     def __init__(
         self,
         session: Session,
-        prj: Project,
         user_id: Optional[UserIDT],
         filters: ProjectFiltersDict,
     ):
         """
         :param user_id: The 'current' user, in case the filter refers to him/her.
         """
-        self.prj = prj
         self.user_id = user_id
-        self.mapping = ProjectMapping().load_from_project(prj)
         self.filters = ObjectSetFilter(session, filters)
+        self.mapping: Union[ProjectMapping, ProjectSetMapping]
 
     def get_sql(
         self,
@@ -146,7 +145,7 @@ class DescribedObjectSet(object):
         cnn_part = "AND cnn.objcnnid <@ obj_in_prj(prjs.projid)"
 
         obj_where = WhereClause()
-        params: SQLParamDict = {"projid": self.prj.projid}
+        params: SQLParamDict = self._get_sql_params()
         used_prefixes = set()
 
         def push_where(prefix: str) -> str:
@@ -155,7 +154,6 @@ class DescribedObjectSet(object):
                 params.update(filter_clauses[prefix].params)
                 return " AND " + " AND ".join(filter_clauses[prefix].ands)
             return ""
-
         column_referencing_sql = (
             select_list
             + "\n".join(
@@ -167,9 +165,7 @@ class DescribedObjectSet(object):
             )
             + order_clause.get_sql()
         )
-        selected_tables = FromClause(
-            f"(VALUES (:projid)) AS prjs(projid)"
-        )  # Prepare a future _set_ of projects
+        selected_tables = self._get_initial_from_clause()
         if "prj." in column_referencing_sql:
             selected_tables += (
                 f"{Project.__tablename__} prj ON prj.projid = prjs.projid"
@@ -290,15 +286,6 @@ class DescribedObjectSet(object):
 
         return selected_tables, obj_where, params
 
-    def without_filtering_taxo(self):
-        """
-        Return a clone of self, but without any Taxonomy related filter.
-        """
-        filters_but_taxo = self.filters.filters_without_taxo()
-        return DescribedObjectSet(
-            self.filters.session, self.prj, self.user_id, filters_but_taxo
-        )
-
     def driving_table_is_obj_field(self, where: str, order: str) -> bool:
         """Choose the fastest way to find needed objects.
         We mirror acquis_id from obj_head to obj_fields so 2 options are:
@@ -321,6 +308,47 @@ class DescribedObjectSet(object):
         ):
             ret = False
         return ret
+
+    def _get_sql_params(self) -> SQLParamDict:
+        raise NotImplementedError()
+
+    def _get_initial_from_clause(self) -> FromClause:
+        raise NotImplementedError()
+
+
+class DescribedObjectSet(BaseDescribedObjectSet):
+    """
+    A (potentially large) set of objects, described by a base rule (all objects in project XXX)
+    and filtered by exclusion conditions.
+    """
+
+    __slots__ = ("prj",)
+
+    def __init__(
+        self,
+        session: Session,
+        prj: Project,
+        user_id: Optional[UserIDT],
+        filters: ProjectFiltersDict,
+    ):
+        super().__init__(session, user_id, filters)
+        self.prj = prj
+        self.mapping = ProjectMapping().load_from_project(prj)
+
+    def _get_sql_params(self) -> SQLParamDict:
+        return {"projid": self.prj.projid}
+
+    def _get_initial_from_clause(self) -> FromClause:
+        return FromClause(f"(VALUES (:projid)) AS prjs(projid)")
+
+    def without_filtering_taxo(self):
+        """
+        Return a clone of self, but without any Taxonomy related filter.
+        """
+        filters_but_taxo = self.filters.filters_without_taxo()
+        return DescribedObjectSet(
+            self.filters.session, self.prj, self.user_id, filters_but_taxo
+        )
 
 
 class EnumeratedObjectSet(MappedTable):
@@ -1375,13 +1403,13 @@ class ObjectSetFilter(object):
         return less_filtered
 
 
-class DescribedObjectBOSet(object):
+class DescribedObjectBOSet(BaseDescribedObjectSet):
     """
-    A (potentially large) set of objects, described by a base rule (all objects in projects XXX)
-    and filtered by exclusion conditions.
+    A (potentially large) set of objects, described by a base rule (all objects in
+    a list of projects) and filtered by exclusion conditions.
     """
 
-    __slots__ = ("project_ids", "user_id", "mapping", "filters")
+    __slots__ = ("project_ids",)
 
     def __init__(
         self,
@@ -1390,17 +1418,8 @@ class DescribedObjectBOSet(object):
         user_id: Optional[UserIDT],
         filters: ProjectFiltersDict,
     ):
-        """
-        :param user_id: The 'current' user, in case the filter refers to him/her.
-        """
+        super().__init__(session, user_id, filters)
         self.project_ids = project_ids
-        self.user_id = user_id
-        object_mappings: TableMapping = TableMapping(
-            ObjectFields, FREE_COLS_ARE_ELSEWHERE
-        )
-        sample_mappings: TableMapping = TableMapping(Sample)
-        acquisition_mappings: TableMapping = TableMapping(Acquisition)
-        process_mappings: TableMapping = TableMapping(Process)
         # store for iteration
         src_projects: List[Project] = (
             session.query(Project).filter(Project.projid.in_(self.project_ids)).all()
@@ -1408,176 +1427,14 @@ class DescribedObjectBOSet(object):
         self.mapping: ProjectSetMapping = ProjectSetMapping().load_from_projects(
             src_projects
         )
-        self.filters = ObjectSetFilter(session, filters)
 
-    def get_sql(
-        self,
-        order_clause: Optional[OrderClause] = None,
-        select_list: str = "",
-        all_images: bool = False,
-    ) -> Tuple[FromClause, WhereClause, SQLParamDict]:
-        """
-        Construct SQL parts for getting per-object information.
-        :param order_clause: The required order by clause, possibly containing a resultset window.
-        :param select_list: Used for hinting the builder that some specific table will be needed in join.
-                major tables obj_head, samples and acquisitions are always joined.
-        :param all_images: If not set (default), only return the lowest rank, i.e. visible, image
-        :return:
-        """
-        if order_clause is None:
-            order_clause = OrderClause()
-        # The filters on objects
-        filter_clauses = self.filters.get_sql_filter(
-            self.user_id, self.mapping.object_mappings
-        )
-        acq_part = "AND acq.acquisid <@ acq_in_prj(prjs.projid)"
-        obh_part = "AND obh.objid <@ obj_in_prj(prjs.projid)"
-        obf_part = "AND obf.objfid <@ obj_in_prj(prjs.projid)"
-        cnn_part = "AND cnn.objcnnid <@ obj_in_prj(prjs.projid)"
+    def _get_sql_params(self) -> SQLParamDict:
+        return {
+            "projid": ",".join([str(project_id) for project_id in self.project_ids])
+        }
 
-        obj_where = WhereClause()
-        params: SQLParamDict = {"projid": self.project_ids}
-        used_prefixes = set()
-
-        def push_where(prefix: str) -> str:
-            if prefix in filter_clauses:
-                used_prefixes.add(prefix)
-                params.update(filter_clauses[prefix].params)
-                return " AND " + " AND ".join(filter_clauses[prefix].ands)
-            return ""
-
-        column_referencing_sql = (
-            select_list
-            + "\n".join(
-                [
-                    " ".join(a_where.ands)
-                    for a_where in filter_clauses.values()
-                    if a_where.ands
-                ]
-            )
-            + order_clause.get_sql()
-        )
-        # TODO better select clause  to avoid a replace later in code
-        selected_tables = FromClause(f"(select unnest(ARRAY[:projid]) as projid) prjs")
-        if "prj." in column_referencing_sql:
-            selected_tables += (
-                f"{Project.__tablename__} prj ON prj.projid = prjs.projid"
-                + push_where("prj")
-            )
-            selected_tables += (
-                f"{Sample.__tablename__} sam ON sam.projid = prj.projid"
-                + push_where("sam")
-            )
-        else:
-            selected_tables += (
-                f"{Sample.__tablename__} sam ON sam.projid = prjs.projid"
-                + push_where("sam")
-            )
-        selected_tables += (
-            f"{Acquisition.__tablename__} acq ON acq.acq_sample_id = sam.sampleid {acq_part}"
-            + push_where("acq")
-        )
-        if "prc." in column_referencing_sql:
-            selected_tables += (
-                f"{Process.__tablename__} prc ON prc.processid = acq.acquisid"
-                + push_where("prc")
-            )
-        obj_field_joined = "obf." in column_referencing_sql
-        if obj_field_joined and self.driving_table_is_obj_field(
-            "\n".join(
-                [
-                    " ".join(a_where.ands)
-                    for a_where in filter_clauses.values()
-                    if a_where.ands
-                ]
-            ),
-            order_clause.get_sql(),
-        ):
-            selected_tables += (
-                f"{ObjectFields.__tablename__} obf ON obf.acquis_id = acq.acquisid {obf_part}"
-                + push_where("obf")
-            )
-            selected_tables += (
-                f"{ObjectHeader.__tablename__} obh ON obh.objid = obf.objfid {obh_part}"
-                + push_where("obh")
-            )
-        else:
-            selected_tables += (
-                f"{ObjectHeader.__tablename__} obh ON obh.acquisid = acq.acquisid {obh_part}"
-                + push_where("obh")
-            )
-            if obj_field_joined:
-                selected_tables += (
-                    f"{ObjectFields.__tablename__} obf ON obf.objfid = obh.objid {obf_part}"
-                    + push_where("obf")
-                )
-        if "cnn." in column_referencing_sql:
-            selected_tables += (
-                f"{ObjectCNNFeatureVector.__tablename__} cnn ON cnn.objcnnid = obh.objid {cnn_part}"
-                + push_where("cnn")
-            )
-        # if "prd." in column_referencing_sql:
-        #     preds_ref = Prediction.__tablename__ + " prd"
-        #     selected_tables += (
-        #         preds_ref
-        #         + " ON prd.object_id = obh.objid AND prd.classif_id = obh.classif_id"
-        #     )
-        #     if self.filters.status_filter not in MEANS_TRAINING_ID_EXIST:
-        #         selected_tables.set_outer(preds_ref)
-        # if "trn." in column_referencing_sql:
-        #     trainings_ref = Training.__tablename__ + " trn"
-        #     selected_tables += trainings_ref + " ON trn.training_id = prd.training_id"
-        #     if self.filters.status_filter not in MEANS_TRAINING_ID_EXIST:
-        #         selected_tables.set_outer(trainings_ref)
-        if "ohu." in column_referencing_sql:  # Inline query for annotators in history
-            selected_tables += (
-                f"(select 1 as in_annots WHERE EXISTS (select * from {ObjectsClassifHisto.__tablename__} och "
-                "WHERE och.objid = obh.objid AND och.classif_who = ANY (:filt_annot) ) ) ohu ON True"
-            )
-            selected_tables.set_outer("(select 1 as in_annots ")
-            selected_tables.set_lateral("(select 1 as in_annots ")
-        if "txo." in column_referencing_sql or "txp." in column_referencing_sql:
-            selected_tables += (
-                f"{Taxonomy.__tablename__} txo ON txo.id = obh.classif_id"
-                + push_where("txo")
-            )
-            if (
-                self.filters.status_filter not in MEANS_CLASSIF_ID_EXIST
-                and not self.filters.taxo  # If some taxo is needed it's a plain join
-            ):
-                selected_tables.set_outer(f"{Taxonomy.__tablename__} txo ")
-        if "img." in column_referencing_sql:
-            if all_images:
-                selected_tables += (
-                    f"{Image.__tablename__} img ON obh.objid = img.objid"
-                    + push_where("img")
-                )
-            else:
-                selected_tables += (
-                    f"(select * from {Image.__tablename__} img2 where obh.objid = img2.objid order by imgrank limit 1) img ON true"
-                    + push_where("img")
-                )
-                selected_tables.set_lateral(f"(select * from {Image.__tablename__}")
-        if "usr." in column_referencing_sql:
-            selected_tables += (
-                f"{User.__tablename__} usr ON obh.classif_who = usr.id"
-                + push_where("usr")
-            )
-            selected_tables.set_outer(f"{User.__tablename__} usr ")
-        if "txp." in column_referencing_sql:
-            selected_tables += (
-                f"{Taxonomy.__tablename__} txp ON txp.id = txo.parent_id"
-                + push_where("txp")
-            )
-            selected_tables.set_outer(f"{Taxonomy.__tablename__} txp ")
-
-        # Collect remaining filters
-        for prefix, a_where in filter_clauses.items():
-            if prefix not in used_prefixes:
-                obj_where.ands.extend(a_where.ands)
-                params.update(a_where.params)
-
-        return selected_tables, obj_where, params
+    def _get_initial_from_clause(self) -> FromClause:
+        return FromClause(f"(select :projid as projid) prjs")
 
     def without_filtering_taxo(self):
         """
@@ -1587,29 +1444,6 @@ class DescribedObjectBOSet(object):
         return DescribedObjectBOSet(
             self.filters.session, self.project_ids, self.user_id, filters_but_taxo
         )
-
-    def driving_table_is_obj_field(self, where: str, order: str) -> bool:
-        """Choose the fastest way to find needed objects.
-        We mirror acquis_id from obj_head to obj_fields so 2 options are:
-        -1 Fetch via acquis_id the big rows in obj_fields and then PK access to obj_head
-        -2 Fetch via acquis_id the small rows in obj_head and then PK access to obj_fields
-        1 is faster if we need the majority of rows, 2 is better if some filter eliminates based on obj_head cols.
-        We don't know in advance the selectivity of filters, so there is kind of heuristic here.
-        """
-        ret = False
-        if ("obf." in order) or ("obf." in where and "obh." not in where):
-            ret = True
-        if (
-            "obh.classif_id" in where
-        ):  # Very discriminating and covered by index 'is_objectsacqclassifqual'
-            ret = False
-        if (
-            "obh.classif_qual" in where  # covered as well by 'is_objectsacqclassifqual'
-            and self.filters.status_filter
-            not in ("NV",)  # This OR-linked condition does not end up in index scan
-        ):
-            ret = False
-        return ret
 
     def as_select_list(
         self, alias: str, table_name: str, mappingcols: Dict[str, str]
