@@ -44,7 +44,6 @@ from BO.Mappings import (
     ProjectSetMapping,
     TableMapping,
     TABLE_TO_PREFIX,
-    FREE_COLS_ARE_ELSEWHERE,
 )
 from BO.Object import ObjectIDWithParentsT, MANUAL_STATES_TEXT, PREDICTED_STATE_TEXT
 from BO.Taxonomy import TaxonomyBO
@@ -154,6 +153,7 @@ class BaseDescribedObjectSet(object):
                 params.update(filter_clauses[prefix].params)
                 return " AND " + " AND ".join(filter_clauses[prefix].ands)
             return ""
+
         column_referencing_sql = (
             select_list
             + "\n".join(
