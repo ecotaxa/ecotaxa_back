@@ -18,6 +18,7 @@ from DB.Sample import Sample
 from DB.helpers import Result
 from DB.helpers.Direct import text
 from DB.helpers.ORM import Model, contains_eager, any_
+from DB.helpers.SQL import SelectClause
 from formats.JSONObjectSet import JSON_FIELDS, JSONDesc
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
@@ -157,9 +158,10 @@ class JsonDumper(Service):
             object_set: DescribedObjectSet = DescribedObjectSet(
                 self.session, self.prj, self.requester_id, self.filters
             )
-            from_, where, params = object_set.get_sql()
+            select_clause = SelectClause().add_expr("obh.objid")
+            from_, where, params = object_set.get_sql(select_clause)
 
-            sql = """ SELECT objid FROM """ + from_.get_sql() + where.get_sql()
+            sql = select_clause.get_sql() + " FROM " + from_.get_sql() + where.get_sql()
 
         logger.info("SQL=%s", sql)
         logger.info("SQLParam=%s", params)

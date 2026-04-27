@@ -1,8 +1,11 @@
+\echo
+\set ON_ERROR_STOP on
+
 \set SAM_MULT 1000000::bigint
 \set ACQ_MULT 10000000::bigint
 \set OBJ_MULT 100000000
 \set OTHER_TBLSPC home_tables
--- \set OTHER_TBLSPC pg_default
+-- \set OTHER_TBLSPC pg_default -- For PROD
 
 -- Bump the first projects which collide
 CREATE UNLOGGED TABLE projid_old_2_new AS
@@ -90,7 +93,7 @@ COMMIT;
 
 
 CREATE UNLOGGED TABLE samid_old_2_new AS
-SELECT sampleid                                                                           AS old_id,
+SELECT sampleid                                                                         AS old_id,
        (projid * :SAM_MULT) + ROW_NUMBER() OVER (PARTITION BY projid ORDER BY sampleid) AS new_id
 FROM samples;
 
@@ -147,16 +150,6 @@ SET acq_sample_id = mapping.new_id
 FROM samid_old_2_new mapping
 WHERE acquisitions.acq_sample_id = mapping.old_id;
 
--- 4. Re-create the primary key and foreign keys
--- ALTER TABLE samples ADD PRIMARY KEY (sampleid);
-
-vacuum (verbose, full) samples;
-
-vacuum (verbose, full) acquisitions;
-
--- 6. Cleanup
--- DROP TABLE samid_old_2_new;
-
 -- 2. Drop constraints to allow updating primary keys and foreign keys
 -- This includes foreign keys from 'obj_head' and 'process'
 ALTER TABLE obj_head
@@ -189,9 +182,22 @@ SET processid = mapping.new_id
 FROM acqid_old_2_new mapping
 WHERE process.processid = mapping.old_id;
 
-vacuum (verbose, full) acquisitions;
+REINDEX TABLE samples;
+VACUUM (verbose, full) samples;
 
-vacuum (verbose, full) process;
+-- 7. Restore primary keys and foreign keys
+ALTER TABLE acquisitions
+    ADD CONSTRAINT acquisitions_pkey PRIMARY KEY (acquisid);
+
+REINDEX TABLE acquisitions;
+VACUUM (verbose, full) acquisitions;
+
+ALTER TABLE process
+    ADD CONSTRAINT process_pkey PRIMARY KEY (processid);
+
+REINDEX TABLE process;
+VACUUM (verbose, full) process;
+
 
 -- Make space in the old table namespace
 -- Primary Key
@@ -344,17 +350,13 @@ $$
 $$;
 
 
--- 7. Restore primary keys and foreign keys
-ALTER TABLE acquisitions
-    ADD CONSTRAINT acquisitions_pkey PRIMARY KEY (acquisid);
-
-ALTER TABLE process
-    ADD CONSTRAINT process_pkey PRIMARY KEY (processid);
-
 ALTER TABLE obj_head
     ADD CONSTRAINT obj_head_pkey PRIMARY KEY (objid);
 
 CREATE UNIQUE INDEX is_objectsacqclassifqual ON obj_head USING btree (acquisid, objid) INCLUDE (classif_qual, classif_id);
+
+DROP TABLE obj_head_old;
+
 CREATE INDEX is_objectsdate ON obj_head USING btree (objdate) INCLUDE (acquisid);
 CREATE INDEX is_objectsdepth ON obj_head USING btree (depth_max, depth_min) INCLUDE (acquisid);
 CREATE INDEX is_objectslatlong ON obj_head USING btree (latitude, longitude) INCLUDE (acquisid);
@@ -1295,6 +1297,8 @@ ALTER TABLE obj_cnn_features_vector OWNER TO postgres;
 ALTER TABLE ONLY obj_cnn_features_vector
     ADD CONSTRAINT obj_cnn_features_vector_pkey PRIMARY KEY (objcnnid);
 
+DROP TABLE obj_cnn_features_vector_old;
+
 CREATE INDEX obj_cnn_features_vector_hv_ivfflat_l2_5k_idx ON obj_cnn_features_vector USING ivfflat (((features)::halfvec(50)) halfvec_l2_ops) WITH (lists='5000');
 
 -- Foreign keys
@@ -1324,6 +1328,41 @@ ALTER TABLE prediction_histo
     ADD CONSTRAINT prediction_histo_training_id_fkey FOREIGN KEY (training_id) REFERENCES training(training_id) ON DELETE CASCADE;
 ALTER TABLE obj_cnn_features_vector
     ADD CONSTRAINT obj_cnn_features_vector_objcnnid_fkey FOREIGN KEY (objcnnid) REFERENCES obj_head(objid) ON DELETE CASCADE ON UPDATE CASCADE;
+
+CREATE OR REPLACE FUNCTION public.fix_partition_stats(
+    p_parent_table regclass,
+    p_column_name text,
+    p_target_value int DEFAULT 1000
+)
+    RETURNS void
+    LANGUAGE plpgsql
+AS
+$$
+DECLARE
+    v_partition_record record;
+BEGIN
+    FOR v_partition_record IN
+        SELECT inhrelid::regclass AS partition_name
+        FROM pg_inherits
+        WHERE inhparent = p_parent_table
+        LOOP
+            RAISE NOTICE 'Stats on partition : %', v_partition_record.partition_name;
+            EXECUTE format(
+                    'ALTER TABLE %s ALTER COLUMN %I SET STATISTICS %L',
+                    v_partition_record.partition_name,
+                    p_column_name,
+                    p_target_value
+                    );
+            EXECUTE format('ANALYZE %s', v_partition_record.partition_name);
+        END LOOP;
+    EXECUTE format('ANALYZE %s', p_parent_table);
+END;
+$$;
+
+SELECT public.fix_partition_stats('obj_field', 'acquis_id', 1000);
+
+SELECT public.fix_partition_stats('obj_head', 'acquisid', 1000);
+
 
 CREATE OR REPLACE FUNCTION acq_in_prj(prj_id int)
 RETURNS int8range AS $$

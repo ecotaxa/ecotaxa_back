@@ -44,7 +44,7 @@ from DB.helpers import Result
 from DB.helpers.Direct import text
 from DB.helpers.Hints import RECURS_HINT
 from DB.helpers.Postgres import db_server_now
-from DB.helpers.SQL import OrderClause
+from DB.helpers.SQL import OrderClause, SelectClause, FromClause, WhereClause
 from FS.VaultRemover import VaultRemover
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
@@ -107,18 +107,24 @@ class ObjectManager(Service):
         )
         free_columns_mappings = object_set.mapping.object_mappings
 
-        # The order fields have an impact on the query
+        # The order field has an impact on the query
         order_clause = self.cook_order_clause(
             order_field, free_columns_mappings, str(return_fields)
         )
 
-        extra_cols = self.add_return_fields(return_fields, free_columns_mappings)
+        select_clause = SelectClause()
+        select_clause.add_expr("obh.objid", "obh_objid").add_expr(
+            "acq.acquisid"
+        ).add_expr("sam.sampleid").add_expr("0", "total")
+        self.return_fields_to_selects(
+            select_clause, return_fields, free_columns_mappings
+        )
 
         if sim_search_seed is not None:
-            extra_cols = (
-                extra_cols
-                + f""", cnn.features::halfvec(50)<->(SELECT features::halfvec(50) FROM {ObjectCNNFeatureVector.__tablename__}
-        WHERE objcnnid={sim_search_seed}) AS l2_dist"""
+            seed_sql = f"(SELECT features::halfvec(50) FROM {ObjectCNNFeatureVector.__tablename__} WHERE objcnnid={sim_search_seed})"
+            select_clause.add_expr(
+                f"cnn.features::halfvec(50)<->{seed_sql}",
+                "l2_dist",
             )
             order_clause = OrderClause()
             asc_desc = (
@@ -127,73 +133,20 @@ class ObjectManager(Service):
             order_clause.add_expression(None, "l2_dist", asc_desc)
 
         order_clause.set_window(window_start, window_size)
-
-        from_, where_clause, params = object_set.get_sql(order_clause, extra_cols)
-
-        cte = ""
-        if (
-            order_clause.get_sql().strip("\n")
-            and order_field is not None
-            and sim_search_seed is None
-        ):
-            ordr = order_field[1:] if order_field.startswith("-") else order_field
-            # Select only object ID and sort columns
-            sort_val = ObjectBO.resolve_fields([ordr], free_columns_mappings)[0]
-            # Keep only useful (for filtering and sorting) JOINS
-            joins = from_.get_sql().splitlines()
-            from_sql = ""
-            # Eliminate costly but useless (in this context) joins
-            for a_line in joins:
-                keep = True
-                if a_line.find("taxonomy txo") != -1:
-                    if "txo." not in sort_val and a_line.strip().endswith(
-                        "ON txo.id = obh.classif_id"
-                    ):
-                        keep = False
-                elif a_line.find("images img") != -1:
-                    if "img." not in sort_val and a_line.strip().endswith(
-                        "imgrank limit 1) img ON true"
-                    ):
-                        keep = False
-                elif a_line.find("obj_field obf") != -1:
-                    if "obf." not in sort_val and a_line.strip().endswith(
-                        "<@ obj_in_prj(prjs.projid)"
-                    ):
-                        keep = False
-                if keep:
-                    from_sql += a_line
-            cte = (
-                f"""
-    WITH relevant_objs AS ( SELECT obh.objid AS object_id, {sort_val} \n FROM """
-                + from_sql
-                + where_clause.get_sql()
-                + order_clause.get_sql()
-                + ")"
-            )
-            # It's absorbed in CTE
-            order_clause.set_window(None, None)
-            # TODO: We could enable below, but it goes with a JOIN we would have to remove as well
-            # It's in the case "filter on annotator"
-            # where_clause.clear()
-
-        # Compute the total in a second step (_summarize)
-        total_col = "0 AS total"
-        sql = (
-            cte
-            + f"""
-SELECT {RECURS_HINT} obh.objid, acq.acquisid, sam.sampleid, %s%s
-  FROM """
-            % (
-                total_col,
-                extra_cols,
+        from_clause, where_clause, params = object_set.get_sql(
+            select_clause, order_clause
+        )
+        cte, select_clause, from_clause, where_clause, order_clause = (
+            self.optimize_for_limit(
+                select_clause, from_clause, where_clause, order_clause
             )
         )
-        sql += from_.get_sql()
-        if cte:
-            sql += "\nJOIN relevant_objs rel ON obh.objid = rel.object_id "
+
+        sql = cte + select_clause.get_sql() + "\n FROM "
+        sql += from_clause.get_sql()
         sql += where_clause.get_sql()
         # Add order & window, if empty it's just a \n
-        sql += order_clause.get_sql()
+        sql += "\n" + order_clause.get_sql()
 
         with CodeTimer("Query: SQL: %s PARAMS: %s: " % (sql, params), logger, 1):
             res: Result = self.ro_session.execute(text(sql), params)
@@ -239,9 +192,10 @@ SELECT {RECURS_HINT} obh.objid, acq.acquisid, sam.sampleid, %s%s
         if order_field[0] == "-":
             asc_desc = "DESC"
             order_field = order_field[1:]
-        order_expr = ObjectBO._field_to_db_col(order_field, mappings)
-        if order_expr is None:
+        dep_and_expr = ObjectBO._field_to_db_col(order_field, mappings)
+        if dep_and_expr is None:
             return ret
+        dep_tbl, order_expr = dep_and_expr
         if " AS " in order_expr:
             alias = None
             order_expr, order_col = order_expr.split(" AS ")
@@ -269,19 +223,26 @@ SELECT {RECURS_HINT} obh.objid, acq.acquisid, sam.sampleid, %s%s
         return ret
 
     @classmethod
-    def add_return_fields(
-        cls, return_fields: Optional[List[str]], mapping: TableMapping
-    ) -> str:
+    def return_fields_to_selects(
+        cls,
+        receiving_clause: SelectClause,
+        return_fields: Optional[List[str]],
+        mapping: TableMapping,
+    ) -> None:
         """
-            From an API-named list of columns, return the real text for the SELECT to return them
+         Add select parts corresponding to an API-named list of columns
+        :param receiving_clause: Where to add.
         :param return_fields: The fields in prefix+name convention
         :param mapping: Mapping to use
         :return:
         """
         vals = ObjectBO.resolve_fields(return_fields, mapping)
-        if len(vals) == 0:
-            return ""
-        return ",\n" + ", ".join(vals)
+        for tbl_alias, a_val in vals:
+            if " AS " in a_val:
+                expr, name = a_val.split(" AS ", 1)
+                receiving_clause.add_expr(expr, name)
+            else:
+                receiving_clause.add_expr(a_val)
 
     def get_prediction_infos(
         self, current_user_id: UserIDT, object_ids: ObjectIDListT
@@ -367,19 +328,27 @@ SELECT {RECURS_HINT} obh.objid, acq.acquisid, sam.sampleid, %s%s
         """
         Compute the summary of given object_set
         """
-        from_, where, params = object_set.get_sql()
-        sql = f"""
-SELECT {RECURS_HINT} COUNT(*) nbr"""
+        select_clause = SelectClause().add_expr(f"{RECURS_HINT} COUNT(*)", "nbr")
         if only_total:
-            sql += """, NULL nbr_v, NULL nbr_d, NULL nbr_p"""
+            select_clause.add_expr("NULL", "nbr_v").add_expr("NULL", "nbr_d").add_expr(
+                "NULL", "nbr_p"
+            )
         else:
-            sql += f""",
-            COUNT(*) FILTER (WHERE obh.classif_qual = '{VALIDATED_CLASSIF_QUAL}') nbr_v,
-            COUNT(*) FILTER (WHERE obh.classif_qual = '{DUBIOUS_CLASSIF_QUAL}') nbr_d,
-            COUNT(*) FILTER (WHERE obh.classif_qual = '{PREDICTED_CLASSIF_QUAL}') nbr_p"""
-        sql += (
-            """
-      FROM """
+            select_clause.add_expr(
+                f"COUNT(*) FILTER (WHERE obh.classif_qual = '{VALIDATED_CLASSIF_QUAL}')",
+                "nbr_v",
+            ).add_expr(
+                f"COUNT(*) FILTER (WHERE obh.classif_qual = '{DUBIOUS_CLASSIF_QUAL}')",
+                "nbr_d",
+            ).add_expr(
+                f"COUNT(*) FILTER (WHERE obh.classif_qual = '{PREDICTED_CLASSIF_QUAL}')",
+                "nbr_p",
+            )
+
+        from_, where, params = object_set.get_sql(select_clause)
+        sql = (
+            select_clause.get_sql()
+            + "\n      FROM "
             + from_.get_sql()
             + " "
             + where.get_sql()
@@ -743,3 +712,105 @@ SELECT {RECURS_HINT} COUNT(*) nbr"""
         changes_for_id["n"] += inc_or_dec
         if qualif in CLASSIF_QUALS:
             changes_for_id[qualif] += inc_or_dec
+
+    @staticmethod
+    def optimize_for_limit(
+        select_clause: SelectClause,
+        from_clause: FromClause,
+        where_clause: WhereClause,
+        order_clause: OrderClause,
+    ) -> Tuple[str, SelectClause, FromClause, WhereClause, OrderClause]:
+        """
+        If the query has a window function OFFSET + LIMIT, arrange that costly
+        JOINs (e.g. image) which don't influence the result are only done for
+        the returned lines i.e. up to the limit in size.
+        """
+        # TODO: Disabled for now, too tricky
+        return "", select_clause, from_clause, where_clause, order_clause
+
+        if not order_clause.has_window():
+            return "", select_clause, from_clause, where_clause, order_clause
+
+        selected_prfx = select_clause.table_refs()
+        if not "img" in selected_prfx:
+            return "", select_clause, from_clause, where_clause, order_clause
+
+        # Top-level objects are always pushed out
+        rec_select_clause = select_clause.clone()
+        rec_select_clause = (
+            rec_select_clause.replace_alias("prj", "rec")
+            .replace_alias("sam", "rec")
+            .replace_alias("acq", "rec")
+            .replace_alias("obh", "rec")
+            .replace_alias("obf", "rec")
+            .replace_alias("txo", "rec")
+        )
+        # Computed in CTE part
+        select_clause.remove_for_column_alias("total")
+        select_clause.remove_for_column_alias("imgcount")
+
+        rec_from_clause = FromClause("recs rec")
+
+        if "img" in selected_prfx:
+            # Push image join after CTE
+            select_clause.remove_for_table_alias("img")
+            FromClause.transfer(from_clause, rec_from_clause, "img")
+            for prfx in ("prjs.", "sam.", "acq.", "obh.", "obf."):
+                rec_from_clause.replace_in_join(-1, prfx, "rec.")
+
+        if False:
+            # order_prfx = order_clause.table_refs()
+
+            # replace_alias("obh", "rec")
+            rec_select_clause = rec_select_clause.replace_alias("obf", "rec")
+            # .replace_alias("txo", "rec")
+
+            select_clause.add_expr("obh.classif_id")  # TODO: For joining txo
+            select_clause.add_expr(
+                "obf.objfid",
+            )
+            select_clause.add_expr(
+                "prjs.projid",
+            )
+
+            select_clause.remove_for_table_alias("obh")
+            select_clause.remove_for_table_alias("txo")
+
+            # SelectClause.transfer(select_clause, rec_select_clause, "img")
+
+            FromClause.transfer(from_clause, rec_from_clause, "obh")
+            # rec_from_clause.replace_in_join(-1, "obh.", "rec.")
+
+            # rec_from_clause.replace_in_join(-1, "obh.", "rec.")
+
+            FromClause.transfer(from_clause, rec_from_clause, "txo")
+            # rec_from_clause.replace_in_join(-1, "obh.", "rec.")
+
+            # FromClause.transfer(from_clause, rec_from_clause, "img")
+
+        order_clause_nolimit = order_clause.clone().set_window(None, None)
+        cte = (
+            "WITH recs AS ( "
+            + select_clause.get_sql()
+            # + ", ROW_NUMBER() OVER ("
+            # + order_clause_nolimit.get_sql()
+            # + ") AS cte_ordr"
+            + "\n FROM "
+            + from_clause.get_sql()
+            + where_clause.get_sql()
+            + "\n"
+            + order_clause.get_sql()
+            + ")\n"
+        )
+        rec_where_clause = WhereClause()
+        # rec_order_clause = OrderClause().add_expression("rec", "cte_ordr")
+        rec_order_clause = (
+            order_clause.clone().replace("obh.", "rec.").replace("obf.", "rec.")
+        )
+        return (
+            cte,
+            rec_select_clause,
+            rec_from_clause,
+            rec_where_clause,
+            rec_order_clause,
+        )

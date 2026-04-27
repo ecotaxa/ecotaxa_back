@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import datetime
+import re
 from collections import OrderedDict
 from decimal import Decimal
 from typing import (
@@ -25,6 +26,7 @@ from typing import (
     cast,
     Final,
     Union,
+    Set,
 )
 
 # A Postgresl insert generator, needed for the key conflict clause
@@ -63,6 +65,7 @@ from DB.Object import (
     NON_UPDATABLE_VIA_API,
     DUBIOUS_CLASSIF_QUAL,
     ObjectIDListT,
+    OBJ_PRJ_OFFSET_SQL,
 )
 from DB.Prediction import (
     PSEUDO_TRAINING_SCORE,
@@ -76,7 +79,13 @@ from DB.helpers.Core import select
 from DB.helpers.Direct import func
 from DB.helpers.ORM import Row, Delete, Update, any_, and_, or_, case
 from DB.helpers.Postgres import pg_insert, PgInsert
-from DB.helpers.SQL import WhereClause, SQLParamDict, FromClause, OrderClause
+from DB.helpers.SQL import (
+    WhereClause,
+    SQLParamDict,
+    FromClause,
+    OrderClause,
+    SelectClause,
+)
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
 
@@ -119,29 +128,30 @@ class BaseDescribedObjectSet(object):
 
     def get_sql(
         self,
+        select_clause: SelectClause,
         order_clause: Optional[OrderClause] = None,
-        select_list: str = "",
         all_images: bool = False,
     ) -> Tuple[FromClause, WhereClause, SQLParamDict]:
         """
         Construct SQL parts for getting per-object information.
         :param order_clause: The required order by clause, possibly containing a resultset window.
-        :param select_list: Used for hinting the builder that some specific table will be needed in join.
-                major tables obj_head, samples and acquisitions are always joined.
+        :param select_clause: Used for hinting the builder that some specific table will be needed in join.
+                Major tables obj_head, samples, and acquisitions are always joined.
         :param all_images: If not set (default), only return the lowest rank, i.e. visible, image
         :return:
         """
         if order_clause is None:
             order_clause = OrderClause()
+        assert order_clause
 
         # The filters on objects
         filter_clauses = self.filters.get_sql_filter(
             self.user_id, self.mapping.object_mappings
         )
-        acq_part = "AND acq.acquisid <@ acq_in_prj(prjs.projid)"
-        obh_part = "AND obh.objid <@ obj_in_prj(prjs.projid)"
-        obf_part = "AND obf.objfid <@ obj_in_prj(prjs.projid)"
-        cnn_part = "AND cnn.objcnnid <@ obj_in_prj(prjs.projid)"
+        bound_expr = self._get_bound_expression()
+        obh_part = f"AND obh.objid {bound_expr}"
+        obf_part = f"AND obf.objfid {bound_expr}"
+        cnn_part = f"AND cnn.objcnnid {bound_expr}"
 
         obj_where = WhereClause()
         params: SQLParamDict = self._get_sql_params()
@@ -154,19 +164,13 @@ class BaseDescribedObjectSet(object):
                 return " AND " + " AND ".join(filter_clauses[prefix].ands)
             return ""
 
-        column_referencing_sql = (
-            select_list
-            + "\n".join(
-                [
-                    " ".join(a_where.ands)
-                    for a_where in filter_clauses.values()
-                    if a_where.ands
-                ]
-            )
-            + order_clause.get_sql()
+        referenced_table_aliases = (
+            select_clause.table_refs()
+            .union(set(filter_clauses.keys()))
+            .union(order_clause.table_refs())
         )
         selected_tables = self._get_initial_from_clause()
-        if "prj." in column_referencing_sql:
+        if "prj" in referenced_table_aliases:
             selected_tables += (
                 f"{Project.__tablename__} prj ON prj.projid = prjs.projid"
                 + push_where("prj")
@@ -181,15 +185,15 @@ class BaseDescribedObjectSet(object):
                 + push_where("sam")
             )
         selected_tables += (
-            f"{Acquisition.__tablename__} acq ON acq.acq_sample_id = sam.sampleid {acq_part}"
+            f"{Acquisition.__tablename__} acq ON acq.acq_sample_id = sam.sampleid"
             + push_where("acq")
         )
-        if "prc." in column_referencing_sql:
+        if "prc" in referenced_table_aliases:
             selected_tables += (
                 f"{Process.__tablename__} prc ON prc.processid = acq.acquisid"
                 + push_where("prc")
             )
-        obj_field_joined = "obf." in column_referencing_sql
+        obj_field_joined = "obf" in referenced_table_aliases
         if obj_field_joined and self.driving_table_is_obj_field(
             "\n".join(
                 [
@@ -198,14 +202,14 @@ class BaseDescribedObjectSet(object):
                     if a_where.ands
                 ]
             ),
-            order_clause.get_sql(),
+            order_clause.table_refs(),
         ):
             selected_tables += (
                 f"{ObjectFields.__tablename__} obf ON obf.acquis_id = acq.acquisid {obf_part}"
                 + push_where("obf")
             )
             selected_tables += (
-                f"{ObjectHeader.__tablename__} obh ON obh.objid = obf.objfid {obh_part}"
+                f"{ObjectHeader.__tablename__} obh ON obh.acquisid = acq.acquisid AND obh.objid = obf.objfid {obh_part}"
                 + push_where("obh")
             )
         else:
@@ -215,10 +219,10 @@ class BaseDescribedObjectSet(object):
             )
             if obj_field_joined:
                 selected_tables += (
-                    f"{ObjectFields.__tablename__} obf ON obf.objfid = obh.objid {obf_part}"
+                    f"{ObjectFields.__tablename__} obf ON obf.acquis_id = acq.acquisid AND obf.objfid = obh.objid {obf_part}"
                     + push_where("obf")
                 )
-        if "cnn." in column_referencing_sql:
+        if "cnn" in referenced_table_aliases:
             selected_tables += (
                 f"{ObjectCNNFeatureVector.__tablename__} cnn ON cnn.objcnnid = obh.objid {cnn_part}"
                 + push_where("cnn")
@@ -236,14 +240,14 @@ class BaseDescribedObjectSet(object):
         #     selected_tables += trainings_ref + " ON trn.training_id = prd.training_id"
         #     if self.filters.status_filter not in MEANS_TRAINING_ID_EXIST:
         #         selected_tables.set_outer(trainings_ref)
-        if "ohu." in column_referencing_sql:  # Inline query for annotators in history
+        if "ohu" in referenced_table_aliases:  # Inline query for annotators in history
             selected_tables += (
                 f"(select 1 as in_annots WHERE EXISTS (select * from {ObjectsClassifHisto.__tablename__} och "
                 "WHERE och.objid = obh.objid AND och.classif_who = ANY (:filt_annot) ) ) ohu ON True"
             )
             selected_tables.set_outer("(select 1 as in_annots ")
             selected_tables.set_lateral("(select 1 as in_annots ")
-        if "txo." in column_referencing_sql or "txp." in column_referencing_sql:
+        if "txo" in referenced_table_aliases or "txp" in referenced_table_aliases:
             selected_tables += (
                 f"{Taxonomy.__tablename__} txo ON txo.id = obh.classif_id"
                 + push_where("txo")
@@ -253,7 +257,7 @@ class BaseDescribedObjectSet(object):
                 and not self.filters.taxo  # If some taxo is needed it's a plain join
             ):
                 selected_tables.set_outer(f"{Taxonomy.__tablename__} txo ")
-        if "img." in column_referencing_sql:
+        if "img" in referenced_table_aliases:
             if all_images:
                 selected_tables += (
                     f"{Image.__tablename__} img ON obh.objid = img.objid"
@@ -265,13 +269,13 @@ class BaseDescribedObjectSet(object):
                     + push_where("img")
                 )
                 selected_tables.set_lateral(f"(select * from {Image.__tablename__}")
-        if "usr." in column_referencing_sql:
+        if "usr" in referenced_table_aliases:
             selected_tables += (
                 f"{User.__tablename__} usr ON obh.classif_who = usr.id"
                 + push_where("usr")
             )
             selected_tables.set_outer(f"{User.__tablename__} usr ")
-        if "txp." in column_referencing_sql:
+        if "txp" in referenced_table_aliases:
             selected_tables += (
                 f"{Taxonomy.__tablename__} txp ON txp.id = txo.parent_id"
                 + push_where("txp")
@@ -286,7 +290,9 @@ class BaseDescribedObjectSet(object):
 
         return selected_tables, obj_where, params
 
-    def driving_table_is_obj_field(self, where: str, order: str) -> bool:
+    def driving_table_is_obj_field(
+        self, where: str, order_clause_refs: Set[str]
+    ) -> bool:
         """Choose the fastest way to find needed objects.
         We mirror acquis_id from obj_head to obj_fields so 2 options are:
         -1 Fetch via acquis_id the big rows in obj_fields and then PK access to obj_head
@@ -295,7 +301,7 @@ class BaseDescribedObjectSet(object):
         We don't know in advance the selectivity of filters, so there is kind of heuristic here.
         """
         ret = False
-        if ("obf." in order) or ("obf." in where and "obh." not in where):
+        if ("obf" in order_clause_refs) or ("obf." in where and "obh." not in where):
             ret = True
         if (
             "obh.classif_id" in where
@@ -315,6 +321,9 @@ class BaseDescribedObjectSet(object):
     def _get_initial_from_clause(self) -> FromClause:
         raise NotImplementedError()
 
+    def _get_bound_expression(self) -> str:
+        raise NotImplementedError()
+
 
 class DescribedObjectSet(BaseDescribedObjectSet):
     """
@@ -322,7 +331,7 @@ class DescribedObjectSet(BaseDescribedObjectSet):
     and filtered by exclusion conditions.
     """
 
-    __slots__ = ("prj",)
+    __slots__ = ("prj_id",)
 
     def __init__(
         self,
@@ -332,14 +341,19 @@ class DescribedObjectSet(BaseDescribedObjectSet):
         filters: ProjectFiltersDict,
     ):
         super().__init__(session, user_id, filters)
-        self.prj = prj
+        self.prj_id = prj.projid
         self.mapping = ProjectMapping().load_from_project(prj)
 
     def _get_sql_params(self) -> SQLParamDict:
-        return {"projid": self.prj.projid}
+        return {"projid": self.prj_id}
 
     def _get_initial_from_clause(self) -> FromClause:
         return FromClause(f"(VALUES (:projid)) AS prjs(projid)")
+
+    def _get_bound_expression(self) -> str:
+        return (
+            f"between :projid*{OBJ_PRJ_OFFSET_SQL} and (:projid+1)*{OBJ_PRJ_OFFSET_SQL}"
+        )
 
     def without_filtering_taxo(self):
         """
@@ -1189,11 +1203,11 @@ class ObjectSetFilter(object):
         if self.taxo:
             if self.taxo_child:
                 # TODO: In this case a single taxon is allowed. Not very consistent
-                prfx_where_clause("obh").chain(
-                    "obh.classif_id IN ("
-                    + TaxonomyBO.RQ_CHILDREN.replace(":ids", ":taxo")
-                    + ")"
-                ).add_param("taxo", [int(self.taxo)])
+                subq = TaxonomyBO.RQ_CHILDREN.replace(":ids", ":taxo")
+                subq = re.sub(r"\s+", " ", subq).strip()
+                prfx_where_clause("obh").chain(f"obh.classif_id IN ({subq})").add_param(
+                    "taxo", [int(self.taxo)]
+                )
             else:
                 taxa = [int(x) for x in self.taxo.split(",") if x != "None"]
                 if len(taxa) == 1:
@@ -1436,6 +1450,9 @@ class DescribedObjectBOSet(BaseDescribedObjectSet):
     def _get_initial_from_clause(self) -> FromClause:
         return FromClause(f"(select :projid as projid) prjs")
 
+    def _get_bound_expression(self) -> str:
+        return f"between prjs.projid*{OBJ_PRJ_OFFSET_SQL} and (prjs.projid+1)* {OBJ_PRJ_OFFSET_SQL}"
+
     def without_filtering_taxo(self):
         """
         Return a clone of self, but without any Taxonomy related filter.
@@ -1445,14 +1462,17 @@ class DescribedObjectBOSet(BaseDescribedObjectSet):
             self.filters.session, self.project_ids, self.user_id, filters_but_taxo
         )
 
-    def as_select_list(
-        self, alias: str, table_name: str, mappingcols: Dict[str, str]
-    ) -> str:
+    @staticmethod
+    def into_select_list(
+        select_clause: SelectClause,
+        alias: str,
+        table_name: str,
+        mappingcols: Dict[str, str],
+    ) -> None:
         """
-        Return a SQL select list for given alias. col = name of db column mapping , name= name of tsv column
+        Add SQL select expressions to the given clause for given alias.
+        col = name of db column mapping , name= name of tsv column
         """
-        sels = []
         tsv_table_name = TABLE_TO_PREFIX[table_name]
         for name, col in mappingcols.items():
-            sels.append('%s.%s AS "%s_%s"' % (alias, col, tsv_table_name, name))
-        return ", " + ", ".join(sels) if sels else ""
+            select_clause.add_expr(f"{alias}.{col}", f"{tsv_table_name}_{name}")

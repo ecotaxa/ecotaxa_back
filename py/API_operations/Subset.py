@@ -32,6 +32,7 @@ from DB.helpers.Bean import bean_of, Bean
 from DB.helpers.DBWriter import DBWriter
 from DB.helpers.Direct import text
 from DB.helpers.ORM import any_
+from DB.helpers.SQL import SelectClause
 from FS.Vault import Vault
 from helpers.DynamicLogs import get_logger, LogsSwitcher
 from .helpers.JobService import JobServiceOnProjectBase, ArgsDict
@@ -392,7 +393,8 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         object_set: DescribedObjectSet = DescribedObjectSet(
             self.session, self.prj, self._get_owner_id(), self.req.filters
         )
-        from_, where, params = object_set.get_sql()
+        select_clause = SelectClause().add_expr("obh.objid")
+        from_, where, params = object_set.get_sql(select_clause)
 
         # noinspection SqlResolve
         sql = (

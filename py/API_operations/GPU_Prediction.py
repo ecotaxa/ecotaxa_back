@@ -23,10 +23,10 @@ from DB.Object import ObjectIDListT
 from DB.Project import ProjectIDT, Project
 from DB.helpers import Result
 from DB.helpers.Direct import text
+from DB.helpers.SQL import SelectClause
 from ML.Deep_features_extractor import DeepFeaturesExtractor
 from ML.Random_forest_classifier import OurRandomForestClassifier
 from helpers.DynamicLogs import get_logger
-
 # TODO: Move somewhere else
 from helpers.Timer import CodeTimer
 from .ObjectManager import ObjectManager
@@ -235,13 +235,13 @@ In second step 'Choice of Learning Set categories and size', where the learning 
             self.ro_session, tgt_project, user_id, filters
         )
         free_columns_mappings = object_set.mapping.object_mappings
-        sel_cols = ObjectManager.add_return_fields(features, free_columns_mappings)
-        from_, where_clause, params = object_set.get_sql(
-            order_clause=None, select_list=sel_cols
+        select_clause = SelectClause().add_expr("obh.objid").add_expr("NULL")
+        ObjectManager.return_fields_to_selects(
+            select_clause, features, free_columns_mappings
         )
+        from_, where_clause, params = object_set.get_sql(select_clause)
         sql = (
-            "SELECT obh.objid, NULL "
-            + sel_cols
+            select_clause.get_sql()
             + " FROM "
             + from_.get_sql()
             + where_clause.get_sql()

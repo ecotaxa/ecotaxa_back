@@ -14,7 +14,7 @@ from DB.CNNFeatureVector import ObjectCNNFeatureVector
 from DB.Object import ObjectIDT
 from DB.Project import ProjectIDT
 from DB.helpers.Direct import text
-from DB.helpers.SQL import OrderClause
+from DB.helpers.SQL import OrderClause, SelectClause
 from helpers.DynamicLogs import get_logger
 
 # TODO: Move somewhere else
@@ -85,14 +85,16 @@ class SimilaritySearchForProject(Service):
         order_clause = OrderClause()
         order_clause.add_expression(None, "l2_dist")
         order_clause.set_window(None, self.limit)
-        dist_exp = f"""cnn.objcnnid, cnn.features::halfvec(50)<->(SELECT features::halfvec(50) FROM {ObjectCNNFeatureVector.__tablename__}
-        WHERE objcnnid={self.target_id}) AS l2_dist"""
-        from_, where_clause, params = object_set.get_sql(order_clause, dist_exp)
+        dist_exp = SelectClause().add_expr(
+            f"""cnn.objcnnid, cnn.features::halfvec(50)<->(SELECT features::halfvec(50) FROM {ObjectCNNFeatureVector.__tablename__} WHERE objcnnid={self.target_id})""",
+            "l2_dist",
+        )
+        from_, where_clause, params = object_set.get_sql(dist_exp, order_clause)
 
         query = f"""
         SET LOCAL ivvflat.probes = 10;
-        SELECT {dist_exp}
-        FROM {from_.get_sql()} {where_clause.get_sql()} {order_clause.get_sql()}
+        {dist_exp.get_sql()}
+        FROM {from_.get_sql()} {where_clause.get_sql()} \n{order_clause.get_sql()}
         """
 
         result = self.ro_session.execute(text(query), params).fetchall()
