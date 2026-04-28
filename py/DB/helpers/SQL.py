@@ -16,6 +16,7 @@ SQLParamDict = Dict[str, Union[int, float, Decimal, str, List[int], List[str]]]
 # Not completely exact but good enough
 COL_RE = re.compile(r"\b(\w+)\.(\w+)\b", re.ASCII)
 IDENTIFIER_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$", re.ASCII)
+RECORD_RE = re.compile(r"^\(\s*[\w.]+\s*,\s*[\w.]+(?:\s*,\s*[\w.]+)*\s*\)$", re.ASCII)
 
 
 class SelectClause(object):
@@ -31,8 +32,8 @@ class SelectClause(object):
 
     def clone(self) -> "SelectClause":
         new_clause = SelectClause()
-        new_clause.expressions = list(self.expressions)
-        new_clause.aliases = list(self.aliases)
+        new_clause.expressions = self.expressions[:]
+        new_clause.aliases = self.aliases[:]
         return new_clause
 
     def add_expr(self, expr: str, alias: Optional[str] = None) -> "SelectClause":
@@ -40,6 +41,9 @@ class SelectClause(object):
         self.expressions.append(expr)
         self.aliases.append(alias)
         return self
+
+    def has_expr(self, an_expr: str):
+        return an_expr in self.expressions
 
     def get_sql(self) -> str:
         aliased = []
@@ -51,7 +55,7 @@ class SelectClause(object):
                     aliased.append(f'{expr} AS "{alias}"')
             else:
                 aliased.append(expr)
-        ret = "SELECT " + ", ".join(aliased)
+        ret = "SELECT " + f", ".join(aliased)
         return ret
 
     def table_refs(self) -> Set[str]:
@@ -68,24 +72,54 @@ class SelectClause(object):
             del self.aliases[i]
 
     @staticmethod
-    def transfer(
+    def copy_for_ref(
         from_clause: "SelectClause", to_clause: "SelectClause", for_table_ref: str
     ):
-        indices_to_move = []
+        indices_to_copy = []
         for i, expr in enumerate(from_clause.expressions):
             # Find refs in this expression
             refs = {match.group(1) for match in COL_RE.finditer(expr)}
             if for_table_ref in refs:
-                indices_to_move.append(i)
+                indices_to_copy.append(i)
+        # Copy items
+        present = set(to_clause.result_columns())
+        for i in indices_to_copy:
+            from_exp = from_clause.expressions[i]
+            from_alias = from_clause.aliases[i]
+            showed = SelectClause.seen_as(from_exp, from_alias)
+            if from_exp in to_clause.expressions:
+                continue  # No dups
+            if showed in present:
+                from_alias = "_2" if from_alias is None else (from_alias + "_2")
+                present.add(from_alias)
+            to_clause.add_expr(from_exp, from_alias)
+
+    @staticmethod
+    def copy_unlinked(from_clause: "SelectClause", to_clause: "SelectClause"):
+        indices_to_copy = []
+        for i, expr in enumerate(from_clause.expressions):
+            if expr.startswith("NULL"):
+                indices_to_copy.append(i)
         # Move items
-        for i in indices_to_move:
-            to_clause.add_expr(from_clause.expressions[i], from_clause.aliases[i])
-        from_clause._remove_items(indices_to_move)
+        for i in indices_to_copy:
+            from_exp = from_clause.expressions[i]
+            from_alias = from_clause.aliases[i]
+            if from_exp in to_clause.expressions:
+                continue  # No dups
+            to_clause.add_expr(from_exp, from_alias)
 
     def replace_alias(self, table_alias: str, replace_alias: str) -> "SelectClause":
-        for i, expr in enumerate(self.expressions):
-            # Mutate table_alias. prefix if present
-            self.expressions[i] = expr.replace(f"{table_alias}.", f"{replace_alias}.")
+        for i, (expr, alias) in enumerate(zip(self.expressions, self.aliases)):
+            if f"{table_alias}." not in expr:
+                continue
+            if alias is not None and "SELECT" not in expr:
+                self.expressions[i] = f"{replace_alias}.{alias}"
+                self.aliases[i] = None
+            else:
+                # Mutate table_alias. prefix , including subquery values
+                self.expressions[i] = expr.replace(
+                    f"{table_alias}.", f"{replace_alias}."
+                )
         return self
 
     def remove_for_table_alias(self, table_alias: str):
@@ -103,6 +137,42 @@ class SelectClause(object):
         ]
         self._remove_items(indices_to_remove)
 
+    @staticmethod
+    def seen_as(expr: str, alias: Optional[str]) -> str:
+        """How an expression ends up in resultset"""
+        if alias is not None:
+            ret = alias
+        else:
+            if "." in expr:
+                ret = expr.split(".")[-1]
+            else:
+                ret = expr
+        assert ret is not None, (expr, alias)
+        return ret
+
+    def result_columns(self) -> List[str]:
+        columns = []
+        for expr, alias in zip(self.expressions, self.aliases):
+            columns.append(self.seen_as(expr, alias))
+        return columns
+
+    def find_expr_for_alias(self, col_alias: str) -> str:
+        for i, alias in enumerate(self.aliases):
+            if alias == col_alias:
+                return self.expressions[i]
+        return ""
+
+    @staticmethod
+    def is_a_record(expr: str) -> bool:
+        return RECORD_RE.match(expr) is not None
+
+    @staticmethod
+    def composing_columns(record: str) -> List[str]:
+        # Remove parentheses
+        clean_expr = record.strip("()")
+        # Split by comma
+        return [c.strip() for c in clean_expr.split(",")]
+
 
 class AliasedSelectClause(SelectClause):
     """
@@ -111,11 +181,12 @@ class AliasedSelectClause(SelectClause):
 
     def __init__(self):
         SelectClause.__init__(self)
+        self.expressions: List[str]
         self.aliases: List[str]
 
     def add_expr(
         self, expr: str, alias: str
-    ) -> "AliasedSelectClause":  # type:ignore[override]
+    ) -> "AliasedSelectClause":  # type: ignore[override]
         assert alias is not None, "Alias is mandatory for AliasedSelectClause"
         SelectClause.add_expr(self, expr, alias)
         return self
@@ -128,12 +199,13 @@ class FromClause(object):
 
     __slots__ = ("joins", "left_joins", "lateral_joins", "table_aliases")
 
-    def __init__(self, first: str):
-        self.joins: List[str] = [first]
+    def __init__(self, first: Optional[str] = None):
+        self.joins: List[str] = [first] if first is not None else []
         self.left_joins: Set[int] = set()
         self.lateral_joins: Set[int] = set()
         self.table_aliases: OrderedDict[str, int] = OrderedDict()
-        self._add_alias(first)
+        if first is not None:
+            self._add_alias(first)
 
     def _add_alias(self, expression: str, idx: Optional[int] = None):
         if idx is None:
@@ -162,7 +234,7 @@ class FromClause(object):
         self._add_alias(other)
         return self
 
-    def get_sql(self) -> str:
+    def get_sql(self, indent: str = " ") -> str:
         sqls = [self.joins[0]]
         for i, a_join in enumerate(self.joins[1:], start=1):
             lateral = "LATERAL " if i in self.lateral_joins else ""
@@ -170,7 +242,7 @@ class FromClause(object):
                 sqls.append("LEFT JOIN " + lateral + a_join)
             else:
                 sqls.append("JOIN " + lateral + a_join)
-        return "\n ".join(sqls)
+        return f"\n{indent}".join(sqls)
 
     def remove_if_refers_to(self, table_name: str) -> None:
         indices_to_remove = [
@@ -253,6 +325,9 @@ class FromClause(object):
 
     def table_refs(self) -> List[str]:
         return list(self.table_aliases.keys())
+
+    def join_at_alias(self, ref: str) -> str:
+        return self.joins[self.table_aliases[ref]]
 
     @staticmethod
     def transfer(
@@ -339,24 +414,30 @@ class WhereClause(object):
         self.ands.clear()
         self.params.clear()
 
+    def replace_table(self, table_from: str, table_to: str):
+        """Textual substitution of a table name in all conditions"""
+        for i, a_cond in enumerate(self.ands):
+            if table_from in a_cond:
+                self.ands[i] = a_cond.replace(table_from, table_to)
+
 
 class OrderClause(object):
     """
     An 'order by' clause in SQL. List of columns/aliases.
     """
 
-    __slots__ = ("expressions", "columns", "window_start", "window_size")
+    __slots__ = ("expressions", "window_start", "window_size")
 
     def __init__(self) -> None:
         self.expressions: List[str] = []
-        self.columns: List[str] = []
         self.window_start: Optional[int] = None
         self.window_size: Optional[int] = None
 
     def clone(self) -> "OrderClause":
         ret = OrderClause()
         ret.expressions = self.expressions[:]
-        ret.columns = self.columns[:]
+        ret.window_start = self.window_start
+        ret.window_size = self.window_size
         return ret
 
     def add_expression(
@@ -373,25 +454,36 @@ class OrderClause(object):
         if table_alias is not None:
             # Refer to a table in select list
             self.expressions.append(f"{table_alias}.{expr} {asc_or_desc}")
-            self.columns.append(table_alias + "." + expr)
         else:
             # Refer to a select expression
             self.expressions.append(f"{expr} {asc_or_desc}")
-            self.columns.append(expr)
         return self
 
-    def referenced_columns(self, with_prefices=True) -> Set[str]:
-        if with_prefices:
-            return set(self.columns)
-        else:
-            return set([a_col.split(".")[1] for a_col in self.columns])
-
-    def table_refs(self) -> Set[str]:
-        """Return e.g. obh, obj, img, etc... depending on ordered values"""
-        refs = set()
+    def columns(self) -> Generator[str, None, None]:
         for expr in self.expressions:
+            parts = expr.split(maxsplit=1)
+            yield parts[0]
+
+    def referenced_columns(self, with_prefices=True) -> Set[str]:
+        res = set()
+        for col in self.columns():
+            if not with_prefices:
+                if "." in col:
+                    col = col.split(".")[1]
+            res.add(col)
+        return res
+
+    def table_refs(self, select: SelectClause) -> Set[str]:
+        """Return e.g. obh, obj, img, etc... depending on ordering values"""
+        refs = set()
+        for expr in self.columns():
             for match in COL_RE.finditer(expr):
                 refs.add(match.group(1))
+            else:
+                # Ref to a selected expression, we have aliases in such case
+                sel_expr = select.find_expr_for_alias(expr)
+                for match in COL_RE.finditer(sel_expr):
+                    refs.add(match.group(1))
         return refs
 
     def set_window(self, start: Optional[int], size: Optional[int]) -> "OrderClause":
@@ -402,17 +494,31 @@ class OrderClause(object):
     def has_window(self) -> bool:
         return self.window_start is not None or self.window_size is not None
 
-    def get_sql(self) -> str:
-        ret = ("ORDER BY " + ", ".join(self.expressions)) if self.expressions else ""
+    def get_sql(self, indent="") -> str:
+        ret = (
+            (f"{indent}ORDER BY " + ", ".join(self.expressions))
+            if self.expressions
+            else ""
+        )
         if self.window_start is not None:
             ret += f" OFFSET {self.window_start}"
         if self.window_size is not None:
             ret += f" LIMIT {self.window_size}"
         return ret
 
-    def replace(self, chunk_from, chunk_to) -> "OrderClause":
+    def replace(self, chunk_from: str, chunk_to: str) -> "OrderClause":
         self.expressions = [
             a_exp.replace(chunk_from, chunk_to) for a_exp in self.expressions
         ]
-        self.columns = [a_col.replace(chunk_from, chunk_to) for a_col in self.columns]
         return self
+
+    def replace_aliases(self, table_ref: str, select: SelectClause):
+        for i, expr in enumerate(self.expressions):
+            if COL_RE.search(expr):
+                continue
+            # Ref to a selected expression, we have aliases in such case
+            col_or_alias, asc_or_desc = expr.split(maxsplit=1)
+            sel_expr = select.find_expr_for_alias(col_or_alias)
+            if not f"{table_ref}." in sel_expr:
+                continue
+            self.expressions[i] = sel_expr + " " + asc_or_desc

@@ -44,7 +44,7 @@ from DB.helpers import Result
 from DB.helpers.Direct import text
 from DB.helpers.Hints import RECURS_HINT
 from DB.helpers.Postgres import db_server_now
-from DB.helpers.SQL import OrderClause, SelectClause, FromClause, WhereClause
+from DB.helpers.SQL import OrderClause, SelectClause
 from FS.VaultRemover import VaultRemover
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
@@ -113,9 +113,9 @@ class ObjectManager(Service):
         )
 
         select_clause = SelectClause()
-        select_clause.add_expr("obh.objid", "obh_objid").add_expr(
-            "acq.acquisid"
-        ).add_expr("sam.sampleid").add_expr("0", "total")
+        select_clause.add_expr("obh.objid").add_expr("acq.acquisid").add_expr(
+            "sam.sampleid"
+        ).add_expr("0", "total")
         self.return_fields_to_selects(
             select_clause, return_fields, free_columns_mappings
         )
@@ -136,13 +136,8 @@ class ObjectManager(Service):
         from_clause, where_clause, params = object_set.get_sql(
             select_clause, order_clause
         )
-        cte, select_clause, from_clause, where_clause, order_clause = (
-            self.optimize_for_limit(
-                select_clause, from_clause, where_clause, order_clause
-            )
-        )
 
-        sql = cte + select_clause.get_sql() + "\n FROM "
+        sql = select_clause.get_sql() + "\n FROM "
         sql += from_clause.get_sql()
         sql += where_clause.get_sql()
         # Add order & window, if empty it's just a \n
@@ -201,7 +196,7 @@ class ObjectManager(Service):
             order_expr, order_col = order_expr.split(" AS ")
             if (
                 "." + order_col not in return_fields_str
-            ):  # Uncommon but seen in logs: order by a not-displayed column
+            ):  # Uncommon but seen in logs: order by a not-returned column
                 order_col = order_expr
         else:
             alias, order_col = order_expr.split(".", 1)
@@ -272,15 +267,12 @@ class ObjectManager(Service):
         for a_prj_id in prj_ids:
             RightsBO.user_wants(self.session, current_user_id, Action.READ, a_prj_id)
 
-        sql = (
-            """
+        sql = """
     SELECT obh.objid, acq.acquisid, sam.sampleid, sam.projid
       FROM %s obh
       JOIN acquisitions acq on acq.acquisid = obh.acquisid 
       JOIN samples sam on sam.sampleid = acq.acq_sample_id 
-     WHERE obh.objid = any (:ids) """
-            % ObjectHeader.__tablename__
-        )
+     WHERE obh.objid = any (:ids) """ % ObjectHeader.__tablename__
         params = {"ids": object_ids}
 
         res: Result = self.ro_session.execute(text(sql), params)
@@ -363,7 +355,7 @@ class ObjectManager(Service):
         nbr_v: Optional[int]
         nbr_d: Optional[int]
         nbr_p: Optional[int]
-        nbr, nbr_v, nbr_d, nbr_p = res.first()  # type:ignore
+        nbr, nbr_v, nbr_d, nbr_p = res.first()  # type: ignore
         return nbr, nbr_v, nbr_d, nbr_p
 
     def delete(
@@ -604,7 +596,7 @@ class ObjectManager(Service):
         # Eventually remove the None
         if None in ret:
             ret.remove(None)
-        return ret  # type:ignore # mypy doesn't spot the None removal above
+        return ret  # type: ignore # mypy doesn't spot the None removal above
 
     def classify_set(
         self,
@@ -712,105 +704,3 @@ class ObjectManager(Service):
         changes_for_id["n"] += inc_or_dec
         if qualif in CLASSIF_QUALS:
             changes_for_id[qualif] += inc_or_dec
-
-    @staticmethod
-    def optimize_for_limit(
-        select_clause: SelectClause,
-        from_clause: FromClause,
-        where_clause: WhereClause,
-        order_clause: OrderClause,
-    ) -> Tuple[str, SelectClause, FromClause, WhereClause, OrderClause]:
-        """
-        If the query has a window function OFFSET + LIMIT, arrange that costly
-        JOINs (e.g. image) which don't influence the result are only done for
-        the returned lines i.e. up to the limit in size.
-        """
-        # TODO: Disabled for now, too tricky
-        return "", select_clause, from_clause, where_clause, order_clause
-
-        if not order_clause.has_window():
-            return "", select_clause, from_clause, where_clause, order_clause
-
-        selected_prfx = select_clause.table_refs()
-        if not "img" in selected_prfx:
-            return "", select_clause, from_clause, where_clause, order_clause
-
-        # Top-level objects are always pushed out
-        rec_select_clause = select_clause.clone()
-        rec_select_clause = (
-            rec_select_clause.replace_alias("prj", "rec")
-            .replace_alias("sam", "rec")
-            .replace_alias("acq", "rec")
-            .replace_alias("obh", "rec")
-            .replace_alias("obf", "rec")
-            .replace_alias("txo", "rec")
-        )
-        # Computed in CTE part
-        select_clause.remove_for_column_alias("total")
-        select_clause.remove_for_column_alias("imgcount")
-
-        rec_from_clause = FromClause("recs rec")
-
-        if "img" in selected_prfx:
-            # Push image join after CTE
-            select_clause.remove_for_table_alias("img")
-            FromClause.transfer(from_clause, rec_from_clause, "img")
-            for prfx in ("prjs.", "sam.", "acq.", "obh.", "obf."):
-                rec_from_clause.replace_in_join(-1, prfx, "rec.")
-
-        if False:
-            # order_prfx = order_clause.table_refs()
-
-            # replace_alias("obh", "rec")
-            rec_select_clause = rec_select_clause.replace_alias("obf", "rec")
-            # .replace_alias("txo", "rec")
-
-            select_clause.add_expr("obh.classif_id")  # TODO: For joining txo
-            select_clause.add_expr(
-                "obf.objfid",
-            )
-            select_clause.add_expr(
-                "prjs.projid",
-            )
-
-            select_clause.remove_for_table_alias("obh")
-            select_clause.remove_for_table_alias("txo")
-
-            # SelectClause.transfer(select_clause, rec_select_clause, "img")
-
-            FromClause.transfer(from_clause, rec_from_clause, "obh")
-            # rec_from_clause.replace_in_join(-1, "obh.", "rec.")
-
-            # rec_from_clause.replace_in_join(-1, "obh.", "rec.")
-
-            FromClause.transfer(from_clause, rec_from_clause, "txo")
-            # rec_from_clause.replace_in_join(-1, "obh.", "rec.")
-
-            # FromClause.transfer(from_clause, rec_from_clause, "img")
-
-        order_clause_nolimit = order_clause.clone().set_window(None, None)
-        cte = (
-            "WITH recs AS ( "
-            + select_clause.get_sql()
-            # + ", ROW_NUMBER() OVER ("
-            # + order_clause_nolimit.get_sql()
-            # + ") AS cte_ordr"
-            + "\n FROM "
-            + from_clause.get_sql()
-            + where_clause.get_sql()
-            + "\n"
-            + order_clause.get_sql()
-            + ")\n"
-        )
-        rec_where_clause = WhereClause()
-        # rec_order_clause = OrderClause().add_expression("rec", "cte_ordr")
-        rec_order_clause = (
-            order_clause.clone().replace("obh.", "rec.").replace("obf.", "rec.")
-        )
-        return (
-            cte,
-            rec_select_clause,
-            rec_from_clause,
-            rec_where_clause,
-            rec_order_clause,
-        )

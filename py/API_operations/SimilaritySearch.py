@@ -85,9 +85,13 @@ class SimilaritySearchForProject(Service):
         order_clause = OrderClause()
         order_clause.add_expression(None, "l2_dist")
         order_clause.set_window(None, self.limit)
-        dist_exp = SelectClause().add_expr(
-            f"""cnn.objcnnid, cnn.features::halfvec(50)<->(SELECT features::halfvec(50) FROM {ObjectCNNFeatureVector.__tablename__} WHERE objcnnid={self.target_id})""",
-            "l2_dist",
+        dist_exp = (
+            SelectClause()
+            .add_expr("acq.acquisid")
+            .add_expr(
+                f"""cnn.objcnnid, cnn.features::halfvec(50)<->(SELECT features::halfvec(50) FROM {ObjectCNNFeatureVector.__tablename__} WHERE objcnnid={self.target_id})""",
+                "l2_dist",
+            )
         )
         from_, where_clause, params = object_set.get_sql(dist_exp, order_clause)
 

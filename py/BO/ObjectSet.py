@@ -143,17 +143,21 @@ class BaseDescribedObjectSet(object):
         if order_clause is None:
             order_clause = OrderClause()
         assert order_clause
+        order_clause_refs = order_clause.table_refs(select_clause)
 
-        # The filters on objects
+        # The filters on objects and ancillary entities
         filter_clauses = self.filters.get_sql_filter(
             self.user_id, self.mapping.object_mappings
         )
+        where_code = "\n".join(
+            [a_where.get_sql() for a_where in filter_clauses.values()]
+        )
+
         bound_expr = self._get_bound_expression()
         obh_part = f"AND obh.objid {bound_expr}"
         obf_part = f"AND obf.objfid {bound_expr}"
-        cnn_part = f"AND cnn.objcnnid {bound_expr}"
 
-        obj_where = WhereClause()
+        where_clause = WhereClause()
         params: SQLParamDict = self._get_sql_params()
         used_prefixes = set()
 
@@ -167,7 +171,7 @@ class BaseDescribedObjectSet(object):
         referenced_table_aliases = (
             select_clause.table_refs()
             .union(set(filter_clauses.keys()))
-            .union(order_clause.table_refs())
+            .union(order_clause_refs)
         )
         selected_tables = self._get_initial_from_clause()
         if "prj" in referenced_table_aliases:
@@ -193,23 +197,22 @@ class BaseDescribedObjectSet(object):
                 f"{Process.__tablename__} prc ON prc.processid = acq.acquisid"
                 + push_where("prc")
             )
-        obj_field_joined = "obf" in referenced_table_aliases
-        if obj_field_joined and self.driving_table_is_obj_field(
-            "\n".join(
-                [
-                    " ".join(a_where.ands)
-                    for a_where in filter_clauses.values()
-                    if a_where.ands
-                ]
-            ),
-            order_clause.table_refs(),
-        ):
+        obf_in_first = (
+            "obf" in referenced_table_aliases
+            and self.driving_table_is_obj_field(
+                where_code,
+                order_clause_refs,
+            )
+        )
+        if obf_in_first:
             selected_tables += (
                 f"{ObjectFields.__tablename__} obf ON obf.acquis_id = acq.acquisid {obf_part}"
                 + push_where("obf")
             )
+            # Note: Adding the condition on acq here kills performance (it becomes a check and avoids index)
+            # Don't add "obh.acquisid = acq.acquisid"
             selected_tables += (
-                f"{ObjectHeader.__tablename__} obh ON obh.acquisid = acq.acquisid AND obh.objid = obf.objfid {obh_part}"
+                f"{ObjectHeader.__tablename__} obh ON obh.objid = obf.objfid {obh_part}"
                 + push_where("obh")
             )
         else:
@@ -217,40 +220,24 @@ class BaseDescribedObjectSet(object):
                 f"{ObjectHeader.__tablename__} obh ON obh.acquisid = acq.acquisid {obh_part}"
                 + push_where("obh")
             )
-            if obj_field_joined:
+            if "obf" in referenced_table_aliases:
+                # Note: Same as above, no "obf.acquis_id = acq.acquisid"
                 selected_tables += (
-                    f"{ObjectFields.__tablename__} obf ON obf.acquis_id = acq.acquisid AND obf.objfid = obh.objid {obf_part}"
+                    f"{ObjectFields.__tablename__} obf ON obf.objfid = obh.objid {obf_part}"
                     + push_where("obf")
                 )
         if "cnn" in referenced_table_aliases:
-            selected_tables += (
-                f"{ObjectCNNFeatureVector.__tablename__} cnn ON cnn.objcnnid = obh.objid {cnn_part}"
-                + push_where("cnn")
-            )
-        # if "prd." in column_referencing_sql:
-        #     preds_ref = Prediction.__tablename__ + " prd"
-        #     selected_tables += (
-        #         preds_ref
-        #         + " ON prd.object_id = obh.objid AND prd.classif_id = obh.classif_id"
-        #     )
-        #     if self.filters.status_filter not in MEANS_TRAINING_ID_EXIST:
-        #         selected_tables.set_outer(preds_ref)
-        # if "trn." in column_referencing_sql:
-        #     trainings_ref = Training.__tablename__ + " trn"
-        #     selected_tables += trainings_ref + " ON trn.training_id = prd.training_id"
-        #     if self.filters.status_filter not in MEANS_TRAINING_ID_EXIST:
-        #         selected_tables.set_outer(trainings_ref)
+            selected_tables += f"{ObjectCNNFeatureVector.__tablename__} cnn ON cnn.objcnnid = obh.objid"
         if "ohu" in referenced_table_aliases:  # Inline query for annotators in history
             selected_tables += (
                 f"(select 1 as in_annots WHERE EXISTS (select * from {ObjectsClassifHisto.__tablename__} och "
-                "WHERE och.objid = obh.objid AND och.classif_who = ANY (:filt_annot) ) ) ohu ON True"
+                "WHERE och.objid = obh.objid AND och.classif_who = ANY (:filt_annot))) ohu ON True"
             )
             selected_tables.set_outer("(select 1 as in_annots ")
             selected_tables.set_lateral("(select 1 as in_annots ")
         if "txo" in referenced_table_aliases or "txp" in referenced_table_aliases:
             selected_tables += (
                 f"{Taxonomy.__tablename__} txo ON txo.id = obh.classif_id"
-                + push_where("txo")
             )
             if (
                 self.filters.status_filter not in MEANS_CLASSIF_ID_EXIST
@@ -259,36 +246,159 @@ class BaseDescribedObjectSet(object):
                 selected_tables.set_outer(f"{Taxonomy.__tablename__} txo ")
         if "img" in referenced_table_aliases:
             if all_images:
-                selected_tables += (
-                    f"{Image.__tablename__} img ON obh.objid = img.objid"
-                    + push_where("img")
-                )
+                selected_tables += f"{Image.__tablename__} img ON img.objid = obh.objid"
             else:
-                selected_tables += (
-                    f"(select * from {Image.__tablename__} img2 where obh.objid = img2.objid order by imgrank limit 1) img ON true"
-                    + push_where("img")
-                )
+                selected_tables += f"(select * from {Image.__tablename__} img2 where img2.objid = obh.objid order by imgrank limit 1) img ON true"
                 selected_tables.set_lateral(f"(select * from {Image.__tablename__}")
         if "usr" in referenced_table_aliases:
-            selected_tables += (
-                f"{User.__tablename__} usr ON obh.classif_who = usr.id"
-                + push_where("usr")
-            )
+            selected_tables += f"{User.__tablename__} usr ON usr.id = obh.classif_who"
             selected_tables.set_outer(f"{User.__tablename__} usr ")
         if "txp" in referenced_table_aliases:
-            selected_tables += (
-                f"{Taxonomy.__tablename__} txp ON txp.id = txo.parent_id"
-                + push_where("txp")
-            )
+            selected_tables += f"{Taxonomy.__tablename__} txp ON txp.id = txo.parent_id"
             selected_tables.set_outer(f"{Taxonomy.__tablename__} txp ")
 
         # Collect remaining filters
         for prefix, a_where in filter_clauses.items():
             if prefix not in used_prefixes:
-                obj_where.ands.extend(a_where.ands)
+                where_clause.ands.extend(a_where.ands)
                 params.update(a_where.params)
 
-        return selected_tables, obj_where, params
+        if order_clause.has_window():
+            self.optimize_for_limit(
+                filter_clauses,
+                select_clause,
+                selected_tables,
+                where_clause,
+                order_clause,
+                order_clause_refs,
+                obf_in_first,
+            )
+
+        return selected_tables, where_clause, params
+
+    @staticmethod
+    def optimize_for_limit(
+        filter_clauses: Dict[str, WhereClause],
+        select_clause: SelectClause,
+        selected_tables: FromClause,
+        where_clause: WhereClause,
+        order_clause: OrderClause,
+        order_clause_refs: Set[str],
+        obf_in_first: bool,
+    ):
+        """
+         If the query has a window function OFFSET + LIMIT, arrange that costly
+         JOINs (e.g. image) which don't influence the result are only done for
+         the returned lines i.e. up to the limit in size.
+         e.g.: Before:
+         SELECT obh.objid AS obh_objid, acq.acquisid, sam.sampleid, 0 AS total, obh.objid, obh.classif_qual,
+                (SELECT COUNT(img2.imgrank) FROM images img2 WHERE img2.objid = obh.objid) AS imgcount,
+                obh.complement_info,
+                img.height, img.width, (img.thumb_height,img.imgid) AS thumb_file_name, img.thumb_height, img.thumb_width, (img.imgid,img.orig_file_name) AS file_name,
+                txo.name, txo.display_name, txo.taxostatus,
+                obf.n06, obf.n07
+         FROM (VALUES (14387)) AS prjs(projid)
+         JOIN samples sam ON sam.projid = prjs.projid
+         JOIN acquisitions acq ON acq.acq_sample_id = sam.sampleid
+         JOIN obj_field obf ON obf.acquis_id = acq.acquisid AND obf.objfid between 14387*1e8::bigint and (14387+1)*1e8::bigint
+         JOIN obj_head obh ON obh.objid = obf.objfid AND obh.objid between 14387*1e8::bigint and (14387+1)*1e8::bigint
+         LEFT JOIN taxonomy txo ON txo.id = obh.classif_id
+         JOIN LATERAL (select * from images img2 where obh.objid = img2.objid order by imgrank limit 1) img ON true
+        ORDER BY obf.n06 DESC, obf.objfid DESC OFFSET 0 LIMIT 1000
+
+         After:
+         SELECT obh.objid, hier.acquisid, hier.sampleid, 0 AS total, obh.objid, obh.classif_qual,
+                (SELECT COUNT(img2.imgrank) FROM images img2 WHERE img2.objid = obh.objid) AS imgcount,
+                obh.complement_info,
+                img.height, img.width, (img.thumb_height,img.imgid) AS thumb_file_name, img.thumb_height, img.thumb_width, (img.imgid,img.orig_file_name) AS file_name,
+                txo.name, txo.display_name, txo.taxostatus,
+                hier.n06, hier.n07
+          FROM (SELECT acq.acquisid, sam.sampleid, obf.objfid, obf.n06, obf.n07
+                FROM (VALUES (14387)) AS prjs(projid)
+                JOIN samples sam ON sam.projid = prjs.projid
+                JOIN acquisitions acq ON acq.acq_sample_id = sam.sampleid
+                JOIN obj_field obf ON obf.acquis_id = acq.acquisid AND obf.objfid between 14387*1e8::bigint and (14387+1)*1e8::bigint
+               ORDER BY obf.n06 DESC, obf.objfid DESC OFFSET 0 LIMIT 1000
+             ) hier
+          JOIN obj_head obh ON obh.objid = hier.objfid AND obh.objid between 14387*1e8::bigint and (14387+1)*1e8::bigint
+          LEFT JOIN taxonomy txo ON txo.id = obh.classif_id
+          JOIN LATERAL (select * from images img2 where obh.objid = img2.objid order by imgrank limit 1) img ON true
+          ORDER BY hier.n06 DESC, hier.objfid
+        """
+        used_tables = set(selected_tables.table_aliases)
+        if "cnn" in used_tables:
+            return
+
+        subselect_select = SelectClause()
+        subselect_from = FromClause()
+        subselect_order = order_clause.clone()
+        replacements = []
+        SelectClause.copy_unlinked(select_clause, subselect_select)
+
+        # Transfer
+        for hier_ref in ("prjs", "sam", "acq"):
+            FromClause.transfer(selected_tables, subselect_from, hier_ref)
+            SelectClause.copy_for_ref(select_clause, subselect_select, hier_ref)
+            replacements.append(hier_ref)
+
+        # Move the obj_* in the same order they were added
+        obj_tables = ("obf", "obh") if obf_in_first else ("obh", "obf")
+        for an_obj_ref in obj_tables:
+            FromClause.transfer(selected_tables, subselect_from, an_obj_ref)
+            SelectClause.copy_for_ref(select_clause, subselect_select, an_obj_ref)
+            for a_col in order_clause.referenced_columns():
+                if a_col.startswith(an_obj_ref + ".") and not subselect_select.has_expr(
+                    a_col
+                ):
+                    subselect_select.add_expr(a_col)
+            replacements.append(an_obj_ref)
+
+        if "txo" in order_clause_refs:
+            FromClause.transfer(selected_tables, subselect_from, "txo")
+            SelectClause.copy_for_ref(select_clause, subselect_select, "txo")
+            replacements.append("txo")
+
+        if "img" in order_clause_refs:
+            FromClause.transfer(selected_tables, subselect_from, "img")
+            SelectClause.copy_for_ref(select_clause, subselect_select, "img")
+            replacements.append("img")
+            for a_col in order_clause.referenced_columns():
+                if "img" + "." in a_col:
+                    cols_to_add = (
+                        SelectClause.composing_columns(a_col)
+                        if SelectClause.is_a_record(a_col)
+                        else [a_col]
+                    )
+                    for to_add in cols_to_add:
+                        if subselect_select.has_expr(to_add):
+                            continue
+                        subselect_select.add_expr(to_add)
+            subselect_order.replace_aliases("img", select_clause)
+
+        if "txo" in used_tables:
+            if not "obh.classif_id" in subselect_select.expressions:
+                # Need join condition
+                subselect_select.add_expr("obh.classif_id")
+
+        for ref in replacements:
+            select_clause.replace_alias(ref, "hier")
+            selected_tables.replace_table(ref + ".", "hier.")
+            where_clause.replace_table(ref + ".", "hier.")
+            order_clause.replace(ref + ".", "hier.")
+
+        # Plug back
+        order_sql = subselect_order.get_sql("\n     ")
+        order_clause.set_window(None, None)  # We build proper chunk of data in subquery
+        subselect_sql = (
+            "( "
+            + subselect_select.get_sql()
+            + "\n     FROM "
+            + subselect_from.get_sql("     ")
+            + order_sql
+            + ") hier"
+        )
+        selected_tables.insert(subselect_sql, 0)
+        return
 
     def driving_table_is_obj_field(
         self, where: str, order_clause_refs: Set[str]
@@ -441,7 +551,7 @@ class EnumeratedObjectSet(MappedTable):
         obj_del_qry: Delete = ObjectHeader.__table__.delete()
         obj_del_qry = obj_del_qry.where(ObjectHeader.objid == any_(a_chunk))
         with CodeTimer("DELETE for %d objs: " % len(a_chunk), logger):
-            nb_objs = session.execute(obj_del_qry).rowcount  # type:ignore # case1
+            nb_objs = session.execute(obj_del_qry).rowcount  # type: ignore # case1
 
         session.commit()
         # TODO: Cache delete
@@ -516,7 +626,7 @@ class EnumeratedObjectSet(MappedTable):
         obj_upd_qry = obj_upd_qry.values(params)
         updated_objs = self.session.execute(
             obj_upd_qry
-        ).rowcount  # type:ignore  # case1
+        ).rowcount  # type: ignore  # case1
         # TODO: Cache upd
         # prj_id = self.get_projects_ids()[0]
         # ObjectCacheUpdater(prj_id).update_objects(self.object_ids, params)
@@ -576,7 +686,7 @@ class EnumeratedObjectSet(MappedTable):
         # TODO: Below not clear nor clean
         ins_qry = ins_qry.on_conflict_do_nothing(constraint="objectsclassifhisto_pkey")
         # logger.info("Histo query: %s", ins_qry.compile())
-        nb_obj_histos = self.session.execute(ins_qry).rowcount  # type:ignore  # case1
+        nb_obj_histos = self.session.execute(ins_qry).rowcount  # type: ignore  # case1
         logger.info(
             " %d out of %d rows copied to log", nb_obj_histos, len(self.object_ids)
         )
@@ -1173,13 +1283,13 @@ class ObjectSetFilter(object):
     ) -> Dict[str, WhereClause]:
         """
             The generated SQL assumes that, in the query:
+                'prj' is the alias for Project
+                'sam' is the alias for Sample
+                'acq' is the alias for Acquisition
+                'prc' is the alias for Process
                 'obh' is the alias for object_head aka ObjectHeader
                 'obf' the alias for ObjectFields, if relevant to mapping system
-                'acq' is the alias for Acquisition
-                'sam' is the alias for Sample
-                'prj' is the alias for Project
-                'prc' is the alias for Process
-                'och' is the alias for historical Classification Histo (ObjectsClassifHisto)
+                'ohu' is the alias for historical Classification Histo (ObjectsClassifHisto)
         :param user_id: For filtering validators.
         :param params: SQL params will be added there.
         :param object_mappings: Free field mappings from project.
@@ -1413,7 +1523,7 @@ class ObjectSetFilter(object):
         """
         less_filtered = self.filters.copy()
         for a_key in self.TAXO_KEYS:
-            less_filtered.pop(a_key, "")  # type:ignore
+            less_filtered.pop(a_key, "")  # type: ignore
         return less_filtered
 
 

@@ -98,7 +98,7 @@ def test_all_fields(fastapi):
 
     # Copy/paste from redoc API
     obj_fields = "classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id, classif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min, latitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos"
-    img_fields = "file_name, height, imgid, imgrank, file_name, objid, orig_file_name, thumb_file_name, thumb_height, thumb_width, width"
+    img_fields = "file_name, height, imgid, imgrank, objid, orig_file_name, thumb_file_name, thumb_height, thumb_width, width"
     txo_fields = "creation_datetime, creator_email, display_name, id, id_instance, aphia_id, lastupdate_datetime, name, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostatus, taxotype"
     all_fields = (
         ["obj." + fld.strip() for fld in obj_fields.split(",")]
@@ -122,4 +122,14 @@ def test_all_fields(fastapi):
     for a_field in all_fields:
         objs, details = _prj_query(
             fastapi, CREATOR_AUTH, prj_id, fields="obj.objid", order=a_field
+        )
+
+    objs, details = _prj_query(
+        fastapi, CREATOR_AUTH, prj_id, fields="obh.objid", order="img.file_name", size=10
+    )
+
+    # Test all 'order by', all fields present and limit
+    for a_field in all_fields:
+        objs, details = _prj_query(
+            fastapi, CREATOR_AUTH, prj_id, fields=",".join(all_fields), order=a_field, size=10
         )

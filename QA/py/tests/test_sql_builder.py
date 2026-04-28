@@ -39,13 +39,13 @@ def test_select_clause_transfer():
 
     target = SelectClause()
 
-    SelectClause.transfer(source, target, "obh")
+    SelectClause.copy_for_ref(source, target, "obh")
 
     assert target.expressions == ["obh.id"]
     assert target.aliases == [None]
 
-    assert source.expressions == ["obj.name", "img.width"]
-    assert source.aliases == ["o_name", None]
+    assert source.expressions == ["obh.id", "obj.name", "img.width"]
+    assert source.aliases == [None, "o_name", None]
 
 
 def test_select_clause_complex_refs():
@@ -80,7 +80,17 @@ def test_order_clause_refs():
     order = OrderClause()
     order.add_expression("obh", "id", "DESC")
     order.add_expression("obj", "name", "ASC")
-    assert order.table_refs() == {"obh", "obj"}
+    assert order.table_refs(SelectClause()) == {"obh", "obj"}
+
+
+def test_where_clause_replace_table():
+    from DB.helpers.SQL import WhereClause
+    wc = WhereClause()
+    wc.chain("t1.col1 = 1")
+    wc.chain("t1.col2 = t2.col2")
+    wc.replace_table("t1", "t3")
+    assert wc.ands[0] == "t3.col1 = 1"
+    assert wc.ands[1] == "t3.col2 = t2.col2"
 
 
 def test_from_clause():
@@ -286,3 +296,44 @@ def test_from_clause_transfer_lateral():
 
     # Verify the lateral join is present in target
     assert "LATERAL (SELECT * FROM table2) t2" in target.get_sql()
+
+
+def test_select_clause_replace_alias():
+    select = SelectClause()
+
+    # Case 1: Simple expression replacement
+    # According to implementation:
+    # if alias is not None and "SELECT" not in expr:
+    #     self.expressions[i] = f"{replace_alias}.{alias}"
+    #     self.aliases[i] = None
+    expr = "hier.classif_date"
+    alias = "classif_when"
+    select.add_expr(expr, alias)
+    select.replace_alias("hier", "hier_new")
+    assert select.expressions[0] == "hier_new.classif_when"
+    assert select.aliases[0] is None
+
+    # Case 2: Expression containing SELECT (should not trigger alias replacement logic, goes to else)
+    # The else branch:
+    # self.expressions[i] = expr.replace(f"{table_alias}.", f"{replace_alias}.")
+    select = SelectClause()
+    expr = "(SELECT 1 FROM other_table WHERE other_table.val = hier.id) AS sub"
+    select.add_expr(expr, "sub_alias")
+    select.replace_alias("hier", "hier_new")
+
+    # Expected: (SELECT 1 FROM other_table WHERE other_table.val = hier_new.id) AS sub
+    assert select.expressions[0] == "(SELECT 1 FROM other_table WHERE other_table.val = hier_new.id) AS sub"
+    assert select.aliases[0] == "sub_alias"
+
+
+def test_select_clause_copy_for_ref_complex():
+    source = SelectClause()
+    source.add_expr("CASE WHEN obh.classif_qual in ('V','D') THEN obh.classif_date END", "classif_when")
+    source.add_expr("other.col", "other_col")
+    source.add_expr("(SELECT COUNT(img2.imgrank) FROM images img2 WHERE img2.objid = obh.objid)", "imgcount")
+
+    target = SelectClause()
+
+    SelectClause.copy_for_ref(source, target, "obh")
+
+    assert len(target.expressions) == 2

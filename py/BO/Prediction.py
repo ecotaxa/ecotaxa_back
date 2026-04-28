@@ -11,7 +11,7 @@ from typing import Any, List, Dict, ClassVar
 
 import numpy as np  # type: ignore
 from numpy import ndarray
-from sqlalchemy import bindparam
+from sqlalchemy import bindparam, func
 from sqlalchemy.dialects.postgresql import ARRAY
 
 from DB.Acquisition import Acquisition
@@ -75,6 +75,7 @@ class DeepFeatures(object):
                     Note: It _still_ takes a few seconds for millions of objects
         """
         qry = session.query(ObjectHeader.objid, Image.imgid, Image.orig_file_name)
+        qry = qry.where(ObjectHeader.objid.op("<@")(func.obj_in_prj(proj_id)))
         qry = qry.join(Acquisition, Acquisition.acquisid == ObjectHeader.acquisid)
         qry = qry.join(
             Sample,
