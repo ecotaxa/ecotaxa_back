@@ -97,7 +97,7 @@ class JsonDumper(Service):
             else:
                 fld_name = a_field_or_relation.key
                 # This is where SQLAlchemy does all its magic when it's a relation
-                attr = getattr(a_row, fld_name)  # type:ignore # case2
+                attr = getattr(a_row, fld_name)  # type: ignore # case2
             if isinstance(attr, list):
                 # Serialize the list of child entities, ordinary relationship
                 children: List[Dict[str, Any]] = []
@@ -151,7 +151,7 @@ class JsonDumper(Service):
                 "  FROM obj_head obh "
                 "  JOIN acquisitions acq ON obh.acquisid = acq.acquisid "
                 "  JOIN samples sam ON acq.acq_sample_id = sam.sampleid "
-                " WHERE sam.projid = :prj"
+                " WHERE obh.objid <@ obj_in_prj(:prj) AND sam.projid = :prj"
             )
             params = {"prj": self.prj.projid}
         else:

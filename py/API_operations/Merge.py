@@ -25,6 +25,8 @@ from .helpers.Service import Service
 
 logger = get_logger(__name__)
 
+FIX_FOREIGN_CHUNK_SIZE = 8000
+
 
 class MergeService(Service):
     """
@@ -158,16 +160,18 @@ class MergeService(Service):
         sam_updates = []
         for sam in samples:
             old_sam_id = sam.sampleid
-            logger.info("Renaming Sample %d to %d", old_sam_id, new_sam_id)
             sam_updates.append({"new": new_sam_id, "old": old_sam_id})
             new_sam_id += 1
 
         if sam_updates:
             # Update Sample itself and Acquisitions pointing to it
-            for sql in [
-                "UPDATE samples SET sampleid = :new WHERE sampleid = :old",
-            ]:
-                session.execute(text(sql), sam_updates)
+            sql = "UPDATE samples SET sampleid = :new WHERE sampleid = :old"
+            for i in range(0, len(sam_updates), FIX_FOREIGN_CHUNK_SIZE):
+                chunk = sam_updates[i : i + FIX_FOREIGN_CHUNK_SIZE]
+                logger.info(
+                    f"Renaming chunk of {len(chunk)} Samples: %s", str(chunk)[:100]
+                )
+                session.execute(text(sql), chunk)
 
         # 2. Fix Acquisitions
         acqs = (
@@ -181,7 +185,6 @@ class MergeService(Service):
         acq_updates = []
         for acq in acqs:
             old_acq_id = acq.acquisid
-            logger.info("Renaming Acquisition %d to %d", old_acq_id, new_acq_id)
             acq_updates.append({"new": new_acq_id, "old": old_acq_id})
             new_acq_id += 1
 
@@ -191,7 +194,13 @@ class MergeService(Service):
                 "UPDATE acquisitions SET acquisid = :new WHERE acquisid = :old",
                 "UPDATE obj_field SET acquis_id = :new WHERE acquis_id = :old",
             ]:
-                session.execute(text(sql), acq_updates)
+                for i in range(0, len(acq_updates), FIX_FOREIGN_CHUNK_SIZE):
+                    chunk = acq_updates[i : i + FIX_FOREIGN_CHUNK_SIZE]
+                    logger.info(
+                        f"Renaming chunk of {len(chunk)} Acquisitions: %s",
+                        str(chunk)[:300],
+                    )
+                    session.execute(text(sql), chunk)
 
         # 3. Fix Objects
         objs = (
@@ -210,12 +219,14 @@ class MergeService(Service):
             new_obj_id += 1
 
         if obj_updates:
-            logger.info("Renaming %d Objects", len(obj_updates))
             # Update ObjectHeader, ObjectFields, ObjectsClassifHisto, Prediction, PredictionHisto and Image (via cascade)
-            for sql in [
-                "UPDATE obj_head SET objid = :new WHERE objid = :old",
-            ]:
-                session.execute(text(sql), obj_updates)
+            sql = "UPDATE obj_head SET objid = :new WHERE objid = :old"
+            for i in range(0, len(obj_updates), FIX_FOREIGN_CHUNK_SIZE):
+                chunk = obj_updates[i : i + FIX_FOREIGN_CHUNK_SIZE]
+                logger.info(
+                    f"Renaming chunk of {len(chunk)} Objects: %s...", str(chunk)[:300]
+                )
+                session.execute(text(sql), chunk)
 
         session.expire_all()
         session.commit()

@@ -19,7 +19,6 @@ from BO.Object import ObjectBO
 from BO.ObjectSet import DescribedObjectSet
 from BO.Rights import RightsBO, Action
 from BO.User import UserIDT
-from DB import ObjectHeader
 from DB.Object import ObjectIDListT
 from DB.Project import ProjectIDListT, Project
 from DB.helpers import Session, Result
@@ -183,7 +182,7 @@ class FeatureConsistentProjectSet(object):
         res = self.read_all()
         obj_ids: List[int] = []
         classif_ids: ClassifIDListT = []
-        rc = res.rowcount  # type:ignore # case1
+        rc = res.rowcount  # type: ignore # case1
         np_table = self.np_read(res, rc, self.column_names, obj_ids, classif_ids, {})
         return np_table, obj_ids, classif_ids
 
@@ -266,19 +265,21 @@ class LimitedInCategoriesProjectSet(FeatureConsistentProjectSet):
         self.categories = categories
 
     def _add_random_limit(self, sql: str) -> str:
-        prj_in_list = ",".join([str(prj_id) for prj_id in self.prj_ids])
+        prj_in_list = ",".join([f"({prj_id})" for prj_id in self.prj_ids])
         categ_in_list = ",".join([str(classif_id) for classif_id in self.categories])
         random_view = (
             " WITH rndm AS ( SELECT objid, projid FROM"
             " ( SELECT sam2.projid, obh2.objid, "
             "          ROW_NUMBER() OVER (PARTITION BY obh2.classif_id "
             "                             ORDER BY HASHTEXT(obh2.orig_id)) rrank "  # TODO predictable random?
-            "     FROM %s obh2"
-            "     JOIN acquisitions acq2 ON acq2.acquisid = obh2.acquisid"
-            "     JOIN samples sam2 ON sam2.sampleid = acq2.acq_sample_id "
-            "                      AND sam2.projid IN ({0})"
-            "    WHERE obh2.classif_qual = 'V' AND obh2.classif_id IN ({2})) q"
-            " WHERE rrank <= {1} )" % ObjectHeader.__tablename__
+            "     FROM (VALUES ({0})) AS prjs(projid) "
+            "     JOIN samples sam2 ON sam2.projid = prjs.projid "
+            "     JOIN acquisitions acq2 ON acq2.acq_sample_id = sam2.sampleid "
+            "     JOIN obj_head obh2 ON obh2.acquisid = acq2.acquisid "
+            "                       AND obh2.objid <@ obj_in_prj(prjs.projid) "
+            "                       AND obh2.classif_qual = 'V' AND obh2.classif_id IN ({2})"
+            " ) q"
+            " WHERE rrank <= {1} )"
         ).format(prj_in_list, self.random_limit, categ_in_list)
         sql = sql.replace("WITH flat", ", flat")
         for prjid in self.prj_ids:

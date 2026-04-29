@@ -45,7 +45,7 @@ class Image(Model):
             "  JOIN obj_head obh ON img.objid = obh.objid "
             "  JOIN acquisitions acq ON obh.acquisid = acq.acquisid "
             "  JOIN samples sam ON acq.acq_sample_id = sam.sampleid "
-            " WHERE sam.projid = :prj"
+            " WHERE obh.objid <@ obj_in_prj(:prj) AND sam.projid = :prj"
         )
         res: Result = session.execute(sql, {"prj": prj_id})
         ret = {img_id for img_id, in res}
