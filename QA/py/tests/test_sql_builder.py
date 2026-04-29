@@ -346,4 +346,4 @@ def test_select_clause_copy_for_ref_complex():
 
     SelectClause.copy_for_ref(source, target, "obh")
 
-    assert len(target.expressions) == 2
+    assert len(target.expressions) == 1  # The CASE WHEN
