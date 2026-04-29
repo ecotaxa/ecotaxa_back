@@ -61,7 +61,7 @@ def run_gunicorn() -> None:
                 # "timeout" is misnamed, it's in fact the maximum time for a worker to reply to a request
                 # https://stackoverflow.com/questions/54832771/gunicorn-doesnt-kill-worker-even-after-timeout
                 # We have quite long occasional queries so increase from default value of 30 (sec)
-                "timeout": 120,
+                "timeout": 180,
                 # Kill workers after this number of requests received. Good and simple concept but killing the worker
                 # means eventually killing the running task inside. Idea can be recycled but inside the app itself.
                 # "max_requests": 1024,
