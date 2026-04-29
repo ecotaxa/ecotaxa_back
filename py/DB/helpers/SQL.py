@@ -22,6 +22,11 @@ RECORD_RE = re.compile(r"^\(\s*[\w.]+\s*,\s*[\w.]+(?:\s*,\s*[\w.]+)*\s*\)$", re.
 class SelectClause(object):
     """
     List of selected expressions, eventually aliased.
+    E.g.: img.orig_file_name
+          (img.thumb_height,img.imgid)
+          CASE WHEN obh.classif_qual='P' THEN obh.classif_id END
+          HASHTEXT(obh.orig_id)
+          (SELECT COUNT(img2.imgrank) FROM images img2 WHERE img2.objid = obh.objid)
     """
 
     __slots__ = ("expressions", "aliases")
@@ -41,16 +46,14 @@ class SelectClause(object):
         self.aliases.append(alias)
         return self
 
-    def add_expr_with_no_dup(self, expr: str, suffix: str) -> str:
-        alias = None
+    def add_expr_with_no_dup(self, expr: str, alias: Optional[str] = None) -> str:
         seen = self.seen_as(expr, alias)
         present_seen = self.result_columns()
         if seen in present_seen:
-            alias = f"_{suffix}"
+            alias = expr.replace(".", "_")
             seen = alias
             assert seen not in present_seen
-        self.expressions.append(expr)
-        self.aliases.append(alias)
+        self.add_expr(expr, alias)
         return seen
 
     def has_expr(self, an_expr: str):
@@ -84,41 +87,29 @@ class SelectClause(object):
 
     @staticmethod
     def copy_for_ref(
-        from_clause: "SelectClause", to_clause: "SelectClause", for_table_ref: str
-    ):
+        orig_clause: "SelectClause", dest_clause: "SelectClause", for_table_ref: str
+    ) -> Dict[str, str]:
+        """
+            Find expressions related to 'for_table_ref' in orig_clause and clone them into dest_clause.
+            We keep subqueries in orig_clause so LIMIT-ed rows only get the computations
+        :return: A translation dict for found expressions.
+        """
+        ret = dict()
         indices_to_copy = []
-        for i, expr in enumerate(from_clause.expressions):
+        for i, expr in enumerate(orig_clause.expressions):
+            if expr.startswith("(SELECT"):
+                continue
             # Find refs in this expression
             refs = {match.group(1) for match in COL_RE.finditer(expr)}
             if for_table_ref in refs:
                 indices_to_copy.append(i)
         # Copy items
-        present = set(to_clause.result_columns())
         for i in indices_to_copy:
-            from_exp = from_clause.expressions[i]
-            from_alias = from_clause.aliases[i]
-            idx_in_to = to_clause.expressions.find(from_exp)
-            if from_exp in to_clause.expressions and from_alias is None:
-                continue  # Exact same value
-            # showed = SelectClause.seen_as(from_exp, from_alias)
-            # if showed in present:
-            #     from_alias = "_2" if from_alias is None else (from_alias + "_2")
-            #     present.add(from_alias)
-            to_clause.add_expr(from_exp, from_alias)
-
-    @staticmethod
-    def copy_unlinked(from_clause: "SelectClause", to_clause: "SelectClause"):
-        indices_to_copy = []
-        for i, expr in enumerate(from_clause.expressions):
-            if expr.startswith("NULL"):
-                indices_to_copy.append(i)
-        # Move items
-        for i in indices_to_copy:
-            from_exp = from_clause.expressions[i]
-            from_alias = from_clause.aliases[i]
-            if from_exp in to_clause.expressions:
-                continue  # No dups
-            to_clause.add_expr(from_exp, from_alias)
+            from_exp = orig_clause.expressions[i]  # type: str
+            from_alias = orig_clause.aliases[i]  # type: Optional[str]
+            seen = dest_clause.add_expr_with_no_dup(from_exp, from_alias)
+            ret[from_exp] = seen
+        return ret
 
     def replace_alias(self, table_alias: str, replace_alias: str) -> "SelectClause":
         for i, (expr, alias) in enumerate(zip(self.expressions, self.aliases)):
@@ -132,6 +123,12 @@ class SelectClause(object):
                 self.expressions[i] = expr.replace(
                     f"{table_alias}.", f"{replace_alias}."
                 )
+        return self
+
+    def replace_in_expressions(self, from_expr: str, to_expr: str) -> "SelectClause":
+        for i, expr in enumerate(self.expressions):
+            if from_expr in expr:
+                self.expressions[i] = expr.replace(from_expr, to_expr)
         return self
 
     def remove_for_table_alias(self, table_alias: str):
@@ -159,7 +156,6 @@ class SelectClause(object):
                 ret = expr.split(".")[-1]
             else:
                 ret = expr
-        assert ret is not None, (expr, alias)
         return ret
 
     def result_columns(self) -> List[str]:
@@ -322,6 +318,16 @@ class FromClause(object):
         for i, a_join in enumerate(self.joins):
             self._add_alias(a_join, i)
 
+    def replace_in_expressions(self, from_expr: str, to_expr: str):
+        """Textual substitution of an expression in all join conditions"""
+        for i, a_join in enumerate(self.joins):
+            if from_expr in a_join:
+                self.joins[i] = a_join.replace(from_expr, to_expr)
+        # Rebuild table_aliases
+        self.table_aliases = OrderedDict()
+        for i, a_join in enumerate(self.joins):
+            self._add_alias(a_join, i)
+
     def insert(self, a_join: str, idx: int):
         self.joins.insert(idx, a_join)
         # Shift indices in sets
@@ -432,6 +438,12 @@ class WhereClause(object):
             if table_from in a_cond:
                 self.ands[i] = a_cond.replace(table_from, table_to)
 
+    def replace_in_expressions(self, expr_from: str, expr_to: str):
+        """Textual substitution of a expression in all conditions"""
+        for i, a_cond in enumerate(self.ands):
+            if expr_from in a_cond:
+                self.ands[i] = a_cond.replace(expr_from, expr_to)
+
 
 class OrderClause(object):
     """
@@ -490,16 +502,22 @@ class OrderClause(object):
         return res
 
     def table_refs(self, select: SelectClause) -> Set[str]:
-        """Return e.g. obh, obj, img, etc... depending on ordering values"""
+        """Return e.g. obh, obj, img, etc. depending on ordering values"""
         refs = set()
         for expr in self.base_expressions():
-            for match in COL_RE.finditer(expr):  # Work for CASE expression too
+            found = False
+            for match in COL_RE.finditer(expr):  # Works for CASE expression too
                 refs.add(match.group(1))
-            else:
+                found = True
+            if not found:
                 # Ref to a selected expression, we have aliases in such case
                 sel_expr = select.find_expr_for_alias(expr)
                 for match in COL_RE.finditer(sel_expr):
                     refs.add(match.group(1))
+                    found = True
+                if not found:
+                    # A constant, e.g. NULL::int
+                    refs.add("")
         return refs
 
     def set_window(self, start: Optional[int], size: Optional[int]) -> "OrderClause":
@@ -522,9 +540,9 @@ class OrderClause(object):
             ret += f" LIMIT {self.window_size}"
         return ret
 
-    def replace(self, chunk_from: str, chunk_to: str) -> "OrderClause":
+    def replace_in_expressions(self, from_expr: str, to_expr: str) -> "OrderClause":
         self.expressions = [
-            a_exp.replace(chunk_from, chunk_to) for a_exp in self.expressions
+            a_exp.replace(from_expr, to_expr) for a_exp in self.expressions
         ]
         return self
 

@@ -78,9 +78,11 @@ def test_select_clause_complex_refs():
 
 def test_order_clause_refs():
     order = OrderClause()
+    select = SelectClause().add_expr("txo.name", "crit")
     order.add_expression("obh", "id", "DESC")
     order.add_expression("obj", "name", "ASC")
-    assert order.table_refs(SelectClause()) == {"obh", "obj"}
+    order.add_expression(None, "crit", "ASC")
+    assert order.table_refs(select) == {"obh", "obj", "txo"}
 
 
 def test_order_clause_refs2():

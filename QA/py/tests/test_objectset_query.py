@@ -101,7 +101,7 @@ def test_all_fields(fastapi):
     sam_fields = "orig_id, latitude"
     acq_fields = "orig_id, instrument, acquisid"
     # prc_fields = "orig_id, processid" Not in API
-    obj_fields = "classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id, classif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min, latitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos"
+    obj_fields = "imgcount, classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id, classif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min, latitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos"
     img_fields = "file_name, height, imgid, imgrank, objid, orig_file_name, thumb_file_name, thumb_height, thumb_width, width"
     txo_fields = "creation_datetime, creator_email, display_name, id, id_instance, aphia_id, lastupdate_datetime, name, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostatus, taxotype"
     txp_fields = "aphia_id, name"
@@ -151,6 +151,7 @@ def test_all_fields(fastapi):
             fastapi, CREATOR_AUTH, prj_id, fields=all_fields_txt, order=a_field, size=10
         )
         check_ret(details, len(all_fields))
+
     # Test all 'order by', one field present and limit
     for a_field in all_fields:
         objs, details = _prj_query(
@@ -170,3 +171,12 @@ def test_all_fields(fastapi):
     )
     check_ret(details, len(all_fields))
 
+    # Limit AKA size should return exact same data
+    objs_no_limit, details_no_limit = _prj_query(
+        fastapi, CREATOR_AUTH, prj_id, fields=all_fields_txt, order="usr.name"
+    )
+    objs_limit, details_limit = _prj_query(
+        fastapi, CREATOR_AUTH, prj_id, fields=all_fields_txt, order="usr.name", size=10000
+    )
+    assert objs_no_limit == objs_limit
+    assert details_no_limit == details_limit

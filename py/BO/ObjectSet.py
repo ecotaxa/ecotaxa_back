@@ -319,8 +319,6 @@ class BaseDescribedObjectSet(object):
           JOIN LATERAL (select * from images img2 where obh.objid = img2.objid order by imgrank limit 1) img ON true
           ORDER BY hier.n06 DESC, hier.objfid
         """
-        return  # TODO: Unsure about coverage and side-effects but cuts query time drastically.
-
         used_tables = set(selected_tables.table_aliases)
         if "cnn" in used_tables:
             return
@@ -328,71 +326,62 @@ class BaseDescribedObjectSet(object):
         subselect_select = SelectClause()
         subselect_from = FromClause()
         subselect_order: Optional[OrderClause] = None
-        replacements = []
-        SelectClause.copy_unlinked(select_clause, subselect_select)
+        replacements: Dict[str, Dict[str, str]] = dict()
 
-        # Transfer hierarchical joins
-        for hier_ref in ("prjs", "sam", "acq"):
-            FromClause.transfer(selected_tables, subselect_from, hier_ref)
-            SelectClause.copy_for_ref(select_clause, subselect_select, hier_ref)
-            replacements.append(hier_ref)
+        # Transfer hierarchical joins first, then obj tables in the same order they were added
+        obj_tables = ["obf", "obh"] if obf_in_first else ["obh", "obf"]
+        moved_refs = ["prjs", "sam", "acq"] + obj_tables
+        for table_ref in moved_refs:
+            FromClause.transfer(selected_tables, subselect_from, table_ref)
+            from_to_expr = SelectClause.copy_for_ref(
+                select_clause, subselect_select, table_ref
+            )
+            replacements[table_ref] = from_to_expr
 
-        # Move the obj_* in the same order they were added
-        obj_tables = ("obf", "obh") if obf_in_first else ("obh", "obf")
-        for an_obj_ref in obj_tables:
-            FromClause.transfer(selected_tables, subselect_from, an_obj_ref)
-            SelectClause.copy_for_ref(select_clause, subselect_select, an_obj_ref)
-            replacements.append(an_obj_ref)
+        if order_clause_refs.issubset(
+            moved_refs
+        ):  # All "order by" comes from one of the tables above
+            if set(filter_clauses).issubset(
+                moved_refs
+            ):  # There is no filter other than tables above
+                subselect_order = (
+                    order_clause.clone()
+                )  # Safe to pull up the order + limit
 
-        # Need join conditions in subselect
+        # TODO later: Move txo, txp, usr (and img ?) when there are filters
+        #  or needed columns e.g. txo.name which is in UI
+
+        # Ensure "order by", references a column present in subselect
+        for a_col in order_clause.referenced_columns():
+            prfx, _ = a_col.split(".")
+            if not prfx in replacements:
+                continue
+            if subselect_select.has_expr(a_col):
+                continue
+            seen = subselect_select.add_expr_with_no_dup(a_col)
+            replacements.setdefault(prfx, dict())[a_col] = seen
+
+        # Need join conditions, i.e. FKs, in subselect. TODO: Could extract them
         for prfx, join_col in [("txo", "obh.classif_id"), ("usr", "obh.classif_who")]:
-            if prfx in used_tables:
-                if join_col not in subselect_select.expressions:
-                    subselect_select.add_expr(join_col)
+            if not prfx in used_tables:
+                continue
+            if subselect_select.has_expr(join_col):
+                continue
+            subselect_select.add_expr(join_col)
+            replacements.setdefault(prfx, dict())[join_col] = join_col.split(".")[1]
 
-        # All order by comes from one of the tables above and there is not filter
-        # outside which could exclude rows, we are safe to move the order into
-        # the subselect
-        if False:
-            subselect_order = order_clause.clone()
-
-            if "txo" in order_clause_refs:
-                FromClause.transfer(selected_tables, subselect_from, "txo")
-                SelectClause.copy_for_ref(select_clause, subselect_select, "txo")
-                replacements.append("txo")
-
-            if "img" in order_clause_refs:
-                FromClause.transfer(selected_tables, subselect_from, "img")
-                SelectClause.copy_for_ref(select_clause, subselect_select, "img")
-                replacements.append("img")
-                for a_col in order_clause.referenced_columns():
-                    if "img" + "." in a_col:
-                        cols_to_add = (
-                            SelectClause.composing_columns(a_col)
-                            if SelectClause.is_a_record(a_col)
-                            else [a_col]
-                        )
-                        for to_add in cols_to_add:
-                            if subselect_select.has_expr(to_add):
-                                continue
-                            subselect_select.add_expr(to_add)
-                subselect_order.replace_aliases("img", select_clause)
-
-        col_refs_in_order_clause = order_clause.referenced_columns()
-        for ref in replacements:
-            select_clause.replace_alias(ref, "hier")
-            selected_tables.replace_table(ref + ".", "hier.")
-            where_clause.replace_table(ref + ".", "hier.")
-            # Ensure "order by" references something present in subselect
-            for a_col in col_refs_in_order_clause:
-                if not a_col.startswith(ref + "."):
-                    continue
-                if subselect_select.has_expr(a_col):
-                    replacement = a_col.replace(ref + ".", "hier.")
-                else:
-                    seen = subselect_select.add_expr_with_no_dup(a_col, "ordr")
-                    replacement = "hier." + seen
-                order_clause.replace(a_col, replacement)
+        for ref, from_to_expr in replacements.items():
+            long_exprs_in_first = dict(
+                sorted(
+                    from_to_expr.items(), key=lambda item: len(item[0]), reverse=True
+                )
+            )
+            for from_expr, to_alias in long_exprs_in_first.items():
+                to_expr = "hier." + to_alias
+                select_clause.replace_in_expressions(from_expr, to_expr)
+                selected_tables.replace_in_expressions(from_expr, to_expr)
+                where_clause.replace_in_expressions(from_expr, to_expr)
+                order_clause.replace_in_expressions(from_expr, to_expr)
 
         # Plug back
         order_sql = ""
