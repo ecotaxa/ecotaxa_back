@@ -228,13 +228,6 @@ class BaseDescribedObjectSet(object):
                 )
         if "cnn" in referenced_table_aliases:
             selected_tables += f"{ObjectCNNFeatureVector.__tablename__} cnn ON cnn.objcnnid = obh.objid"
-        if "ohu" in referenced_table_aliases:  # Inline query for annotators in history
-            selected_tables += (
-                f"(select 1 as in_annots WHERE EXISTS (select * from {ObjectsClassifHisto.__tablename__} och "
-                "WHERE och.objid = obh.objid AND och.classif_who = ANY (:filt_annot))) ohu ON True"
-            )
-            selected_tables.set_outer("(select 1 as in_annots ")
-            selected_tables.set_lateral("(select 1 as in_annots ")
         if "txo" in referenced_table_aliases or "txp" in referenced_table_aliases:
             selected_tables += (
                 f"{Taxonomy.__tablename__} txo ON txo.id = obh.classif_id"
@@ -243,7 +236,11 @@ class BaseDescribedObjectSet(object):
                 self.filters.status_filter not in MEANS_CLASSIF_ID_EXIST
                 and not self.filters.taxo  # If some taxo is needed it's a plain join
             ):
+                # Possibly return no taxo when classif_id is null
                 selected_tables.set_outer(f"{Taxonomy.__tablename__} txo ")
+        if "txp" in referenced_table_aliases:
+            selected_tables += f"{Taxonomy.__tablename__} txp ON txp.id = txo.parent_id"
+            selected_tables.set_outer(f"{Taxonomy.__tablename__} txp ")
         if "img" in referenced_table_aliases:
             if all_images:
                 selected_tables += f"{Image.__tablename__} img ON img.objid = obh.objid"
@@ -253,9 +250,6 @@ class BaseDescribedObjectSet(object):
         if "usr" in referenced_table_aliases:
             selected_tables += f"{User.__tablename__} usr ON usr.id = obh.classif_who"
             selected_tables.set_outer(f"{User.__tablename__} usr ")
-        if "txp" in referenced_table_aliases:
-            selected_tables += f"{Taxonomy.__tablename__} txp ON txp.id = txo.parent_id"
-            selected_tables.set_outer(f"{Taxonomy.__tablename__} txp ")
 
         # Collect remaining filters
         for prefix, a_where in filter_clauses.items():
@@ -333,11 +327,11 @@ class BaseDescribedObjectSet(object):
 
         subselect_select = SelectClause()
         subselect_from = FromClause()
-        subselect_order = order_clause.clone()
+        subselect_order: Optional[OrderClause] = None
         replacements = []
         SelectClause.copy_unlinked(select_clause, subselect_select)
 
-        # Transfer
+        # Transfer hierarchical joins
         for hier_ref in ("prjs", "sam", "acq"):
             FromClause.transfer(selected_tables, subselect_from, hier_ref)
             SelectClause.copy_for_ref(select_clause, subselect_select, hier_ref)
@@ -348,49 +342,65 @@ class BaseDescribedObjectSet(object):
         for an_obj_ref in obj_tables:
             FromClause.transfer(selected_tables, subselect_from, an_obj_ref)
             SelectClause.copy_for_ref(select_clause, subselect_select, an_obj_ref)
-            for a_col in order_clause.referenced_columns():
-                if a_col.startswith(an_obj_ref + ".") and not subselect_select.has_expr(
-                    a_col
-                ):
-                    subselect_select.add_expr(a_col)
             replacements.append(an_obj_ref)
 
-        if "txo" in order_clause_refs:
-            FromClause.transfer(selected_tables, subselect_from, "txo")
-            SelectClause.copy_for_ref(select_clause, subselect_select, "txo")
-            replacements.append("txo")
+        # Need join conditions in subselect
+        for prfx, join_col in [("txo", "obh.classif_id"), ("usr", "obh.classif_who")]:
+            if prfx in used_tables:
+                if join_col not in subselect_select.expressions:
+                    subselect_select.add_expr(join_col)
 
-        if "img" in order_clause_refs:
-            FromClause.transfer(selected_tables, subselect_from, "img")
-            SelectClause.copy_for_ref(select_clause, subselect_select, "img")
-            replacements.append("img")
-            for a_col in order_clause.referenced_columns():
-                if "img" + "." in a_col:
-                    cols_to_add = (
-                        SelectClause.composing_columns(a_col)
-                        if SelectClause.is_a_record(a_col)
-                        else [a_col]
-                    )
-                    for to_add in cols_to_add:
-                        if subselect_select.has_expr(to_add):
-                            continue
-                        subselect_select.add_expr(to_add)
-            subselect_order.replace_aliases("img", select_clause)
+        # All order by comes from one of the tables above and there is not filter
+        # outside which could exclude rows, we are safe to move the order into
+        # the subselect
+        if False:
+            subselect_order = order_clause.clone()
 
-        if "txo" in used_tables:
-            if not "obh.classif_id" in subselect_select.expressions:
-                # Need join condition
-                subselect_select.add_expr("obh.classif_id")
+            if "txo" in order_clause_refs:
+                FromClause.transfer(selected_tables, subselect_from, "txo")
+                SelectClause.copy_for_ref(select_clause, subselect_select, "txo")
+                replacements.append("txo")
 
+            if "img" in order_clause_refs:
+                FromClause.transfer(selected_tables, subselect_from, "img")
+                SelectClause.copy_for_ref(select_clause, subselect_select, "img")
+                replacements.append("img")
+                for a_col in order_clause.referenced_columns():
+                    if "img" + "." in a_col:
+                        cols_to_add = (
+                            SelectClause.composing_columns(a_col)
+                            if SelectClause.is_a_record(a_col)
+                            else [a_col]
+                        )
+                        for to_add in cols_to_add:
+                            if subselect_select.has_expr(to_add):
+                                continue
+                            subselect_select.add_expr(to_add)
+                subselect_order.replace_aliases("img", select_clause)
+
+        col_refs_in_order_clause = order_clause.referenced_columns()
         for ref in replacements:
             select_clause.replace_alias(ref, "hier")
             selected_tables.replace_table(ref + ".", "hier.")
             where_clause.replace_table(ref + ".", "hier.")
-            order_clause.replace(ref + ".", "hier.")
+            # Ensure "order by" references something present in subselect
+            for a_col in col_refs_in_order_clause:
+                if not a_col.startswith(ref + "."):
+                    continue
+                if subselect_select.has_expr(a_col):
+                    replacement = a_col.replace(ref + ".", "hier.")
+                else:
+                    seen = subselect_select.add_expr_with_no_dup(a_col, "ordr")
+                    replacement = "hier." + seen
+                order_clause.replace(a_col, replacement)
 
         # Plug back
-        order_sql = subselect_order.get_sql("\n     ")
-        order_clause.set_window(None, None)  # We build proper chunk of data in subquery
+        order_sql = ""
+        if subselect_order is not None:
+            order_sql = subselect_order.get_sql("\n     ")
+            order_clause.set_window(
+                None, None
+            )  # We build proper chunk of data in subquery
         subselect_sql = (
             "( "
             + subselect_select.get_sql()
@@ -1291,7 +1301,6 @@ class ObjectSetFilter(object):
                 'prc' is the alias for Process
                 'obh' is the alias for object_head aka ObjectHeader
                 'obf' the alias for ObjectFields, if relevant to mapping system
-                'ohu' is the alias for historical Classification Histo (ObjectsClassifHisto)
         :param user_id: For filtering validators.
         :param params: SQL params will be added there.
         :param object_mappings: Free field mappings from project.
@@ -1508,8 +1517,10 @@ class ObjectSetFilter(object):
                 ).add_param("freetxtval", like_exp)
 
         if self.annotators:
-            prfx_where_clause("ohu").chain(
-                "(obh.classif_who = ANY (:filt_annot) OR ohu.in_annots IS NOT NULL)"
+            prfx_where_clause("obh").chain(
+                "(obh.classif_who = ANY (:filt_annot) "
+                "OR EXISTS (SELECT 1 FROM objectsclassifhisto och "
+                "WHERE och.objid = obh.objid AND och.classif_who = ANY (:filt_annot)))"
             ).add_param("filt_annot", [int(x) for x in self.annotators.split(",")])
         elif self.last_annotators:
             prfx_where_clause("obh").chain(

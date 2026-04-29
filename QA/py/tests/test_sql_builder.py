@@ -83,6 +83,14 @@ def test_order_clause_refs():
     assert order.table_refs(SelectClause()) == {"obh", "obj"}
 
 
+def test_order_clause_refs2():
+    order = OrderClause()
+    order.add_expression("obh", "id", "DESC")
+    order.add_expression("obj", "name", "ASC")
+    order.add_expression(None, "CASE WHEN hier.classif_qual='P' THEN hier.classif_id END", "ASC")
+    assert order.referenced_columns() == {"obh.id", "obj.name", "hier.classif_qual", "hier.classif_id"}
+
+
 def test_where_clause_replace_table():
     from DB.helpers.SQL import WhereClause
     wc = WhereClause()

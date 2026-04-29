@@ -37,10 +37,21 @@ class SelectClause(object):
         return new_clause
 
     def add_expr(self, expr: str, alias: Optional[str] = None) -> "SelectClause":
-        assert isinstance(expr, str), repr(expr)
         self.expressions.append(expr)
         self.aliases.append(alias)
         return self
+
+    def add_expr_with_no_dup(self, expr: str, suffix: str) -> str:
+        alias = None
+        seen = self.seen_as(expr, alias)
+        present_seen = self.result_columns()
+        if seen in present_seen:
+            alias = f"_{suffix}"
+            seen = alias
+            assert seen not in present_seen
+        self.expressions.append(expr)
+        self.aliases.append(alias)
+        return seen
 
     def has_expr(self, an_expr: str):
         return an_expr in self.expressions
@@ -86,12 +97,13 @@ class SelectClause(object):
         for i in indices_to_copy:
             from_exp = from_clause.expressions[i]
             from_alias = from_clause.aliases[i]
-            showed = SelectClause.seen_as(from_exp, from_alias)
-            if from_exp in to_clause.expressions:
-                continue  # No dups
-            if showed in present:
-                from_alias = "_2" if from_alias is None else (from_alias + "_2")
-                present.add(from_alias)
+            idx_in_to = to_clause.expressions.find(from_exp)
+            if from_exp in to_clause.expressions and from_alias is None:
+                continue  # Exact same value
+            # showed = SelectClause.seen_as(from_exp, from_alias)
+            # if showed in present:
+            #     from_alias = "_2" if from_alias is None else (from_alias + "_2")
+            #     present.add(from_alias)
             to_clause.add_expr(from_exp, from_alias)
 
     @staticmethod
@@ -423,7 +435,10 @@ class WhereClause(object):
 
 class OrderClause(object):
     """
-    An 'order by' clause in SQL. List of columns/aliases.
+    An 'order by' clause in SQL. List of columns/aliases/expressions.
+    Examples:   user.name
+                filename
+                CASE WHEN obh.classif_qual='P' THEN obh.classif_id END
     """
 
     __slots__ = ("expressions", "window_start", "window_size")
@@ -459,25 +474,26 @@ class OrderClause(object):
             self.expressions.append(f"{expr} {asc_or_desc}")
         return self
 
-    def columns(self) -> Generator[str, None, None]:
+    def base_expressions(self) -> Generator[str, None, None]:
         for expr in self.expressions:
             parts = expr.split(maxsplit=1)
             yield parts[0]
 
     def referenced_columns(self, with_prefices=True) -> Set[str]:
         res = set()
-        for col in self.columns():
-            if not with_prefices:
-                if "." in col:
-                    col = col.split(".")[1]
-            res.add(col)
+        for expr in self.expressions:
+            for match in COL_RE.finditer(expr):
+                col = match.group(2)
+                if with_prefices:
+                    col = match.group(1) + "." + col
+                res.add(col)
         return res
 
     def table_refs(self, select: SelectClause) -> Set[str]:
         """Return e.g. obh, obj, img, etc... depending on ordering values"""
         refs = set()
-        for expr in self.columns():
-            for match in COL_RE.finditer(expr):
+        for expr in self.base_expressions():
+            for match in COL_RE.finditer(expr):  # Work for CASE expression too
                 refs.add(match.group(1))
             else:
                 # Ref to a selected expression, we have aliases in such case
