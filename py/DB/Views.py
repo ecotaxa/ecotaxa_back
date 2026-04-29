@@ -8,10 +8,9 @@
 from typing import List
 
 from sqlalchemy import Table, text
-from sqlalchemy_views import CreateView, DropView  # type:ignore # case6
+from sqlalchemy_views import CreateView, DropView  # type: ignore # case6
 
-OBJECTS_DEF = text(
-    """
+OBJECTS_DEF = text("""
 SELECT prj.projid,
        sam.sampleid,
        obh.objid,
@@ -40,11 +39,10 @@ SELECT prj.projid,
        ofi.*
     FROM projects prj
     JOIN samples sam ON sam.projid = prj.projid
-    JOIN acquisitions acq ON acq.acq_sample_id = sam.sampleid AND acq.acquisid <@ acq_in_prj(prj.projid)
+    JOIN acquisitions acq ON acq.acq_sample_id = sam.sampleid
     JOIN obj_head obh ON obh.acquisid = acq.acquisid AND obh.objid <@ obj_in_prj(prj.projid)
     LEFT JOIN obj_field ofi ON obh.objid = ofi.objfid     -- allow elimination by planner
-    """
-)
+    """)
 
 
 def views_deletion_queries(metadata) -> List:

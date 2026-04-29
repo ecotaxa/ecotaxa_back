@@ -395,7 +395,7 @@ class ProjectBO(object):
             + PREDICTED_CLASSIF_QUAL
             + """' THEN 1 END) nbr_p
           FROM obj_head obh 
-          JOIN acquisitions acq ON acq.acquisid = obh.acquisid AND acq.acquisid <@ acq_in_prj(:prjid)
+          JOIN acquisitions acq ON acq.acquisid = obh.acquisid
           JOIN samples sam ON sam.sampleid = acq.acq_sample_id AND sam.projid = :prjid
          WHERE obh.objid <@ obj_in_prj(:prjid)
         GROUP BY sam.projid, obh.classif_id;"""
@@ -404,8 +404,7 @@ class ProjectBO(object):
 
     @staticmethod
     def update_stats(session: Session, projid: int):
-        sql = text(
-            """
+        sql = text("""
         UPDATE projects
            SET objcount=tsp.nbr_sum,
                pctclassified=100.0*nbrclassified/tsp.nbr_sum,
@@ -417,8 +416,7 @@ class ProjectBO(object):
                WHERE projid = :prjid
               GROUP BY projid) tsp ON prj.projid = tsp.projid
         WHERE projects.projid = :prjid
-          AND prj.projid = :prjid"""
-        )
+          AND prj.projid = :prjid""")
         session.execute(sql, {"prjid": projid})
 
     @staticmethod
@@ -444,7 +442,7 @@ class ProjectBO(object):
             sql += ", pts.id"
         res: Result = session.execute(text(sql), params)
         with CodeTimer("stats for %d projects:" % len(prj_ids), logger):
-            ret = [ProjectTaxoStats(**rec) for rec in res]  # type:ignore # case4
+            ret = [ProjectTaxoStats(**rec) for rec in res]  # type: ignore # case4
         for a_stat in ret:
             a_stat.used_taxa.sort()
         return ret
@@ -480,9 +478,6 @@ class ProjectBO(object):
         pqry = pqry.order_by(prjs_vals.c.projid, User.name)
         pqry = pqry.where(
             ObjectHeader.objid.op("<@")(func.obj_in_prj(prjs_vals.c.projid))
-        )
-        pqry = pqry.where(
-            Acquisition.acquisid.op("<@")(func.acq_in_prj(prjs_vals.c.projid))
         )
         ret = []
         user_activities: Dict[UserIDT, UserActivity] = {}
@@ -530,9 +525,6 @@ class ProjectBO(object):
         hqry = hqry.order_by(prjs_vals.c.projid, User.name)
         hqry = hqry.where(
             ObjectHeader.objid.op("<@")(func.obj_in_prj(prjs_vals.c.projid))
-        )
-        hqry = hqry.where(
-            Acquisition.acquisid.op("<@")(func.acq_in_prj(prjs_vals.c.projid))
         )
         with CodeTimer(
             "user history stats for %d projects, qry: %s:" % (len(prj_ids), str(hqry)),
@@ -769,7 +761,7 @@ class ProjectBO(object):
             Acquisition.acq_sample_id.in_(soon_deleted_samples)
         )
         logger.info("Del acquisitions :%s", str(del_acquis_qry))
-        gone_acqs = session.execute(del_acquis_qry).rowcount  # type:ignore  # case1
+        gone_acqs = session.execute(del_acquis_qry).rowcount  # type: ignore  # case1
         ret.append(gone_acqs)
         logger.info("%d rows deleted", gone_acqs)
 
@@ -777,7 +769,7 @@ class ProjectBO(object):
             Sample.sampleid.in_(soon_deleted_samples)
         )
         logger.info("Del samples :%s", str(del_sample_qry))
-        gone_sams = session.execute(del_sample_qry).rowcount  # type:ignore  # case1
+        gone_sams = session.execute(del_sample_qry).rowcount  # type: ignore  # case1
         ret.append(gone_sams)
         logger.info("%d rows deleted", gone_sams)
 
@@ -885,7 +877,7 @@ class ProjectBO(object):
             # TODO: We can't lock what does not exists, so it can fail here.
             pts_ins = (
                 """INSERT INTO projects_taxo_stat(projid, id, nbr, nbr_v, nbr_d, nbr_p)
-                                 SELECT :prj, COALESCE(obh.classif_id, -1), COUNT(*) nbr,
+                                 SELECT :prjid, COALESCE(obh.classif_id, -1), COUNT(*) nbr,
                                         COUNT(CASE WHEN obh.classif_qual = '"""
                 + VALIDATED_CLASSIF_QUAL
                 + """' THEN 1 END) nbr_v,
@@ -896,13 +888,15 @@ class ProjectBO(object):
                 + PREDICTED_CLASSIF_QUAL
                 + """' THEN 1 END) nbr_p
                            FROM %s obh
-                           JOIN acquisitions acq ON acq.acquisid = obh.acquisid AND acq.acquisid <@ acq_in_prj(:prj)
-                           JOIN samples sam ON sam.sampleid = acq.acq_sample_id AND sam.projid = :prj
-                          WHERE COALESCE(obh.classif_id, -1) = ANY(:ids)
-                       GROUP BY obh.classif_id"""
-                % ObjectHeader.__tablename__
+                           JOIN acquisitions acq ON acq.acquisid = obh.acquisid
+                           JOIN samples sam ON sam.sampleid = acq.acq_sample_id AND sam.projid = :prjid
+                          WHERE obh.objid <@ obj_in_prj(:prjid)
+                            AND COALESCE(obh.classif_id, -1) = ANY(:ids)
+                       GROUP BY obh.classif_id""" % ObjectHeader.__tablename__
             )
-            session.execute(text(pts_ins), {"prj": prj_id, "ids": list(ids_not_in_db)})
+            session.execute(
+                text(pts_ins), {"prjid": prj_id, "ids": list(ids_not_in_db)}
+            )
         # Apply delta
         for classif_id, chg in collated_changes.items():
             if classif_id in ids_not_in_db:

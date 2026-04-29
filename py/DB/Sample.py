@@ -80,8 +80,7 @@ class Sample(Model):
             Create sample geo from objects one.
         TODO: Should be in a BO
         """
-        sql = text(
-            f"""
+        sql = text(f"""
         UPDATE samples usam
            SET latitude = sll.latitude, longitude = sll.longitude
           FROM (SELECT {RECURS_HINT} sam.sampleid, MIN(obh.latitude) latitude, MIN(obh.longitude) longitude
@@ -94,21 +93,19 @@ class Sample(Model):
                    AND obh.objid <@ obj_in_prj(:projid)
               GROUP BY sam.sampleid) sll
          WHERE usam.sampleid = sll.sampleid
-           AND projid = :projid """
-        )
+           AND projid = :projid """)
         session.execute(sql, {"projid": prj_id})
         session.commit()
 
     @classmethod
     def get_sample_summary(cls, session: Session, sample_id: int) -> List:
-        sql = text(
-            f"""
+        sql = text(f"""
             SELECT {RECURS_HINT} MIN(obh.objdate+obh.objtime), MAX(obh.objdate+obh.objtime), MIN(obh.depth_min), MAX(obh.depth_max)
               FROM obj_head obh
               JOIN acquisitions acq on acq.acquisid = obh.acquisid
               JOIN samples sam on sam.sampleid = acq.acq_sample_id
-             WHERE sam.sampleid = :smp """
-        )
+             WHERE sam.sampleid = :smp
+               AND obh.objid <@ obj_in_prj(sam.projid) """)
         res: Result = session.execute(sql, {"smp": sample_id})
         return [a_val for a_val in res.one()]
 

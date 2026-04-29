@@ -272,7 +272,8 @@ class ObjectManager(Service):
       FROM %s obh
       JOIN acquisitions acq on acq.acquisid = obh.acquisid 
       JOIN samples sam on sam.sampleid = acq.acq_sample_id 
-     WHERE obh.objid = any (:ids) """ % ObjectHeader.__tablename__
+     WHERE obh.objid = any (:ids) 
+       AND obh.objid <@ obj_in_prj(sam.projid) """ % ObjectHeader.__tablename__
         params = {"ids": object_ids}
 
         res: Result = self.ro_session.execute(text(sql), params)

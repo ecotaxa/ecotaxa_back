@@ -1364,17 +1364,6 @@ SELECT public.fix_partition_stats('obj_field', 'acquis_id', 1000);
 SELECT public.fix_partition_stats('obj_head', 'acquisid', 1000);
 
 
-CREATE OR REPLACE FUNCTION acq_in_prj(prj_id int)
-RETURNS int8range AS $$
-  SELECT int8range(
-    prj_id * :ACQ_MULT::bigint,
-    (prj_id + 1) * :ACQ_MULT::bigint,
-    '[)'
-  );
-$$ LANGUAGE sql IMMUTABLE;
-
-GRANT EXECUTE ON FUNCTION acq_in_prj(int) TO PUBLIC;
-
 CREATE OR REPLACE FUNCTION obj_in_prj(prj_id int)
 RETURNS int8range AS $$
   SELECT int8range(
@@ -1416,7 +1405,7 @@ SELECT prj.projid,
        ofi.*
     FROM projects prj
     JOIN samples sam ON sam.projid = prj.projid
-    JOIN acquisitions acq ON acq.acq_sample_id = sam.sampleid AND acq.acquisid <@ acq_in_prj(prj.projid)
+    JOIN acquisitions acq ON acq.acq_sample_id = sam.sampleid
     JOIN obj_head obh ON obh.acquisid = acq.acquisid AND obh.objid <@ obj_in_prj(prj.projid)
     LEFT JOIN obj_field ofi ON obh.objid = ofi.objfid
 ;
