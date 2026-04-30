@@ -60,9 +60,7 @@ class CollectionProject(Model):
     __tablename__ = "collection_project"
     """ n<->n plain relationship b/w collection and projects """
     collection_id = Column(INTEGER, ForeignKey("collection.id"), primary_key=True)
-    project_id = Column(
-        INTEGER, ForeignKey("projects.projid", onupdate="CASCADE"), primary_key=True
-    )
+    project_id = Column(INTEGER, ForeignKey("projects.projid"), primary_key=True)
 
     def __str__(self) -> str:
         return "{0},{1}".format(self.collection_id, self.project_id)

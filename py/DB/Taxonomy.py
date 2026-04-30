@@ -114,7 +114,7 @@ class TaxonomyChangeLog(Model):
     # ...in this project...
     project_id = Column(
         INTEGER,
-        ForeignKey("projects.projid", ondelete="CASCADE", onupdate="CASCADE"),
+        ForeignKey("projects.projid", ondelete="CASCADE"),
         nullable=False,
         primary_key=True,
     )

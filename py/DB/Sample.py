@@ -23,9 +23,7 @@ class Sample(Model):
     # Historical (plural) name of the table
     __tablename__ = "samples"
     sampleid: int = Column(BIGINT, primary_key=True, autoincrement=False)
-    projid: int = Column(
-        INTEGER, ForeignKey("projects.projid", onupdate="CASCADE"), nullable=False
-    )
+    projid: int = Column(INTEGER, ForeignKey("projects.projid"), nullable=False)
     # i.e. sample_id from TSV
     orig_id: str = Column(VARCHAR(255), nullable=False)
     latitude = Column(DOUBLE_PRECISION)
