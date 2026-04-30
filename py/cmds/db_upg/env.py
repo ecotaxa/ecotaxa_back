@@ -1,3 +1,4 @@
+import re
 from logging.config import fileConfig
 
 from alembic import context
@@ -28,9 +29,38 @@ target_metadata = Project.metadata
 # ... etc.
 
 
-from cmds.db_upg.db_conn import conn  # type:ignore
+from cmds.db_upg.db_conn import conn  # type: ignore
 
 config.set_main_option("sqlalchemy.url", str(conn.url))
+
+
+def include_object(obj, name, type_, reflected, compare_to):
+    is_partition_suffix = re.compile(r"_(default|\d+(_\d+)*)$")
+    partitioned_bases = ("obj_head", "obj_field")
+
+    def is_partition(table_name):
+        return table_name.startswith(partitioned_bases) and is_partition_suffix.search(
+            table_name
+        )
+
+    if type_ == "table":
+        return not is_partition(name)
+
+    if type_ == "foreign_key_constraint":
+        if is_partition(obj.table.name):
+            return False
+        try:
+            referred_table = obj.referred_table.name
+            if is_partition(referred_table):
+                return False
+        except AttributeError:
+            pass
+
+    if type_ in ("index", "unique_constraint"):
+        if is_partition(obj.table.name):
+            return False
+
+    return True
 
 
 def run_migrations_offline():
@@ -52,6 +82,7 @@ def run_migrations_offline():
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         transaction_per_migration=True,
+        include_object=include_object,
     )
 
     with context.begin_transaction():
@@ -76,6 +107,7 @@ def run_migrations_online():
             connection=connection,
             target_metadata=target_metadata,
             transaction_per_migration=True,
+            include_object=include_object,
         )
 
         with context.begin_transaction():
