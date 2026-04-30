@@ -1313,7 +1313,7 @@ ALTER TABLE obj_head
 ALTER TABLE obj_field
     ADD CONSTRAINT obj_field_objfid_fkey FOREIGN KEY (objfid) REFERENCES obj_head (objid) ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE images
-    ADD CONSTRAINT images_objid_fkey FOREIGN KEY (objid) REFERENCES obj_head(objid) ON DELETE CASCADE ON UPDATE CASCADE;
+    ADD CONSTRAINT images_objid_fkey FOREIGN KEY (objid) REFERENCES obj_head(objid) ON UPDATE CASCADE;
 ALTER TABLE objectsclassifhisto
     ADD CONSTRAINT objectsclassifhisto_objid_fkey FOREIGN KEY (objid) REFERENCES obj_head(objid) ON DELETE CASCADE ON UPDATE CASCADE,
     ADD CONSTRAINT objectsclassifhisto_classif_id_fkey FOREIGN KEY (classif_id) REFERENCES taxonomy(id) ON DELETE CASCADE,
