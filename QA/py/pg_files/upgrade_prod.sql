@@ -3061,6 +3061,79 @@ UPDATE alembic_version SET version_num='acf6f3fcb35c' WHERE alembic_version.vers
 
 COMMIT;
 
+-- Running upgrade acf6f3fcb35c -> 5d49f4994e0c
+
+DROP INDEX is_objectsacqclassifqual;
+
+CREATE UNIQUE INDEX is_objectsacqclassifqual ON obj_head (acquisid, objid) INCLUDE (classif_qual, classif_id);
+
+DROP INDEX is_obj_head_acquisid_objid;
+
+DROP INDEX obj_field_acquisid_objfid_idx;
+
+CREATE UNIQUE INDEX obj_field_acquisid_objfid_idx ON obj_field (acquis_id, objfid) INCLUDE (n01, n02, n03, n04);
+
+ALTER TABLE acquisitions DROP CONSTRAINT acquisitions_sampleid_fkey;
+
+ALTER TABLE acquisitions ADD FOREIGN KEY(acq_sample_id) REFERENCES samples (sampleid) ON UPDATE CASCADE;
+
+ALTER TABLE images DROP CONSTRAINT images_objid_fkey;
+
+ALTER TABLE images ADD FOREIGN KEY(objid) REFERENCES obj_head (objid) ON UPDATE CASCADE;
+
+ALTER TABLE obj_head DROP CONSTRAINT obj_head_acquisid_fkey;
+
+ALTER TABLE obj_head ADD FOREIGN KEY(acquisid) REFERENCES acquisitions (acquisid) ON DELETE CASCADE ON UPDATE CASCADE;
+
+ALTER TABLE obj_cnn_features_vector DROP CONSTRAINT obj_cnn_features_vector_objcnnid_fkey;
+
+ALTER TABLE obj_cnn_features_vector ADD FOREIGN KEY(objcnnid) REFERENCES obj_head (objid) ON DELETE CASCADE ON UPDATE CASCADE;
+
+ALTER TABLE obj_field DROP CONSTRAINT obj_field_objfid_fkey;
+
+ALTER TABLE obj_field ADD FOREIGN KEY(objfid) REFERENCES obj_head (objid) ON DELETE CASCADE ON UPDATE CASCADE;
+
+ALTER TABLE objectsclassifhisto DROP CONSTRAINT objectsclassifhisto_objid_fkey;
+
+ALTER TABLE objectsclassifhisto ADD FOREIGN KEY(objid) REFERENCES obj_head (objid) ON DELETE CASCADE ON UPDATE CASCADE;
+
+ALTER TABLE prediction DROP CONSTRAINT prediction_object_id_fkey;
+
+ALTER TABLE prediction ADD FOREIGN KEY(object_id) REFERENCES obj_head (objid) ON DELETE CASCADE ON UPDATE CASCADE;
+
+ALTER TABLE prediction_histo DROP CONSTRAINT prediction_histo_object_id_fkey;
+
+ALTER TABLE prediction_histo ADD FOREIGN KEY(object_id) REFERENCES obj_head (objid) ON DELETE CASCADE ON UPDATE CASCADE;
+
+ALTER TABLE process DROP CONSTRAINT process_processid_fkey;
+
+ALTER TABLE process ADD FOREIGN KEY(processid) REFERENCES acquisitions (acquisid) ON DELETE CASCADE ON UPDATE CASCADE;
+
+DROP TABLE collection_orga_role_w_organization;
+
+ALTER TABLE projects DROP COLUMN license;
+
+ALTER TABLE projects DROP COLUMN visible;
+
+ALTER TABLE users ALTER COLUMN type DROP NOT NULL;
+
+ALTER TABLE users DROP COLUMN organization;
+
+CREATE OR REPLACE FUNCTION obj_in_prj(prj_id int)
+RETURNS int8range AS $$
+  SELECT int8range(
+    prj_id * 100000000::bigint,
+    (prj_id + 1) * 100000000::bigint,
+    '[)'
+  );
+$$ LANGUAGE sql IMMUTABLE;
+
+GRANT EXECUTE ON FUNCTION obj_in_prj(int) TO PUBLIC;;
+
+UPDATE alembic_version SET version_num='5d49f4994e0c' WHERE alembic_version.version_num = 'acf6f3fcb35c';
+
+COMMIT;
+
 ------- Leave on tail
 
 ALTER TABLE alembic_version REPLICA IDENTITY FULL;
