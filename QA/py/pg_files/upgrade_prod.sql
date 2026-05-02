@@ -3063,6 +3063,8 @@ COMMIT;
 
 -- Running upgrade acf6f3fcb35c -> 5d49f4994e0c
 
+DROP VIEW IF EXISTS objects;
+
 DROP INDEX is_objectsacqclassifqual;
 
 CREATE UNIQUE INDEX is_objectsacqclassifqual ON obj_head (acquisid, objid) INCLUDE (classif_qual, classif_id);
@@ -3071,9 +3073,15 @@ DROP INDEX is_obj_head_acquisid_objid;
 
 DROP INDEX obj_field_acquisid_objfid_idx;
 
+ALTER TABLE obj_field ALTER COLUMN acquis_id TYPE BIGINT;
+
 CREATE UNIQUE INDEX obj_field_acquisid_objfid_idx ON obj_field (acquis_id, objfid) INCLUDE (n01, n02, n03, n04);
 
 ALTER TABLE acquisitions DROP CONSTRAINT acquisitions_sampleid_fkey;
+
+ALTER TABLE samples ALTER COLUMN sampleid TYPE BIGINT;
+
+ALTER TABLE acquisitions ALTER COLUMN acq_sample_id TYPE BIGINT;
 
 ALTER TABLE acquisitions ADD FOREIGN KEY(acq_sample_id) REFERENCES samples (sampleid) ON UPDATE CASCADE;
 
@@ -3082,6 +3090,10 @@ ALTER TABLE images DROP CONSTRAINT images_objid_fkey;
 ALTER TABLE images ADD FOREIGN KEY(objid) REFERENCES obj_head (objid) ON UPDATE CASCADE;
 
 ALTER TABLE obj_head DROP CONSTRAINT obj_head_acquisid_fkey;
+
+ALTER TABLE acquisitions ALTER COLUMN acquisid TYPE BIGINT;
+
+ALTER TABLE obj_head ALTER COLUMN acquisid TYPE BIGINT;
 
 ALTER TABLE obj_head ADD FOREIGN KEY(acquisid) REFERENCES acquisitions (acquisid) ON DELETE CASCADE ON UPDATE CASCADE;
 
@@ -3107,17 +3119,9 @@ ALTER TABLE prediction_histo ADD FOREIGN KEY(object_id) REFERENCES obj_head (obj
 
 ALTER TABLE process DROP CONSTRAINT process_processid_fkey;
 
+ALTER TABLE process ALTER COLUMN processid TYPE BIGINT;
+
 ALTER TABLE process ADD FOREIGN KEY(processid) REFERENCES acquisitions (acquisid) ON DELETE CASCADE ON UPDATE CASCADE;
-
-DROP TABLE collection_orga_role_w_organization;
-
-ALTER TABLE projects DROP COLUMN license;
-
-ALTER TABLE projects DROP COLUMN visible;
-
-ALTER TABLE users ALTER COLUMN type DROP NOT NULL;
-
-ALTER TABLE users DROP COLUMN organization;
 
 CREATE OR REPLACE FUNCTION obj_in_prj(prj_id int)
 RETURNS int8range AS $$
@@ -3129,6 +3133,39 @@ RETURNS int8range AS $$
 $$ LANGUAGE sql IMMUTABLE;
 
 GRANT EXECUTE ON FUNCTION obj_in_prj(int) TO PUBLIC;;
+
+CREATE OR REPLACE VIEW objects AS
+SELECT prj.projid,
+       sam.sampleid,
+       obh.objid,
+       obh.latitude,
+       obh.longitude,
+       obh.objdate,
+       obh.objtime,
+       obh.depth_min,
+       obh.depth_max,
+       obh.classif_id,
+       obh.classif_qual,
+       obh.classif_who,
+       CASE WHEN obh.classif_qual IN ('V', 'D') THEN obh.classif_date END AS classif_when,
+       obh.classif_score                                                  AS classif_auto_score,
+       CASE WHEN obh.classif_qual = 'P' THEN obh.classif_date END         AS classif_auto_when,
+       CASE WHEN obh.classif_qual = 'P' THEN obh.classif_id END           AS classif_auto_id,
+       NULL::integer                                                      AS classif_crossvalidation_id,
+       obh.complement_info,
+       NULL::double precision                                             AS similarity,
+       obh.sunpos,
+       HASHTEXT(obh.orig_id)                                              AS random_value,
+       obh.acquisid,
+       obh.object_link,
+       obh.orig_id,
+       obh.acquisid                                                       AS processid,
+       ofi.*
+    FROM projects prj
+    JOIN samples sam ON sam.projid = prj.projid
+    JOIN acquisitions acq ON acq.acq_sample_id = sam.sampleid
+    JOIN obj_head obh ON obh.acquisid = acq.acquisid AND obh.objid <@ obj_in_prj(prj.projid)
+    LEFT JOIN obj_field ofi ON obh.objid = ofi.objfid;
 
 UPDATE alembic_version SET version_num='5d49f4994e0c' WHERE alembic_version.version_num = 'acf6f3fcb35c';
 
