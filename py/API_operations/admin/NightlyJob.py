@@ -12,7 +12,6 @@ from dataclasses import dataclass
 from glob import glob
 from pathlib import Path
 from typing import Tuple, Any, List, Optional
-
 from API_operations.helpers.JobService import JobServiceBase, ArgsDict
 from BO.Job import JobBO
 from BO.Project import ProjectBO
@@ -85,6 +84,7 @@ class NightlyJobService(JobServiceBase):
         all_prj_ids.sort()
         # Release transaction, otherwise (if idle_in_transaction_session_timeout is set) the connection could expire
         self.ro_session.commit()
+        self.delete_empty_samples(all_prj_ids, 0, 10)
         self.compute_all_projects_taxo_stats(all_prj_ids, 0, 30)
         self.compute_all_projects_stats(all_prj_ids, 30, 60)
         self.refresh_taxo_tree_stats(60)
@@ -296,6 +296,48 @@ class NightlyJobService(JobServiceBase):
                 if ptime > dtime:
                     dtime = self.get_tree_time(Path(entry.path), dtime)
         return dtime
+
+    def delete_empty_samples(self, all_proj_ids: ProjectIDListT, start: int, end: int):
+        self.update_progress(start, "Find and delete empty samples")
+        total = len(all_proj_ids)
+        for idx, prj in enumerate(all_proj_ids):
+            progress = round(start + (end - start) / total * idx)
+            sql = f"""
+                    SELECT  sam.sampleid 
+                      FROM samples sam WHERE sam.projid = :prj AND NOT EXISTS ( SELECT 1 FROM obj_head obh INNER JOIN acquisitions acq ON acq.acquisid = obh.acquisid AND acq.acq_sample_id = sam.sampleid )               
+                     
+            """
+            res = self.ro_session.execute(text(sql), {"prj": prj})
+            emptysam = [a_val[0] for a_val in res]
+            if len(emptysam):
+                params = {"emptysam": list(emptysam)}
+                self.update_progress(
+                    progress, "Delete empty samples for project : %s" % str(prj)
+                )
+                # double check check if really no objects
+                logger.info(
+                    "SQL %s , empty samples %s",
+                    str(sql).strip(),
+                    str(",".join([str(a_val) for a_val in emptysam])),
+                )
+                sql = f"""
+                      DELETE FROM acquisitions acq WHERE acq.acq_sample_id = ANY (:emptysam)    
+                      """
+                logger.info(
+                    "%s delete empty acquisitions for project %",
+                    str(sql).strip(),
+                    str(prj),
+                )
+                _res = self.session.execute(text(sql), params)
+                sql = f"""
+                      DELETE FROM samples sam WHERE sam.sampleid =ANY (:emptysam)    
+                      """
+                logger.info(
+                    "%s delete empty samples for project %s", str(sql).strip(), str(prj)
+                )
+                _res = self.session.execute(text(sql), params)
+                logger.info(" project %s has no more empty samples", str(prj))
+        self.update_progress(end, "Empty samples deleted")
 
     @staticmethod
     def _delete_definitely(
