@@ -6,10 +6,10 @@ from __future__ import annotations
 
 from typing import List, TYPE_CHECKING, Iterable
 
-from BO.DataLicense import LicenseEnum, AccessLevelEnum
+from BO.DataLicense import AccessLevelEnum
 from DB.helpers.ORM import Model
 from .Instrument import Instrument
-from .helpers.DDL import Column, Sequence, Boolean, ForeignKey
+from .helpers.DDL import Column, Sequence, ForeignKey
 from .helpers.ORM import relationship
 from .helpers.Postgres import VARCHAR, INTEGER, DOUBLE_PRECISION
 
