@@ -375,7 +375,7 @@ class DarwinCoreExport(JobServiceBase):
             orgname = [o.strip() for o in orgname]
             organization = " - ".join(orgname)
             if orgacr != "?":
-                organization + " (" + orgacr.strip() + ")"
+                organization += " (" + orgacr.strip() + ")"
         # TODO: Organization should fit from https://edmo.seadatanet.org/search
 
         try:
