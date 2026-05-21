@@ -85,14 +85,14 @@ class NightlyJobService(JobServiceBase):
         # Release transaction, otherwise (if idle_in_transaction_session_timeout is set) the connection could expire
         self.ro_session.commit()
         self.delete_empty_samples(all_prj_ids, 0, 10)
-        self.compute_all_projects_taxo_stats(all_prj_ids, 0, 30)
-        self.compute_all_projects_stats(all_prj_ids, 30, 60)
-        self.refresh_taxo_tree_stats(60)
-        self.clean_old_jobs(70)
-        self.clean_old_prediction_histo(75)
-        self.clean_aborted_trainings(78)
-        const_status = self.check_consistency(80, 90)
-        self.users_files_maintenance(90, 100)
+        self.compute_all_projects_taxo_stats(all_prj_ids, 10, 40)
+        self.compute_all_projects_stats(all_prj_ids, 40, 70)
+        self.refresh_taxo_tree_stats(70)
+        self.clean_old_jobs(75)
+        self.clean_old_prediction_histo(78)
+        self.clean_aborted_trainings(80)
+        const_status = self.check_consistency(82, 92)
+        self.users_files_maintenance(92, 100)
         if not const_status:
             self.set_job_result(
                 errors=["See log for consistency problems"], infos={"status": "error"}
