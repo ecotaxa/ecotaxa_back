@@ -4284,3 +4284,15 @@ def startup_event() -> None:
 @app.on_event("shutdown")
 def shutdown_event() -> None:
     JobScheduler.shutdown()
+
+
+def _split_num_list(ids: str) -> List[int]:
+    # Find first non-num char, decide it's a separator
+    for c in ids:
+        if c not in "0123456789":
+            sep = c
+            break
+    else:
+        sep = ","
+    num_ids = [int(x) for x in ids.split(sep) if x.isdigit()]
+    return num_ids

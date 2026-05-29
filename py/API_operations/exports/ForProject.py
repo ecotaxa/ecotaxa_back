@@ -53,7 +53,7 @@ from helpers import (
     DateTime,
 )  # Need to keep the whole module imported, as the function is mocked
 from helpers.DynamicLogs import get_logger, LogsSwitcher
-from ..helpers.JobService import JobServiceBase, ArgsDict , _split_num_list  # fmt:skip
+from ..helpers.JobService import JobServiceBase, ArgsDict  # fmt:skip
 
 logger = get_logger(__name__)
 
@@ -72,7 +72,7 @@ class ProjectExport(JobServiceBase):
         self.out_file_name: str = ""
         self.out_path: Path = Path("")
         self.backup_with_just_image_refs = False
-        self.pre_mapping: Dict[int, Optional[ClassifIDT]] = {}
+        self.pre_mapping: Dict[ClassifIDT, Optional[ClassifIDT]] = {}
         # get pre_mapping
         if self.JOB_TYPE == "SummaryExport" or self.JOB_TYPE == "GeneralExport":
             if self.req.collection_id is not None:
@@ -81,10 +81,8 @@ class ProjectExport(JobServiceBase):
                 operation = RecastOperation.collection_export
             else:
                 is_collection = False
-                project_ids = _split_num_list(str(self.req.project_id))
+                target_id = int(self.req.project_id)
                 operation = RecastOperation.project_export
-                # takes the pre_mapping of the first project
-                target_id = project_ids[0]
             pre_mapping: Optional[Dict[int, Optional[ClassifIDT]]] = (
                 self.query_taxo_recast(
                     target_id=target_id,
@@ -99,7 +97,7 @@ class ProjectExport(JobServiceBase):
         """
         Initial run, basically just do security check and create the job.
         """
-        project_ids = _split_num_list(str(self.req.project_id))
+        project_ids = str(self.req.project_id).split(",")
         if self.JOB_TYPE == "BackupExport" or (
             self.JOB_TYPE == "GeneralExport" and self.req.with_images
         ):
@@ -901,11 +899,7 @@ class ProjectExport(JobServiceBase):
         return "biovolume"
 
     def add_zeroes_in_sci_summary(
-        self,
-        aug_qry: ObjectSetQueryPlus,
-        id_cols: List[str],
-        zero_col: str,
-        target_id: ProjectIDT,
+        self, aug_qry: ObjectSetQueryPlus, id_cols: List[str], zero_col: str
     ):
         """
         Return relevant zero lines, for given non-zero input ones.
@@ -921,7 +915,7 @@ class ProjectExport(JobServiceBase):
             # Columns are aliased so the output columns are named differently
             out_id_cols = [aug_qry.defs_to_alias[a_col] for a_col in id_cols]
             not_presents = self.not_presents_in_sci_summary(
-                without_zeroes, out_id_cols, zero_col, aug_qry.obj_set, target_id
+                without_zeroes, out_id_cols, zero_col, aug_qry.obj_set
             )
             without_zeroes.extend(not_presents)
             without_zeroes.sort(
@@ -941,10 +935,9 @@ class ProjectExport(JobServiceBase):
         id_cols: List[str],
         zero_col: str,
         object_set: Union[DescribedObjectSet, DescribedObjectBOSet],
-        target_id: ProjectIDT,
     ):
         """
-        Produce lines with 0 abundance/concentration/biovolume for relevant (sample, status, category) triplets
+        Produce lines with 0 count/concentration/biovolume for relevant (sample, status, category) triplets
         or (sample, acquisition, status, category) tuples.
         Specs: https://github.com/ecotaxa/ecotaxa/issues/615#issuecomment-1158781701
         """
@@ -1065,10 +1058,10 @@ class ProjectExport(JobServiceBase):
         # Group according to request
         aug_qry.set_grouping(self._grouping_from_req(True))
 
-        msg = "Computing zero lines to add project %s" % project_id
+        msg = "Computing zero lines to add"
         logger.info(msg)
         self.update_progress(30, msg)
-        row_src = self.add_zeroes_in_sci_summary(aug_qry, id_cols, zero_col, project_id)
+        row_src = self.add_zeroes_in_sci_summary(aug_qry, id_cols, zero_col)
 
         msg = "Writing to file %s" % out_file
         logger.info(msg)
@@ -1096,8 +1089,8 @@ class ProjectExport(JobServiceBase):
         res = qry.all()
         if res is None or len(res) != 1:
             return None
-        transforms: Dict[ClassifIDT, Optional[ClassifIDT]] = {}
         the_one = json.loads(res[0].transforms)
+        transforms: Dict[ClassifIDT, Optional[ClassifIDT]] = {}
         for k, v in the_one.items():
             if v is None:
                 val = 0
