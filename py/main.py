@@ -143,7 +143,6 @@ from API_operations.exports.ForProject import (
 )
 from API_operations.imports.Import import FileImport
 from API_operations.imports.SimpleImport import SimpleImport
-from API_operations.helpers.JobService import _split_num_list
 from BG_operations.JobScheduler import JobScheduler
 from BO.Classification import HistoricalClassification, ClassifIDT
 from BO.Collection import (
