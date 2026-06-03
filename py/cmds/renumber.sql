@@ -10,7 +10,7 @@
 -- Bump the first projects which collide
 CREATE UNLOGGED TABLE projid_old_2_new AS
 SELECT * FROM (VALUES
-    (1, 12),
+    (1, 13),
     (3, 16),
     (4, 17),
     (6, 19),
@@ -349,13 +349,12 @@ $$
     end;
 $$;
 
+DROP TABLE obj_head_old;
 
 ALTER TABLE obj_head
     ADD CONSTRAINT obj_head_pkey PRIMARY KEY (objid);
 
 CREATE UNIQUE INDEX is_objectsacqclassifqual ON obj_head USING btree (acquisid, objid) INCLUDE (classif_qual, classif_id);
-
-DROP TABLE obj_head_old;
 
 CREATE INDEX is_objectsdate ON obj_head USING btree (objdate) INCLUDE (acquisid);
 CREATE INDEX is_objectsdepth ON obj_head USING btree (depth_max, depth_min) INCLUDE (acquisid);
@@ -1130,6 +1129,8 @@ $$
     end;
 $$;
 
+DROP TABLE obj_field_old;
+
 ALTER TABLE obj_field
     OWNER TO postgres;
 
@@ -1137,9 +1138,6 @@ ALTER TABLE obj_field
     ADD CONSTRAINT obj_field_pk PRIMARY KEY (objfid);
 
 CREATE UNIQUE INDEX obj_field_acquisid_objfid_idx ON obj_field USING btree (acquis_id, objfid) INCLUDE (n01, n02, n03, n04);
-
---    WITH (autovacuum_vacuum_scale_factor = '0.01', fillfactor = '98');
---    TABLESPACE :OTHER_TBLSPC;
 
 ------------------------ IMAGES ----------------------
 
@@ -1169,6 +1167,8 @@ SELECT imgid,
        thumb_height
   FROM images_old
   JOIN objid_old_2_new mpg_obj ON mpg_obj.old_id = objid;
+
+DROP TABLE images_old;
 
 ALTER TABLE ONLY images ALTER COLUMN objid SET STATISTICS 10000;
 
@@ -1208,6 +1208,8 @@ SELECT mpg_obj.new_id,
   FROM objectsclassifhisto_old
   JOIN objid_old_2_new mpg_obj ON mpg_obj.old_id = objid;
 
+DROP TABLE objectsclassifhisto_old;
+
 ALTER TABLE ONLY objectsclassifhisto ALTER COLUMN classif_date SET STATISTICS 10000;
 
 ALTER TABLE objectsclassifhisto OWNER TO postgres;
@@ -1238,6 +1240,8 @@ SELECT mpg_obj.new_id,
   FROM prediction_old
   JOIN objid_old_2_new mpg_obj ON mpg_obj.old_id = object_id;
 
+DROP TABLE prediction_old;
+
 ALTER TABLE prediction OWNER TO postgres;
 
 ALTER TABLE ONLY prediction
@@ -1267,6 +1271,8 @@ SELECT mpg_obj.new_id,
   FROM prediction_histo_old
   JOIN objid_old_2_new mpg_obj ON mpg_obj.old_id = object_id;
 
+DROP TABLE prediction_histo_old;
+
 ALTER TABLE prediction_histo OWNER TO postgres;
 
 ALTER TABLE ONLY prediction_histo
@@ -1292,12 +1298,12 @@ SELECT mpg_obj.new_id,
   FROM obj_cnn_features_vector_old
   JOIN objid_old_2_new mpg_obj ON mpg_obj.old_id = objcnnid;
 
+DROP TABLE obj_cnn_features_vector_old;
+
 ALTER TABLE obj_cnn_features_vector OWNER TO postgres;
 
 ALTER TABLE ONLY obj_cnn_features_vector
     ADD CONSTRAINT obj_cnn_features_vector_pkey PRIMARY KEY (objcnnid);
-
-DROP TABLE obj_cnn_features_vector_old;
 
 CREATE INDEX obj_cnn_features_vector_hv_ivfflat_l2_5k_idx ON obj_cnn_features_vector USING ivfflat (((features)::halfvec(50)) halfvec_l2_ops) WITH (lists='5000');
 
@@ -1348,7 +1354,7 @@ BEGIN
         LOOP
             RAISE NOTICE 'Stats on partition : %', v_partition_record.partition_name;
             EXECUTE format(
-                    'ALTER TABLE %s ALTER COLUMN %I SET STATISTICS %L',
+                    'ALTER TABLE %I ALTER COLUMN %I SET STATISTICS %s',
                     v_partition_record.partition_name,
                     p_column_name,
                     p_target_value
@@ -1364,14 +1370,16 @@ SELECT public.fix_partition_stats('obj_field', 'acquis_id', 1000);
 SELECT public.fix_partition_stats('obj_head', 'acquisid', 1000);
 
 
-CREATE OR REPLACE FUNCTION obj_in_prj(prj_id int)
-RETURNS int8range AS $$
-  SELECT int8range(
-    prj_id * :OBJ_MULT::bigint,
-    (prj_id + 1) * :OBJ_MULT::bigint,
-    '[)'
-  );
-$$ LANGUAGE sql IMMUTABLE;
+SELECT format($$
+  CREATE OR REPLACE FUNCTION obj_in_prj(prj_id int)
+  RETURNS int8range AS $func$
+    SELECT int8range(
+      prj_id * %s::bigint,
+      (prj_id + 1) * %s::bigint,
+      '[)'
+    );
+  $func$ LANGUAGE sql IMMUTABLE;
+$$, :OBJ_MULT, :OBJ_MULT) \gexec
 
 GRANT EXECUTE ON FUNCTION obj_in_prj(int) TO PUBLIC;
 

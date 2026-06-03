@@ -179,15 +179,10 @@ class BaseDescribedObjectSet(object):
                 f"{Project.__tablename__} prj ON prj.projid = prjs.projid"
                 + push_where("prj")
             )
-            selected_tables += (
-                f"{Sample.__tablename__} sam ON sam.projid = prj.projid"
-                + push_where("sam")
-            )
-        else:
-            selected_tables += (
-                f"{Sample.__tablename__} sam ON sam.projid = prjs.projid"
-                + push_where("sam")
-            )
+        selected_tables += (
+            f"{Sample.__tablename__} sam ON sam.projid = prjs.projid"
+            + push_where("sam")
+        )
         selected_tables += (
             f"{Acquisition.__tablename__} acq ON acq.acq_sample_id = sam.sampleid"
             + push_where("acq")
@@ -330,7 +325,7 @@ class BaseDescribedObjectSet(object):
 
         # Transfer hierarchical joins first, then obj tables in the same order they were added
         obj_tables = ["obf", "obh"] if obf_in_first else ["obh", "obf"]
-        moved_refs = ["prjs", "sam", "acq"] + obj_tables
+        moved_refs = ["prjs", "prj", "sam", "acq"] + obj_tables
         for table_ref in moved_refs:
             FromClause.transfer(selected_tables, subselect_from, table_ref)
             from_to_expr = SelectClause.copy_for_ref(
