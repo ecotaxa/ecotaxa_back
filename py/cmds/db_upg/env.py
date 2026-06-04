@@ -21,6 +21,12 @@ fileConfig(config.config_file_name)
 # target_metadata = mymodel.Base.metadata
 from DB.Project import Project
 
+# noinspection PyUnresolvedReferences
+from DB.Relations import relationship
+
+# noinspection PyUnresolvedReferences
+from DB.MigratedIDs import ObjidOld2New, SampleIdOld2New, AcquisIdOld2New
+
 target_metadata = Project.metadata
 
 # other values from the config, defined by the needs of env.py,

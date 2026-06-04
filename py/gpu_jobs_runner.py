@@ -27,6 +27,10 @@ def main():
     while JobSchedulerClass.the_runner is None:
         with JobSchedulerClass() as sce:
             sce._run_one()
+
+        if os.environ.get("ONE_SHOT"):
+            break
+
         time.sleep(10)
 
 
