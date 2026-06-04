@@ -105,6 +105,8 @@ class JsonDumper(Service):
 
                 # Sort to have a stable output
                 def dump_sort_key(obj):
+                    if hasattr(obj, "imgrank"):
+                        return obj.imgrank
                     if hasattr(obj, "objid"):
                         return obj.objid
                     if hasattr(obj, "sampleid"):
