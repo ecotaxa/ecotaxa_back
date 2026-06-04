@@ -25,8 +25,10 @@ class RecastOperation(str, Enum):
     collection_export = "collection_export"
     # Taxa recast overwrite automatic worms recast
     dwca_export_occurrence = "dwca_export_occurrence"
-    # Taxa recast in settings
+    # Taxa recast in dwca
     dwca_export_emof = "dwca_export_emof"
+    # Missing taxa are recast during Project import
+    project_import = "project_import"
 
 
 class TaxoRecast(Model):

@@ -15,7 +15,7 @@ import json
 from fastapi import HTTPException
 from collections import OrderedDict
 from functools import lru_cache
-from typing import Dict, List, Optional, Tuple, cast, Set, Any, Iterable, Union
+from typing import Dict, List, Optional, Tuple, cast, Set, Any, Iterable
 from urllib.parse import quote_plus
 from helpers.CustomException import ValidationException
 import BO.ProjectVarsDefault as DefaultVars
@@ -345,16 +345,17 @@ class DarwinCoreExport(JobServiceBase):
     @staticmethod
     def user_to_eml_person(
         user: Optional[User], for_messages: str
-    ) -> Tuple[Optional[EMLPerson], List[str]]:
+    ) -> Tuple[Optional[EMLPerson], List[str], List[str]]:
         """
         Build & return an EMLPerson entity from a DB User one.
         """
-        problems = []
+        problems: List[str] = []
+        warnings: List[str] = []
         ret = None
 
         if user is None:
             problems.append("No %s at all" % for_messages)
-            return ret, problems
+            return ret, problems, warnings
 
         if not user.organisation:
             problems.append(
@@ -363,14 +364,18 @@ class DarwinCoreExport(JobServiceBase):
         else:
             orgacr = CollectionBO.get_institution_code(user.organisation.strip())
             if orgacr == "?":
-                problems.append(
+                warnings.append(
                     "Cannot determine short organization from %s org: '%s' (need at least a - or () )."
                     % (for_messages, user.organisation)
                 )
-                return ret, problems
+
+                # return ret, problems
+
             orgname = user.organisation.strip().split("-")[:-1]
             orgname = [o.strip() for o in orgname]
-            organization = " - ".join(orgname) + " (" + orgacr.strip() + ")"
+            organization = " - ".join(orgname)
+            if orgacr != "?":
+                organization += " (" + orgacr.strip() + ")"
         # TODO: Organization should fit from https://edmo.seadatanet.org/search
 
         try:
@@ -385,7 +390,6 @@ class DarwinCoreExport(JobServiceBase):
             name, sur_name = DarwinCoreExport.capitalize_name(
                 name
             ), DarwinCoreExport.capitalize_name(sur_name)
-
         try:
             country = countries_by_name[user.country]
         except KeyError:
@@ -406,7 +410,7 @@ class DarwinCoreExport(JobServiceBase):
             # Optional but useful field
             if "@" in user.email:
                 ret.electronicMailAddress = user.email
-        return ret, problems
+        return ret, problems, warnings
 
     @staticmethod
     def eml_person_to_associated_person(
@@ -454,10 +458,12 @@ class DarwinCoreExport(JobServiceBase):
         for an_id in self.the_collection.display_order[creators_key]:
             a_creator = creators_by_id[an_id]
             if an_id[-1] == user_order_type:
-                person, errs = self.user_to_eml_person(
+                person, errs, wrns = self.user_to_eml_person(
                     a_creator, "creator '%s'" % a_creator.name
                 )
-                if errs:
+                if len(wrns):
+                    self.warnings.extend(errs)
+                if len(errs):
                     self.warnings.extend(errs)
                 else:
                     assert person is not None
@@ -479,10 +485,12 @@ class DarwinCoreExport(JobServiceBase):
         for an_id in self.the_collection.display_order[associates_key]:
             an_associate = associates_by_id[an_id]
             if an_id[-1] == user_order_type:
-                person, errs = self.user_to_eml_person(
+                person, errs, wrns = self.user_to_eml_person(
                     an_associate, "associated person %d" % an_associate.id
                 )
-                if errs:
+                if len(wrns):
+                    self.warnings.extend(wrns)
+                if len(errs):
                     self.warnings.extend(errs)
                 else:
                     assert person is not None
@@ -503,13 +511,15 @@ class DarwinCoreExport(JobServiceBase):
             self.errors.append(
                 "No valid data creator (user or organisation) found for EML metadata."
             )
-        contact, errs = self.user_to_eml_person(
+        contact, errs, wrns = self.user_to_eml_person(
             self.the_collection.contact_user, "contact"
         )
         if contact is None:
             self.errors.append("No valid contact user found for EML metadata.")
             self.warnings.extend(errs)
-        provider, errs = self.user_to_eml_person(
+        if len(wrns):
+            self.warnings.extend(wrns)
+        provider, errs, wrns = self.user_to_eml_person(
             self.the_collection.provider_user, "provider"
         )
         if provider is None:
@@ -517,6 +527,8 @@ class DarwinCoreExport(JobServiceBase):
                 "No valid metadata provider user found for EML metadata."
             )
             self.warnings.extend(errs)
+        if len(wrns):
+            self.warnings.extend(wrns)
 
         publication_date = now_time().date().isoformat()
         # the abstract appears as description in the ITP but it is the abstract field of the collection

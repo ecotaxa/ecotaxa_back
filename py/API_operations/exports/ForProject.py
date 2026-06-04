@@ -872,7 +872,7 @@ class ProjectExport(JobServiceBase):
         """
         @see https://github.com/ecotaxa/ecotaxa/issues/615
         """
-        self.update_progress(1, "Start Abundance Summary export")
+        self.update_progress(1, "Start Count Summary export")
 
         # We want count, in the end of the line
         aug_qry.set_aliases({aug_qry.COUNT_STAR: "count"})
@@ -951,7 +951,7 @@ class ProjectExport(JobServiceBase):
         object_set: Union[DescribedObjectSet, DescribedObjectBOSet],
     ):
         """
-        Produce lines with 0 abundance/concentration/biovolume for relevant (sample, status, category) triplets
+        Produce lines with 0 count/concentration/biovolume for relevant (sample, status, category) triplets
         or (sample, acquisition, status, category) tuples.
         Specs: https://github.com/ecotaxa/ecotaxa/issues/615#issuecomment-1158781701
         """
