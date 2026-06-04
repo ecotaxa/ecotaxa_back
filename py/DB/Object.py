@@ -139,6 +139,7 @@ class ObjectHeader(Model):
         qry = session.query(ObjectHeader.orig_id, ObjectHeader.objid)
         qry = qry.join(Acquisition).join(Sample).join(Project)
         qry = qry.filter(Project.projid == prj_id)
+        qry = qry.filter(ObjectHeader.objid.op("<@")(func.obj_in_prj(prj_id)))
         ret = {orig_id: objid for orig_id, objid in qry}
         return ret
 
@@ -147,6 +148,7 @@ class ObjectHeader(Model):
         ret: Dict[int, Set[int]] = {}
         qry = session.query(Image.objid, Image.imgrank)
         qry = qry.join(ObjectHeader).join(Acquisition).join(Sample).join(Project)
+        qry = qry.filter(ObjectHeader.objid.op("<@")(func.obj_in_prj(prj_id)))
         qry = qry.filter(Project.projid == prj_id)
         for objid, imgrank in qry:
             ret.setdefault(objid, set()).add(imgrank)
@@ -328,8 +330,7 @@ class ObjectsClassifHisto(Model):
 # SQLA Query: stmt = select(ObjectHeader).where(
 #     ObjectHeader.objid.op("<@")(func.obj_in_prj(21433))
 # )
-_create_func_ddl = DDL(
-    f"""
+_create_func_ddl = DDL(f"""
 CREATE OR REPLACE FUNCTION obj_in_prj(prj_id int)
 RETURNS int8range AS $$
   SELECT int8range(
@@ -340,8 +341,7 @@ RETURNS int8range AS $$
 $$ LANGUAGE sql IMMUTABLE;
 
 GRANT EXECUTE ON FUNCTION obj_in_prj(int) TO PUBLIC;
-"""
-)
+""")
 
 event.listen(
     ObjectHeader.__table__,
