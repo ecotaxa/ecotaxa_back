@@ -39,7 +39,6 @@ ObjectIDT = int
 ObjectIDListT = List[int]
 
 OBJ_PRJ_OFFSET = 100_000_000  # AKA 1e8
-OBJ_PRJ_OFFSET_SQL = "1e8::bigint"
 
 if TYPE_CHECKING:
     pass
