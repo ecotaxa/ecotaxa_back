@@ -13,6 +13,7 @@ down_revision = "acf6f3fcb35c"
 import sqlalchemy as sa
 from alembic import op
 
+from DB.Acquisition import ACQ_PRJ_OFFSET
 from DB.Object import OBJ_PRJ_OFFSET
 
 
@@ -94,7 +95,6 @@ def upgrade():
         "obj_field",
         ["acquis_id", "objfid"],
         unique=True,
-        postgresql_include=["n01", "n02", "n03", "n04"],
     )
 
     op.drop_constraint("acquisitions_sampleid_fkey", "acquisitions", type_="foreignkey")
@@ -222,6 +222,17 @@ RETURNS int8range AS $$
 $$ LANGUAGE sql IMMUTABLE;
 
 GRANT EXECUTE ON FUNCTION obj_in_prj(int) TO PUBLIC;
+
+CREATE OR REPLACE FUNCTION acq_in_prj(prj_id int)
+RETURNS int8range AS $$
+  SELECT int8range(
+    prj_id * {ACQ_PRJ_OFFSET}::bigint,
+    (prj_id + 1) * {ACQ_PRJ_OFFSET}::bigint,
+    '[)'
+  );
+$$ LANGUAGE sql IMMUTABLE;
+
+GRANT EXECUTE ON FUNCTION acq_in_prj(int) TO PUBLIC;
 
 CREATE OR REPLACE VIEW objects AS
 SELECT prj.projid,

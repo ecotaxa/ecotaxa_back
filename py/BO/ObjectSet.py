@@ -65,7 +65,6 @@ from DB.Object import (
     NON_UPDATABLE_VIA_API,
     DUBIOUS_CLASSIF_QUAL,
     ObjectIDListT,
-    OBJ_PRJ_OFFSET_SQL,
 )
 from DB.Prediction import (
     PSEUDO_TRAINING_SCORE,
@@ -184,8 +183,8 @@ class BaseDescribedObjectSet(object):
             + push_where("sam")
         )
         selected_tables += (
-            f"{Acquisition.__tablename__} acq ON acq.acq_sample_id = sam.sampleid"
-            + push_where("acq")
+            f"{Acquisition.__tablename__} acq ON acq.acq_sample_id = sam.sampleid "
+            "AND acq.acquisid " + self._get_acq_partition() + push_where("acq")
         )
         if "prc" in referenced_table_aliases:
             selected_tables += (
@@ -323,25 +322,35 @@ class BaseDescribedObjectSet(object):
         subselect_order: Optional[OrderClause] = None
         replacements: Dict[str, Dict[str, str]] = dict()
 
-        # Transfer hierarchical joins first, then obj tables in the same order they were added
-        obj_tables = ["obf", "obh"] if obf_in_first else ["obh", "obf"]
-        moved_refs = ["prjs", "prj", "sam", "acq"] + obj_tables
-        for table_ref in moved_refs:
+        # Transfer hierarchical joins first, then obj table(s) in the same order they were added
+        if obf_in_first:
+            obj_tables = ["obf"]
+            obj_join = ("obh", "obf", "objfid")
+            if "obh" in order_clause_refs or "obh" in filter_clauses.keys():
+                obj_tables.append("obh")
+        else:
+            obj_tables = ["obh"]
+            obj_join = ("obf", "obh", "objid")
+            if "obf" in order_clause_refs or "obf" in filter_clauses.keys():
+                obj_tables.append("obf")
+        refs_to_move = ["prjs", "prj", "sam", "acq"] + obj_tables
+
+        if order_clause_refs.issubset(
+            refs_to_move  # All "order by" comes from one of the tables above
+        ) and set(filter_clauses).issubset(
+            refs_to_move  # There is no filter other than tables above
+        ):
+            subselect_order = order_clause.clone()  # Safe to pull up the order + limit
+        else:
+            # No interest in inlining
+            return
+
+        for table_ref in refs_to_move:
             FromClause.transfer(selected_tables, subselect_from, table_ref)
             from_to_expr = SelectClause.copy_for_ref(
                 select_clause, subselect_select, table_ref
             )
             replacements[table_ref] = from_to_expr
-
-        if order_clause_refs.issubset(
-            moved_refs
-        ):  # All "order by" comes from one of the tables above
-            if set(filter_clauses).issubset(
-                moved_refs
-            ):  # There is no filter other than tables above
-                subselect_order = (
-                    order_clause.clone()
-                )  # Safe to pull up the order + limit
 
         # TODO later: Move txo, txp, usr (and img ?) when there are filters
         #  or needed columns e.g. txo.name which is in UI
@@ -357,13 +366,20 @@ class BaseDescribedObjectSet(object):
             replacements.setdefault(prfx, dict())[a_col] = seen
 
         # Need join conditions, i.e. FKs, in subselect. TODO: Could extract them
-        for prfx, join_col in [("txo", "obh.classif_id"), ("usr", "obh.classif_who")]:
+        for prfx, join_alias, join_col in [
+            ("txo", "obh", "classif_id"),
+            ("usr", "obh", "classif_who"),
+            obj_join,
+        ]:
             if not prfx in used_tables:
                 continue
-            if subselect_select.has_expr(join_col):
+            if not join_alias in replacements:
                 continue
-            subselect_select.add_expr(join_col)
-            replacements.setdefault(prfx, dict())[join_col] = join_col.split(".")[1]
+            join_expr = f"{join_alias}.{join_col}"
+            if subselect_select.has_expr(join_expr):
+                continue
+            subselect_select.add_expr(join_expr)
+            replacements.setdefault(prfx, dict())[join_expr] = join_col
 
         for ref, from_to_expr in replacements.items():
             long_exprs_in_first = dict(
@@ -430,6 +446,9 @@ class BaseDescribedObjectSet(object):
     def _get_bound_expression(self) -> str:
         raise NotImplementedError()
 
+    def _get_acq_partition(self) -> str:
+        raise NotImplementedError()
+
 
 class DescribedObjectSet(BaseDescribedObjectSet):
     """
@@ -457,9 +476,10 @@ class DescribedObjectSet(BaseDescribedObjectSet):
         return FromClause(f"(VALUES (:projid)) AS prjs(projid)")
 
     def _get_bound_expression(self) -> str:
-        return (
-            f"between :projid*{OBJ_PRJ_OFFSET_SQL} and (:projid+1)*{OBJ_PRJ_OFFSET_SQL}"
-        )
+        return "<@ obj_in_prj(:projid)"  # Hide partitioning from optimizer
+
+    def _get_acq_partition(self) -> str:
+        return f"<@ acq_in_prj(:projid)"
 
     def without_filtering_taxo(self):
         """
@@ -1558,7 +1578,10 @@ class DescribedObjectBOSet(BaseDescribedObjectSet):
         return FromClause(f"(select :projid as projid) prjs")
 
     def _get_bound_expression(self) -> str:
-        return f"between prjs.projid*{OBJ_PRJ_OFFSET_SQL} and (prjs.projid+1)* {OBJ_PRJ_OFFSET_SQL}"
+        return "<@ obj_in_prj(prjs.projid)"  # Hide partitioning from optimizer
+
+    def _get_acq_partition(self) -> str:
+        return f"<@ acq_in_prj(prjs.projid)"
 
     def without_filtering_taxo(self):
         """

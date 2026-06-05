@@ -107,7 +107,7 @@ def test_all_fields(fastapi):
     txp_fields = "aphia_id, name"
     usr_fields = "name, email"
     all_fields = (
-         ["sam." + fld.strip() for fld in sam_fields.split(",")]
+        ["sam." + fld.strip() for fld in sam_fields.split(",")]
         + ["acq." + fld.strip() for fld in acq_fields.split(",")]
         + ["obj." + fld.strip() for fld in obj_fields.split(",")]
         + ["img." + fld.strip() for fld in img_fields.split(",")]
@@ -121,9 +121,7 @@ def test_all_fields(fastapi):
         for a_det in details:
             assert len(a_det) == length
 
-    objs, details = _prj_query(
-        fastapi, CREATOR_AUTH, prj_id, fields=all_fields_txt
-    )
+    objs, details = _prj_query(fastapi, CREATOR_AUTH, prj_id, fields=all_fields_txt)
     check_ret(details, len(all_fields))
 
     # Test all 'order by', all fields present
@@ -141,7 +139,12 @@ def test_all_fields(fastapi):
         check_ret(details, 1)
 
     objs, details = _prj_query(
-        fastapi, CREATOR_AUTH, prj_id, fields="obj.objid", order="img.file_name", size=10
+        fastapi,
+        CREATOR_AUTH,
+        prj_id,
+        fields="obj.objid",
+        order="img.file_name",
+        size=10,
     )
     check_ret(details, 1)
 
@@ -161,13 +164,25 @@ def test_all_fields(fastapi):
 
     # Test with users
     objs, details = _prj_query(
-        fastapi, CREATOR_AUTH, prj_id, fields=all_fields_txt, order="img.file_name", size=10, filt_annot="4,3"
+        fastapi,
+        CREATOR_AUTH,
+        prj_id,
+        fields=all_fields_txt,
+        order="img.file_name",
+        size=10,
+        filt_annot="4,3",
     )
     check_ret(details, len(all_fields))
 
     # Test with project instrument
     objs, details = _prj_query(
-        fastapi, CREATOR_AUTH, prj_id, fields=all_fields_txt, order="img.file_name", size=10, instrument="UVP"
+        fastapi,
+        CREATOR_AUTH,
+        prj_id,
+        fields=all_fields_txt,
+        order="img.file_name",
+        size=10,
+        instrument="UVP",
     )
     check_ret(details, len(all_fields))
 
@@ -176,7 +191,29 @@ def test_all_fields(fastapi):
         fastapi, CREATOR_AUTH, prj_id, fields=all_fields_txt, order="usr.name"
     )
     objs_limit, details_limit = _prj_query(
-        fastapi, CREATOR_AUTH, prj_id, fields=all_fields_txt, order="usr.name", size=10000
+        fastapi,
+        CREATOR_AUTH,
+        prj_id,
+        fields=all_fields_txt,
+        order="usr.name",
+        size=10000,
     )
     assert objs_no_limit == objs_limit
     assert details_no_limit == details_limit
+
+
+def test_free_columns(fastapi):
+    # Admin imports the project
+    prj_id = do_test_import(fastapi, "Free columns Queries test project")
+    # Free column in filter
+    _prj_query(
+        fastapi,
+        CREATOR_AUTH,
+        prj_id,
+        fields="",
+        order=None,
+        size=10000,
+        samples=590261,
+        freetxt="ot01",
+        freetxtval="False",
+    )
