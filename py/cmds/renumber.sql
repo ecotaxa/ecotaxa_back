@@ -367,6 +367,9 @@ CREATE STATISTICS obj_head_score_if_p ON classif_qual, classif_score FROM obj_he
 ALTER STATISTICS obj_head_score_if_p OWNER TO postgres;
 CREATE STATISTICS obj_head_user_if_v_d ON classif_qual, classif_who FROM obj_head;
 ALTER STATISTICS obj_head_user_if_v_d OWNER TO postgres;
+CREATE STATISTICS obj_head_acquisid_objid ON acquisid, objid FROM obj_head;
+ALTER STATISTICS obj_head_acquisid_objid OWNER TO postgres;
+
 
 ALTER TABLE ONLY obj_head ALTER COLUMN acquisid SET STATISTICS 10000;
 
@@ -1137,7 +1140,10 @@ ALTER TABLE obj_field
 ALTER TABLE obj_field
     ADD CONSTRAINT obj_field_pk PRIMARY KEY (objfid);
 
-CREATE UNIQUE INDEX obj_field_acquisid_objfid_idx ON obj_field USING btree (acquis_id, objfid) INCLUDE (n01, n02, n03, n04);
+CREATE STATISTICS obj_field_acquis_id_objfid ON acquis_id, objfid FROM obj_field;
+ALTER STATISTICS obj_field_acquis_id_objfid OWNER TO postgres;
+
+CREATE UNIQUE INDEX obj_field_acquisid_objfid_idx ON obj_field USING btree (acquis_id, objfid);
 
 ------------------------ IMAGES ----------------------
 
@@ -1365,10 +1371,9 @@ BEGIN
 END;
 $$;
 
-SELECT public.fix_partition_stats('obj_field', 'acquis_id', 1000);
+SELECT public.fix_partition_stats('obj_field', 'acquis_id', 10000);
 
-SELECT public.fix_partition_stats('obj_head', 'acquisid', 1000);
-
+SELECT public.fix_partition_stats('obj_head', 'acquisid', 10000);
 
 SELECT format($$
   CREATE OR REPLACE FUNCTION obj_in_prj(prj_id int)
@@ -1382,6 +1387,19 @@ SELECT format($$
 $$, :OBJ_MULT, :OBJ_MULT) \gexec
 
 GRANT EXECUTE ON FUNCTION obj_in_prj(int) TO PUBLIC;
+
+SELECT format($$
+  CREATE OR REPLACE FUNCTION acq_in_prj(prj_id int)
+  RETURNS int8range AS $func$
+    SELECT int8range(
+      prj_id * %s::bigint,
+      (prj_id + 1) * %s::bigint,
+      '[)'
+    );
+  $func$ LANGUAGE sql IMMUTABLE;
+$$, :ACQ_MULT, :ACQ_MULT) \gexec
+
+GRANT EXECUTE ON FUNCTION acq_in_prj(int) TO PUBLIC;
 
 -- Recreate objects view
 CREATE OR REPLACE VIEW objects AS

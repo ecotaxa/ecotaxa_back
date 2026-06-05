@@ -50,7 +50,7 @@ class TimeEvictedQueue(Queue):
             return
         self.last_cleanup = now
         with self.mutex:
-            for a_conn in self.queue:  # type:sqlalchemy.pool.base._ConnectionRecord
+            for a_conn in self.queue:  # type: sqlalchemy.pool.base._ConnectionRecord
                 if (
                     a_conn.dbapi_connection
                     and now - a_conn.starttime > self.DB_SESSION_MAX_AGE

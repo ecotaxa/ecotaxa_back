@@ -248,14 +248,14 @@ Index(  # We CLUSTER using this one, object ids tend to be consecutively read
     "obj_field_acquisid_objfid_idx",
     ObjectFields.__table__.c.acquis_id,
     ObjectFields.__table__.c.objfid,
-    postgresql_include=[  # With luck, users have set their sort options to most important ones first
-        ObjectFields.__table__.c.n01,
-        ObjectFields.__table__.c.n02,
-        ObjectFields.__table__.c.n03,
-        ObjectFields.__table__.c.n04,
-    ],
     unique=True,
 )
+
+# TODO if helpful, partial indexes e.g.:
+# CREATE INDEX idx_obj_field_9107_10955_n01_speedup
+#  ON obj_field_9107_10955 (n01 DESC, objfid DESC)
+#  WHERE objfid BETWEEN 927900000000 AND 928000000000;
+# But need to name the partition.
 
 # Nearly-always used index for recursive descent into object tree, e.g. in manual classification page.
 # Also for FK checks during deletion.
