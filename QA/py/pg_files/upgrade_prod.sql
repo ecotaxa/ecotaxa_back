@@ -3134,6 +3134,17 @@ $$ LANGUAGE sql IMMUTABLE;
 
 GRANT EXECUTE ON FUNCTION obj_in_prj(int) TO PUBLIC;;
 
+CREATE OR REPLACE FUNCTION acq_in_prj(prj_id int)
+RETURNS int8range AS $$
+  SELECT int8range(
+    prj_id * 10000000::bigint,
+    (prj_id + 1) * 10000000::bigint,
+    '[)'
+  );
+$$ LANGUAGE sql IMMUTABLE;
+
+GRANT EXECUTE ON FUNCTION acq_in_prj(int) TO PUBLIC;;
+
 CREATE OR REPLACE VIEW objects AS
 SELECT prj.projid,
        sam.sampleid,
