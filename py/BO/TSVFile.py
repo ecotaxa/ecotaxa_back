@@ -18,6 +18,7 @@ from typing import (
     cast,
     Union,
     TextIO,
+    Type,
 )
 
 # noinspection PyPackageRequirements
@@ -555,7 +556,10 @@ class TSVFile(object):
 
     @staticmethod
     def create_parent(
-        session: Session, dict_to_write, prj_id: ProjectIDT, parent_class
+        session: Session,
+        dict_to_write,
+        prj_id: ProjectIDT,
+        parent_class: Union[Type[Sample], Type[Acquisition], Type[Process]],
     ):
         """
             Create the SQLAlchemy wrapper for Sample, Acquisition or Process.
@@ -564,7 +568,10 @@ class TSVFile(object):
         # noinspection PyCallingNonCallable
         parent = parent_class(**dict_to_write)
         # Link with project
-        parent.projid = prj_id
+        if isinstance(parent, Sample):
+            parent.projid = prj_id
+        if isinstance(parent, (Sample, Acquisition)):
+            parent.set_next_pk(session, prj_id)
         session.add(parent)
         session.flush()
         return parent

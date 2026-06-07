@@ -44,7 +44,7 @@ from DB.helpers import Result
 from DB.helpers.Direct import text
 from DB.helpers.Hints import RECURS_HINT
 from DB.helpers.Postgres import db_server_now
-from DB.helpers.SQL import OrderClause
+from DB.helpers.SQL import OrderClause, SelectClause
 from FS.VaultRemover import VaultRemover
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
@@ -107,18 +107,24 @@ class ObjectManager(Service):
         )
         free_columns_mappings = object_set.mapping.object_mappings
 
-        # The order fields have an impact on the query
+        # The order field has an impact on the query
         order_clause = self.cook_order_clause(
             order_field, free_columns_mappings, str(return_fields)
         )
 
-        extra_cols = self.add_return_fields(return_fields, free_columns_mappings)
+        select_clause = SelectClause()
+        select_clause.add_expr("obh.objid").add_expr("acq.acquisid").add_expr(
+            "sam.sampleid"
+        ).add_expr("0", "total")
+        self.return_fields_to_selects(
+            select_clause, return_fields, free_columns_mappings
+        )
 
         if sim_search_seed is not None:
-            extra_cols = (
-                extra_cols
-                + f""", cnn.features::halfvec(50)<->(SELECT features::halfvec(50) FROM {ObjectCNNFeatureVector.__tablename__}
-        WHERE objcnnid={sim_search_seed}) AS l2_dist"""
+            seed_sql = f"(SELECT features::halfvec(50) FROM {ObjectCNNFeatureVector.__tablename__} WHERE objcnnid={sim_search_seed})"
+            select_clause.add_expr(
+                f"cnn.features::halfvec(50)<->{seed_sql}",
+                "l2_dist",
             )
             order_clause = OrderClause()
             asc_desc = (
@@ -127,23 +133,15 @@ class ObjectManager(Service):
             order_clause.add_expression(None, "l2_dist", asc_desc)
 
         order_clause.set_window(window_start, window_size)
-
-        from_, where_clause, params = object_set.get_sql(order_clause, extra_cols)
-
-        # Compute the total in a second step (_summarize)
-        total_col = "0 AS total"
-
-        sql = f"""
-SELECT {RECURS_HINT} obh.objid, acq.acquisid, sam.sampleid, %s%s
-  FROM """ % (
-            total_col,
-            extra_cols,
+        from_clause, where_clause, params = object_set.get_sql(
+            select_clause, order_clause
         )
-        sql += from_.get_sql() + " " + where_clause.get_sql()
 
-        # Add order & window if relevant
-        if order_clause is not None:
-            sql += order_clause.get_sql()
+        sql = select_clause.get_sql() + "\n FROM "
+        sql += from_clause.get_sql()
+        sql += where_clause.get_sql()
+        # Add order & window, if empty it's just a \n
+        sql += "\n" + order_clause.get_sql()
 
         with CodeTimer("Query: SQL: %s PARAMS: %s: " % (sql, params), logger, 1):
             res: Result = self.ro_session.execute(text(sql), params)
@@ -189,15 +187,16 @@ SELECT {RECURS_HINT} obh.objid, acq.acquisid, sam.sampleid, %s%s
         if order_field[0] == "-":
             asc_desc = "DESC"
             order_field = order_field[1:]
-        order_expr = ObjectBO._field_to_db_col(order_field, mappings)
-        if order_expr is None:
+        dep_and_expr = ObjectBO._field_to_db_col(order_field, mappings)
+        if dep_and_expr is None:
             return ret
+        dep_tbl, order_expr = dep_and_expr
         if " AS " in order_expr:
             alias = None
             order_expr, order_col = order_expr.split(" AS ")
             if (
                 "." + order_col not in return_fields_str
-            ):  # Uncommon but seen in logs: order by a not-displayed column
+            ):  # Uncommon but seen in logs: order by a not-returned column
                 order_col = order_expr
         else:
             alias, order_col = order_expr.split(".", 1)
@@ -219,19 +218,26 @@ SELECT {RECURS_HINT} obh.objid, acq.acquisid, sam.sampleid, %s%s
         return ret
 
     @classmethod
-    def add_return_fields(
-        cls, return_fields: Optional[List[str]], mapping: TableMapping
-    ) -> str:
+    def return_fields_to_selects(
+        cls,
+        receiving_clause: SelectClause,
+        return_fields: Optional[List[str]],
+        mapping: TableMapping,
+    ) -> None:
         """
-            From an API-named list of columns, return the real text for the SELECT to return them
+         Add select parts corresponding to an API-named list of columns
+        :param receiving_clause: Where to add.
         :param return_fields: The fields in prefix+name convention
         :param mapping: Mapping to use
         :return:
         """
         vals = ObjectBO.resolve_fields(return_fields, mapping)
-        if len(vals) == 0:
-            return ""
-        return ",\n" + ", ".join(vals)
+        for tbl_alias, a_val in vals:
+            if " AS " in a_val:
+                expr, name = a_val.split(" AS ", 1)
+                receiving_clause.add_expr(expr, name)
+            else:
+                receiving_clause.add_expr(a_val)
 
     def get_prediction_infos(
         self, current_user_id: UserIDT, object_ids: ObjectIDListT
@@ -261,15 +267,13 @@ SELECT {RECURS_HINT} obh.objid, acq.acquisid, sam.sampleid, %s%s
         for a_prj_id in prj_ids:
             RightsBO.user_wants(self.session, current_user_id, Action.READ, a_prj_id)
 
-        sql = (
-            """
+        sql = """
     SELECT obh.objid, acq.acquisid, sam.sampleid, sam.projid
       FROM %s obh
       JOIN acquisitions acq on acq.acquisid = obh.acquisid 
       JOIN samples sam on sam.sampleid = acq.acq_sample_id 
-     WHERE obh.objid = any (:ids) """
-            % ObjectHeader.__tablename__
-        )
+     WHERE obh.objid = any (:ids) 
+       AND obh.objid <@ obj_in_prj(sam.projid) """ % ObjectHeader.__tablename__
         params = {"ids": object_ids}
 
         res: Result = self.ro_session.execute(text(sql), params)
@@ -317,19 +321,27 @@ SELECT {RECURS_HINT} obh.objid, acq.acquisid, sam.sampleid, %s%s
         """
         Compute the summary of given object_set
         """
-        from_, where, params = object_set.get_sql()
-        sql = f"""
-SELECT {RECURS_HINT} COUNT(*) nbr"""
+        select_clause = SelectClause().add_expr(f"{RECURS_HINT} COUNT(*)", "nbr")
         if only_total:
-            sql += """, NULL nbr_v, NULL nbr_d, NULL nbr_p"""
+            select_clause.add_expr("NULL", "nbr_v").add_expr("NULL", "nbr_d").add_expr(
+                "NULL", "nbr_p"
+            )
         else:
-            sql += f""",
-            COUNT(*) FILTER (WHERE obh.classif_qual = '{VALIDATED_CLASSIF_QUAL}') nbr_v,
-            COUNT(*) FILTER (WHERE obh.classif_qual = '{DUBIOUS_CLASSIF_QUAL}') nbr_d,
-            COUNT(*) FILTER (WHERE obh.classif_qual = '{PREDICTED_CLASSIF_QUAL}') nbr_p"""
-        sql += (
-            """
-      FROM """
+            select_clause.add_expr(
+                f"COUNT(*) FILTER (WHERE obh.classif_qual = '{VALIDATED_CLASSIF_QUAL}')",
+                "nbr_v",
+            ).add_expr(
+                f"COUNT(*) FILTER (WHERE obh.classif_qual = '{DUBIOUS_CLASSIF_QUAL}')",
+                "nbr_d",
+            ).add_expr(
+                f"COUNT(*) FILTER (WHERE obh.classif_qual = '{PREDICTED_CLASSIF_QUAL}')",
+                "nbr_p",
+            )
+
+        from_, where, params = object_set.get_sql(select_clause)
+        sql = (
+            select_clause.get_sql()
+            + "\n      FROM "
             + from_.get_sql()
             + " "
             + where.get_sql()
@@ -344,7 +356,7 @@ SELECT {RECURS_HINT} COUNT(*) nbr"""
         nbr_v: Optional[int]
         nbr_d: Optional[int]
         nbr_p: Optional[int]
-        nbr, nbr_v, nbr_d, nbr_p = res.first()  # type:ignore
+        nbr, nbr_v, nbr_d, nbr_p = res.first()  # type: ignore
         return nbr, nbr_v, nbr_d, nbr_p
 
     def delete(
@@ -585,7 +597,7 @@ SELECT {RECURS_HINT} COUNT(*) nbr"""
         # Eventually remove the None
         if None in ret:
             ret.remove(None)
-        return ret  # type:ignore # mypy doesn't spot the None removal above
+        return ret  # type: ignore # mypy doesn't spot the None removal above
 
     def classify_set(
         self,

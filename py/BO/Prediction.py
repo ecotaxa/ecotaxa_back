@@ -11,7 +11,7 @@ from typing import Any, List, Dict, ClassVar
 
 import numpy as np  # type: ignore
 from numpy import ndarray
-from sqlalchemy import bindparam
+from sqlalchemy import bindparam, func
 from sqlalchemy.dialects.postgresql import ARRAY
 
 from DB.Acquisition import Acquisition
@@ -75,6 +75,7 @@ class DeepFeatures(object):
                     Note: It _still_ takes a few seconds for millions of objects
         """
         qry = session.query(ObjectHeader.objid, Image.imgid, Image.orig_file_name)
+        qry = qry.where(ObjectHeader.objid.op("<@")(func.obj_in_prj(proj_id)))
         qry = qry.join(Acquisition, Acquisition.acquisid == ObjectHeader.acquisid)
         qry = qry.join(
             Sample,
@@ -101,12 +102,12 @@ class DeepFeatures(object):
         return ret
 
     @classmethod
-    def save(cls, session: Session, features: Any) -> int:
+    def save(cls, session: Session, proj_id: ProjectIDT, features: Any) -> int:
         """
         Insert CNN features to DB.
         Features is an iterable dict-like, a pandas dataframe for the moment.
         """
-        writer = DBWriter(session)
+        writer = DBWriter(session, proj_id)
         nb_rows = 0
         # for a_rec in features.to_records(index=True): # This is nice and can produce tuple()
         # but I found no way to feed them into DBWriter without going low-level.

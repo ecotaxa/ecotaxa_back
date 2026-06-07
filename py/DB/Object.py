@@ -9,7 +9,7 @@ import datetime
 from typing import Dict, Set, Iterable, TYPE_CHECKING, List
 
 # noinspection PyPackageRequirements
-from sqlalchemy import Index, Column, ForeignKey, Sequence, Integer  # fmt:skip
+from sqlalchemy import Index, Column, ForeignKey, Integer, text, func, event, DDL  # fmt:skip
 # noinspection PyPackageRequirements
 from sqlalchemy.dialects.postgresql import (
     BIGINT,
@@ -38,6 +38,8 @@ from .helpers.ORM import Model
 ObjectIDT = int
 ObjectIDListT = List[int]
 
+OBJ_PRJ_OFFSET = 100_000_000  # AKA 1e8
+
 if TYPE_CHECKING:
     pass
     # from .Image import Image
@@ -62,11 +64,15 @@ for k, v in classif_qual_labels.items():
 class ObjectHeader(Model):
     __tablename__ = "obj_head"
     # Self
-    objid = Column(BIGINT, Sequence("seq_objects"), primary_key=True)  # 8 bytes align d
+    objid = Column(BIGINT, primary_key=True, autoincrement=False)  # 8 bytes align d
     # Parent
     acquisid = Column(
-        INTEGER, ForeignKey("acquisitions.acquisid", ondelete="CASCADE"), nullable=False
-    )  # 4 bytes align i
+        BIGINT,
+        ForeignKey("acquisitions.acquisid", ondelete="CASCADE", onupdate="CASCADE"),
+        nullable=False,
+    )  # 8 bytes align d
+    # Author of last change in/to 'V' or 'D'
+    classif_who = Column(Integer, ForeignKey(User.id))  # 4 bytes align i
     # User-visible classification
     classif_id = Column(INTEGER, ForeignKey(Taxonomy.id))  # 4 bytes align i
 
@@ -91,8 +97,6 @@ class ObjectHeader(Model):
     classif_date = Column(TIMESTAMP)  # 8 bytes align d
     # If the object is Predicted, its score
     classif_score = Column(DOUBLE_PRECISION)  # 8 bytes align d
-    # Author of last change in/to 'V' or 'D'
-    classif_who = Column(Integer, ForeignKey(User.id))  # 4 bytes align i
 
     # User-provided identifier
     orig_id = Column(
@@ -114,12 +118,27 @@ class ObjectHeader(Model):
     history: relationship
 
     @classmethod
+    def get_next_pk(cls, session: Session, prj_id: int) -> int:
+        """
+        Return the next available primary key for a new Object in the given project.
+        """
+        session.execute(text("SELECT pg_advisory_xact_lock(1000, :id)"), {"id": prj_id})
+        res = (
+            session.query(func.max(cls.objid))
+            .filter(cls.objid >= prj_id * OBJ_PRJ_OFFSET)
+            .filter(cls.objid < (prj_id + 1) * OBJ_PRJ_OFFSET)
+            .scalar()
+        )
+        return res + 1 if res else prj_id * OBJ_PRJ_OFFSET + 1
+
+    @classmethod
     def fetch_existing_objects(
         cls, session: Session, prj_id: ProjectIDT
     ) -> Dict[str, int]:
         qry = session.query(ObjectHeader.orig_id, ObjectHeader.objid)
         qry = qry.join(Acquisition).join(Sample).join(Project)
         qry = qry.filter(Project.projid == prj_id)
+        qry = qry.filter(ObjectHeader.objid.op("<@")(func.obj_in_prj(prj_id)))
         ret = {orig_id: objid for orig_id, objid in qry}
         return ret
 
@@ -128,6 +147,7 @@ class ObjectHeader(Model):
         ret: Dict[int, Set[int]] = {}
         qry = session.query(Image.objid, Image.imgrank)
         qry = qry.join(ObjectHeader).join(Acquisition).join(Sample).join(Project)
+        qry = qry.filter(ObjectHeader.objid.op("<@")(func.obj_in_prj(prj_id)))
         qry = qry.filter(Project.projid == prj_id)
         for objid, imgrank in qry:
             ret.setdefault(objid, set()).add(imgrank)
@@ -196,19 +216,16 @@ NON_UPDATABLE_VIA_API = USED_FIELDS_FOR_CLASSIF.union(HIDDEN_FIELDS_FOR_CLASSIF)
 class ObjectFields(Model):
     __tablename__ = "obj_field"
     objfid = Column(
-        BIGINT, ForeignKey(ObjectHeader.objid, ondelete="CASCADE"), primary_key=True
+        BIGINT,
+        ForeignKey(ObjectHeader.objid, ondelete="CASCADE", onupdate="CASCADE"),
+        primary_key=True,
     )
     # Not a real FK, this is used for a cluster which groups together data blocks by acquisition
-    acquis_id = Column(INTEGER, nullable=False)
+    # TODO: Remove in favor of PK projid header
+    acquis_id = Column(BIGINT, nullable=False)
     # The relationships are created in Relations.py but the typing here helps the IDE
     object: relationship
 
-
-Index(  # We CLUSTER using this one, object ids tend to be consecutively read
-    "obj_field_acquisid_objfid_idx",
-    ObjectFields.__table__.c.acquis_id,
-    ObjectFields.__table__.c.objfid,
-)
 
 # TODO
 # event.listen(
@@ -225,18 +242,31 @@ for i in range(1, 501):
 for i in range(1, 21):
     setattr(ObjectFields, "t%02d" % i, Column(VARCHAR(250)))
 
+
+Index(  # We CLUSTER using this one, object ids tend to be consecutively read
+    "obj_field_acquisid_objfid_idx",
+    ObjectFields.__table__.c.acquis_id,
+    ObjectFields.__table__.c.objfid,
+    unique=True,
+)
+
+# TODO if helpful, partial indexes e.g.:
+# CREATE INDEX idx_obj_field_9107_10955_n01_speedup
+#  ON obj_field_9107_10955 (n01 DESC, objfid DESC)
+#  WHERE objfid BETWEEN 927900000000 AND 928000000000;
+# But need to name the partition.
+
 # Nearly-always used index for recursive descent into object tree, e.g. in manual classification page.
 # Also for FK checks during deletion.
 Index(
     "is_objectsacqclassifqual",
     ObjectHeader.__table__.c.acquisid,
-    ObjectHeader.__table__.c.classif_qual,
-    postgresql_include=[ObjectHeader.classif_id.name],
-)
-Index(  # We CLUSTER on this one # TODO: Any way to declare the cluster here?
-    "is_obj_head_acquisid_objid",
-    ObjectHeader.__table__.c.acquisid,
     ObjectHeader.__table__.c.objid,
+    postgresql_include=[
+        ObjectHeader.__table__.c.classif_qual,
+        ObjectHeader.__table__.c.classif_id,
+    ],
+    unique=True,
 )
 
 # For finding globally objects in some depth range
@@ -271,7 +301,9 @@ DEFAULT_CLASSIF_HISTORY_DATE = "TO_TIMESTAMP(0)"
 class ObjectsClassifHisto(Model):
     __tablename__ = "objectsclassifhisto"
     objid = Column(
-        BIGINT, ForeignKey(ObjectHeader.objid, ondelete="CASCADE"), primary_key=True
+        BIGINT,
+        ForeignKey(ObjectHeader.objid, ondelete="CASCADE", onupdate="CASCADE"),
+        primary_key=True,
     )  # 8 bytes align d
     # Date of manual setting of 'V' or 'D', training date for 'P'
     classif_date = Column(TIMESTAMP, primary_key=True)  # 8 bytes align d
@@ -289,3 +321,29 @@ class ObjectsClassifHisto(Model):
     object: relationship
     classif: relationship
     classifier: relationship
+
+
+# Usage, e.g.
+# SQL: SELECT count(*) FROM obj_head WHERE objid <@ obj_in_prj(9279);
+# SQLA Core: query = select(cls).where(cls.objid.op("<@")(func.obj_in_prj(21433)))
+# SQLA Query: stmt = select(ObjectHeader).where(
+#     ObjectHeader.objid.op("<@")(func.obj_in_prj(21433))
+# )
+_create_func_ddl = DDL(f"""
+CREATE OR REPLACE FUNCTION obj_in_prj(prj_id int)
+RETURNS int8range AS $$
+  SELECT int8range(
+    prj_id * {OBJ_PRJ_OFFSET}::bigint,
+    (prj_id + 1) * {OBJ_PRJ_OFFSET}::bigint,
+    '[)'
+  );
+$$ LANGUAGE sql IMMUTABLE;
+
+GRANT EXECUTE ON FUNCTION obj_in_prj(int) TO PUBLIC;
+""")
+
+event.listen(
+    ObjectHeader.__table__,
+    "after_create",
+    _create_func_ddl.execute_if(dialect="postgresql"),
+)

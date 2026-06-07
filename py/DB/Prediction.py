@@ -37,7 +37,7 @@ class Prediction(Model):
 
     object_id: int = Column(
         BIGINT,
-        ForeignKey(ObjectHeader.objid, ondelete="CASCADE"),
+        ForeignKey(ObjectHeader.objid, ondelete="CASCADE", onupdate="CASCADE"),
         nullable=False,
     )
     training_id: int = Column(
@@ -68,7 +68,7 @@ class PredictionHisto(Model):
 
     object_id: int = Column(
         BIGINT,
-        ForeignKey(ObjectHeader.objid, ondelete="CASCADE"),
+        ForeignKey(ObjectHeader.objid, ondelete="CASCADE", onupdate="CASCADE"),
         nullable=False,
     )
     training_id: int = Column(

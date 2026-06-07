@@ -77,6 +77,9 @@ from DB.helpers.ORM import (
     joinedload,
     minimal_table_of,
     func,
+    column,
+    Integer,
+    values,
 )
 from helpers.DynamicLogs import get_logger
 from helpers.FieldListType import FieldListType
@@ -391,17 +394,17 @@ class ProjectBO(object):
                COUNT(CASE WHEN obh.classif_qual = '"""
             + PREDICTED_CLASSIF_QUAL
             + """' THEN 1 END) nbr_p
-          FROM obj_head obh
+          FROM obj_head obh 
           JOIN acquisitions acq ON acq.acquisid = obh.acquisid
           JOIN samples sam ON sam.sampleid = acq.acq_sample_id AND sam.projid = :prjid
+         WHERE obh.objid <@ obj_in_prj(:prjid)
         GROUP BY sam.projid, obh.classif_id;"""
         )
         session.execute(sql, {"prjid": projid})
 
     @staticmethod
     def update_stats(session: Session, projid: int):
-        sql = text(
-            """
+        sql = text("""
         UPDATE projects
            SET objcount=tsp.nbr_sum,
                pctclassified=100.0*nbrclassified/tsp.nbr_sum,
@@ -413,8 +416,7 @@ class ProjectBO(object):
                WHERE projid = :prjid
               GROUP BY projid) tsp ON prj.projid = tsp.projid
         WHERE projects.projid = :prjid
-          AND prj.projid = :prjid"""
-        )
+          AND prj.projid = :prjid""")
         session.execute(sql, {"prjid": projid})
 
     @staticmethod
@@ -440,7 +442,7 @@ class ProjectBO(object):
             sql += ", pts.id"
         res: Result = session.execute(text(sql), params)
         with CodeTimer("stats for %d projects:" % len(prj_ids), logger):
-            ret = [ProjectTaxoStats(**rec) for rec in res]  # type:ignore # case4
+            ret = [ProjectTaxoStats(**rec) for rec in res]  # type: ignore # case4
         for a_stat in ret:
             a_stat.used_taxa.sort()
         return ret
@@ -456,21 +458,27 @@ class ProjectBO(object):
         """
         # Activity count: Count 1 for present classification for a user per object.
         #  Of course, the classification date is the latest for the user.
+        prjs_vals = values(column("projid", Integer), name="prjs").data(
+            [(pid,) for pid in prj_ids]
+        )
         pqry = session.query(
-            Project.projid,
+            prjs_vals.c.projid,
             User.id,
             User.name,
             func.count(ObjectHeader.objid),
             func.max(
                 ObjectHeader.classif_date
             ),  # OK we filter manual action via user id below
-        )
+        ).select_from(prjs_vals)
+        pqry = pqry.join(Project, Project.projid == prjs_vals.c.projid)
         pqry = pqry.join(Sample).join(Acquisition).join(ObjectHeader)
         pqry = pqry.join(User, User.id == ObjectHeader.classif_who)
-        pqry = pqry.filter(Project.projid == any_(prj_ids))
         pqry = pqry.filter(ObjectHeader.classif_who == User.id)
-        pqry = pqry.group_by(Project.projid, User.id)
-        pqry = pqry.order_by(Project.projid, User.name)
+        pqry = pqry.group_by(prjs_vals.c.projid, User.id)
+        pqry = pqry.order_by(prjs_vals.c.projid, User.name)
+        pqry = pqry.where(
+            ObjectHeader.objid.op("<@")(func.obj_in_prj(prjs_vals.c.projid))
+        )
         ret = []
         user_activities: Dict[UserIDT, UserActivity] = {}
         user_activities_per_project = {}
@@ -501,22 +509,23 @@ class ProjectBO(object):
         # Activity count update: Add 1 for each entry in history for each user.
         # The dates in history are ignored, except for users which do not appear in first resultset.
         hqry = session.query(
-            Project.projid,
+            prjs_vals.c.projid,
             User.id,
             User.name,
             func.count(ObjectsClassifHisto.objid),
             func.max(ObjectsClassifHisto.classif_date),
-        )
-        hqry = (
-            hqry.join(Sample)
-            .join(Acquisition)
-            .join(ObjectHeader)
-            .join(ObjectsClassifHisto)
-        )
+        ).select_from(prjs_vals)
+        hqry = hqry.join(Project, Project.projid == prjs_vals.c.projid)
+        hqry = hqry.join(Sample)
+        hqry = hqry.join(Acquisition)
+        hqry = hqry.join(ObjectHeader)
+        hqry = hqry.join(ObjectsClassifHisto)
         hqry = hqry.join(User, User.id == ObjectsClassifHisto.classif_who)
-        hqry = hqry.filter(Project.projid == any_(prj_ids))
-        hqry = hqry.group_by(Project.projid, User.id)
-        hqry = hqry.order_by(Project.projid, User.name)
+        hqry = hqry.group_by(prjs_vals.c.projid, User.id)
+        hqry = hqry.order_by(prjs_vals.c.projid, User.name)
+        hqry = hqry.where(
+            ObjectHeader.objid.op("<@")(func.obj_in_prj(prjs_vals.c.projid))
+        )
         with CodeTimer(
             "user history stats for %d projects, qry: %s:" % (len(prj_ids), str(hqry)),
             logger,
@@ -752,7 +761,7 @@ class ProjectBO(object):
             Acquisition.acq_sample_id.in_(soon_deleted_samples)
         )
         logger.info("Del acquisitions :%s", str(del_acquis_qry))
-        gone_acqs = session.execute(del_acquis_qry).rowcount  # type:ignore  # case1
+        gone_acqs = session.execute(del_acquis_qry).rowcount  # type: ignore  # case1
         ret.append(gone_acqs)
         logger.info("%d rows deleted", gone_acqs)
 
@@ -760,7 +769,7 @@ class ProjectBO(object):
             Sample.sampleid.in_(soon_deleted_samples)
         )
         logger.info("Del samples :%s", str(del_sample_qry))
-        gone_sams = session.execute(del_sample_qry).rowcount  # type:ignore  # case1
+        gone_sams = session.execute(del_sample_qry).rowcount  # type: ignore  # case1
         ret.append(gone_sams)
         logger.info("%d rows deleted", gone_sams)
 
@@ -868,7 +877,7 @@ class ProjectBO(object):
             # TODO: We can't lock what does not exists, so it can fail here.
             pts_ins = (
                 """INSERT INTO projects_taxo_stat(projid, id, nbr, nbr_v, nbr_d, nbr_p)
-                                 SELECT :prj, COALESCE(obh.classif_id, -1), COUNT(*) nbr,
+                                 SELECT :prjid, COALESCE(obh.classif_id, -1), COUNT(*) nbr,
                                         COUNT(CASE WHEN obh.classif_qual = '"""
                 + VALIDATED_CLASSIF_QUAL
                 + """' THEN 1 END) nbr_v,
@@ -880,12 +889,14 @@ class ProjectBO(object):
                 + """' THEN 1 END) nbr_p
                            FROM %s obh
                            JOIN acquisitions acq ON acq.acquisid = obh.acquisid
-                           JOIN samples sam ON sam.sampleid = acq.acq_sample_id AND sam.projid = :prj
-                          WHERE COALESCE(obh.classif_id, -1) = ANY(:ids)
-                       GROUP BY obh.classif_id"""
-                % ObjectHeader.__tablename__
+                           JOIN samples sam ON sam.sampleid = acq.acq_sample_id AND sam.projid = :prjid
+                          WHERE obh.objid <@ obj_in_prj(:prjid)
+                            AND COALESCE(obh.classif_id, -1) = ANY(:ids)
+                       GROUP BY obh.classif_id""" % ObjectHeader.__tablename__
             )
-            session.execute(text(pts_ins), {"prj": prj_id, "ids": list(ids_not_in_db)})
+            session.execute(
+                text(pts_ins), {"prjid": prj_id, "ids": list(ids_not_in_db)}
+            )
         # Apply delta
         for classif_id, chg in collated_changes.items():
             if classif_id in ids_not_in_db:

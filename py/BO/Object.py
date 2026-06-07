@@ -135,46 +135,51 @@ class ObjectBO(MappedEntity):
         return ret
 
     @staticmethod
-    def _field_to_db_col(a_field: str, mapping: TableMapping) -> Optional[str]:
-        """Translate API field ref to DB column/expression one"""
+    def _field_to_db_col(
+        a_field: str, mapping: TableMapping
+    ) -> Optional[Tuple[str, str]]:
+        """Translate API field ref to DB column/expression one.
+        Return a tuple expressing the dependency of the expression: table alias, expression
+        """
         try:
             prfx, name = a_field.split(".", 1)
         except ValueError:
             return None
         if prfx == "obj":
             if name in ObjectHeader.__dict__:
-                return "obh." + name
+                return "obh", "obh." + name
             elif name in OBJECT_VIRTUAL_COLUMNS:
-                return OBJECT_VIRTUAL_COLUMNS.sql_for(name)
+                return "obh", OBJECT_VIRTUAL_COLUMNS.sql_for(name)
         elif prfx == "fre":
             if name in mapping.tsv_cols_to_real:
                 mpg = mapping.tsv_cols_to_real[name]
                 is_split, real_col = mapping.phy_lookup(mpg)
-                col_ref = ("obf" if is_split else "obh") + "." + real_col
-                return col_ref
+                tbl = "obf" if is_split else "obh"
+                col_ref = tbl + "." + real_col
+                return tbl, col_ref
         elif prfx == "img":
             if name in Image.__dict__:
-                return a_field
+                return prfx, a_field
             elif name in IMAGE_VIRTUAL_COLUMNS:
-                return IMAGE_VIRTUAL_COLUMNS.sql_for(name)
+                return prfx, IMAGE_VIRTUAL_COLUMNS.sql_for(name)
         elif prfx in ("txo", "txp"):
             if name in Taxonomy.__dict__:
-                return a_field
+                return prfx, a_field
         elif prfx == "sam":
             if name in Sample.__dict__:
-                return a_field
+                return prfx, a_field
         elif prfx == "acq":
             if name in Acquisition.__dict__:
-                return a_field
+                return prfx, a_field
         elif prfx == "usr":
             if name in User.__dict__:
-                return a_field
+                return prfx, a_field
         return None
 
     @classmethod
     def resolve_fields(
         cls, fields_list: Optional[List[str]], mappings: TableMapping
-    ) -> List[str]:
+    ) -> List[Tuple[str, str]]:
         """Translate a list of API field references to DB column/expression one"""
         if fields_list is None or len(fields_list) == 0:
             return []

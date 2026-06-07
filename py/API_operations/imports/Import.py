@@ -310,7 +310,7 @@ class FileImport(ImportServiceBase):
             source_path, "[base]", Path(self.temp_for_jobs.data_dir_for(self.job_id))
         )
         # Configure the import to come, destination
-        db_writer = DBWriter(self.session)
+        db_writer = DBWriter(self.session, self.prj_id)
         import_where = ImportWhere(
             db_writer, self.vault, self.temp_for_jobs.base_dir_for(self.job_id)
         )

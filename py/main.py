@@ -72,6 +72,7 @@ from API_models.helpers.Introspect import plain_columns
 from API_models.imports import ImportReq, SimpleImportRsp, SimpleImportReq, ImportRsp
 from API_models.login import LoginReq
 from API_models.merge import MergeRsp
+from API_models.misc import MigratedIDsRsp
 from API_models.objects import (
     ObjectSetQueryRsp,
     ObjectSetRevertToHistoryRsp,
@@ -121,6 +122,7 @@ from API_operations.Consistency import ProjectConsistencyChecker
 from API_operations.DBSyncService import DBSyncService
 from API_operations.JsonDumper import JsonDumper
 from API_operations.Merge import MergeService
+from API_operations.MigratedIDs import MigratedIDsService
 from API_operations.ObjectManager import ObjectManager
 from API_operations.OpenID import router as openid_router, init_openid
 from API_operations.Prediction import PredictForProject, PredictionDataService
@@ -3441,7 +3443,7 @@ def query_taxa_in_worms(
     "/searchworms/{name}",
     operation_id="search_worms_name",
     tags=["Taxonomy Tree"],
-    response_model=Optional[List[Dict]],  # type:ignore
+    response_model=Optional[List[Dict]],  # type: ignore
 )
 def search_worms_name(
     name: str,
@@ -3459,7 +3461,7 @@ def search_worms_name(
     "/addworms/",
     operation_id="add_worms_taxon",
     tags=["Taxonomy Tree"],
-    response_model=Any,  # type:ignore
+    response_model=Any,  # type: ignore
 )
 def add_worms_taxon(
     taxon: AddWormsTaxonModel = Body(...),
@@ -4209,6 +4211,49 @@ def query_ml_models() -> List[MLModel]:
     with PredictionDataService() as sce:
         models = sce.get_models()
     return [MLModel(name=a_model) for a_model in models]
+
+
+@app.get(
+    "/migrated_ids",
+    operation_id="get_migrated_ids",
+    tags=["misc"],
+    response_model=MigratedIDsRsp,
+)
+def get_migrated_ids(
+    projects: str = Query(
+        "",
+        title="Project IDs",
+        description="String containing the list of one or more project ids separated by non-num char.",
+        example="1,2,3",
+    ),
+    samples: str = Query(
+        "",
+        title="Sample IDs",
+        description="String containing the list of one or more sample ids separated by non-num char.",
+        example="1,2,3",
+    ),
+    acquisitions: str = Query(
+        "",
+        title="Acquisition IDs",
+        description="String containing the list of one or more acquisition ids separated by non-num char.",
+        example="1,2,3",
+    ),
+    objects: str = Query(
+        "",
+        title="Object IDs",
+        description="String containing the list of one or more object ids separated by non-num char.",
+        example="1,2,3",
+    ),
+) -> MigratedIDsRsp:
+    """
+    **Return migrated IDs from old IDs.**
+    """
+    proj_ids = _split_num_list(projects)
+    sam_ids = _split_num_list(samples)
+    acq_ids = _split_num_list(acquisitions)
+    obj_ids = _split_num_list(objects)
+    with MigratedIDsService() as sce:
+        return sce.get_migrated_ids(proj_ids, sam_ids, acq_ids, obj_ids)
 
 
 # ######################## END OF MISC

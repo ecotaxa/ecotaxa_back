@@ -17,9 +17,12 @@ from BO.Job import JobBO
 from BO.Project import ProjectBO
 from BO.Rights import RightsBO
 from BO.Taxonomy import TaxonomyBO
+from DB.Acquisition import ACQ_PRJ_OFFSET
 from DB.Job import JobIDT, Job
+from DB.Object import OBJ_PRJ_OFFSET
 from DB.Prediction import PredictionHisto
 from DB.Project import Project, ProjectIDListT
+from DB.Sample import SAM_PRJ_OFFSET
 from DB.Training import Training, IN_PROGRESS_DATE
 from DB.User import Role
 from DB.helpers import Result
@@ -526,7 +529,7 @@ NightlyJobService.NIGHTLY_CHECKS = [
         """,
     ),
     ConsistencyCheckAndFix(
-        "The must be no score information for manual states",
+        "There must be no score information for manual states",
         "select objid from obj_head where classif_qual in ('V','D') and classif_score is not null limit 100",
         [],
         """
@@ -559,8 +562,26 @@ where classif_qual is null and classif_id is null and classif_score is not null"
         """,
     ),
     ConsistencyCheckAndFix(
+        f"Samples IDs match project ones with offset {SAM_PRJ_OFFSET}",
+        f"select sampleid, projid from samples where (sampleid / {SAM_PRJ_OFFSET}) != projid limit 100",
+        [],
+        "need investigation",
+    ),
+    ConsistencyCheckAndFix(
+        f"Acquisitions IDs match project ones with offset {ACQ_PRJ_OFFSET}",
+        f"select acquisid, acq_sample_id from acquisitions where (acquisid / {ACQ_PRJ_OFFSET}) != (acq_sample_id / {SAM_PRJ_OFFSET}) limit 100",
+        [],
+        "need investigation",
+    ),
+    ConsistencyCheckAndFix(
+        f"Objects IDs match project ones with offset {OBJ_PRJ_OFFSET}",
+        f"select objid, acquisid from obj_head where (objid / {OBJ_PRJ_OFFSET}) != (acquisid / {ACQ_PRJ_OFFSET}) limit 100",
+        [],
+        "need investigation",
+    ),
+    ConsistencyCheckAndFix(
         "All obj_fields have same acquisid as object",
-        "select count(1) from obj_head obh join obj_field obf on obf.objfid = obh.objid where obh.acquisid != obf.acquis_id",
+        "SELECT count(1) FROM obj_head obh LEFT JOIN obj_field obf ON obf.objfid = obh.objid AND obf.acquis_id = obh.acquisid WHERE obf.objfid IS NULL;",
         0,
         """
         -- find root cause
@@ -619,7 +640,7 @@ where classif_qual is null and classif_id is null and classif_score is not null"
         "An object cannot be in a prediction and historical same prediction",
         """select * from prediction_histo prh
      join prediction prd on prh.training_id = prd.training_id
-                     and prh.object_id = prd.object_id
+                        and prh.object_id = prd.object_id
       limit 100
         """,
         [],
