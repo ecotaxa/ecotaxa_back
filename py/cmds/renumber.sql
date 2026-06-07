@@ -8,7 +8,7 @@
 -- \set OTHER_TBLSPC pg_default -- For PROD
 
 -- Bump the first projects which collide
-CREATE UNLOGGED TABLE projid_old_2_new AS
+CREATE TABLE projid_old_2_new AS
 SELECT * FROM (VALUES
     (1, 13),
     (3, 16),
@@ -92,12 +92,12 @@ WHERE taxo_change_log.project_id = m.old_id;
 COMMIT;
 
 
-CREATE UNLOGGED TABLE samid_old_2_new AS
+CREATE TABLE samid_old_2_new AS
 SELECT sampleid                                                                         AS old_id,
        (projid * :SAM_MULT) + ROW_NUMBER() OVER (PARTITION BY projid ORDER BY sampleid) AS new_id
 FROM samples;
 
-CREATE UNLOGGED TABLE acqid_old_2_new AS
+CREATE TABLE acqid_old_2_new AS
 SELECT acquisid AS old_id,
        (projid * :ACQ_MULT) +
        ROW_NUMBER() OVER (
@@ -106,13 +106,14 @@ SELECT acquisid AS old_id,
            )    AS new_id
 	 FROM acquisitions acq
 	 JOIN samples sam ON sam.sampleid = acq.acq_sample_id;
+ANALYZE acqid_old_2_new;
 CREATE INDEX acquisid_mapping_idx ON acqid_old_2_new (new_id) INCLUDE (old_id);
 CREATE INDEX acquisid_mapping_idx2 ON acqid_old_2_new (old_id) INCLUDE (new_id);
 
 ---- OBJ
 -- Durée : 1013986,567 ms (16:53,987) NVME drive
 -- PROD: Durée : 1740768,903 ms (29:00,769)
-CREATE UNLOGGED TABLE objid_old_2_new TABLESPACE :OTHER_TBLSPC AS
+CREATE TABLE objid_old_2_new TABLESPACE :OTHER_TBLSPC AS
 SELECT objid AS old_id,
        (projid * :OBJ_MULT::bigint) + ROW_NUMBER() OVER (
         PARTITION BY projid
@@ -120,6 +121,7 @@ SELECT objid AS old_id,
 	 FROM obj_head obh
 	 JOIN acquisitions acq ON acq.acquisid = obh.acquisid
 	 JOIN samples sam ON sam.sampleid = acq.acq_sample_id;
+ANALYZE objid_old_2_new;
 -- Durée : 528378,732 ms (08:48,379)
 CREATE UNIQUE INDEX objid_mapping_old_to_new ON objid_old_2_new (old_id) INCLUDE (new_id);
 -- Durée : 453830,658 ms (07:33,831)
