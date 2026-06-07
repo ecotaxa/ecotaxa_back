@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from glob import glob
 from pathlib import Path
 from typing import Tuple, Any, List, Optional
+
 from API_operations.helpers.JobService import JobServiceBase, ArgsDict
 from BO.Job import JobBO
 from BO.Project import ProjectBO
@@ -165,7 +166,7 @@ class NightlyJobService(JobServiceBase):
         Rules: Jobs older than 30 days are erased whatever
                Jobs older than 1 week are erased if they ran OK.
         """
-        self.update_progress(start, "Recomputing taxonomy stats")
+        self.update_progress(start, "Clean old jobs")
         logger.info("Starting cleanup of old jobs")
         thirty_days_ago = datetime.datetime.today() - datetime.timedelta(days=30)
         old_jobs_qry_1 = (
@@ -302,6 +303,7 @@ class NightlyJobService(JobServiceBase):
 
     def delete_empty_samples(self, all_proj_ids: ProjectIDListT, start: int, end: int):
         self.update_progress(start, "Find and delete empty samples")
+        logger.info("Find and delete empty samples")
         total = len(all_proj_ids)
         for idx, prj in enumerate(all_proj_ids):
             progress = round(start + (end - start) / total * idx)
@@ -327,7 +329,7 @@ class NightlyJobService(JobServiceBase):
                       DELETE FROM acquisitions acq WHERE acq.acq_sample_id = ANY (:emptysam)    
                       """
                 logger.info(
-                    "%s delete empty acquisitions for project %",
+                    "%s delete empty acquisitions for project %s",
                     str(sql).strip(),
                     str(prj),
                 )
@@ -339,6 +341,7 @@ class NightlyJobService(JobServiceBase):
                     "%s delete empty samples for project %s", str(sql).strip(), str(prj)
                 )
                 _res = self.session.execute(text(sql), params)
+                self.session.commit()
                 logger.info(" project %s has no more empty samples", str(prj))
         self.update_progress(end, "Empty samples deleted")
 

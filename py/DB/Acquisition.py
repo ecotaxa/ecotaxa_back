@@ -26,6 +26,7 @@ class Acquisition(Model):
     # Self ID
     acquisid: int = Column(BIGINT, primary_key=True, autoincrement=False)
     # Parent ID
+    # TODO: Delete cascade
     acq_sample_id: int = Column(
         BIGINT, ForeignKey("samples.sampleid", onupdate="CASCADE"), nullable=False
     )
