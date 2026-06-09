@@ -2,7 +2,7 @@
   "openapi":"3.0.2",
   "info":{
     "title":"EcoTaxa",
-    "version":"0.0.44"
+    "version":"0.0.45"
   },
   "servers":[
     {
@@ -7029,6 +7029,92 @@
           }
         }
       }
+    },
+    "/migrated_ids":{
+      "get":{
+        "tags":[
+          "misc"
+        ],
+        "summary":"Get Migrated Ids",
+        "description":"**Return migrated IDs from old IDs.**",
+        "operationId":"get_migrated_ids",
+        "parameters":[
+          {
+            "description":"String containing the list of one or more project ids separated by non-num char.",
+            "required":false,
+            "schema":{
+              "title":"Project IDs",
+              "type":"string",
+              "description":"String containing the list of one or more project ids separated by non-num char.",
+              "default":""
+            },
+            "example":"1,2,3",
+            "name":"projects",
+            "in":"query"
+          },
+          {
+            "description":"String containing the list of one or more sample ids separated by non-num char.",
+            "required":false,
+            "schema":{
+              "title":"Sample IDs",
+              "type":"string",
+              "description":"String containing the list of one or more sample ids separated by non-num char.",
+              "default":""
+            },
+            "example":"1,2,3",
+            "name":"samples",
+            "in":"query"
+          },
+          {
+            "description":"String containing the list of one or more acquisition ids separated by non-num char.",
+            "required":false,
+            "schema":{
+              "title":"Acquisition IDs",
+              "type":"string",
+              "description":"String containing the list of one or more acquisition ids separated by non-num char.",
+              "default":""
+            },
+            "example":"1,2,3",
+            "name":"acquisitions",
+            "in":"query"
+          },
+          {
+            "description":"String containing the list of one or more object ids separated by non-num char.",
+            "required":false,
+            "schema":{
+              "title":"Object IDs",
+              "type":"string",
+              "description":"String containing the list of one or more object ids separated by non-num char.",
+              "default":""
+            },
+            "example":"1,2,3",
+            "name":"objects",
+            "in":"query"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/MigratedIDsRsp"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components":{
@@ -8183,7 +8269,8 @@
               "project_export":"project_export",
               "collection_export":"collection_export",
               "dwca_export_occurrence":"dwca_export_occurrence",
-              "dwca_export_emof":"dwca_export_emof"
+              "dwca_export_emof":"dwca_export_emof",
+              "project_import":"project_import"
             },
             "example":{
               "prediction_input":"pre_predict",
@@ -8711,7 +8798,8 @@
         "enum":[
           "C",
           "S",
-          "A"
+          "A",
+          "I"
         ],
         "type":"string",
         "description":"An enumeration."
@@ -9249,6 +9337,67 @@
         },
         "description":"Merge response."
       },
+      "MigratedIDsRsp":{
+        "title":"MigratedIDsRsp",
+        "required":[
+          "projects",
+          "samples",
+          "acquisitions",
+          "objects"
+        ],
+        "type":"object",
+        "properties":{
+          "projects":{
+            "title":"Projects old->new",
+            "type":"object",
+            "additionalProperties":{
+              "type":"integer"
+            },
+            "description":"The mapping from old project IDs to new IDs.",
+            "example":{
+              "1":13,
+              "3":16
+            }
+          },
+          "samples":{
+            "title":"Samples old->new",
+            "type":"object",
+            "additionalProperties":{
+              "type":"integer"
+            },
+            "description":"The mapping from old sample IDs to new IDs.",
+            "example":{
+              "10":13000001,
+              "11":13000002
+            }
+          },
+          "acquisitions":{
+            "title":"Acquisitions/Processes old->new",
+            "type":"object",
+            "additionalProperties":{
+              "type":"integer"
+            },
+            "description":"The mapping from old acquisition/process IDs to new IDs.",
+            "example":{
+              "20":1300000001,
+              "21":1300000002
+            }
+          },
+          "objects":{
+            "title":"Objects old->new",
+            "type":"object",
+            "additionalProperties":{
+              "type":"integer"
+            },
+            "description":"The mapping from old object IDs to new IDs.",
+            "example":{
+              "30":13000000001,
+              "31":13000000002
+            }
+          }
+        },
+        "description":"Response for migrated IDs."
+      },
       "MinUserModel":{
         "title":"MinUserModel",
         "required":[
@@ -9387,6 +9536,12 @@
             "description":"The parent acquisition Id.",
             "example":144
           },
+          "classif_who":{
+            "title":"Classification who",
+            "type":"integer",
+            "description":"The user who manually classified this object, if **V** or **D**.",
+            "example":"null"
+          },
           "classif_id":{
             "title":"Classification Id",
             "type":"integer",
@@ -9443,12 +9598,6 @@
             "title":"Classification score",
             "type":"number",
             "description":"The ML score for this object, if **P**.",
-            "example":"null"
-          },
-          "classif_who":{
-            "title":"Classification who",
-            "type":"integer",
-            "description":"The user who manually classified this object, if **V** or **D**.",
             "example":"null"
           },
           "orig_id":{
@@ -9519,6 +9668,12 @@
             "description":"The parent acquisition Id.",
             "example":144
           },
+          "classif_who":{
+            "title":"Classification who",
+            "type":"integer",
+            "description":"The user who manually classified this object, if **V** or **D**.",
+            "example":"null"
+          },
           "classif_id":{
             "title":"Classification Id",
             "type":"integer",
@@ -9575,12 +9730,6 @@
             "title":"Classification score",
             "type":"number",
             "description":"The ML score for this object, if **P**.",
-            "example":"null"
-          },
-          "classif_who":{
-            "title":"Classification who",
-            "type":"integer",
-            "description":"The user who manually classified this object, if **V** or **D**.",
             "example":"null"
           },
           "orig_id":{
@@ -10751,7 +10900,8 @@
           "project_export",
           "collection_export",
           "dwca_export_occurrence",
-          "dwca_export_emof"
+          "dwca_export_emof",
+          "project_import"
         ],
         "type":"string",
         "description":"An enumeration."

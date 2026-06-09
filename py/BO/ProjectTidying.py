@@ -6,6 +6,8 @@
 #
 from typing import Dict, Set, List, Optional
 
+from sqlalchemy import func
+
 from BO.Acquisition import AcquisitionOrigIDT
 from BO.Process import ProcessOrigIDT
 from BO.Sample import SampleOrigIDT
@@ -45,14 +47,15 @@ class ProjectTopology(object):
         """
         Read the project topology from DB.
         """
-        qry = session.query(Sample)
-        qry = qry.join(Sample.all_acquisitions)
-        qry = qry.join(Acquisition.process)
-        qry = qry.join(Acquisition.all_objects)
-        qry = qry.filter(Sample.projid == prj_id)
-        qry = qry.with_entities(
+        qry = session.query(
             Sample.orig_id, Acquisition.orig_id, Process.orig_id, ObjectHeader.objid
         )
+        qry = qry.join(Acquisition, Sample.sampleid == Acquisition.acq_sample_id)
+        qry = qry.join(Process, Acquisition.acquisid == Process.processid)
+        qry = qry.join(ObjectHeader, Acquisition.acquisid == ObjectHeader.acquisid)
+        qry = qry.filter(Sample.projid == prj_id)
+        qry = qry.filter(Acquisition.acquisid.op("<@")(func.acq_in_prj(prj_id)))
+        qry = qry.filter(ObjectHeader.objid.op("<@")(func.obj_in_prj(prj_id)))
         sam_orig_id: str
         acq_orig_id: str
         prc_orig_id: str

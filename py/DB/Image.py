@@ -41,11 +41,11 @@ class Image(Model):
         # Must be reloaded from DB, as phase 1 added all objects for duplicates checking
         sql = text(
             f"SELECT {RECURS_HINT} concat(obh.orig_id,'*',img.orig_file_name) "
-            "  FROM images img "
-            "  JOIN obj_head obh ON img.objid = obh.objid "
-            "  JOIN acquisitions acq ON obh.acquisid = acq.acquisid "
-            "  JOIN samples sam ON acq.acq_sample_id = sam.sampleid "
-            " WHERE obh.objid <@ obj_in_prj(:prj) AND sam.projid = :prj"
+            "  FROM samples sam "
+            "  JOIN acquisitions acq ON acq.acq_sample_id = sam.sampleid AND acq.acquisid <@ acq_in_prj(:prj) "
+            "  JOIN obj_head obh ON obh.acquisid = acq.acquisid AND obh.objid <@ obj_in_prj(:prj) "
+            "  JOIN images img ON img.objid = obh.objid "
+            " WHERE sam.projid = :prj"
         )
         res: Result = session.execute(sql, {"prj": prj_id})
         ret = {img_id for img_id, in res}
