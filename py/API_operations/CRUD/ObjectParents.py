@@ -17,7 +17,7 @@ from BO.Acquisition import (
 )
 from BO.ColumnUpdate import ColUpdateList
 from BO.Mappings import ProjectMapping
-from BO.Process import ProcessIDListT, EnumeratedProcessSet, ProcessIDT, ProcessBO
+from BO.Process import DescribedProcessSet, ProcessIDListT, EnumeratedProcessSet, ProcessIDT, ProcessBO
 from BO.Rights import RightsBO, Action
 from BO.Sample import (
     SampleIDListT,
@@ -229,3 +229,17 @@ class ProcessesService(Service):
         )
         assert project  # for mypy
         return process_set.apply_on_all(project, updates)
+
+    def search(
+        self, current_user_id: Optional[UserIDT], project_id: ProjectIDT
+    ) -> List[ProcessBO]:
+        # Security check
+        if current_user_id is None:
+            project = RightsBO.anonymous_wants(self.ro_session, Action.READ, project_id)
+        else:
+            _user, project = RightsBO.user_wants(
+                self.session, current_user_id, Action.READ, project_id
+            )
+        process_set = DescribedProcessSet(self.ro_session, project_id)
+        
+        return process_set.list()
