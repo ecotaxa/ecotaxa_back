@@ -34,7 +34,7 @@ class Training(Model):
         INTEGER, ForeignKey(Project.projid, ondelete="CASCADE"), nullable=True
     )
     # Who launched or is responsible for the training operation
-    training_author: str = Column(INTEGER, ForeignKey(User.id), nullable=False)
+    training_author: int = Column(INTEGER, ForeignKey(User.id), nullable=False)
     # When it occurred
     training_start: datetime = Column(TIMESTAMP, nullable=False)
     training_end: datetime = Column(TIMESTAMP, nullable=False)
