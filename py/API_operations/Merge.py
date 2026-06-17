@@ -7,17 +7,15 @@ from typing import List, Dict, Union, Any
 from sqlalchemy.orm import Session
 
 from API_models.merge import MergeRsp
-from BO.Acquisition import AcquisitionIDT
 from BO.Bundle import InBundle
 from BO.Mappings import ProjectMapping, RemapOp, MAPPED_TABLES, MappedTableTypeT
 from BO.Project import ProjectBO
 from BO.ProjectPrivilege import ProjectPrivilegeBO
 from BO.Rights import RightsBO, Action
-from BO.Sample import SampleIDT
-from DB.Acquisition import Acquisition, ACQ_PRJ_OFFSET
+from DB.Acquisition import Acquisition, AcquisitionIDT, ACQ_PRJ_OFFSET
 from DB.Object import ObjectHeader, ObjectFields, OBJ_PRJ_OFFSET
 from DB.Project import Project
-from DB.Sample import Sample, SAM_PRJ_OFFSET
+from DB.Sample import Sample, SampleIDT, SAM_PRJ_OFFSET
 from DB.helpers.ORM import orm_equals, any_, all_, func
 from DB.helpers.Postgres import values_cte, text
 from helpers.DynamicLogs import get_logger

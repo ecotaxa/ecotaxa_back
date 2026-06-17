@@ -13,7 +13,7 @@ from BO.DataLicense import LicenseEnum, AccessLevelEnum
 from BO.Job import DBJobStateEnum
 from BO.Project import ProjectUserStats, ProjectColumns
 from BO.ProjectSet import ProjectSetColumnStats
-from BO.Sample import SampleTaxoStats, SampleIDT
+from BO.Sample import SampleTaxoStats
 from BO.User import UserIDT
 from DB.Acquisition import Acquisition
 from DB.Collection import Collection
@@ -21,7 +21,7 @@ from DB.Instrument import UNKNOWN_INSTRUMENT
 from DB.Job import Job, JobIDT
 from DB.Process import Process
 from DB.Project import Project, ProjectIDT, ProjectIDListT
-from DB.Sample import Sample
+from DB.Sample import Sample, SampleIDT
 from DB.User import User, Guest, Organization, OrganizationIDT
 from helpers.pydantic import BaseModel, Field, DescriptiveModel
 from .helpers.DBtoModel import combine_models

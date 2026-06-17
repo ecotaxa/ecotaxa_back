@@ -8,15 +8,12 @@ from typing import Dict, Set, List, Optional
 
 from sqlalchemy import func
 
-from BO.Acquisition import AcquisitionOrigIDT
-from BO.Process import ProcessOrigIDT
-from BO.Sample import SampleOrigIDT
 from DB import Session
-from DB.Acquisition import Acquisition
+from DB.Acquisition import Acquisition, AcquisitionOrigIDT
 from DB.Object import ObjectHeader, ObjectIDT
-from DB.Process import Process
+from DB.Process import Process, ProcessOrigIDT
 from DB.Project import ProjectIDT
-from DB.Sample import Sample
+from DB.Sample import Sample, SampleOrigIDT
 
 
 class ProjectTopology(object):

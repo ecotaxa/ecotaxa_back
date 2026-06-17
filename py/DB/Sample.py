@@ -18,6 +18,10 @@ SAMPLE_FREE_COLUMNS = 61
 
 SAM_PRJ_OFFSET = 1_000_000  # AKA 1e6
 
+SampleIDT = int
+SampleIDListT = List[int]  # Typings, to be clear that these are not e.g. project IDs
+SampleOrigIDT = str
+
 
 class Sample(Model):
     # Historical (plural) name of the table

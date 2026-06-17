@@ -12,19 +12,13 @@ from BO.ColumnUpdate import ColUpdateList
 from BO.helpers.MappedEntity import MappedEntity
 from BO.helpers.MappedTable import MappedTable
 from DB import Session
-from DB.Acquisition import Acquisition
+from DB.Acquisition import Acquisition, AcquisitionIDT, AcquisitionIDListT
 from DB.Object import ObjectHeader
 from DB.Project import ProjectIDT, ProjectIDListT, Project
 from DB.Sample import Sample
 from DB.helpers.ORM import any_, and_
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
-
-AcquisitionIDT = int
-AcquisitionIDListT = List[
-    int
-]  # Typings, to be clear that these are not e.g. project IDs
-AcquisitionOrigIDT = str
 
 logger = get_logger(__name__)
 

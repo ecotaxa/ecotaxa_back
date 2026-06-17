@@ -5,22 +5,18 @@
 #
 # An enumerated set of Process(es)
 #
-from typing import List, ClassVar
+from typing import ClassVar
 
 from BO.ColumnUpdate import ColUpdateList
 from BO.helpers.MappedEntity import MappedEntity
 from BO.helpers.MappedTable import MappedTable
 from DB import Session
-from DB.Process import Process
+from DB.Process import Process, ProcessIDT, ProcessIDListT
 from DB.Project import ProjectIDListT, Project
 from DB.Sample import Sample
 from DB.helpers.ORM import any_
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
-
-ProcessIDT = int
-ProcessIDListT = List[int]  # Typings, to be clear that these are not e.g. project IDs
-ProcessOrigIDT = str
 
 logger = get_logger(__name__)
 

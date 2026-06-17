@@ -10,17 +10,17 @@
 # EMODnet QC source code:
 #      https://github.com/EMODnet/EMODnetBiocheck
 import datetime
-import re
 import json
-from fastapi import HTTPException
+import re
 from collections import OrderedDict
 from functools import lru_cache
 from typing import Dict, List, Optional, Tuple, cast, Set, Any, Iterable
 from urllib.parse import quote_plus
-from helpers.CustomException import ValidationException
+
+from fastapi import HTTPException
+
 import BO.ProjectVarsDefault as DefaultVars
 from API_models.exports import ExportRsp, SciExportTypeEnum
-from BO.Acquisition import AcquisitionIDT
 from BO.Classification import ClassifIDT, ClassifIDListT, ClassifIDSetT
 from BO.Collection import (
     CollectionIDT,
@@ -41,10 +41,11 @@ from BO.Project import ProjectBO, ProjectTaxoStats, ProjectIDListT
 from BO.ProjectSet import PermissionConsistentProjectSet
 from BO.Sample import SampleBO, SampleAggregForTaxon
 from BO.TaxoRecast import TaxoRecastBO
-from BO.Vocabulary import Vocabulary, Units
-from BO.WoRMSification import WoRMSifier
 from BO.Taxonomy import TaxonBOSet, WoRMSBO
 from BO.User import UserIDT
+from BO.Vocabulary import Vocabulary, Units
+from BO.WoRMSification import WoRMSifier
+from DB.Acquisition import AcquisitionIDT
 from DB.Collection import Collection
 from DB.Project import ProjectTaxoStat, Project
 from DB.Sample import Sample
@@ -84,6 +85,7 @@ from formats.DarwinCore.models import (
     EMLIdentifier,
     EMLAssociatedPerson,
 )
+from helpers.CustomException import ValidationException
 from helpers.DateTime import now_time
 from helpers.DynamicLogs import get_logger, LogsSwitcher
 from helpers.httpexception import DETAIL_ONE_OR_MORE_PRIVATE, DETAIL_EXPORT_PREVENTED
@@ -610,7 +612,7 @@ class DarwinCoreExport(JobServiceBase):
 
         # TODO: a marine regions substitute
         # Note: below can be very long for big projects
-        (min_lat, max_lat, min_lon, max_lon) = ProjectBO.get_bounding_geo(
+        min_lat, max_lat, min_lon, max_lon = ProjectBO.get_bounding_geo(
             self.session, self.the_collection.project_ids
         )
         geo_cov = EMLGeoCoverage(
@@ -622,7 +624,7 @@ class DarwinCoreExport(JobServiceBase):
         )
 
         # Note: below can be very long for big projects
-        (min_date, max_date) = ProjectBO.get_date_range(
+        min_date, max_date = ProjectBO.get_date_range(
             self.session, self.the_collection.project_ids
         )
         time_cov = EMLTemporalCoverage(

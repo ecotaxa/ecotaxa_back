@@ -17,7 +17,7 @@ from DB.Object import (
     ObjectHeader,
 )
 from DB.Project import ProjectIDListT, Project
-from DB.Sample import Sample
+from DB.Sample import Sample, SampleIDT, SampleIDListT
 from DB.helpers import Session, Result
 from DB.helpers.Direct import text
 from DB.helpers.ORM import any_
@@ -27,10 +27,6 @@ from .Classification import ClassifIDListT, ClassifIDT
 from .ColumnUpdate import ColUpdateList
 from .helpers.MappedEntity import MappedEntity
 from .helpers.MappedTable import MappedTable
-
-SampleIDT = int
-SampleIDListT = List[int]  # Typings, to be clear that these are not e.g. project IDs
-SampleOrigIDT = str
 
 logger = get_logger(__name__)
 
@@ -175,10 +171,9 @@ class EnumeratedSampleSet(MappedTable):
           JOIN acquisitions acq ON acq.acquisid = obh.acquisid 
           JOIN samples sam ON sam.sampleid = acq.acq_sample_id
          WHERE sam.sampleid = ANY(:ids)
-         GROUP BY sam.sampleid;"""
-            % ObjectHeader.__tablename__
+         GROUP BY sam.sampleid;""" % ObjectHeader.__tablename__
         )
         with CodeTimer("Stats for %d samples: " % len(self.ids), logger):
             res: Result = self.session.execute(sql, {"ids": self.ids})
-            ret = [SampleTaxoStats(**rec) for rec in res]  # type:ignore # case4
+            ret = [SampleTaxoStats(**rec) for rec in res]  # type: ignore # case4
         return ret

@@ -10,12 +10,10 @@ from typing import Tuple, List, Optional, Any, ClassVar, Union
 
 from sqlalchemy import MetaData
 
-from BO.Acquisition import AcquisitionIDT
 from BO.Classification import HistoricalClassificationListT, HistoricalClassification
 from BO.Mappings import TableMapping
-from BO.Sample import SampleIDT
 from BO.helpers.MappedEntity import MappedEntity
-from DB.Acquisition import Acquisition
+from DB.Acquisition import Acquisition, AcquisitionIDT
 from DB.Image import Image, IMAGE_VIRTUAL_COLUMNS
 from DB.Object import (
     ObjectHeader,
@@ -29,7 +27,7 @@ from DB.Object import (
 )
 from DB.ObjectVirtual import OBJECT_VIRTUAL_COLUMNS
 from DB.Project import ProjectIDT, Project
-from DB.Sample import Sample
+from DB.Sample import Sample, SampleIDT
 from DB.Taxonomy import Taxonomy
 from DB.User import User
 from DB.helpers.ORM import (
@@ -219,7 +217,7 @@ class ObjectBOSet(object):
         # noinspection PyUnresolvedReferences
         qry = qry.join(
             ReducedObjectFields,
-            ObjectHeader.objid == ReducedObjectFields.objfid,  # type:ignore
+            ObjectHeader.objid == ReducedObjectFields.objfid,  # type: ignore
         )
         qry = qry.options(joinedload(ObjectHeader.all_images))
         self.all = [

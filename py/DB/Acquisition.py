@@ -2,7 +2,7 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import Dict, Tuple
+from typing import Dict, Tuple, List
 
 from sqlalchemy import func, DDL, event  # fmt: skip
 # noinspection PyProtectedMember
@@ -18,6 +18,12 @@ from .helpers.Postgres import VARCHAR, BIGINT
 ACQUISITION_FREE_COLUMNS = 31
 
 ACQ_PRJ_OFFSET = 10_000_000  # AKA 1e7
+
+AcquisitionIDT = int
+AcquisitionIDListT = List[
+    int
+]  # Typings, to be clear that these are not e.g. project IDs
+AcquisitionOrigIDT = str
 
 
 class Acquisition(Model):

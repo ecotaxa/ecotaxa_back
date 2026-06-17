@@ -9,26 +9,25 @@ from typing import Optional, List
 
 from API_operations.helpers.Service import Service
 from BO.Acquisition import (
-    AcquisitionIDListT,
     EnumeratedAcquisitionSet,
     AcquisitionBO,
-    AcquisitionIDT,
     DescribedAcquisitionSet,
 )
 from BO.ColumnUpdate import ColUpdateList
 from BO.Mappings import ProjectMapping
-from BO.Process import ProcessIDListT, EnumeratedProcessSet, ProcessIDT, ProcessBO
+from BO.Process import EnumeratedProcessSet, ProcessBO
 from BO.Rights import RightsBO, Action
 from BO.Sample import (
-    SampleIDListT,
     EnumeratedSampleSet,
-    SampleIDT,
     SampleBO,
     DescribedSampleSet,
     SampleTaxoStats,
 )
 from BO.User import UserIDT
+from DB.Acquisition import AcquisitionIDT, AcquisitionIDListT
+from DB.Process import ProcessIDT, ProcessIDListT
 from DB.Project import ProjectIDT, ProjectIDListT
+from DB.Sample import SampleIDT, SampleIDListT
 
 
 class SamplesService(Service):

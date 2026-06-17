@@ -29,7 +29,7 @@ from BO.Rights import RightsBO, Action
 from BO.Taxonomy import TaxonomyBO, ClassifSetInfoT
 from BO.Training import TrainingBO, PredictionBO
 from BO.User import UserIDT
-from DB import ObjectCNNFeatureVector
+from DB.CNNFeatureVector import ObjectCNNFeatureVector
 from DB.Image import IMAGE_VIRTUAL_COLUMNS
 from DB.Object import ObjectIDListT
 from DB.Object import (

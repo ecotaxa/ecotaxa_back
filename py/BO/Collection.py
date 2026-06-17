@@ -7,9 +7,9 @@ from typing import List, Any, Optional, Set, Dict, Union
 
 from pydantic import BaseModel
 
+from BO.DataLicense import AccessLevelEnum
 from BO.DataLicense import LicenseEnum
 from BO.ProjectPrivilege import ProjectPrivilegeBO
-from BO.Sample import SampleOrigIDT
 from BO.User import UserIDT, GuestIDT, PersonBO
 from DB import Session
 from DB.Collection import (
@@ -24,10 +24,9 @@ from DB.Collection import (
 from DB.Object import ObjectHeader
 from DB.Project import ProjectIDListT, Project
 from DB.ProjectPrivilege import ProjectPrivilege
-from DB.Sample import Sample
+from DB.Sample import Sample, SampleOrigIDT
 from DB.User import User, Person, Organization, OrganizationIDT
 from DB.helpers.ORM import contains_eager, func, any_
-from BO.DataLicense import AccessLevelEnum
 from helpers.DynamicLogs import get_logger
 
 logger = get_logger(__name__)
