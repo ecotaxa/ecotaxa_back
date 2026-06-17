@@ -23,11 +23,11 @@ from BO.Sample import (
     DescribedSampleSet,
     SampleTaxoStats,
 )
-from BO.User import UserIDT
 from DB.Acquisition import AcquisitionIDT, AcquisitionIDListT
 from DB.Process import ProcessIDT, ProcessIDListT
 from DB.Project import ProjectIDT, ProjectIDListT
 from DB.Sample import SampleIDT, SampleIDListT
+from DB.User import UserIDT
 
 
 class SamplesService(Service):

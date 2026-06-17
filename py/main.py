@@ -158,7 +158,6 @@ from BO.Project import ProjectBO, ProjectUserStats, ProjectColumns
 from BO.ProjectSet import ProjectSetColumnStats
 from BO.Sample import SampleTaxoStats
 from BO.Taxonomy import TaxonBO
-from BO.User import UserIDT, GuestIDT
 from BO.WoRMSification import WoRMSBO
 from DB import Sample
 from DB.Job import DBJobStateEnum
@@ -166,7 +165,7 @@ from DB.Object import ObjectIDListT
 from DB.Project import ProjectTaxoStat, Project
 from DB.ProjectPrivilege import ProjectPrivilege
 from DB.TaxoRecast import RecastOperation
-from DB.User import User, OrganizationIDT
+from DB.User import GuestIDT, OrganizationIDT, User, UserIDT
 from helpers.AppConfig import Config
 from helpers.DynamicLogs import get_logger, get_api_logger, MONITOR_LOG_PATH
 from helpers.fastApiUtils import (

@@ -9,7 +9,7 @@ from typing import Union, Optional
 
 from API_models.imports import ImportReq, SimpleImportReq
 from API_operations.helpers.JobService import JobServiceOnProjectBase, ArgsDict
-from BO.User import UserIDT
+from DB.User import UserIDT
 from FS.CommonDir import CommonFolder
 from FS.UserFilesDir import UserFilesDirectory
 from FS.Vault import Vault

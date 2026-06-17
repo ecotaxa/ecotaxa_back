@@ -6,17 +6,18 @@
 # Global preferences for a user
 #
 from typing import Union, Optional
+
 from sqlalchemy.orm import Session
-from BO.Taxonomy import TaxonBO, WoRMSBO
+
+from BO.Collection import CollectionIDT
 from BO.ProjectSet import PermissionConsistentProjectSet
+from BO.Rights import NOT_FOUND, Action
+from BO.Taxonomy import TaxonBO, WoRMSBO
 from DB.Collection import CollectionProject
 from DB.Project import ProjectIDT
 from DB.TaxoRecast import TaxoRecast, RecastOperation
-from BO.User import UserIDT
-from BO.Collection import CollectionIDT
-from BO.Rights import NOT_FOUND, Action
+from DB.User import UserIDT
 from helpers.DynamicLogs import get_logger
-
 
 logger = get_logger(__name__)
 

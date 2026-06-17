@@ -5,9 +5,8 @@
 from pathlib import Path
 from typing import Optional
 
-from BO.User import UserIDT
 from BO.Rights import RightsBO
-from DB.User import User, Role
+from DB.User import Role, User, UserIDT
 from .helpers.Service import Service
 
 

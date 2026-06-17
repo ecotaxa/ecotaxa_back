@@ -15,7 +15,7 @@ from typing import cast, List
 from API_models.filters import ProjectFiltersDict
 from API_models.prediction import PredictionReq, PredictionRsp
 from BO.Rights import RightsBO, Action
-from BO.User import UserIDT
+from DB.User import UserIDT
 from FS.MachineLearningModels import SavedModels
 from FS.Vault import Vault
 from helpers.DynamicLogs import get_logger, LogsSwitcher

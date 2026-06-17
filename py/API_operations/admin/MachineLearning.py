@@ -13,9 +13,8 @@ from API_models.filters import ProjectFiltersDict
 from API_operations.ObjectManager import ObjectManager
 from API_operations.helpers.Service import Service
 from BO.Rights import RightsBO
-from BO.User import UserIDT
 from DB.Project import ProjectIDT
-from DB.User import Role
+from DB.User import Role, UserIDT
 from FS.MachineLearningModels import SavedModels
 from FS.Vault import Vault
 from ML.CNN_feature_trainer import CNNFeatureTrainer

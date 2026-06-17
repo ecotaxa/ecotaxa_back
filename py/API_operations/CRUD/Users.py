@@ -20,22 +20,22 @@ from BO.Preferences import Preferences
 from BO.Rights import RightsBO, NOT_AUTHORIZED, NOT_FOUND
 from BO.User import (
     UserBO,
-    UserIDT,
-    UserIDListT,
     SHORT_TOKEN_AGE,
     PROFILE_TOKEN_AGE,
 )
 from DB.Project import ProjectIDT
 from DB.User import (
-    User,
+    Guest,
+    Organization,
+    Person,
     Role,
-    UserRole,
     TempPasswordReset,
+    User,
+    UserIDListT,
+    UserIDT,
+    UserRole,
     UserStatus,
     UserType,
-    Guest,
-    Person,
-    Organization,
 )
 from helpers import DateTime
 from helpers.DynamicLogs import get_logger

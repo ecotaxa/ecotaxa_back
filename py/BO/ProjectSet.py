@@ -18,9 +18,9 @@ from BO.Classification import ClassifIDT, ClassifIDListT
 from BO.Object import ObjectBO
 from BO.ObjectSet import DescribedObjectSet
 from BO.Rights import RightsBO, Action
-from BO.User import UserIDT
 from DB.Object import ObjectIDListT
 from DB.Project import ProjectIDListT, Project
+from DB.User import UserIDT
 from DB.helpers import Session, Result
 from DB.helpers.Direct import text
 from DB.helpers.ORM import any_

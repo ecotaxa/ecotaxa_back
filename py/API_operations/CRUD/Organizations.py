@@ -10,9 +10,8 @@ from fastapi import HTTPException
 from API_models.crud import OrganizationModel
 from BO.Collection import CollectionBO, CollectionIDListT
 from BO.Rights import RightsBO, NOT_AUTHORIZED, NOT_FOUND
-from BO.User import UserIDT
 from DB.Collection import CollectionUserRole
-from DB.User import User, Organization, OrganizationIDT, OrganizationIDListT
+from DB.User import Organization, OrganizationIDListT, OrganizationIDT, User, UserIDT
 from helpers.DynamicLogs import get_logger
 from helpers.httpexception import (
     DETAIL_NOT_FOUND,

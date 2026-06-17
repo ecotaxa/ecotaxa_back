@@ -11,8 +11,8 @@ from typing import Dict, List, Any, Final
 from BO.Classification import ClassifIDT
 from BO.Rights import RightsBO
 from BO.Taxonomy import TaxonomyBO
-from BO.User import UserIDT
 from DB.Taxonomy import Taxonomy
+from DB.User import UserIDT
 from helpers import DateTime
 from helpers.DynamicLogs import get_logger
 from providers.EcoTaxoServer import EcoTaxoServerClient

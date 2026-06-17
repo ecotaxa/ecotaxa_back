@@ -9,10 +9,10 @@ from typing import List, Set, Dict, Optional, Callable, Tuple, Any
 from BO.Classification import ClassifIDT
 from BO.Mappings import ProjectMapping
 from BO.ProjectTidying import ProjectTopology
-from BO.User import UserIDT
 from BO.Vignette import VignetteMaker
 from DB.Acquisition import Acquisition
 from DB.Sample import Sample
+from DB.User import UserIDT
 from DB.helpers.DBWriter import DBWriter
 from FS.Vault import Vault
 from helpers import DateTime

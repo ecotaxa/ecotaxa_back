@@ -6,16 +6,15 @@
 from typing import Optional, List
 
 from fastapi import HTTPException
+
 from API_models.crud import GuestModel
-from BO.Rights import RightsBO, NOT_AUTHORIZED, NOT_FOUND
-from BO.User import GuestBO, GuestIDT, GuestIDListT, UserIDT
-from DB import Organization
-from DB.Collection import CollectionUserRole, CollectionProject
 from BO.Collection import CollectionIDListT, CollectionBO
 from BO.ProjectPrivilege import ProjectPrivilegeBO
+from BO.Rights import RightsBO, NOT_AUTHORIZED, NOT_FOUND
+from BO.User import GuestBO
+from DB.Collection import CollectionUserRole, CollectionProject
 from DB.ProjectPrivilege import ProjectPrivilege
-from DB.User import Person, User, Guest
-from providers.MailProvider import MailProvider
+from DB.User import Guest, GuestIDListT, GuestIDT, Person, User, UserIDT
 from helpers import DateTime
 from helpers.DynamicLogs import get_logger
 from helpers.httpexception import (
@@ -24,7 +23,7 @@ from helpers.httpexception import (
     DETAIL_EMAIL_OWNED_BY_OTHER,
     DETAIL_NOT_FOUND,
 )
-
+from providers.MailProvider import MailProvider
 from ..helpers.Service import Service
 from ..helpers.UserValidation import ActivationType
 

@@ -7,9 +7,9 @@ from abc import ABC
 from typing import List, Dict, Any, Optional, Type
 
 from BO.Job import JobBO
-from BO.User import UserIDT
 from DB.Job import Job, JobIDT, DBJobStateEnum
 from DB.Project import Project, ProjectIDT
+from DB.User import UserIDT
 from FS.TempDirForTasks import TempDirForTasks
 from helpers import DateTime
 from helpers.DynamicLogs import get_logger, LogEmitter, LogsSwitcher

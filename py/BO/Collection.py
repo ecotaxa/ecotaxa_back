@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from BO.DataLicense import AccessLevelEnum
 from BO.DataLicense import LicenseEnum
 from BO.ProjectPrivilege import ProjectPrivilegeBO
-from BO.User import UserIDT, GuestIDT, PersonBO
+from BO.User import PersonBO
 from DB import Session
 from DB.Collection import (
     COLLECTION_ROLE_DATA_CREATOR,
@@ -25,7 +25,7 @@ from DB.Object import ObjectHeader
 from DB.Project import ProjectIDListT, Project
 from DB.ProjectPrivilege import ProjectPrivilege
 from DB.Sample import Sample, SampleOrigIDT
-from DB.User import User, Person, Organization, OrganizationIDT
+from DB.User import GuestIDT, Organization, OrganizationIDT, Person, User, UserIDT
 from DB.helpers.ORM import contains_eager, func, any_
 from helpers.DynamicLogs import get_logger
 

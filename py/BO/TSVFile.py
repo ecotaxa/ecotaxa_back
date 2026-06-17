@@ -49,13 +49,13 @@ from DB.Prediction import PSEUDO_TRAINING_SCORE
 from DB.Process import Process
 from DB.Project import ProjectIDT
 from DB.Sample import Sample
+from DB.User import UserIDT
 from DB.helpers import Session
 from DB.helpers.Bean import Bean
 from DB.helpers.ORM import detach_from_session
 from helpers.DynamicLogs import get_logger
 from .Image import ImageBO
 from .ObjectSet import EnumeratedObjectSet
-from .User import UserIDT
 from .helpers.TSVHelpers import (
     clean_value,
     clean_value_and_none,

@@ -9,8 +9,7 @@ from typing import Tuple, List
 
 from API_operations.helpers.Service import Service
 from BO.Rights import RightsBO
-from BO.User import UserIDT
-from DB.User import Role
+from DB.User import Role, UserIDT
 from DB.helpers.Direct import text
 from helpers.DynamicLogs import get_logger
 

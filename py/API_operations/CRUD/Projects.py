@@ -3,8 +3,10 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 from typing import List, Union, Tuple, Optional, Dict
-from API_models.crud import CreateProjectReq
+
 from fastapi import HTTPException
+
+from API_models.crud import CreateProjectReq
 from BO.Classification import ClassifIDListT, ClassifIDT
 from BO.Collection import MinimalCollectionBO
 from BO.ObjectSet import EnumeratedObjectSet
@@ -17,10 +19,9 @@ from BO.Project import (
 )
 from BO.ProjectSet import ProjectSetColumnStats, LimitedInCategoriesProjectSet
 from BO.Rights import RightsBO, Action, NOT_FOUND
-from BO.User import UserIDT
 from DB.Project import Project, ANNOTATE_STATUS, ProjectIDT, ProjectIDListT
 from DB.Sample import Sample
-from DB.User import User
+from DB.User import User, UserIDT
 from DB.helpers.ORM import clone_of
 from FS.VaultRemover import VaultRemover
 from helpers.DynamicLogs import get_logger

@@ -6,7 +6,6 @@ import gzip
 import os
 import shutil
 import tarfile
-import time
 import zipfile
 from pathlib import Path
 from typing import Optional, List, NamedTuple, Dict, Tuple
@@ -14,7 +13,7 @@ from typing import Optional, List, NamedTuple, Dict, Tuple
 from magic_rs import from_path, CantMatchTypeError
 from starlette.datastructures import UploadFile
 
-from BO.User import UserIDT
+from DB.User import UserIDT
 from FS.CommonDir import CommonFolder, DirEntryT
 from helpers.AppConfig import Config
 from helpers.CustomException import UnprocessableEntityException
@@ -77,7 +76,7 @@ class UserFilesDirectory(object):
         with open(source_path, "wb") as file:
             buff = await stream.read(65536)
             while len(buff) != 0:
-                file.write(buff)  # type:ignore # Mypy is unaware of async read result
+                file.write(buff)  # type: ignore # Mypy is unaware of async read result
                 buff = await stream.read(65536)
         file_ext, compressed_path, mime_type = self._get_file_info(
             name.lstrip(os.path.sep), base_path.absolute()

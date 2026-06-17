@@ -3,19 +3,21 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 from typing import List, Union, Optional, Dict, Any
+
 from fastapi import HTTPException
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
+
 from API_models.crud import CreateCollectionReq, CollectionAggregatedRsp
 from BO.Collection import CollectionBO, CollectionIDT
+from BO.Project import CollectionProjectBOSet
 from BO.ProjectSet import PermissionConsistentProjectSet
 from BO.Rights import NOT_FOUND
-from BO.User import UserIDT
-from BO.Project import CollectionProjectBOSet
-from DB.Project import ProjectIDListT
 from DB.Collection import Collection
+from DB.Project import ProjectIDListT
+from DB.User import UserIDT
 from helpers.DynamicLogs import get_logger
-from ..helpers.Service import Service
 from helpers.httpexception import DETAIL_EXCLUSIVE_CREATOR_ASSOCIATE
+from ..helpers.Service import Service
 
 logger = get_logger(__name__)
 

@@ -38,7 +38,6 @@ from BO.User import (
     MinimalUserBOListT,
     UserActivityListT,
 )
-from BO.User import UserIDT, UserIDListT
 from DB.Acquisition import Acquisition
 from DB.Collection import CollectionProject, Collection
 from DB.Object import (
@@ -62,7 +61,7 @@ from DB.ProjectPrivilege import ProjectPrivilege
 from DB.ProjectVariables import KNOWN_PROJECT_VARS
 from DB.ProjectVariables import ProjectVariables
 from DB.Sample import Sample
-from DB.User import Role, User, UserStatus
+from DB.User import Role, User, UserIDListT, UserIDT, UserStatus
 from DB.helpers import Session, Result
 from DB.helpers.Bean import Bean
 from DB.helpers.Core import select

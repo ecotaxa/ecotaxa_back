@@ -11,9 +11,8 @@ from typing import Tuple, List, Any, Dict, TextIO, Optional
 from BG_operations.JobScheduler import JobScheduler
 from BO.Job import JobBO
 from BO.Rights import RightsBO, NOT_FOUND, NOT_AUTHORIZED
-from BO.User import UserIDT
 from DB.Job import JobIDT, DBJobStateEnum, Job
-from DB.User import User, Role
+from DB.User import Role, User, UserIDT
 from FS.TempDirForTasks import TempDirForTasks
 from helpers.fastApiUtils import AutoCloseBinaryIO
 from ..helpers.JobService import JobServiceBase

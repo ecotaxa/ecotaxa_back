@@ -42,7 +42,6 @@ from BO.ProjectSet import PermissionConsistentProjectSet
 from BO.Sample import SampleBO, SampleAggregForTaxon
 from BO.TaxoRecast import TaxoRecastBO
 from BO.Taxonomy import TaxonBOSet, WoRMSBO
-from BO.User import UserIDT
 from BO.Vocabulary import Vocabulary, Units
 from BO.WoRMSification import WoRMSifier
 from DB.Acquisition import AcquisitionIDT
@@ -51,7 +50,7 @@ from DB.Project import ProjectTaxoStat, Project
 from DB.Sample import Sample
 from DB.TaxoRecast import TaxoRecast, RecastOperation
 from DB.Taxonomy import Taxonomy
-from DB.User import User, Organization
+from DB.User import Organization, User, UserIDT
 from DB.helpers import Session
 from DB.helpers.Direct import text
 from DB.helpers.Postgres import timestamp_to_str

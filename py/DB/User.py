@@ -25,6 +25,12 @@ from .helpers.Postgres import TIMESTAMP, INTEGER
 if TYPE_CHECKING:
     from .ProjectPrivilege import ProjectPrivilege
 
+# Typings, to be clear that these are not e.g. object IDs
+UserIDT = int
+UserIDListT = List[int]
+GuestIDT = int
+GuestIDListT = List[int]
+
 
 class UserStatus(int, Enum):
     blocked = -1

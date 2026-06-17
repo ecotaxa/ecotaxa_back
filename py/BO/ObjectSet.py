@@ -50,7 +50,6 @@ from BO.Mappings import (
 from BO.Object import ObjectIDWithParentsT, MANUAL_STATES_TEXT, PREDICTED_STATE_TEXT
 from BO.Taxonomy import TaxonomyBO
 from BO.Training import TrainingBO, PredictionBO
-from BO.User import UserIDT
 from BO.helpers.MappedTable import MappedTable
 from DB import Session, Query, Process, User, ObjectCNNFeatureVector
 from DB.Acquisition import Acquisition
@@ -73,6 +72,7 @@ from DB.Project import ProjectIDListT, Project
 from DB.Sample import Sample
 from DB.Taxonomy import TaxoStatus
 from DB.Taxonomy import Taxonomy
+from DB.User import UserIDT
 from DB.helpers import Result
 from DB.helpers.Core import select
 from DB.helpers.Direct import func

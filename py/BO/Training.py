@@ -15,7 +15,6 @@ from BO.Classification import (
     ClassifIDListT,
     ClassifScoresListT,
 )
-from BO.User import UserIDT
 from DB import Session
 from DB.Object import (
     ObjectIDT,
@@ -30,6 +29,7 @@ from DB.Prediction import (
     ClassifScore,
 )
 from DB.Training import Training, TrainingIDT, IN_PROGRESS_DATE
+from DB.User import UserIDT
 from DB.helpers.Core import select
 from DB.helpers.ORM import Delete, any_, and_
 from helpers import DateTime
@@ -307,13 +307,13 @@ class PredictionBO(object):
         )
         res = self.session.execute(resurrect_qry)
         # If nothing was resurrected from PredictionHisto, rebuild from Training matching dates
-        if res.rowcount == 0:  # type:ignore  # case1
+        if res.rowcount == 0:  # type: ignore  # case1
             self.reconstruct_predictions(histo)
 
         # Remove history which is now current
         histo_pred_del_qry: Delete = PredictionHisto.__table__.delete()
         histo_pred_del_qry = histo_pred_del_qry.where(
-            tuple_(  # type:ignore
+            tuple_(  # type: ignore
                 PredictionHisto.training_id,
                 PredictionHisto.object_id,
                 PredictionHisto.classif_id,

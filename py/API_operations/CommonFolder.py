@@ -8,8 +8,7 @@
 from API_models.filesystem import DirectoryModel
 from API_operations.UserFilesFolder import UserFilesFolderService
 from BO.Rights import RightsBO
-from BO.User import UserIDT
-from DB.User import User
+from DB.User import User, UserIDT
 from FS.CommonDir import CommonFolder
 from helpers.DynamicLogs import get_logger
 from .helpers.Service import Service
