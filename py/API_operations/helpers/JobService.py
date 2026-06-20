@@ -4,12 +4,12 @@
 #
 import abc
 from abc import ABC
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Type
 
 from BO.Job import JobBO
-from BO.User import UserIDT
 from DB.Job import Job, JobIDT, DBJobStateEnum
 from DB.Project import Project, ProjectIDT
+from DB.User import UserIDT
 from FS.TempDirForTasks import TempDirForTasks
 from helpers import DateTime
 from helpers.DynamicLogs import get_logger, LogEmitter, LogsSwitcher
@@ -42,19 +42,24 @@ class JobServiceBase(Service, LogEmitter, ABC):
         self.last_reply: Dict[str, Any] = {}
 
     @staticmethod
-    def find_jobservice_class_by_type(clazz, job_type: str):
+    def find_jobservice_class_by_type(
+        job_type: str,
+    ) -> Optional[Type["JobServiceBase"]]:
         """
-        Find a subclass with given type
+        Find a subclass with given JOB_TYPE
         """
-        for job_sub_class in clazz.__subclasses__():
-            if job_sub_class.JOB_TYPE == job_type:
-                return job_sub_class
-            else:
-                for_subclass = JobServiceBase.find_jobservice_class_by_type(
-                    job_sub_class, job_type
-                )
-                if for_subclass:
-                    return for_subclass
+
+        def find_class_by_type(clazz):
+            for job_sub_class in clazz.__subclasses__():
+                if job_sub_class.JOB_TYPE == job_type:
+                    return job_sub_class
+                else:
+                    for_subclass = find_class_by_type(job_sub_class)
+                    if for_subclass:
+                        return for_subclass
+            return None
+
+        return find_class_by_type(JobServiceBase)
 
     def log_file_path(self) -> str:
         """
@@ -127,6 +132,7 @@ class JobServiceBase(Service, LogEmitter, ABC):
         self.job_id = new_job.id
         self.temp_for_jobs.erase_for(new_job.id)  # mainly for tests
         with LogsSwitcher(self):
+            # Write arrival event into job log
             logger.info("Creating job %d", self.job_id)
         self.session.commit()
 

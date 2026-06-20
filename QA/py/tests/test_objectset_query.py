@@ -44,7 +44,7 @@ def test_queries(fastapi):
     # Add a sample spanning 2 days
     do_import_a_bit_more_skipping(fastapi, "Queries test project")
 
-    ref = [6, 7, 8, 11, 12, 13, 1, 2, 3, 4, 5]
+    ref = [6, 7, 8, 9, 10, 11, 1, 2, 3, 4, 5]  # No gap as no DB sequence anymore
     all = _prj_query(fastapi, CREATOR_AUTH, prj_id, order="obj.depth_min")
     # we must offset expected by first actual objID as they vary, run to run
     min_objid = min(all)
@@ -97,29 +97,123 @@ def test_all_fields(fastapi):
     do_import_a_bit_more_skipping(fastapi, "Full Queries test project")
 
     # Copy/paste from redoc API
-    obj_fields = "classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id, classif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min, latitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos"
-    img_fields = "file_name, height, imgid, imgrank, file_name, objid, orig_file_name, thumb_file_name, thumb_height, thumb_width, width"
+    # prj_fields = "title, status" Not in API
+    sam_fields = "orig_id, latitude"
+    acq_fields = "orig_id, instrument, acquisid"
+    # prc_fields = "orig_id, processid" Not in API
+    obj_fields = "imgcount, classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id, classif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min, latitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos"
+    img_fields = "file_name, height, imgid, imgrank, objid, orig_file_name, thumb_file_name, thumb_height, thumb_width, width"
     txo_fields = "creation_datetime, creator_email, display_name, id, id_instance, aphia_id, lastupdate_datetime, name, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostatus, taxotype"
+    txp_fields = "aphia_id, name"
+    usr_fields = "name, email"
     all_fields = (
-        ["obj." + fld.strip() for fld in obj_fields.split(",")]
+        ["sam." + fld.strip() for fld in sam_fields.split(",")]
+        + ["acq." + fld.strip() for fld in acq_fields.split(",")]
+        + ["obj." + fld.strip() for fld in obj_fields.split(",")]
         + ["img." + fld.strip() for fld in img_fields.split(",")]
         + ["txo." + fld.strip() for fld in txo_fields.split(",")]
+        + ["txp." + fld.strip() for fld in txp_fields.split(",")]
+        + ["usr." + fld.strip() for fld in usr_fields.split(",")]
     )
+    all_fields_txt = ",".join(all_fields)
 
-    objs, details = _prj_query(
-        fastapi, CREATOR_AUTH, prj_id, fields=",".join(all_fields)
-    )
-    for a_det in details:
-        assert len(a_det) == len(all_fields)
+    def check_ret(details, length):
+        for a_det in details:
+            assert len(a_det) == length
+
+    objs, details = _prj_query(fastapi, CREATOR_AUTH, prj_id, fields=all_fields_txt)
+    check_ret(details, len(all_fields))
 
     # Test all 'order by', all fields present
     for a_field in all_fields:
         objs, details = _prj_query(
-            fastapi, CREATOR_AUTH, prj_id, fields=",".join(all_fields), order=a_field
+            fastapi, CREATOR_AUTH, prj_id, fields=all_fields_txt, order=a_field
         )
+        check_ret(details, len(all_fields))
 
     # Test all 'order by', single field present
     for a_field in all_fields:
         objs, details = _prj_query(
             fastapi, CREATOR_AUTH, prj_id, fields="obj.objid", order=a_field
         )
+        check_ret(details, 1)
+
+    objs, details = _prj_query(
+        fastapi,
+        CREATOR_AUTH,
+        prj_id,
+        fields="obj.objid",
+        order="img.file_name",
+        size=10,
+    )
+    check_ret(details, 1)
+
+    # Test all 'order by', all fields present and limit
+    for a_field in all_fields:
+        objs, details = _prj_query(
+            fastapi, CREATOR_AUTH, prj_id, fields=all_fields_txt, order=a_field, size=10
+        )
+        check_ret(details, len(all_fields))
+
+    # Test all 'order by', one field present and limit
+    for a_field in all_fields:
+        objs, details = _prj_query(
+            fastapi, CREATOR_AUTH, prj_id, fields="obj.orig_id", order=a_field, size=10
+        )
+        check_ret(details, 1)
+
+    # Test with users
+    objs, details = _prj_query(
+        fastapi,
+        CREATOR_AUTH,
+        prj_id,
+        fields=all_fields_txt,
+        order="img.file_name",
+        size=10,
+        filt_annot="4,3",
+    )
+    check_ret(details, len(all_fields))
+
+    # Test with project instrument
+    objs, details = _prj_query(
+        fastapi,
+        CREATOR_AUTH,
+        prj_id,
+        fields=all_fields_txt,
+        order="img.file_name",
+        size=10,
+        instrument="UVP",
+    )
+    check_ret(details, len(all_fields))
+
+    # Limit AKA size should return exact same data
+    objs_no_limit, details_no_limit = _prj_query(
+        fastapi, CREATOR_AUTH, prj_id, fields=all_fields_txt, order="usr.name"
+    )
+    objs_limit, details_limit = _prj_query(
+        fastapi,
+        CREATOR_AUTH,
+        prj_id,
+        fields=all_fields_txt,
+        order="usr.name",
+        size=10000,
+    )
+    assert objs_no_limit == objs_limit
+    assert details_no_limit == details_limit
+
+
+def test_free_columns(fastapi):
+    # Admin imports the project
+    prj_id = do_test_import(fastapi, "Free columns Queries test project")
+    # Free column in filter
+    _prj_query(
+        fastapi,
+        CREATOR_AUTH,
+        prj_id,
+        fields="",
+        order=None,
+        size=10000,
+        samples=590261,
+        freetxt="ot01",
+        freetxtval="False",
+    )

@@ -32,6 +32,7 @@ from DB.helpers.Bean import bean_of, Bean
 from DB.helpers.DBWriter import DBWriter
 from DB.helpers.Direct import text
 from DB.helpers.ORM import any_
+from DB.helpers.SQL import SelectClause
 from FS.Vault import Vault
 from helpers.DynamicLogs import get_logger, LogsSwitcher
 from .helpers.JobService import JobServiceOnProjectBase, ArgsDict
@@ -41,7 +42,13 @@ logger = get_logger(__name__)
 # Useful typings
 # TODO: Put somewhere else if reused in other classes
 DBObjectTupleT = Tuple[
-    ObjectHeader, ObjectFields, ObjectCNNFeatureVector, Image, Sample, Acquisition, Process
+    ObjectHeader,
+    ObjectFields,
+    ObjectCNNFeatureVector,
+    Image,
+    Sample,
+    Acquisition,
+    Process,
 ]
 DBObjectTupleListT = List[DBObjectTupleT]
 
@@ -131,11 +138,11 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         used_columns = set(obj_mapping.real_cols_to_tsv.keys())
         used_columns.add("orig_id")  # By safety
         # Create a DB writer
-        writer = DBWriter(self.session)
+        dest_prj_id = self.dest_prj.projid
+        writer = DBWriter(self.session, dest_prj_id)
         # Narrow the writes in ObjectFields thanks to mappings of original project
         writer.narrow_to(used_columns)
         # Use import helpers
-        dest_prj_id = self.dest_prj.projid
         import_how = ImportHow(
             prj_id=dest_prj_id,
             update_mode="No",
@@ -377,6 +384,8 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
             part_key = "sam.sampleid"
         elif req.group_type == GroupDefinitions.acquisitions:
             part_key = "acq.acquisid"
+        elif req.group_type == GroupDefinitions.internal_ids:
+            part_key = "obh.objid"
         else:
             part_key = "???"
 
@@ -384,7 +393,8 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         object_set: DescribedObjectSet = DescribedObjectSet(
             self.session, self.prj, self._get_owner_id(), self.req.filters
         )
-        from_, where, params = object_set.get_sql()
+        select_clause = SelectClause().add_expr("obh.objid")
+        from_, where, params = object_set.get_sql(select_clause)
 
         # noinspection SqlResolve
         sql = (

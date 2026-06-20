@@ -6,7 +6,7 @@
 #
 # @see README.md
 #
-from typing import List, Tuple
+from typing import List, Tuple, Union
 
 import numpy as np  # type: ignore
 
@@ -55,7 +55,11 @@ class OurRandomForestClassifier(object):
                 random_state=420,
             )  # TODO: verbose sends logs we can't see :(
 
-    def learn_from(self, training_samples: np.ndarray, target_values: np.ndarray):
+    def learn_from(
+        self,
+        training_samples: np.ndarray,
+        target_values: Union[np.ndarray, ClassifIDListT],
+    ):
         """
         Learn the classifier from given data.
         """

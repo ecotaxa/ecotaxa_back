@@ -18,6 +18,7 @@ from DB.Sample import Sample
 from DB.helpers import Result
 from DB.helpers.Direct import text
 from DB.helpers.ORM import Model, contains_eager, any_
+from DB.helpers.SQL import SelectClause
 from formats.JSONObjectSet import JSON_FIELDS, JSONDesc
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
@@ -48,7 +49,6 @@ class JsonDumper(Service):
         self.mapping = ProjectMapping()
         if self.prj:
             self.mapping.load_from_project(self.prj)
-        self.ids_to_dump: List[int] = []
         self.already_dumped: Set[Model] = set()
         self.first_query = True
 
@@ -60,11 +60,12 @@ class JsonDumper(Service):
         if self.prj is None:
             to_stream = {}
         else:
-            self._find_what_to_dump()
-            # TODO: The result seems unneeded so far, we just need the stuff loaded in SQLA session
-            _to_dump = self._db_fetch(self.ids_to_dump)
+            ids_to_dump = self._find_what_to_dump()  # Filtered IDs
+            _to_dump = self._db_fetch(
+                ids_to_dump
+            )  # Load into SQLA only filtered-in ones
             # prj = to_dump[0][0]
-            if len(self.ids_to_dump) == 0 or len(_to_dump) == 0:
+            if len(ids_to_dump) == 0 or len(_to_dump) == 0:
                 to_stream = {}
             else:
                 to_stream = self.dump_row(out_stream, self.prj)
@@ -96,12 +97,25 @@ class JsonDumper(Service):
             else:
                 fld_name = a_field_or_relation.key
                 # This is where SQLAlchemy does all its magic when it's a relation
-                attr = getattr(a_row, fld_name)  # type:ignore # case2
+                attr = getattr(a_row, fld_name)  # type: ignore # case2
             if isinstance(attr, list):
                 # Serialize the list of child entities, ordinary relationship
                 children: List[Dict[str, Any]] = []
                 tgt_dict[how] = children
-                for a_child_row in sorted(attr):
+
+                # Sort to have a stable output
+                def dump_sort_key(obj):
+                    if hasattr(obj, "imgrank"):
+                        return obj.imgrank
+                    if hasattr(obj, "objid"):
+                        return obj.objid
+                    if hasattr(obj, "sampleid"):
+                        return obj.sampleid
+                    if hasattr(obj, "acquisid"):
+                        return obj.acquisid
+                    return obj
+
+                for a_child_row in sorted(attr, key=dump_sort_key):
                     child_obj = self.dump_row(out_stream, a_child_row)
                     children.append(child_obj)
             elif isinstance(attr, Model):
@@ -127,18 +141,29 @@ class JsonDumper(Service):
                 if attr is not None:
                     tgt_dict[a_tsv_col] = attr
 
-    def _find_what_to_dump(self) -> None:
+    def _find_what_to_dump(self) -> List[int]:
         """
         Determine the objects to dump.
         """
         assert self.prj is not None
         # Prepare a where clause and parameters from filter
-        object_set: DescribedObjectSet = DescribedObjectSet(
-            self.session, self.prj, self.requester_id, self.filters
-        )
-        from_, where, params = object_set.get_sql()
+        if len(self.filters) == 0:
+            sql = (
+                "SELECT obh.objid"
+                "  FROM obj_head obh "
+                "  JOIN acquisitions acq ON obh.acquisid = acq.acquisid "
+                "  JOIN samples sam ON acq.acq_sample_id = sam.sampleid "
+                " WHERE obh.objid <@ obj_in_prj(:prj) AND sam.projid = :prj"
+            )
+            params = {"prj": self.prj.projid}
+        else:
+            object_set: DescribedObjectSet = DescribedObjectSet(
+                self.session, self.prj, self.requester_id, self.filters
+            )
+            select_clause = SelectClause().add_expr("obh.objid")
+            from_, where, params = object_set.get_sql(select_clause)
 
-        sql = """ SELECT objid FROM """ + from_.get_sql() + where.get_sql()
+            sql = select_clause.get_sql() + " FROM " + from_.get_sql() + where.get_sql()
 
         logger.info("SQL=%s", sql)
         logger.info("SQLParam=%s", params)
@@ -149,7 +174,7 @@ class JsonDumper(Service):
 
         logger.info("NB OBJIDS=%d", len(ids))
 
-        self.ids_to_dump = ids
+        return ids
 
     def _db_fetch(self, objids: List[int]) -> List[DBObjectTupleT]:
         """
@@ -173,8 +198,6 @@ class JsonDumper(Service):
             contains_eager(ObjectHeader.all_images)
         )
         ret = ret.filter(ObjectHeader.objid == any_(objids))
-        ret = ret.order_by(ObjectHeader.objid)
-        ret = ret.order_by(Image.imgrank)
 
         if self.first_query:
             logger.info("Query: %s", str(ret))

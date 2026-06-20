@@ -4,6 +4,7 @@
 import shutil
 from os.path import dirname, realpath
 from pathlib import Path
+from typing import Any, Generator
 
 import pytest
 
@@ -25,7 +26,7 @@ def pushd(self):
 
 
 @pytest.fixture(scope="session")
-def tstlogs() -> Path:
+def tstlogs() -> Generator[Path, Any, None]:
     shutil.rmtree(LOGS, ignore_errors=True)
     os.mkdir(LOGS)
     yield LOGS

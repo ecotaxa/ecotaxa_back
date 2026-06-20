@@ -81,7 +81,6 @@ def test_list_jobs(fastapi):
     assert rsp.status_code == 403
 
 
-@pytest.mark.skip(reason="No code yet")
 def test_list_jobs_filtering(fastapi):
     # Register our test job classes if needed, though JobServiceBase.create_job works anyway
 

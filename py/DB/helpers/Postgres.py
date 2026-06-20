@@ -7,10 +7,10 @@
 #
 from datetime import datetime
 from enum import Enum
-from typing import List, Tuple, Any
+from typing import List, Tuple, Any, Callable, Optional
 
 # noinspection PyUnresolvedReferences
-from sqlalchemy import VARCHAR, INTEGER, CHAR  # fmt: skip
+from sqlalchemy import VARCHAR, INTEGER, CHAR, event  # fmt: skip
 # noinspection PyUnresolvedReferences
 from sqlalchemy.dialects.postgresql import (
     DOUBLE_PRECISION,
@@ -21,13 +21,13 @@ from sqlalchemy.dialects.postgresql import (
     SMALLINT,
     BYTEA,
     JSONB,
-)
+)  # fmt: skip
 # noinspection PyUnresolvedReferences
-from sqlalchemy.dialects.postgresql import dialect as pg_dialect
+from sqlalchemy.dialects.postgresql import dialect as pg_dialect  # fmt: skip
 # noinspection PyUnresolvedReferences
-from sqlalchemy.dialects.postgresql import insert as pg_insert, Insert as PgInsert
+from sqlalchemy.dialects.postgresql import insert as pg_insert, Insert as PgInsert  # fmt: skip
 # noinspection PyUnresolvedReferences
-from sqlalchemy.sql import any_ as _pg_any, all_ as _pg_all
+from sqlalchemy.sql import any_ as _pg_any, all_ as _pg_all  # fmt: skip
 
 from .ORM import text, Session, column, Integer
 
@@ -60,6 +60,38 @@ class SequenceCache(object):
         except IndexError:
             populate(self.store, self.sess, self.seq_name, self.size)
             return self.next()
+
+
+class LocalSequenceCache(object):
+    """
+    Generate and keep in memory some valid sequence numbers, from a project-local generator.
+    """
+
+    def __init__(self, session: Session, generator_def: Callable[[], int]):
+        self.sess = session
+        self.generator_def = generator_def
+        self.next_id: Optional[int] = None
+
+        # Hook: Invalidate the cache when the session commits or rolls back,
+        # because the advisory lock (used in generator_def) is released.
+        @event.listens_for(self.sess, "after_commit")
+        def receive_after_commit(_session):
+            self.clear()
+
+        @event.listens_for(self.sess, "after_rollback")
+        def receive_after_rollback(_session):
+            self.clear()
+
+    def clear(self):
+        """Empty the local store of IDs."""
+        self.next_id = None
+
+    def next(self):
+        if self.next_id is None:
+            self.next_id = self.generator_def()
+        ret = self.next_id
+        self.next_id += 1
+        return ret
 
 
 def db_server_now(session: Session) -> datetime:

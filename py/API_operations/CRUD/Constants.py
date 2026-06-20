@@ -31,4 +31,8 @@ class ConstantsService(Service):
         ret.time_to_live = self.config.get_time_to_live()
         ret.all_in_one = self.config.get_all_in_one() == "on"
         ret.taxoserver_url = self.config.get_taxoserver_url()
+        client_id, _, _ = self.config.get_openid_config()
+        ret.openid_configured = client_id is not None
+        ret.accepted_mime_types = self.config.get_accepted_mime_types()
+        ret.archive_extensions = self.config.get_archive_extensions()
         return ret

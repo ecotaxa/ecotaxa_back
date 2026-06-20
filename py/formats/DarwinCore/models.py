@@ -419,6 +419,12 @@ class EMLProject(BaseModel):
     from the associated method step."""
 
 
+class EMLAdditionalMetaBibliographyCitation(BaseModel):
+    citation: Optional[str]
+    """ A single citation for use when citing the dataset. The IPT can also auto-generate 
+    a citation based on the metadata (people, title, organization, onlineURL, DOI etc)."""
+
+
 class EMLAdditionalMeta(BaseModel):
     """
     EML additional metadata
@@ -433,7 +439,7 @@ class EMLAdditionalMeta(BaseModel):
     citation: Optional[str]
     """ A single citation for use when citing the dataset. The IPT can also auto-generate 
     a citation based on the metadata (people, title, organization, onlineURL, DOI etc)."""
-    bibliography: Optional[str]
+    bibliography: Optional[List[EMLAdditionalMetaBibliographyCitation]]
     """ A list of citations that form a bibliography on literature related / used in the dataset """
     resourceLogoUrl: Optional[str]
     """ URL of the logo associated with a dataset."""
@@ -495,6 +501,8 @@ class EMLMeta(BaseModel):
     taxonomicCoverage: List[EMLTaxonomicClassification]
     intellectualRights: str
     """ AKA licence """
+    publisher: str
+    """ AKA EcoTaxa """
     informationUrl: str
     """ A back-link to the dataset origin """
     purpose: Optional[str]

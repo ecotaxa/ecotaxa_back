@@ -2,13 +2,13 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import Dict, Tuple, List, Type, Optional, ClassVar
+from typing import List, Optional, ClassVar
 
 from helpers.DynamicLogs import get_logger
 from .Bean import Bean
 from .Direct import text
-from .ORM import Session, Table, MetaData, minimal_table_of
-from .Postgres import SequenceCache
+from .ORM import Session, MetaData, minimal_table_of
+from .Postgres import SequenceCache, LocalSequenceCache
 from .. import Prediction
 from ..CNNFeatureVector import ObjectCNNFeatureVector
 from ..Image import Image
@@ -30,7 +30,7 @@ class DBWriter(object):
 
     SEQUENCE_CACHE_SIZE: ClassVar = 100
 
-    def __init__(self, session: Session):
+    def __init__(self, session: Session, prj_id: int):
         self.session = session
 
         self.obj_tbl = ObjectHeader.__table__
@@ -49,8 +49,9 @@ class DBWriter(object):
 
         # Save a bit of time for commit
         self.session.execute(text("SET synchronous_commit TO OFF;"))
-        self.obj_seq_cache = SequenceCache(
-            self.session, "seq_objects", self.SEQUENCE_CACHE_SIZE
+        self.obj_seq_cache = LocalSequenceCache(
+            self.session,
+            lambda: ObjectHeader.get_next_pk(self.session, prj_id),
         )
         self.img_seq_cache = SequenceCache(
             self.session, "seq_images", self.SEQUENCE_CACHE_SIZE

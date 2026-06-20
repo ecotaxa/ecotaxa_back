@@ -3,9 +3,8 @@ import logging
 from API_operations.helpers.Service import Service
 from starlette import status
 
-from tests.api_wrappers import api_wait_for_stable_job
+from tests.api_wrappers import api_wait_for_stable_job, api_get_log_file
 from tests.credentials import ADMIN_AUTH, USER_AUTH
-from tests.export_shared import get_log_file
 from tests.jobs import check_job_ok
 from tests.test_import import do_import_uvp6
 
@@ -15,7 +14,7 @@ NIGHTLY_URL = "/admin/nightly"
 
 def test_admin_images(fastapi):
 
-    prj_id = do_import_uvp6(fastapi, "Test Project Admin")
+    prj_id, _ = do_import_uvp6(fastapi, "Test Project Admin")
 
     url = PROJECT_DIGEST_URL.format(project_id=prj_id)
 
@@ -42,10 +41,11 @@ def do_nightly(fastapi):
 
     job_id = rsp.json()
     job = api_wait_for_stable_job(fastapi, job_id)
-    log = str(get_log_file(fastapi, job.id))
-    if ":ERROR" in log:
-        print([a_line for a_line in log.split("\n")])
+    log = api_get_log_file(fastapi, job.id)
+    if any(":ERROR" in line for line in log):
+        print(log)
     check_job_ok(job)
+    return log
 
 
 def test_nightly_job(fastapi, caplog, tstlogs):
@@ -69,15 +69,11 @@ def test_nightly_job(fastapi, caplog, tstlogs):
     # Only Admin can
     caplog.set_level(logging.DEBUG)
 
-    do_nightly(fastapi)
-    msgs = len(
-        [msg for msg in caplog.messages if msg.startswith("About to clean 3 jobs")]
-    )
+    log = do_nightly(fastapi)
+    msgs = len([line for line in log if "About to clean 3 jobs" in line])
     assert msgs > 0
 
     # Second cleanup must do nothing
-    do_nightly(fastapi)
-    msgs = len(
-        [msg for msg in caplog.messages if msg.startswith("About to clean 0 jobs")]
-    )
+    log = do_nightly(fastapi)
+    msgs = len([line for line in log if "About to clean 0 jobs" in line])
     assert msgs > 0

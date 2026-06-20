@@ -4,29 +4,34 @@
 #
 # Maintenance operations on the DB.
 #
-import os
-import time
-import shutil
 import datetime
-from glob import glob
+import os
+import shutil
+import time
 from dataclasses import dataclass
+from glob import glob
+from pathlib import Path
 from typing import Tuple, Any, List, Optional
 
 from API_operations.helpers.JobService import JobServiceBase, ArgsDict
-from FS.UserFilesDir import UserFilesDirectory
 from BO.Job import JobBO
 from BO.Project import ProjectBO
 from BO.Rights import RightsBO
 from BO.Taxonomy import TaxonomyBO
+from DB.Acquisition import ACQ_PRJ_OFFSET
 from DB.Job import JobIDT, Job
+from DB.Object import OBJ_PRJ_OFFSET
+from DB.Prediction import PredictionHisto
 from DB.Project import Project, ProjectIDListT
+from DB.Sample import SAM_PRJ_OFFSET
+from DB.Training import Training, IN_PROGRESS_DATE
 from DB.User import Role
 from DB.helpers import Result
 from DB.helpers import Session
 from DB.helpers.Direct import text
 from FS.TempDirForTasks import TempDirForTasks
+from FS.UserFilesDir import UserFilesDirectory
 from helpers.DynamicLogs import get_logger, LogsSwitcher
-from pathlib import Path
 
 logger = get_logger(__name__)
 
@@ -81,12 +86,17 @@ class NightlyJobService(JobServiceBase):
         self.update_progress(0, "Starting")
         all_prj_ids = [proj_id for proj_id, in self.ro_session.query(Project.projid)]
         all_prj_ids.sort()
-        self.compute_all_projects_taxo_stats(all_prj_ids, 0, 30)
-        self.compute_all_projects_stats(all_prj_ids, 30, 60)
-        self.refresh_taxo_tree_stats(60)
+        # Release transaction, otherwise (if idle_in_transaction_session_timeout is set) the connection could expire
+        self.ro_session.commit()
+        self.delete_empty_samples(all_prj_ids, 0, 10)
+        self.compute_all_projects_taxo_stats(all_prj_ids, 10, 40)
+        self.compute_all_projects_stats(all_prj_ids, 40, 70)
+        self.refresh_taxo_tree_stats(70)
         self.clean_old_jobs(75)
-        const_status = self.check_consistency(80, 90)
-        self.users_files_maintenance(90, 100)
+        self.clean_old_prediction_histo(78)
+        self.clean_aborted_trainings(80)
+        const_status = self.check_consistency(82, 92)
+        self.users_files_maintenance(92, 100)
         if not const_status:
             self.set_job_result(
                 errors=["See log for consistency problems"], infos={"status": "error"}
@@ -156,7 +166,7 @@ class NightlyJobService(JobServiceBase):
         Rules: Jobs older than 30 days are erased whatever
                Jobs older than 1 week are erased if they ran OK.
         """
-        self.update_progress(start, "Recomputing taxonomy stats")
+        self.update_progress(start, "Clean old jobs")
         logger.info("Starting cleanup of old jobs")
         thirty_days_ago = datetime.datetime.today() - datetime.timedelta(days=30)
         old_jobs_qry_1 = (
@@ -176,12 +186,80 @@ class NightlyJobService(JobServiceBase):
         to_clean = set(old_jobs).union(set(old_jobs_2))
         logger.info("About to clean %d jobs %s", len(to_clean), to_clean)
         temp_for_job = TempDirForTasks(self.config.jobs_dir())
+        chunk = []
         for job_id in to_clean:
             # Commit each job, a bit inefficient but in case of trouble we have less de-sync with filesystem
             with JobBO.get_for_update(self.session, job_id) as job_bo:
                 temp_for_job.archive_for(job_id, {JobServiceBase.JOB_LOG_FILE_NAME})
                 job_bo.archive()
+            chunk.append(job_id)
+            if len(chunk) == self.REPORT_EVERY:
+                logger.info("Done for jobs %s", chunk)
+                chunk = []
+        if chunk:
+            logger.info("Done for jobs %s", chunk)
         logger.info("Cleanup of old jobs done")
+
+    def clean_old_prediction_histo(self, start: int) -> None:
+        """
+        Remove entries from PredictionHisto corresponding to trainings which ended more than 3 months ago.
+        """
+        self.update_progress(start, "Cleaning old PredictionHisto")
+        logger.info("Starting cleanup of old PredictionHisto")
+        three_months_ago = datetime.datetime.today() - datetime.timedelta(days=90)
+        # Find training ids that ended more than 3 months ago
+        # We also check that they are actually in PredictionHisto to only log when we delete something
+        old_trainings_with_histo_qry = (
+            self.session.query(Training.training_id)
+            .join(PredictionHisto, Training.training_id == PredictionHisto.training_id)
+            .filter(Training.training_end < three_months_ago)
+            .distinct()
+        )
+        to_clean_ids = [t_id for t_id, in old_trainings_with_histo_qry]
+        if to_clean_ids:
+            logger.info(
+                "About to clean PredictionHisto for %d old trainings", len(to_clean_ids)
+            )
+            chunk = []
+            for trn_id in to_clean_ids:
+                self.session.query(PredictionHisto).filter(
+                    PredictionHisto.training_id == trn_id
+                ).delete(synchronize_session=False)
+                chunk.append(trn_id)
+                if len(chunk) == self.REPORT_EVERY:
+                    logger.info("Done for PredictionHisto %s", chunk)
+                    chunk = []
+            if chunk:
+                logger.info("Done for PredictionHisto %s", chunk)
+            self.session.commit()
+        logger.info("Cleanup of old PredictionHisto done")
+
+    def clean_aborted_trainings(self, start: int) -> None:
+        """
+        Remove aborted trainings. They have training_end remaining to IN_PROGRESS_DATE.
+        """
+        if self.job_id:
+            self.update_progress(start, "Cleaning aborted trainings")
+        logger.info("Starting cleanup of aborted trainings")
+        limit_date = datetime.datetime.now() - datetime.timedelta(days=1)
+        aborted_trainings_qry = self.session.query(Training).filter(
+            Training.training_end == IN_PROGRESS_DATE,
+            Training.training_start < limit_date,
+        )
+        to_clean = aborted_trainings_qry.all()
+        logger.info("About to clean %d aborted trainings", len(to_clean))
+        chunk = []
+        for trn in to_clean:
+            # TODO: Could use some returning clause
+            self.session.delete(trn)
+            chunk.append(trn.training_id)
+            if len(chunk) == self.REPORT_EVERY:
+                logger.info("Done for trainings %s", chunk)
+                chunk = []
+        if chunk:
+            logger.info("Done for trainings %s", chunk)
+        self.session.commit()
+        logger.info("Cleanup of aborted trainings done")
 
     def check_consistency(self, start: int, end: int, idle: bool = False) -> bool:
         """Ensure data is how it should be"""
@@ -222,6 +300,50 @@ class NightlyJobService(JobServiceBase):
                 if ptime > dtime:
                     dtime = self.get_tree_time(Path(entry.path), dtime)
         return dtime
+
+    def delete_empty_samples(self, all_proj_ids: ProjectIDListT, start: int, end: int):
+        self.update_progress(start, "Find and delete empty samples")
+        logger.info("Find and delete empty samples")
+        total = len(all_proj_ids)
+        for idx, prj in enumerate(all_proj_ids):
+            progress = round(start + (end - start) / total * idx)
+            sql = f"""
+                    SELECT  sam.sampleid 
+                      FROM samples sam WHERE sam.projid = :prj AND NOT EXISTS ( SELECT 1 FROM obj_head obh INNER JOIN acquisitions acq ON acq.acquisid = obh.acquisid AND acq.acq_sample_id = sam.sampleid )               
+                     
+            """
+            res = self.ro_session.execute(text(sql), {"prj": prj})
+            emptysam = [a_val[0] for a_val in res]
+            if len(emptysam):
+                params = {"emptysam": list(emptysam)}
+                self.update_progress(
+                    progress, "Delete empty samples for project : %s" % str(prj)
+                )
+                # double check check if really no objects
+                logger.info(
+                    "SQL %s , empty samples %s",
+                    str(sql).strip(),
+                    str(",".join([str(a_val) for a_val in emptysam])),
+                )
+                sql = f"""
+                      DELETE FROM acquisitions acq WHERE acq.acq_sample_id = ANY (:emptysam)    
+                      """
+                logger.info(
+                    "%s delete empty acquisitions for project %s",
+                    str(sql).strip(),
+                    str(prj),
+                )
+                _res = self.session.execute(text(sql), params)
+                sql = f"""
+                      DELETE FROM samples sam WHERE sam.sampleid =ANY (:emptysam)    
+                      """
+                logger.info(
+                    "%s delete empty samples for project %s", str(sql).strip(), str(prj)
+                )
+                _res = self.session.execute(text(sql), params)
+                self.session.commit()
+                logger.info(" project %s has no more empty samples", str(prj))
+        self.update_progress(end, "Empty samples deleted")
 
     @staticmethod
     def _delete_definitely(
@@ -410,7 +532,7 @@ NightlyJobService.NIGHTLY_CHECKS = [
         """,
     ),
     ConsistencyCheckAndFix(
-        "The must be no score information for manual states",
+        "There must be no score information for manual states",
         "select objid from obj_head where classif_qual in ('V','D') and classif_score is not null limit 100",
         [],
         """
@@ -443,8 +565,26 @@ where classif_qual is null and classif_id is null and classif_score is not null"
         """,
     ),
     ConsistencyCheckAndFix(
+        f"Samples IDs match project ones with offset {SAM_PRJ_OFFSET}",
+        f"select sampleid, projid from samples where (sampleid / {SAM_PRJ_OFFSET}) != projid limit 100",
+        [],
+        "need investigation",
+    ),
+    ConsistencyCheckAndFix(
+        f"Acquisitions IDs match project ones with offset {ACQ_PRJ_OFFSET}",
+        f"select acquisid, acq_sample_id from acquisitions where (acquisid / {ACQ_PRJ_OFFSET}) != (acq_sample_id / {SAM_PRJ_OFFSET}) limit 100",
+        [],
+        "need investigation",
+    ),
+    ConsistencyCheckAndFix(
+        f"Objects IDs match project ones with offset {OBJ_PRJ_OFFSET}",
+        f"select objid, acquisid from obj_head where (objid / {OBJ_PRJ_OFFSET}) != (acquisid / {ACQ_PRJ_OFFSET}) limit 100",
+        [],
+        "need investigation",
+    ),
+    ConsistencyCheckAndFix(
         "All obj_fields have same acquisid as object",
-        "select count(1) from obj_head obh join obj_field obf on obf.objfid = obh.objid where obh.acquisid != obf.acquis_id",
+        "SELECT count(1) FROM obj_head obh LEFT JOIN obj_field obf ON obf.objfid = obh.objid AND obf.acquis_id = obh.acquisid WHERE obf.objfid IS NULL;",
         0,
         """
         -- find root cause
@@ -503,7 +643,7 @@ where classif_qual is null and classif_id is null and classif_score is not null"
         "An object cannot be in a prediction and historical same prediction",
         """select * from prediction_histo prh
      join prediction prd on prh.training_id = prd.training_id
-                     and prh.object_id = prd.object_id
+                        and prh.object_id = prd.object_id
       limit 100
         """,
         [],
@@ -516,6 +656,7 @@ where classif_qual is null and classif_id is null and classif_score is not null"
         """select trn.*
     from training trn
     where trn.training_end < trn.training_start
+      and trn.training_start < now() - interval '1 day'
       limit 100
         """,
         [],

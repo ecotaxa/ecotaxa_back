@@ -18,6 +18,7 @@ from typing import (
     cast,
     Union,
     TextIO,
+    Type,
 )
 
 # noinspection PyPackageRequirements
@@ -48,13 +49,13 @@ from DB.Prediction import PSEUDO_TRAINING_SCORE
 from DB.Process import Process
 from DB.Project import ProjectIDT
 from DB.Sample import Sample
+from DB.User import UserIDT
 from DB.helpers import Session
 from DB.helpers.Bean import Bean
 from DB.helpers.ORM import detach_from_session
 from helpers.DynamicLogs import get_logger
 from .Image import ImageBO
 from .ObjectSet import EnumeratedObjectSet
-from .User import UserIDT
 from .helpers.TSVHelpers import (
     clean_value,
     clean_value_and_none,
@@ -555,7 +556,10 @@ class TSVFile(object):
 
     @staticmethod
     def create_parent(
-        session: Session, dict_to_write, prj_id: ProjectIDT, parent_class
+        session: Session,
+        dict_to_write,
+        prj_id: ProjectIDT,
+        parent_class: Union[Type[Sample], Type[Acquisition], Type[Process]],
     ):
         """
             Create the SQLAlchemy wrapper for Sample, Acquisition or Process.
@@ -564,7 +568,10 @@ class TSVFile(object):
         # noinspection PyCallingNonCallable
         parent = parent_class(**dict_to_write)
         # Link with project
-        parent.projid = prj_id
+        if isinstance(parent, Sample):
+            parent.projid = prj_id
+        if isinstance(parent, (Sample, Acquisition)):
+            parent.set_next_pk(session, prj_id)
         session.add(parent)
         session.flush()
         return parent

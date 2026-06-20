@@ -23,6 +23,7 @@ logger = get_logger(__name__)
 class ActivationType(str, Enum):
     create: Final = "create"
     update: Final = "update"
+    convert: Final = "convert"
     status: Final = "status "
     inform: Final = "inform"
     passwordreset: Final = "passwordreset"

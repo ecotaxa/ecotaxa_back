@@ -7,10 +7,10 @@ from typing import List, Any, Optional, Set, Dict, Union
 
 from pydantic import BaseModel
 
+from BO.DataLicense import AccessLevelEnum
 from BO.DataLicense import LicenseEnum
 from BO.ProjectPrivilege import ProjectPrivilegeBO
-from BO.Sample import SampleOrigIDT
-from BO.User import UserIDT, GuestIDT, PersonBO
+from BO.User import PersonBO
 from DB import Session
 from DB.Collection import (
     COLLECTION_ROLE_DATA_CREATOR,
@@ -24,8 +24,8 @@ from DB.Collection import (
 from DB.Object import ObjectHeader
 from DB.Project import ProjectIDListT, Project
 from DB.ProjectPrivilege import ProjectPrivilege
-from DB.Sample import Sample
-from DB.User import User, Person, Organization, OrganizationIDT
+from DB.Sample import Sample, SampleOrigIDT
+from DB.User import GuestIDT, Organization, OrganizationIDT, Person, User, UserIDT
 from DB.helpers.ORM import contains_eager, func, any_
 from helpers.DynamicLogs import get_logger
 
@@ -50,6 +50,10 @@ associates_key = "associates"
 user_order_type = "u"
 org_order_type = "o"
 
+CODE_RE = re.compile(
+    "\\(([A-Z]+)\\)$"
+)  # Quite strict, just uppercase letters at the end of the name
+
 
 class CollectionBO(object):
     """
@@ -72,6 +76,16 @@ class CollectionBO(object):
         self.associate_organisations: List[Organization] = []
         self.code_provider_org: Optional[str] = None
         self.display_order: Dict[str, Any] = {creators_key: [], associates_key: []}
+        self.is_private: bool = (
+            len(
+                [
+                    prj.projid
+                    for prj in self._collection.projects
+                    if prj.access == AccessLevelEnum.PRIVATE.value
+                ]
+            )
+            > 0
+        )
 
     def enrich(self) -> "CollectionBO":
         """
@@ -280,7 +294,7 @@ class CollectionBO(object):
             COLLECTION_ROLE_ASSOCIATED_PERSON: associates_key,
         }
         if "user" in by_role:
-            _ = (
+            _usrs = (
                 session.query(CollectionUserRole)
                 .filter(CollectionUserRole.collection_id == coll_id)
                 .delete()
@@ -468,10 +482,6 @@ class CollectionBO(object):
         session.commit()
         return True
 
-    CODE_RE = re.compile(
-        "\\(([A-Z]+)\\)$"
-    )  # Quite strict, just uppercase letters at the end of the name
-
     @staticmethod
     def is_a_manager(session: Session, user: User) -> CollectionIDListT:
         """
@@ -536,16 +546,21 @@ class CollectionBO(object):
         can_manage = qry.scalar()
         return can_manage is not None
 
-    def get_institution_code(self) -> str:
+    @staticmethod
+    def get_institution_code(institution_name: str) -> str:
         """
         Conventionally, institution code is the first (sent via API) creator org short name.
-        e.g. Institut de la Mer de Villefranche (IMEV) -> IMEV
+        e.g. Institut de la Mer de Villefranche - (IMEV) -> IMEV  or Institut de la Mer de Villefranche - IMEV -> IMEV
         """
-        found = self.CODE_RE.findall(str(self.code_provider_org))
+        found = CODE_RE.findall(str(institution_name))
         if len(found) == 1:
             return found[0]
         else:
-            return "?"
+            found = str(institution_name).split("-")
+            if len(found) > 1:
+                return found[-1].strip()
+            else:
+                return "?"
 
     def homonym_samples(self, ro_session: Session) -> Set[SampleOrigIDT]:
         """

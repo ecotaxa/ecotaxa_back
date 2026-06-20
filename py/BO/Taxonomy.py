@@ -589,3 +589,42 @@ class TaxonBOSet(object):
 
     def get_by_id(self, taxon_id: ClassifIDT) -> TaxonBO:
         return self.bos_per_id[taxon_id]
+
+
+class WoRMSBO(TaxonBO):
+    __slots__ = ["kingdom"]
+
+    def __init__(
+        self,
+        cat_type: str,
+        cat_status: str,
+        display_name: str,
+        nb_objects: int,
+        nb_children_objects: int,
+        lineage: List[str],
+        id_lineage: List[ClassifIDT],
+        lineage_status: str,
+        aphia_id: Optional[int] = None,
+        rank: Optional[str] = None,
+        children: Optional[List[ClassifIDT]] = None,
+        rename_id: Optional[int] = None,
+        kingdom: Optional[str] = None,
+    ):
+        super().__init__(
+            cat_type,
+            cat_status,
+            display_name,
+            nb_objects,
+            nb_children_objects,
+            lineage,
+            id_lineage,
+            lineage_status,
+            aphia_id,
+            rank,
+            children,
+            rename_id,
+        )
+        self.kingdom = kingdom
+
+    def __repr__(self):
+        return f"WoRMSBO({self.id}: {self.display_name}, aphia={self.aphia_id}, rank={self.rank}, kingdom={self.kingdom})"

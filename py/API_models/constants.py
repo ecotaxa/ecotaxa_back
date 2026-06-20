@@ -127,6 +127,16 @@ class Constants(BaseModel):
         description="My Files number of days before deleting directories",
         default=None,
     )
+    accepted_mime_types: List[str] = Field(
+        title="Accepted mime types",
+        description="File import and My Files, list of accepted mime types",
+        default=[],
+    )
+    archive_extensions: List[str] = Field(
+        title="Accepted archive extensions",
+        description="File import and My Files, list of accepted archive extensions",
+        default=[],
+    )
     all_in_one: bool = Field(
         title="All in One",
         description="local install - run without network access",
@@ -137,9 +147,18 @@ class Constants(BaseModel):
         description="url of taxonomy server ecotaxoserver",
         default="https://ecotaxoserver.obs-vlfr.fr/",
     )
+    openid_configured: bool = Field(
+        title="OpenID configured",
+        description="Whether OpenID authentication is configured.",
+        default=False,
+    )
     recast_operation: Dict[str, str] = Field(
         title="Recast operation",
         description="Taxonomy recast operation name",
         default={st.name: st.value for st in RecastOperation},
-        example={"prediction_input": "pre_predict", "settings": "settings","dwca_export":"dwca_export"},
+        example={
+            "prediction_input": "pre_predict",
+            "dwca_export_occurrence": "dwca_export_occurrence",
+            "dwca_export_emof": "dwca_export_emof",
+        },
     )

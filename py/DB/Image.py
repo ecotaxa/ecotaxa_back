@@ -10,6 +10,7 @@ from DB.helpers.DDL import Index, Column, ForeignKey, Sequence
 from DB.helpers.Direct import text
 from DB.helpers.Postgres import CHAR, BIGINT, VARCHAR, BYTEA, SMALLINT
 from .helpers import Result
+from .helpers.Hints import RECURS_HINT
 from .helpers.ORM import Model
 from .helpers.VirtualColumn import VirtualColumnSet, VirtualColumn
 
@@ -20,7 +21,9 @@ class Image(Model):
     __tablename__ = "images"
     imgid = Column(BIGINT, Sequence("seq_images", start=MIN_IMGID), nullable=False)
     # The Object that this image belongs to, with its rank inside
-    objid = Column(BIGINT, ForeignKey("obj_head.objid"), primary_key=True)
+    objid = Column(
+        BIGINT, ForeignKey("obj_head.objid", onupdate="CASCADE"), primary_key=True
+    )
     imgrank = Column(SMALLINT, primary_key=True)
     width = Column(SMALLINT, nullable=False)
     height = Column(SMALLINT, nullable=False)
@@ -36,12 +39,13 @@ class Image(Model):
         Get all object/image pairs from the project
         """
         # Must be reloaded from DB, as phase 1 added all objects for duplicates checking
-        # TODO: Why using the view?
         sql = text(
-            "SELECT concat(o.orig_id,'*',i.orig_file_name) "
-            "  FROM images i "
-            "  JOIN objects o ON i.objid = o.objid "
-            " WHERE o.projid = :prj"
+            f"SELECT {RECURS_HINT} concat(obh.orig_id,'*',img.orig_file_name) "
+            "  FROM samples sam "
+            "  JOIN acquisitions acq ON acq.acq_sample_id = sam.sampleid AND acq.acquisid <@ acq_in_prj(:prj) "
+            "  JOIN obj_head obh ON obh.acquisid = acq.acquisid AND obh.objid <@ obj_in_prj(:prj) "
+            "  JOIN images img ON img.objid = obh.objid "
+            " WHERE sam.projid = :prj"
         )
         res: Result = session.execute(sql, {"prj": prj_id})
         ret = {img_id for img_id, in res}

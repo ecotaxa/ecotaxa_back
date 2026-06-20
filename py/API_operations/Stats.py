@@ -10,9 +10,9 @@ from decimal import Decimal
 from typing import List, Dict, Tuple, Union
 
 from API_operations.helpers.Service import Service
-from BO.Acquisition import AcquisitionIDT
 from BO.Project import ProjectBO
 from BO.Rights import Action, RightsBO
+from DB.Acquisition import AcquisitionIDT
 
 
 class AcquisitionStats(object):

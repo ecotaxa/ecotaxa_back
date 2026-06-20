@@ -15,6 +15,7 @@ DEFAULT_INSTRUMENTS = [
     ("ZooCam", None, "http://vocab.nerc.ac.uk/collection/L22/current/TOOL1587/"),
     ("Loki", None, "http://vocab.nerc.ac.uk/collection/L22/current/TOOL1586/"),
     ("FlowCam", None, "http://vocab.nerc.ac.uk/collection/L22/current/TOOL1583/"),
+    ("FlowCam macro", None, "http://vocab.nerc.ac.uk/collection/L22/current/TOOL1583/"),
     ("FastCam", None, "http://vocab.nerc.ac.uk/collection/L22/current/TOOL1580/"),
     ("Zooscan", None, "http://vocab.nerc.ac.uk/collection/L22/current/TOOL1581/"),
     ("PlanktoScope", None, "http://vocab.nerc.ac.uk/collection/L22/current/TOOL1579/"),

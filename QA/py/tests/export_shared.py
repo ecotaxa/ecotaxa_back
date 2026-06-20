@@ -4,7 +4,7 @@ from typing import List, Dict, Optional
 from zipfile import ZipFile
 
 from tests.credentials import ADMIN_AUTH
-from tests.test_import import SHARED_DIR
+from tests.consts import SHARED_DIR
 
 
 def download_and_unzip_and_check(
@@ -66,7 +66,7 @@ def one_tsv_check(content_bin, name, only_hdr, ref_dir_path):
         file_content = TextIOWrapper(BytesIO(content_bin), "utf-8-sig").readlines()
     except UnicodeDecodeError as e:
         raise e
-    print("".join(file_content))
+
     with open(ref_dir_path / name) as fd:
         ref_content = fd.readlines()
         assert len(file_content) == len(
@@ -102,12 +102,6 @@ def download_and_check(fastapi, job_id, ref_dir, only_hdr: bool = False):
     dl_url = JOB_DOWNLOAD_URL.format(job_id=job_id)
     rsp = fastapi.get(dl_url, headers=ADMIN_AUTH)
     tsv_check(rsp.content, ref_dir, only_hdr)
-
-
-def get_log_file(fastapi, job_id):
-    log_url = JOB_LOG_DOWNLOAD_URL.format(job_id=job_id)
-    rsp = fastapi.get(log_url, headers=ADMIN_AUTH)
-    return rsp.content
 
 
 def tsv_check(tsv_content, ref_dir: str, only_hdr: bool):

@@ -8,9 +8,9 @@
 from json import loads as json_loads, dumps as json_dumps, JSONDecodeError
 from typing import Dict, Optional, Any, List, Final
 
-from BO.User import UserIDT
 from DB import Session
 from DB.Job import Job, JobIDT, DBJobStateEnum
+from DB.User import UserIDT
 from helpers import DateTime
 from helpers.DynamicLogs import get_logger
 
@@ -89,6 +89,8 @@ class JobBO(object):
     def __getattr__(self, item):
         """Fallback for 'not found' field after the C getattr() call.
         If we did not enrich a Job field somehow then return it"""
+        if item in self.__slots__:
+            raise AttributeError(item)
         return getattr(self._job, item)
 
     def __setattr__(self, item, value):
@@ -111,7 +113,7 @@ class JobBO(object):
         Return a single JobBO. If used in a 'with' context, the session will commit on context exit.
         Note: it's not only the Job which will be committed, but the _whole_ session.
         """
-        job = session.query(Job).get(job_id)
+        job = session.query(Job).with_for_update().get(job_id)
         if job is None:
             raise ValueError(f"Missing job {job_id}")
         job.updated_on = DateTime.now_time()

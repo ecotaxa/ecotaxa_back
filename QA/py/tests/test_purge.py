@@ -15,14 +15,14 @@ from tests.test_import import ADMIN_USER_ID, do_test_import
 # Note: to go faster in a local dev environment, use "filled_database" instead of "database" below
 # BUT DON'T COMMIT THE CHANGE
 def test_purge_plain(fastapi):
-    prj_id = do_test_import(fastapi, "Test Purge")
+    projid = do_test_import(fastapi, "Test Purge")
     # Delete full
     with ProjectsService() as sce:
-        sce.delete(current_user_id=ADMIN_USER_ID, prj_id=prj_id, only_objects=False)
+        sce.delete(current_user_id=ADMIN_USER_ID, projid=projid, only_objects=False)
     # Check it's gone
     with pytest.raises(AssertionError, match="Not found"):
         with ProjectsService() as sce:
-            sce.delete(current_user_id=ADMIN_USER_ID, prj_id=prj_id, only_objects=False)
+            sce.delete(current_user_id=ADMIN_USER_ID, projid=projid, only_objects=False)
 
 
 def test_purge_partial(fastapi, tstlogs):

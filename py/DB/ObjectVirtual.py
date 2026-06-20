@@ -3,8 +3,12 @@
 # Copyright (C) 2015-2024  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 # The virtual columns for Object
-from . import ObjectHeader
-from .Object import PREDICTED_CLASSIF_QUAL, VALIDATED_CLASSIF_QUAL, DUBIOUS_CLASSIF_QUAL
+from .Object import (
+    ObjectHeader,
+    PREDICTED_CLASSIF_QUAL,
+    VALIDATED_CLASSIF_QUAL,
+    DUBIOUS_CLASSIF_QUAL,
+)
 from .helpers.VirtualColumn import VirtualColumnSet, VirtualColumn
 
 

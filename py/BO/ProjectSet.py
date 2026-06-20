@@ -18,13 +18,13 @@ from BO.Classification import ClassifIDT, ClassifIDListT
 from BO.Object import ObjectBO
 from BO.ObjectSet import DescribedObjectSet
 from BO.Rights import RightsBO, Action
-from BO.User import UserIDT
-from DB import ObjectHeader
 from DB.Object import ObjectIDListT
 from DB.Project import ProjectIDListT, Project
+from DB.User import UserIDT
 from DB.helpers import Session, Result
 from DB.helpers.Direct import text
 from DB.helpers.ORM import any_
+from DB.helpers.SQL import SelectClause
 from helpers.DynamicLogs import get_logger
 
 
@@ -70,9 +70,12 @@ class FeatureConsistentProjectSet(object):
             obj_set = DescribedObjectSet(
                 self.session, a_proj, None, ProjectFiltersDict()
             )
-            mapped = ObjectBO.resolve_fields(
-                self.column_names, obj_set.mapping.object_mappings
-            )
+            mapped = [
+                val
+                for ref, val in ObjectBO.resolve_fields(
+                    self.column_names, obj_set.mapping.object_mappings
+                )
+            ]
             assert len(mapped) == len(
                 self.column_names
             ), "Project %d does not contain all columns (%s)" % (
@@ -88,22 +91,23 @@ class FeatureConsistentProjectSet(object):
         Build a UNION with all common columns + object_id and classif_id
         """
         sels_for_prjs = []
-        # We have to alias the column in order to have a consistent naming of the CTE
+        # We have to alias the column, to have a consistent naming of the CTE
         col_aliases = ["c%d" % num for num in range(len(self.column_names))]
-        obj_cols = ",".join(["obh." + a_col for a_col in self.OBJ_COLS])
         # Compose a CTE for each project with its mapped columns
         for an_obj_set, mapped in self._projects_with_mappings():
-            mapped_with_aliases = [
-                "%s AS %s" % (col, als) for col, als in zip(mapped, col_aliases)
-            ]
-            selected_cols = obj_cols + "," + ",".join(mapped_with_aliases)
-            from_, where, params = an_obj_set.get_sql(None, selected_cols)
+            selected_cols = SelectClause()
+            for a_col in self.OBJ_COLS:
+                selected_cols.add_expr("obh." + a_col)
+            for a_col, alias in zip(mapped, col_aliases):
+                selected_cols.add_expr(a_col, alias)
+
+            from_, where, params = an_obj_set.get_sql(selected_cols)
             assert len(where.ands) == 0  # The condition is inside the JOIN
             assert len(params) == 1  # :projid
             prjid = str(params["projid"])
             prj_sql = (
-                "( SELECT "
-                + selected_cols
+                "("
+                + selected_cols.get_sql()
                 + " FROM "
                 + from_.get_sql().replace(":projid", prjid)
                 + f" /*PRJ{prjid}WHERE*/ )"
@@ -261,19 +265,21 @@ class LimitedInCategoriesProjectSet(FeatureConsistentProjectSet):
         self.categories = categories
 
     def _add_random_limit(self, sql: str) -> str:
-        prj_in_list = ",".join([str(prj_id) for prj_id in self.prj_ids])
+        prj_in_list = ",".join([f"({prj_id})" for prj_id in self.prj_ids])
         categ_in_list = ",".join([str(classif_id) for classif_id in self.categories])
         random_view = (
             " WITH rndm AS ( SELECT objid, projid FROM"
             " ( SELECT sam2.projid, obh2.objid, "
             "          ROW_NUMBER() OVER (PARTITION BY obh2.classif_id "
             "                             ORDER BY HASHTEXT(obh2.orig_id)) rrank "  # TODO predictable random?
-            "     FROM %s obh2"
-            "     JOIN acquisitions acq2 ON acq2.acquisid = obh2.acquisid"
-            "     JOIN samples sam2 ON sam2.sampleid = acq2.acq_sample_id "
-            "                      AND sam2.projid IN ({0})"
-            "    WHERE obh2.classif_qual = 'V' AND obh2.classif_id IN ({2})) q"
-            " WHERE rrank <= {1} )" % ObjectHeader.__tablename__
+            "     FROM (VALUES ({0})) AS prjs(projid) "
+            "     JOIN samples sam2 ON sam2.projid = prjs.projid "
+            "     JOIN acquisitions acq2 ON acq2.acq_sample_id = sam2.sampleid "
+            "     JOIN obj_head obh2 ON obh2.acquisid = acq2.acquisid "
+            "                       AND obh2.objid <@ obj_in_prj(prjs.projid) "
+            "                       AND obh2.classif_qual = 'V' AND obh2.classif_id IN ({2})"
+            " ) q"
+            " WHERE rrank <= {1} )"
         ).format(prj_in_list, self.random_limit, categ_in_list)
         sql = sql.replace("WITH flat", ", flat")
         for prjid in self.prj_ids:

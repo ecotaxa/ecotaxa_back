@@ -3021,6 +3021,167 @@ ALTER TABLE collection_user_role ADD COLUMN display_order INTEGER;
 UPDATE alembic_version SET version_num='287303b6d65c' WHERE alembic_version.version_num = '08807338f98d';
 
 COMMIT;
+
+
+BEGIN;
+
+-- Running upgrade 287303b6d65c -> ca50a945b178
+
+ALTER TABLE taxo_recast ALTER COLUMN operation TYPE VARCHAR(32);
+
+ALTER TABLE taxo_recast ADD FOREIGN KEY(project_id) REFERENCES projects (projid) ON DELETE CASCADE;
+
+ALTER TABLE taxo_recast ADD FOREIGN KEY(collection_id) REFERENCES collection (id) ON DELETE CASCADE;
+
+UPDATE alembic_version SET version_num='ca50a945b178' WHERE alembic_version.version_num = '287303b6d65c';
+
+COMMIT;
+
+-- Running upgrade ca50a945b178 -> 9bf6b31796a2
+
+CREATE INDEX is_acquis_sample ON acquisitions (acq_sample_id) INCLUDE (acquisid);
+
+CREATE INDEX is_samples_project ON samples (projid) INCLUDE (sampleid);
+
+UPDATE alembic_version SET version_num='9bf6b31796a2' WHERE alembic_version.version_num = 'ca50a945b178';
+
+COMMIT;
+
+-- Running upgrade 9bf6b31796a2 -> acf6f3fcb35c
+
+CREATE TABLE user_quality (
+    user_id INTEGER NOT NULL,
+    password_strong BOOLEAN NOT NULL,
+    check_date TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL,
+    PRIMARY KEY (user_id),
+    CONSTRAINT user_quality_user_id_fkey FOREIGN KEY(user_id) REFERENCES users (id) ON DELETE CASCADE
+);
+
+UPDATE alembic_version SET version_num='acf6f3fcb35c' WHERE alembic_version.version_num = '9bf6b31796a2';
+
+COMMIT;
+
+-- Running upgrade acf6f3fcb35c -> 5d49f4994e0c
+
+DROP VIEW IF EXISTS objects;
+
+DROP INDEX is_objectsacqclassifqual;
+
+CREATE UNIQUE INDEX is_objectsacqclassifqual ON obj_head (acquisid, objid) INCLUDE (classif_qual, classif_id);
+
+DROP INDEX is_obj_head_acquisid_objid;
+
+DROP INDEX obj_field_acquisid_objfid_idx;
+
+ALTER TABLE obj_field ALTER COLUMN acquis_id TYPE BIGINT;
+
+CREATE UNIQUE INDEX obj_field_acquisid_objfid_idx ON obj_field (acquis_id, objfid) INCLUDE (n01, n02, n03, n04);
+
+ALTER TABLE acquisitions DROP CONSTRAINT acquisitions_sampleid_fkey;
+
+ALTER TABLE samples ALTER COLUMN sampleid TYPE BIGINT;
+
+ALTER TABLE acquisitions ALTER COLUMN acq_sample_id TYPE BIGINT;
+
+ALTER TABLE acquisitions ADD FOREIGN KEY(acq_sample_id) REFERENCES samples (sampleid) ON UPDATE CASCADE;
+
+ALTER TABLE images DROP CONSTRAINT images_objid_fkey;
+
+ALTER TABLE images ADD FOREIGN KEY(objid) REFERENCES obj_head (objid) ON UPDATE CASCADE;
+
+ALTER TABLE obj_head DROP CONSTRAINT obj_head_acquisid_fkey;
+
+ALTER TABLE acquisitions ALTER COLUMN acquisid TYPE BIGINT;
+
+ALTER TABLE obj_head ALTER COLUMN acquisid TYPE BIGINT;
+
+ALTER TABLE obj_head ADD FOREIGN KEY(acquisid) REFERENCES acquisitions (acquisid) ON DELETE CASCADE ON UPDATE CASCADE;
+
+ALTER TABLE obj_cnn_features_vector DROP CONSTRAINT obj_cnn_features_vector_objcnnid_fkey;
+
+ALTER TABLE obj_cnn_features_vector ADD FOREIGN KEY(objcnnid) REFERENCES obj_head (objid) ON DELETE CASCADE ON UPDATE CASCADE;
+
+ALTER TABLE obj_field DROP CONSTRAINT obj_field_objfid_fkey;
+
+ALTER TABLE obj_field ADD FOREIGN KEY(objfid) REFERENCES obj_head (objid) ON DELETE CASCADE ON UPDATE CASCADE;
+
+ALTER TABLE objectsclassifhisto DROP CONSTRAINT objectsclassifhisto_objid_fkey;
+
+ALTER TABLE objectsclassifhisto ADD FOREIGN KEY(objid) REFERENCES obj_head (objid) ON DELETE CASCADE ON UPDATE CASCADE;
+
+ALTER TABLE prediction DROP CONSTRAINT prediction_object_id_fkey;
+
+ALTER TABLE prediction ADD FOREIGN KEY(object_id) REFERENCES obj_head (objid) ON DELETE CASCADE ON UPDATE CASCADE;
+
+ALTER TABLE prediction_histo DROP CONSTRAINT prediction_histo_object_id_fkey;
+
+ALTER TABLE prediction_histo ADD FOREIGN KEY(object_id) REFERENCES obj_head (objid) ON DELETE CASCADE ON UPDATE CASCADE;
+
+ALTER TABLE process DROP CONSTRAINT process_processid_fkey;
+
+ALTER TABLE process ALTER COLUMN processid TYPE BIGINT;
+
+ALTER TABLE process ADD FOREIGN KEY(processid) REFERENCES acquisitions (acquisid) ON DELETE CASCADE ON UPDATE CASCADE;
+
+CREATE OR REPLACE FUNCTION obj_in_prj(prj_id int)
+RETURNS int8range AS $$
+  SELECT int8range(
+    prj_id * 100000000::bigint,
+    (prj_id + 1) * 100000000::bigint,
+    '[)'
+  );
+$$ LANGUAGE sql IMMUTABLE;
+
+GRANT EXECUTE ON FUNCTION obj_in_prj(int) TO PUBLIC;;
+
+CREATE OR REPLACE FUNCTION acq_in_prj(prj_id int)
+RETURNS int8range AS $$
+  SELECT int8range(
+    prj_id * 10000000::bigint,
+    (prj_id + 1) * 10000000::bigint,
+    '[)'
+  );
+$$ LANGUAGE sql IMMUTABLE;
+
+GRANT EXECUTE ON FUNCTION acq_in_prj(int) TO PUBLIC;;
+
+CREATE OR REPLACE VIEW objects AS
+SELECT prj.projid,
+       sam.sampleid,
+       obh.objid,
+       obh.latitude,
+       obh.longitude,
+       obh.objdate,
+       obh.objtime,
+       obh.depth_min,
+       obh.depth_max,
+       obh.classif_id,
+       obh.classif_qual,
+       obh.classif_who,
+       CASE WHEN obh.classif_qual IN ('V', 'D') THEN obh.classif_date END AS classif_when,
+       obh.classif_score                                                  AS classif_auto_score,
+       CASE WHEN obh.classif_qual = 'P' THEN obh.classif_date END         AS classif_auto_when,
+       CASE WHEN obh.classif_qual = 'P' THEN obh.classif_id END           AS classif_auto_id,
+       NULL::integer                                                      AS classif_crossvalidation_id,
+       obh.complement_info,
+       NULL::double precision                                             AS similarity,
+       obh.sunpos,
+       HASHTEXT(obh.orig_id)                                              AS random_value,
+       obh.acquisid,
+       obh.object_link,
+       obh.orig_id,
+       obh.acquisid                                                       AS processid,
+       ofi.*
+    FROM projects prj
+    JOIN samples sam ON sam.projid = prj.projid
+    JOIN acquisitions acq ON acq.acq_sample_id = sam.sampleid
+    JOIN obj_head obh ON obh.acquisid = acq.acquisid AND obh.objid <@ obj_in_prj(prj.projid)
+    LEFT JOIN obj_field ofi ON obh.objid = ofi.objfid;
+
+UPDATE alembic_version SET version_num='5d49f4994e0c' WHERE alembic_version.version_num = 'acf6f3fcb35c';
+
+COMMIT;
+
 ------- Leave on tail
 
 ALTER TABLE alembic_version REPLICA IDENTITY FULL;

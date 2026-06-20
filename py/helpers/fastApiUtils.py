@@ -327,9 +327,12 @@ def _get_range_header(range_header: str, file_size: int) -> Tuple[int, int]:
     return start, end - 1 if end == file_size else end
 
 
+CHUNK_SIZE = 64 * 1024
+
+
 class AutoCloseBinaryIO(object):
     """
-    An IO object which closes underlying file pointer when going out of scope.
+    An IO object which closes its underlying file pointer when going out of scope.
     """
 
     def __init__(self, path: str):
@@ -341,16 +344,22 @@ class AutoCloseBinaryIO(object):
     def seek(self, offset: int):
         return self.fd.seek(offset)
 
-    def __iter__(self):
+    def read(self, size: int = -1) -> bytes:
+        if self.fd is None:
+            return b""
+        return self.fd.read(size)
+
+    def __iter__(self):  # Comply with StreamingResponse interface
         return self
 
-    def __next__(self):
-        try:
-            return self.fd.__next__()
-        except StopIteration:
-            self.fd.close()
-            self.fd = None
+    def __next__(self):  # Comply with StreamingResponse interface
+        chunk = self.read(CHUNK_SIZE)
+        if not chunk:
+            if self.fd is not None:
+                self.fd.close()
+                self.fd = None
             raise StopIteration()
+        return chunk
 
     def __del__(self):
         if hasattr(self, "fd") and self.fd is not None:

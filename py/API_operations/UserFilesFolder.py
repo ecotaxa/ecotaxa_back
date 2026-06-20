@@ -14,14 +14,13 @@ from fastapi import UploadFile
 
 from API_models.filesystem import DirectoryEntryModel, DirectoryModel
 from BO.Rights import RightsBO, NOT_AUTHORIZED
-from BO.User import UserIDT
-from DB.User import User
+from DB.User import User, UserIDT
 from FS.CommonDir import CommonFolder
 from FS.UserFilesDir import UserFilesDirectory
+from helpers.CustomException import BaseAppException, UnprocessableEntityException
 from helpers.DynamicLogs import get_logger
 from helpers.httpexception import DETAIL_NOTHING_DONE, DETAIL_UNKNOWN_ERROR
 from .helpers.Service import Service
-from helpers.CustomException import BaseAppException, UnprocessableEntityException
 
 logger = get_logger(__name__)
 

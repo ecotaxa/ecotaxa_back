@@ -8,7 +8,7 @@ import smtplib
 from datetime import timedelta
 from email.message import EmailMessage
 from enum import Enum
-from typing import Optional, Final, Tuple, Dict, Any
+from typing import Optional, Tuple, Dict, Any
 
 from fastapi import HTTPException
 
@@ -32,11 +32,11 @@ logger = get_logger(__name__)
 
 
 class AccountMailType(str, Enum):
-    activate: Final = "activate"
-    verify: Final = "verify"
-    status: Final = "status"
-    modify: Final = "modify"
-    password_reset: Final = "password_reset"
+    activate = "activate"
+    verify = "verify"
+    status = "status"
+    modify = "modify"
+    password_reset = "password_reset"
 
 
 class ReplaceInMail:
@@ -120,9 +120,11 @@ class MailProvider(object):
             return
         for recipient in recipients:
             if not self.is_email(recipient):
+                detail = DETAIL_INVALID_EMAIL + " " + recipient
+                logger.error("422:" + detail)
                 raise HTTPException(
                     status_code=422,
-                    detail=[DETAIL_INVALID_EMAIL],
+                    detail=[detail],
                 )
         import email.utils as utils
 
@@ -145,7 +147,7 @@ class MailProvider(object):
         domain = sender_email.split("@")
         msg["message-id"] = utils.make_msgid(domain=domain[1])
         msg["Date"] = utils.formatdate()
-        if reply_to == None:
+        if reply_to is None:
             msg["Reply-To"] = "No-Reply"
         else:
             msg["Reply-To"] = str(reply_to)
@@ -346,7 +348,7 @@ class MailProvider(object):
             model = dict(model[language])
         else:
             model = dict(model[DEFAULT_LANGUAGE])
-        if action != None and action in model.keys():
+        if action is not None and action in model.keys():
             model = model[action]
         if model is None:
             raise HTTPException(
@@ -480,7 +482,7 @@ class MailProvider(object):
                 return s
 
             (_, data) = mail.uid("search", search_string(criteria))
-            if data != None and isinstance(data, list):
+            if data is not None and isinstance(data, list):
                 inbox_item_list = data[0].split()
                 if len(inbox_item_list) > 0:
                     most_recent = inbox_item_list[-1]

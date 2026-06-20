@@ -4,20 +4,29 @@
 #
 from typing import List, Dict
 
+from sqlalchemy import func
+
 from .Project import Project, ProjectIDT
 from .helpers import Result
-from .helpers.DDL import Index, Sequence, Column, ForeignKey
+from .helpers.DDL import Index, Column, ForeignKey
 from .helpers.Direct import text
+from .helpers.Hints import RECURS_HINT
 from .helpers.ORM import Model, relationship, Session
-from .helpers.Postgres import VARCHAR, DOUBLE_PRECISION, INTEGER
+from .helpers.Postgres import VARCHAR, DOUBLE_PRECISION, INTEGER, BIGINT
 
 SAMPLE_FREE_COLUMNS = 61
+
+SAM_PRJ_OFFSET = 1_000_000  # AKA 1e6
+
+SampleIDT = int
+SampleIDListT = List[int]  # Typings, to be clear that these are not e.g. project IDs
+SampleOrigIDT = str
 
 
 class Sample(Model):
     # Historical (plural) name of the table
     __tablename__ = "samples"
-    sampleid: int = Column(INTEGER, Sequence("seq_samples"), primary_key=True)
+    sampleid: int = Column(BIGINT, primary_key=True, autoincrement=False)
     projid: int = Column(INTEGER, ForeignKey("projects.projid"), nullable=False)
     # i.e. sample_id from TSV
     orig_id: str = Column(VARCHAR(255), nullable=False)
@@ -31,6 +40,26 @@ class Sample(Model):
 
     def pk(self) -> int:
         return self.sampleid
+
+    @classmethod
+    def get_next_pk(cls, session: Session, prj_id: ProjectIDT) -> int:
+        """
+        Return the next available primary key for a new Sample in the given project.
+        """
+        session.execute(text("SELECT pg_advisory_xact_lock(1001, :id)"), {"id": prj_id})
+        res = (
+            session.query(func.max(cls.sampleid))
+            .filter(cls.sampleid >= prj_id * SAM_PRJ_OFFSET)
+            .filter(cls.sampleid < (prj_id + 1) * SAM_PRJ_OFFSET)
+            .scalar()
+        )
+        return res + 1 if res else prj_id * SAM_PRJ_OFFSET + 1
+
+    def set_next_pk(self, session: Session, prj_id: ProjectIDT) -> None:
+        """
+        Set the next available primary key for this Sample instance.
+        """
+        self.sampleid = self.get_next_pk(session, prj_id)
 
     @classmethod
     def get_orig_id_and_model(
@@ -53,34 +82,32 @@ class Sample(Model):
             Create sample geo from objects one.
         TODO: Should be in a BO
         """
-        sql = text(
-            """
+        sql = text(f"""
         UPDATE samples usam
            SET latitude = sll.latitude, longitude = sll.longitude
-          FROM (SELECT sam.sampleid, MIN(obh.latitude) latitude, MIN(obh.longitude) longitude
+          FROM (SELECT {RECURS_HINT} sam.sampleid, MIN(obh.latitude) latitude, MIN(obh.longitude) longitude
                   FROM obj_head obh
                   JOIN acquisitions acq on acq.acquisid = obh.acquisid
                   JOIN samples sam on sam.sampleid = acq.acq_sample_id
                  WHERE sam.projid = :projid
                    AND obh.latitude IS NOT NULL
                    AND obh.longitude IS NOT NULL
+                   AND obh.objid <@ obj_in_prj(:projid)
               GROUP BY sam.sampleid) sll
          WHERE usam.sampleid = sll.sampleid
-           AND projid = :projid """
-        )
+           AND projid = :projid """)
         session.execute(sql, {"projid": prj_id})
         session.commit()
 
     @classmethod
     def get_sample_summary(cls, session: Session, sample_id: int) -> List:
-        sql = text(
-            """
-            SELECT MIN(obh.objdate+obh.objtime), MAX(obh.objdate+obh.objtime), MIN(obh.depth_min), MAX(obh.depth_max)
+        sql = text(f"""
+            SELECT {RECURS_HINT} MIN(obh.objdate+obh.objtime), MAX(obh.objdate+obh.objtime), MIN(obh.depth_min), MAX(obh.depth_max)
               FROM obj_head obh
               JOIN acquisitions acq on acq.acquisid = obh.acquisid
               JOIN samples sam on sam.sampleid = acq.acq_sample_id
-             WHERE sam.sampleid = :smp """
-        )
+             WHERE sam.sampleid = :smp
+               AND obh.objid <@ obj_in_prj(sam.projid) """)
         res: Result = session.execute(sql, {"smp": sample_id})
         return [a_val for a_val in res.one()]
 
@@ -102,4 +129,13 @@ Index(
         Sample.__table__.c.sampleid
     ],  # For Index Only scans during recursive descent
     unique=True,
+)
+
+Index(
+    "is_samples_project",
+    Sample.__table__.c.projid,
+    postgresql_include=[
+        Sample.__table__.c.sampleid
+    ],  # For Index Only scans during recursive descent
+    unique=False,
 )

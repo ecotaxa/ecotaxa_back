@@ -4,24 +4,26 @@
 #
 from typing import List, Dict, Union, Any
 
+from sqlalchemy.orm import Session
+
 from API_models.merge import MergeRsp
-from BO.Acquisition import AcquisitionIDT
 from BO.Bundle import InBundle
 from BO.Mappings import ProjectMapping, RemapOp, MAPPED_TABLES, MappedTableTypeT
 from BO.Project import ProjectBO
 from BO.ProjectPrivilege import ProjectPrivilegeBO
 from BO.Rights import RightsBO, Action
-from BO.Sample import SampleIDT
-from DB.Acquisition import Acquisition
-from DB.Object import ObjectHeader, ObjectFields
+from DB.Acquisition import Acquisition, AcquisitionIDT, ACQ_PRJ_OFFSET
+from DB.Object import ObjectHeader, ObjectFields, OBJ_PRJ_OFFSET
 from DB.Project import Project
-from DB.Sample import Sample
+from DB.Sample import Sample, SampleIDT, SAM_PRJ_OFFSET
 from DB.helpers.ORM import orm_equals, any_, all_, func
-from DB.helpers.Postgres import values_cte
+from DB.helpers.Postgres import values_cte, text
 from helpers.DynamicLogs import get_logger
 from .helpers.Service import Service
 
 logger = get_logger(__name__)
+
+FIX_FOREIGN_CHUNK_SIZE = 8000
 
 
 class MergeService(Service):
@@ -136,6 +138,96 @@ class MergeService(Service):
         verif(Sample.__tablename__, src_samples, dest_samples)
         verif(Acquisition.__tablename__, src_acquisitions, dest_acquisitions)
         return ret
+
+    @staticmethod
+    def fix_foreign_ids(session: Session, prj_id: int) -> None:
+        """
+        Fix in-place the given project foreign ID after a merge.
+        Samples which don't match the project ID in their IDs should receive new ones.
+        In OK Samples, Acquisitions which don't match the project ID in their IDs should receive new ones.
+        In OK Acquisitions, Objects which don't match the project ID in their IDs should receive new ones.
+        """
+        # 1. Fix Samples
+        samples = (
+            session.query(Sample)
+            .filter(Sample.projid == prj_id)
+            .filter(func.floor(Sample.sampleid / SAM_PRJ_OFFSET) != prj_id)
+            .all()
+        )
+        new_sam_id = Sample.get_next_pk(session, prj_id)
+        sam_updates = []
+        for sam in samples:
+            old_sam_id = sam.sampleid
+            sam_updates.append({"new": new_sam_id, "old": old_sam_id})
+            new_sam_id += 1
+
+        if sam_updates:
+            # Update Sample itself and Acquisitions pointing to it
+            sql = "UPDATE samples SET sampleid = :new WHERE sampleid = :old"
+            for i in range(0, len(sam_updates), FIX_FOREIGN_CHUNK_SIZE):
+                chunk = sam_updates[i : i + FIX_FOREIGN_CHUNK_SIZE]
+                logger.info(
+                    f"Renaming chunk of {len(chunk)} Samples: %s", str(chunk)[:100]
+                )
+                session.execute(text(sql), chunk)
+
+        # 2. Fix Acquisitions
+        acqs = (
+            session.query(Acquisition)
+            .join(Sample)
+            .filter(Sample.projid == prj_id)
+            .filter(func.floor(Acquisition.acquisid / ACQ_PRJ_OFFSET) != prj_id)
+            .all()
+        )
+        new_acq_id = Acquisition.get_next_pk(session, prj_id)
+        acq_updates = []
+        for acq in acqs:
+            old_acq_id = acq.acquisid
+            acq_updates.append({"new": new_acq_id, "old": old_acq_id})
+            new_acq_id += 1
+
+        if acq_updates:
+            # Update Acquisition itself, Process, Objects (via cascade) and ObjectFields (not a declared FK)
+            for sql in [
+                "UPDATE acquisitions SET acquisid = :new WHERE acquisid = :old",
+                "UPDATE obj_field SET acquis_id = :new WHERE acquis_id = :old",
+            ]:
+                for i in range(0, len(acq_updates), FIX_FOREIGN_CHUNK_SIZE):
+                    chunk = acq_updates[i : i + FIX_FOREIGN_CHUNK_SIZE]
+                    logger.info(
+                        f"Renaming chunk of {len(chunk)} Acquisitions: %s",
+                        str(chunk)[:300],
+                    )
+                    session.execute(text(sql), chunk)
+
+        # 3. Fix Objects
+        objs = (
+            session.query(ObjectHeader)
+            .join(Acquisition)
+            .join(Sample)
+            .filter(Sample.projid == prj_id)
+            .filter(func.floor(ObjectHeader.objid / OBJ_PRJ_OFFSET) != prj_id)
+            .all()
+        )
+        new_obj_id = ObjectHeader.get_next_pk(session, prj_id)
+        obj_updates = []
+        for obj in objs:
+            old_obj_id = obj.objid
+            obj_updates.append({"new": new_obj_id, "old": old_obj_id})
+            new_obj_id += 1
+
+        if obj_updates:
+            # Update ObjectHeader, ObjectFields, ObjectsClassifHisto, Prediction, PredictionHisto and Image (via cascade)
+            sql = "UPDATE obj_head SET objid = :new WHERE objid = :old"
+            for i in range(0, len(obj_updates), FIX_FOREIGN_CHUNK_SIZE):
+                chunk = obj_updates[i : i + FIX_FOREIGN_CHUNK_SIZE]
+                logger.info(
+                    f"Renaming chunk of {len(chunk)} Objects: %s...", str(chunk)[:300]
+                )
+                session.execute(text(sql), chunk)
+
+        session.expire_all()
+        session.commit()
 
     def _do_merge(self, dest_prj: Project) -> None:
         """
@@ -264,7 +356,8 @@ class MergeService(Service):
 
         # Acquisition & twin Process have followed their enclosing Sample
 
-        # Remove the parents which are duplicate from orig_id point of view
+        # Remove the parents which are duplicate from orig_id point of view.
+        # They should be empty due to transfers above.
         for a_fk_to_proj_tbl in [Acquisition, Sample]:
             to_del = self.session.query(a_fk_to_proj_tbl)
             if a_fk_to_proj_tbl == Acquisition:
@@ -286,6 +379,8 @@ class MergeService(Service):
         ProjectPrivilegeBO.generous_merge_into(
             self.session, self.prj_id, self.src_prj_id
         )
+
+        self.fix_foreign_ids(self.session, self.prj_id)
 
         # Completely erase the source project
         ProjectBO.delete(self.session, self.src_prj_id)

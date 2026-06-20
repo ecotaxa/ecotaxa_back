@@ -4,17 +4,14 @@
 #
 # Extract deep DeepFeatures on a project.
 #
-from typing import Dict, List, Tuple
-
-import numpy as np
 
 from BO.Rights import RightsBO, Action
-from BO.User import UserIDT
-from DB.Project import ProjectIDT, Project
+from DB.Project import ProjectIDT
+from DB.User import UserIDT
 from FS.MachineLearningModels import SavedModels
 from FS.Vault import Vault
 from helpers.DynamicLogs import get_logger, LogsSwitcher
-from .helpers.JobService import JobServiceOnProjectBase, ArgsDict
+from .helpers.JobService import JobServiceOnProjectBase
 
 logger = get_logger(__name__)
 
@@ -28,7 +25,7 @@ class FeatureExtractionForProject(JobServiceOnProjectBase):
         super().__init__(prj_id)
         self.vault = Vault(self.config.vault_dir())
         self.models_dir = SavedModels(self.config)
-    
+
     def run(self, current_user_id: UserIDT) -> None:
         """
         Initial creation, do security and consistency checks, then create the job.
@@ -46,7 +43,5 @@ class FeatureExtractionForProject(JobServiceOnProjectBase):
         """
         with LogsSwitcher(self):
             self.ensure_deep_features_job()
-    
-    def ensure_deep_features_job(self) -> None:
-        ...
-    
+
+    def ensure_deep_features_job(self) -> None: ...

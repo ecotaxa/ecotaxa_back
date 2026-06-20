@@ -1,3 +1,4 @@
+import re
 from logging.config import fileConfig
 
 from alembic import context
@@ -20,6 +21,12 @@ fileConfig(config.config_file_name)
 # target_metadata = mymodel.Base.metadata
 from DB.Project import Project
 
+# noinspection PyUnresolvedReferences
+from DB.Relations import relationship
+
+# noinspection PyUnresolvedReferences
+from DB.MigratedIDs import ObjidOld2New, SampleIdOld2New, AcquisIdOld2New
+
 target_metadata = Project.metadata
 
 # other values from the config, defined by the needs of env.py,
@@ -28,9 +35,38 @@ target_metadata = Project.metadata
 # ... etc.
 
 
-from cmds.db_upg.db_conn import conn  # type:ignore
+from cmds.db_upg.db_conn import conn  # type: ignore
 
 config.set_main_option("sqlalchemy.url", str(conn.url))
+
+
+def include_object(obj, name, type_, reflected, compare_to):
+    is_partition_suffix = re.compile(r"_(default|\d+(_\d+)*)$")
+    partitioned_bases = ("obj_head", "obj_field")
+
+    def is_partition(table_name):
+        return table_name.startswith(partitioned_bases) and is_partition_suffix.search(
+            table_name
+        )
+
+    if type_ == "table":
+        return not is_partition(name)
+
+    if type_ == "foreign_key_constraint":
+        if is_partition(obj.table.name):
+            return False
+        try:
+            referred_table = obj.referred_table.name
+            if is_partition(referred_table):
+                return False
+        except AttributeError:
+            pass
+
+    if type_ in ("index", "unique_constraint"):
+        if is_partition(obj.table.name):
+            return False
+
+    return True
 
 
 def run_migrations_offline():
@@ -52,6 +88,7 @@ def run_migrations_offline():
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         transaction_per_migration=True,
+        include_object=include_object,
     )
 
     with context.begin_transaction():
@@ -76,6 +113,7 @@ def run_migrations_online():
             connection=connection,
             target_metadata=target_metadata,
             transaction_per_migration=True,
+            include_object=include_object,
         )
 
         with context.begin_transaction():

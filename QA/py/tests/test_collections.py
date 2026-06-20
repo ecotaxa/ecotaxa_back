@@ -51,6 +51,7 @@ def test_collection_lifecycle(fastapi, who):
         "CytoSense",
         "FastCam",
         "FlowCam",
+        "FlowCam macro",
         "IFCB",
         "ISIIS",
         "LISST-Holo",
@@ -114,6 +115,7 @@ def test_collection_lifecycle(fastapi, who):
         "title": "Test collection",
         "short_title": None,
         "display_order": {"associates": [], "creators": []},
+        "is_private": False,
     }
 
     # Update the abstract
@@ -187,6 +189,7 @@ def test_collection_lifecycle(fastapi, who):
             "title": "Test collection",
             "short_title": short_title,
             "display_order": {"creators": ["7_o"], "associates": ["8_o"]},
+            "is_private": False,
         }
     ]
 

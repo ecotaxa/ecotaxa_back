@@ -30,7 +30,13 @@ from BO.ObjectSet import DescribedObjectSet, DescribedObjectBOSet
 from BO.Vocabulary import Term
 from DB.helpers.Direct import text
 from DB.helpers.ORM import Session, Row
-from DB.helpers.SQL import OrderClause, SQLParamDict, SelectClause
+from DB.helpers.SQL import (
+    OrderClause,
+    SQLParamDict,
+    SelectClause,
+    AliasedSelectClause,
+    FromClause,
+)
 from helpers.DynamicLogs import get_logger
 
 logger = get_logger(__name__)
@@ -258,50 +264,52 @@ class ObjectSetQueryPlus(object):
             aggreg_in_exp = self.COUNT_STAR in self.sum_exp.references.values()
             for a_py_ref, a_sql_ref in self.sum_exp.references.items():
                 if aggreg_in_exp and a_sql_ref != self.COUNT_STAR:
-                    select.add("MAX(" + a_sql_ref + ")", a_py_ref)
+                    select.add_expr("MAX(" + a_sql_ref + ")", a_py_ref)
                 else:
-                    select.add(a_sql_ref, a_py_ref)
+                    select.add_expr(a_sql_ref, a_py_ref)
             for key_num, a_col in enumerate(self._group_by_columns()):
-                select.add(a_col, "key%d" % key_num)
+                select.add_expr(a_col, "key%d" % key_num)
 
     def get_sql(self) -> Tuple[str, SQLParamDict]:
         """
         Compose the query and return it.
         """
         # Build SL, aliased parts if relevant
-        select = self._selects_4_output()
+        select_clause = self._selects_4_output()
         # Add implied selects
-        self._add_tech_selects(select)
-        select_clause = select.get_sql()
+        self._add_tech_selects(select_clause)
+        select_sql = select_clause.get_sql()
         # Group by
         group_clause = self._compute_group_by()
         #
         order_clause = OrderClause()
         if not self.sum_exp:
             # Order by all selected columns, in their given order
-            for alias in select.aliases:
-                order_clause.add_expression(alias=None, expr=alias)
+            for alias in select_clause.aliases:
+                if alias is not None:
+                    order_clause.add_expression(table_alias=None, expr=alias)
         else:
             # Order by the grouping keys, in their order.
             # It's important as we detect the breaks in composite key to emit rows with aggregates.
             for key_col in self._group_by_columns():
-                order_clause.add_expression(alias=None, expr=key_col)
+                order_clause.add_expression(table_alias=None, expr=key_col)
 
         # Base SQL comes from filters
-        from_, where, params = self.obj_set.get_sql(order_clause, select_clause)
+        from_, where, params = self.obj_set.get_sql(select_clause, order_clause)
         if len(self.taxo_mapping) > 0:
-            select_clause = self._amend_query_for_mapping(from_, select_clause)
+            select_sql = self._amend_query_for_mapping(from_, select_sql)
         sql = (
-            select_clause
+            select_sql
             + " FROM "
             + from_.get_sql().replace(":projid", str(params["projid"]))
             + where.get_sql()
             + group_clause
+            + "\n"
             + order_clause.get_sql()
         )
         return sql, params
 
-    def _amend_query_for_mapping(self, from_, select_clause: str) -> str:
+    def _amend_query_for_mapping(self, from_: FromClause, select_clause: str) -> str:
         """
         From parts of the ObjectSet SQL, inject the needed mapping, with a CTE.
         """
@@ -315,11 +323,12 @@ class ObjectSetQueryPlus(object):
         if all_null:
             pairs[-1] = pairs[-1][:-1] + "::int)"
         cte_txt = "WITH mpg (src_id, dst_id)" + " AS (VALUES " + ",".join(pairs) + ") "
-        txo_join, idx = from_.find_join("taxonomy txo")
+        txo_join, txo_join_idx = from_.find_join("taxonomy txo")
+        from_.clear_outer(txo_join_idx)
         # Read: when there was no mapping then lookup using classif_id else pick lookup even if null
         exp = "CASE WHEN mpg.src_id IS NULL THEN obh.classif_id ELSE mpg.dst_id END "
-        from_.replace_in_join(idx, "obh.classif_id", exp)
-        from_.insert("mpg ON mpg.src_id = obh.classif_id", idx)
+        from_.replace_in_join(txo_join_idx, "obh.classif_id", exp)
+        from_.insert("mpg ON mpg.src_id = obh.classif_id", txo_join_idx)
         from_.set_outer("mpg ")
         select_clause = cte_txt + select_clause
         return select_clause
@@ -414,18 +423,18 @@ class ObjectSetQueryPlus(object):
         )
         return nb_lines
 
-    def _selects_4_output(self) -> SelectClause:
+    def _selects_4_output(self) -> AliasedSelectClause:
         """
         Compute the selected expressions which will become TSV columns.
         """
-        ret = SelectClause()
+        ret = AliasedSelectClause()
         sels = self.sql_select_list[:]
         for a_sel in sels:
             alias = self.defs_to_alias[a_sel]
-            ret.add(a_sel, alias)
+            ret.add_expr(a_sel, alias)
         # Add a placeholder for sum_expression
         if self.sum_exp is not None:
-            ret.add("0", self.defs_to_alias[self.sum_exp.formula])
+            ret.add_expr("0", self.defs_to_alias[self.sum_exp.formula])
         return ret
 
     def _get_header(self) -> List[str]:

@@ -7,7 +7,6 @@
 import base64
 import hashlib
 import hmac
-
 # TODO: if it exists, find the stubs somewhere
 from typing import Union
 
@@ -15,7 +14,8 @@ from passlib.context import CryptContext  # type: ignore
 
 from API_operations.helpers.Service import Service
 from BO.Rights import NOT_AUTHORIZED
-from DB.User import User, UserStatus, UserType
+from BO.User import UserBO
+from DB.User import User, UserStatus, UserQuality
 from helpers.fastApiUtils import build_serializer
 
 NOT_AUTHORIZED_MAIL = "__id____" + NOT_AUTHORIZED
@@ -64,6 +64,19 @@ class LoginService(Service):
         # verif even user is not active , in order to let modify email only if mail_status is False
         verif_ok = self.verify_and_update_password(password, the_user)
         assert verif_ok == True, NOT_AUTHORIZED
+        is_strong = UserBO.is_strong_password(password)
+        # Check if record already exists
+        quality = (
+            self.session.query(UserQuality)
+            .filter(UserQuality.user_id == the_user.id)
+            .first()
+        )
+        if quality:
+            quality.password_strong = is_strong
+        else:
+            quality = UserQuality(user_id=the_user.id, password_strong=is_strong)
+            self.session.add(quality)
+        self.session.commit()
         # throw exception if the user is not active
         self.verify_status_throw(the_user, account_validation)
         # Sign with the verifying serializer, the salt is Flask's one
@@ -185,7 +198,6 @@ class LoginService(Service):
                     "status": the_user.status,
                     "mail_status": the_user.mail_status,
                 }
-            import json
 
             detail = userdata
             raise HTTPException(

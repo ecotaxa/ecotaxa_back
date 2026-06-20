@@ -31,9 +31,9 @@ def check_sqlalchemy_version() -> None:
 
 
 class TimeEvictedQueue(Queue):
-    DB_SESSION_MAX_AGE: ClassVar[
-        int
-    ] = 300  # No inactive session should be older than 5m
+    DB_SESSION_MAX_AGE: ClassVar[int] = (
+        300  # No inactive session should be older than 5m
+    )
     CLEAN_INTERVAL: ClassVar[int] = 5  # Find sessions to expire after every n sec
 
     def __init__(self, maxsize=0, use_lifo=False):
@@ -50,7 +50,7 @@ class TimeEvictedQueue(Queue):
             return
         self.last_cleanup = now
         with self.mutex:
-            for a_conn in self.queue:  # type:sqlalchemy.pool.base._ConnectionRecord
+            for a_conn in self.queue:  # type: sqlalchemy.pool.base._ConnectionRecord
                 if (
                     a_conn.dbapi_connection
                     and now - a_conn.starttime > self.DB_SESSION_MAX_AGE
@@ -97,7 +97,10 @@ class Connection(object):
         Open a SQLAlchemy connection, i.e. an engine.
         """
         if read_only:
-            exec_options = {"postgresql_readonly": True}
+            exec_options = {
+                "postgresql_readonly": True,
+                # "isolation_level": "AUTOCOMMIT",
+            }
         else:
             exec_options = {}
         # We connect with the help of the PostgreSQL URL
@@ -113,8 +116,8 @@ class Connection(object):
             poolclass=TimeEvictedQueuePool,
             pool_use_lifo=True,
             # We have our own age-based eviction strategy, the pool below will contain invalidated connections
-            pool_size=16,
-            max_overflow=8,
+            pool_size=8,
+            max_overflow=4,
             # In case something goes unexpected, user will wait for this time for a free connection (or failure)
             pool_timeout=60,
             # This way we can restart the DB and sessions will re-establish themselves
@@ -122,7 +125,11 @@ class Connection(object):
             # Important: The invalidation mechanism now depends on it.
             pool_pre_ping=True,
             execution_options=exec_options,
-            connect_args={"application_name": self.APP_NAME},
+            connect_args={
+                "application_name": self.APP_NAME,
+                # Big data options
+                "options": "-c enable_partitionwise_join=on -c enable_partitionwise_aggregate=on",
+            },
             future=True,
             query_cache_size=64,
             # Default cache_size is up to 500*1.5, but we have big text in queries, e.g. all obj_field columns

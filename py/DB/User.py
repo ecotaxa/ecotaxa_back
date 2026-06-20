@@ -25,6 +25,12 @@ from .helpers.Postgres import TIMESTAMP, INTEGER
 if TYPE_CHECKING:
     from .ProjectPrivilege import ProjectPrivilege
 
+# Typings, to be clear that these are not e.g. object IDs
+UserIDT = int
+UserIDListT = List[int]
+GuestIDT = int
+GuestIDListT = List[int]
+
 
 class UserStatus(int, Enum):
     blocked = -1
@@ -212,3 +218,20 @@ class TempPasswordReset(Model):
     )
     temp_password = Column(String(255), nullable=False)
     creation_date = Column(TIMESTAMP, default=func.now(), nullable=False)
+
+
+class UserQuality(Model):
+    """
+    Store user password quality.
+    """
+
+    __tablename__ = "user_quality"
+    user_id = Column(
+        Integer(),
+        ForeignKey("users.id", name="user_quality_user_id_fkey", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    password_strong = Column(Boolean(), nullable=False)
+    check_date = Column(
+        TIMESTAMP, default=func.now(), onupdate=func.now(), nullable=False
+    )

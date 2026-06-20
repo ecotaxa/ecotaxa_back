@@ -9,12 +9,12 @@ from __future__ import annotations
 
 from typing import Optional, TYPE_CHECKING, Iterable, List
 
+from DB.Project import Project
+from DB.User import Organization, Guest
 from DB.helpers.ORM import Model
 from .helpers.DDL import Column, Sequence, ForeignKey, Index
 from .helpers.ORM import relationship
 from .helpers.Postgres import VARCHAR, INTEGER
-from DB.Project import Project
-from DB.User import Organization, Guest
 
 if TYPE_CHECKING:
     from .User import User
@@ -102,6 +102,7 @@ class CollectionOrgaRole(Model):
         primary_key=True,
     )
     display_order: int = Column(INTEGER)
+
     @property
     def organisation(self):
         return self.organization.name

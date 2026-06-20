@@ -2,14 +2,19 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+from typing import List
 
 from .Acquisition import Acquisition
 from .helpers.DDL import Column, ForeignKey
 from .helpers.ORM import Model
 from .helpers.ORM import relationship
-from .helpers.Postgres import VARCHAR, INTEGER
+from .helpers.Postgres import VARCHAR, BIGINT
 
 PROCESS_FREE_COLUMNS = 31
+
+ProcessIDT = int
+ProcessIDListT = List[int]  # Typings, to be clear that these are not e.g. project IDs
+ProcessOrigIDT = str
 
 
 class Process(Model):
@@ -17,7 +22,9 @@ class Process(Model):
     __tablename__ = "process"
     # Twin table with Acquisitions
     processid: int = Column(
-        INTEGER, ForeignKey(Acquisition.acquisid, ondelete="CASCADE"), primary_key=True
+        BIGINT,
+        ForeignKey(Acquisition.acquisid, ondelete="CASCADE", onupdate="CASCADE"),
+        primary_key=True,
     )
     # i.e. process_id from TSV
     orig_id = Column(VARCHAR(255), nullable=False)

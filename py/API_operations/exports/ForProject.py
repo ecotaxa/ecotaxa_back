@@ -6,6 +6,7 @@
 #
 import abc
 import csv
+import json
 import os
 import re
 import zipfile
@@ -27,6 +28,8 @@ from API_models.exports import (
     SummaryExportSumOptionsEnum,
 )
 from API_models.filters import ProjectFiltersDict
+from BO.Classification import ClassifIDT
+from BO.Collection import CollectionIDT
 from BO.Mappings import ProjectSetMapping, PREFIX_TO_TABLE
 from BO.ObjectSet import DescribedObjectSet, DescribedObjectBOSet
 from BO.ObjectSetQueryPlus import ResultGrouping, IterableRowsT, ObjectSetQueryPlus
@@ -39,10 +42,11 @@ from DB.Object import (
     DUBIOUS_CLASSIF_QUAL,
     PREDICTED_CLASSIF_QUAL,
 )
-from DB.Project import Project, ProjectIDListT
+from DB.Project import Project, ProjectIDListT, ProjectIDT
 from DB.ProjectVariables import ProjectVariables
+from DB.TaxoRecast import TaxoRecast, RecastOperation
 from DB.helpers.Direct import text
-from DB.helpers.SQL import OrderClause
+from DB.helpers.SQL import OrderClause, SelectClause
 from FS.CommonDir import ExportFolder
 from FS.Vault import Vault
 from helpers import (
@@ -68,6 +72,26 @@ class ProjectExport(JobServiceBase):
         self.out_file_name: str = ""
         self.out_path: Path = Path("")
         self.backup_with_just_image_refs = False
+        self.pre_mapping: Dict[ClassifIDT, Optional[ClassifIDT]] = {}
+        # get pre_mapping
+        if self.JOB_TYPE == "SummaryExport" or self.JOB_TYPE == "GeneralExport":
+            if self.req.collection_id is not None:
+                is_collection = True
+                target_id = int(self.req.collection_id)
+                operation = RecastOperation.collection_export
+            else:
+                is_collection = False
+                target_id = int(self.req.project_id)
+                operation = RecastOperation.project_export
+            pre_mapping: Optional[Dict[int, Optional[ClassifIDT]]] = (
+                self.query_taxo_recast(
+                    target_id=target_id,
+                    operation=operation,
+                    is_collection=is_collection,
+                )
+            )
+            if pre_mapping is not None:
+                self.pre_mapping = pre_mapping
 
     def run(self, current_user_id: int) -> ExportRsp:
         """
@@ -230,8 +254,13 @@ class ProjectExport(JobServiceBase):
             done_infos.update({"rowcount": nb_rows, "out_file": self.out_file_name})
         # Final copy
         if req.out_to_ftp:
+            export_folder = self.config.export_folder()
+            if export_folder is None:
+                raise Exception(
+                    "out_to_ftp was requested but export folder is not defined"
+                )
             self.update_progress(progress_before_copy, "Copying file to FTP")
-            dest = ExportFolder(self.config.export_folder())
+            dest = ExportFolder(export_folder)
             # Disambiguate using the job ID
             if out_file_name is None:
                 out_file_name = self.out_file_name
@@ -249,6 +278,19 @@ class ProjectExport(JobServiceBase):
         if out_file_name is not None and "out_file" not in done_infos:
             self.out_file_name = out_file_name
             done_infos.update({"out_file": self.out_file_name})
+            if self.JOB_TYPE == "SummaryExport" or self.JOB_TYPE == "GeneralExport":
+                # pre_mapping
+                infotaxonomy = {
+                    "taxonomy": {
+                        "renames": self.pre_mapping,
+                    }
+                }
+                done_infos.update(infotaxonomy)
+
+                logger.info(
+                    "------------------ taxonomy renames --------------- %s",
+                    json.dumps(infotaxonomy),
+                )
         self.set_job_result(errors=[], infos=done_infos)
 
     def append_log_to_zip(self) -> None:
@@ -298,120 +340,133 @@ class ProjectExport(JobServiceBase):
             # Do not make nice dates for backup
             date_fmt, time_fmt = "YYYY-MM-DD", "HH24:MI:SS"
 
-        select_clause = "select "
+        select_clause = SelectClause()
 
         if req.with_images or self.backup_with_just_image_refs:
             # Reconstitute the imported file name, rank might have been corrected during import
-            select_clause += (
-                "img.orig_file_name AS img_file_name, img.imgrank AS img_rank"
+            select_clause.add_expr("img.orig_file_name", "img_file_name").add_expr(
+                "img.imgrank", "img_rank"
             )
             if not self.backup_with_just_image_refs:
-                select_clause += ", img.imgid AS img_internal_id"
-            select_clause += ",\n"
+                select_clause.add_expr("img.imgid", "img_internal_id")
 
-        select_clause += "obh.orig_id AS object_id, "
+        select_clause.add_expr("obh.orig_id", "object_id")
         if not req.only_annotations:
-            select_clause += (
-                """
-                             obh.latitude AS object_lat, obh.longitude AS object_lon,
-                             TO_CHAR(obh.objdate,'{0}') AS object_date,
-                             TO_CHAR(obh.objtime,'{1}') AS object_time,
-                             obh.object_link, obh.depth_min AS object_depth_min, obh.depth_max AS object_depth_max,
-                         """
-            ).format(date_fmt, time_fmt)
-        select_clause += (
-            """
-                CASE obh.classif_qual
-                            WHEN '"""
-            + VALIDATED_CLASSIF_QUAL
-            + """' then 'validated'
-                            WHEN '"""
-            + PREDICTED_CLASSIF_QUAL
-            + """' then 'predicted'
-                            WHEN '"""
-            + DUBIOUS_CLASSIF_QUAL
-            + """' then 'dubious'
+            select_clause.add_expr("obh.latitude", "object_lat").add_expr(
+                "obh.longitude", "object_lon"
+            )
+            select_clause.add_expr(
+                f"TO_CHAR(obh.objdate,'{date_fmt}')", "object_date"
+            ).add_expr(f"TO_CHAR(obh.objtime,'{time_fmt}')", "object_time").add_expr(
+                "obh.object_link"
+            ).add_expr(
+                "obh.depth_min", "object_depth_min"
+            ).add_expr(
+                "obh.depth_max", "object_depth_max"
+            )
+        select_clause.add_expr(
+            f"""CASE obh.classif_qual
+                            WHEN '{VALIDATED_CLASSIF_QUAL}' then 'validated'
+                            WHEN '{PREDICTED_CLASSIF_QUAL}' then 'predicted'
+                            WHEN '{DUBIOUS_CLASSIF_QUAL}' then 'dubious'
                             ELSE obh.classif_qual
-                         END AS object_annotation_status,
-                         usr.name AS object_annotation_person_name, usr.email AS object_annotation_person_email,
-                         """
-            """
-                            CASE WHEN obh.classif_qual IN ('"""
-            + VALIDATED_CLASSIF_QUAL
-            + """','"""
-            + DUBIOUS_CLASSIF_QUAL
-            + """') THEN TO_CHAR(obh.classif_date,'{0}') END AS object_annotation_date,
-                  CASE WHEN obh.classif_qual IN ('"""
-            + VALIDATED_CLASSIF_QUAL
-            + """','"""
-            + DUBIOUS_CLASSIF_QUAL
-            + """') THEN TO_CHAR(obh.classif_date,'{1}') END AS object_annotation_time,"""
-            + """
-                         txo.display_name AS object_annotation_category
-                    """
-        ).format(date_fmt, time_fmt)
+                         END""",
+            "object_annotation_status",
+        )
+        select_clause.add_expr("usr.name", "object_annotation_person_name").add_expr(
+            "usr.email", "object_annotation_person_email"
+        )
+        select_clause.add_expr(
+            f"""CASE WHEN obh.classif_qual IN ('{VALIDATED_CLASSIF_QUAL}','{DUBIOUS_CLASSIF_QUAL}') THEN TO_CHAR(obh.classif_date,'{date_fmt}') END""",
+            "object_annotation_date",
+        ).add_expr(
+            f"""CASE WHEN obh.classif_qual IN ('{VALIDATED_CLASSIF_QUAL}','{DUBIOUS_CLASSIF_QUAL}') THEN TO_CHAR(obh.classif_date,'{time_fmt}') END""",
+            "object_annotation_time",
+        ).add_expr(
+            "txo.display_name", "object_annotation_category"
+        )
+
         if (
             req.exp_type in (ExportTypeEnum.backup, ExportTypeEnum.dig_obj_ident)
             or req.only_annotations
         ):
-            select_clause += ", txo.id AS object_annotation_category_id"
+            select_clause.add_expr("txo.id", "object_annotation_category_id")
         else:
-            select_clause += (
-                ","
-                + TaxonomyBO.parents_sql("obh.classif_id")
-                + " AS object_annotation_hierarchy"
+            select_clause.add_expr(
+                TaxonomyBO.parents_sql("obh.classif_id"), "object_annotation_hierarchy"
             )
 
         if "C" in req.tsv_entities:
-            select_clause += "\n, obh.complement_info"
+            select_clause.add_expr("obh.complement_info")
 
         # Deal with mappings, the goal is to emit SQL which will reconstitute the TSV structure
         mappingset = ProjectSetMapping().load_from_projects(src_projects)
         if "O" in req.tsv_entities:
-            select_clause += "\n " + object_set.as_select_list(
+            object_set.into_select_list(
+                select_clause,
                 "obf",
                 PREFIX_TO_TABLE["object"],
                 mappingset.object_mappings.tsv_cols_to_real,
             )
         if "S" in req.tsv_entities:
-            select_clause += "\n, sam.orig_id AS sample_id, sam.dataportal_descriptor AS sample_dataportal_descriptor "
-            select_clause += object_set.as_select_list(
+            select_clause.add_expr("sam.orig_id", "sample_id").add_expr(
+                "sam.dataportal_descriptor", "sample_dataportal_descriptor"
+            )
+            object_set.into_select_list(
+                select_clause,
                 "sam",
                 PREFIX_TO_TABLE["sample"],
                 mappingset.sample_mappings.tsv_cols_to_real,
             )
         if "P" in req.tsv_entities:
-            select_clause += "\n, prc.orig_id AS process_id "
-            select_clause += object_set.as_select_list(
+            select_clause.add_expr("prc.orig_id", "process_id")
+            object_set.into_select_list(
+                select_clause,
                 "prc",
                 PREFIX_TO_TABLE["process"],
                 mappingset.process_mappings.tsv_cols_to_real,
             )
         if "A" in req.tsv_entities:
-            select_clause += (
-                "\n, acq.orig_id AS acq_id, acq.instrument AS acq_instrument "
+            select_clause.add_expr("acq.orig_id", "acq_id").add_expr(
+                "acq.instrument", "acq_instrument"
             )
-            select_clause += object_set.as_select_list(
+            object_set.into_select_list(
+                select_clause,
                 "acq",
                 PREFIX_TO_TABLE["acq"],
                 mappingset.acquisition_mappings.tsv_cols_to_real,
             )
         if req.exp_type == ExportTypeEnum.dig_obj_ident:
-            select_clause += "\n, obh.objid"
+            select_clause.add_expr("obh.objid")
         if req.with_internal_ids:
-            select_clause += """\n, obh.objid,
-                    obh.acquisid AS processid_internal, obh.acquisid AS acq_id_internal,
-                    sam.sampleid AS sample_id_internal,
-                    obh.classif_id, obh.classif_who,
-                    CASE WHEN obh.classif_qual = 'P' THEN obh.classif_id END AS classif_auto_id,
-                    txp.name classif_auto_name,
-                    obh.classif_score AS classif_auto_score,
-                    CASE WHEN obh.classif_qual = 'P' THEN obh.classif_date END AS classif_auto_when,
-                    HASHTEXT(obh.orig_id) object_random_value, obh.sunpos object_sunpos """
+            select_clause.add_expr("obh.objid").add_expr(
+                "obh.acquisid", "processid_internal"
+            ).add_expr("obh.acquisid", "acq_id_internal").add_expr(
+                "sam.sampleid", "sample_id_internal"
+            ).add_expr(
+                "obh.classif_id"
+            ).add_expr(
+                "obh.classif_who"
+            ).add_expr(
+                "CASE WHEN obh.classif_qual = 'P' THEN obh.classif_id END",
+                "classif_auto_id",
+            ).add_expr(
+                "txp.name", "classif_auto_name"
+            ).add_expr(
+                "obh.classif_score", "classif_auto_score"
+            ).add_expr(
+                "CASE WHEN obh.classif_qual = 'P' THEN obh.classif_date END",
+                "classif_auto_when",
+            ).add_expr(
+                "HASHTEXT(obh.orig_id)", "object_random_value"
+            ).add_expr(
+                "obh.sunpos", "object_sunpos"
+            )
+
             if "S" in req.tsv_entities:
                 # This is not really an id, it's computed, why not
-                select_clause += (
-                    "\n, sam.latitude sample_lat, sam.longitude sample_long "
+                select_clause.add_expr("sam.latitude", "sample_lat").add_expr(
+                    "sam.longitude", "sample_long"
                 )
 
         order_clause = OrderClause()
@@ -434,14 +489,15 @@ class ProjectExport(JobServiceBase):
 
         # Base SQL comes from filters
         from_, where, params = object_set.get_sql(
-            order_clause, select_clause, all_images=not req.only_first_image
+            select_clause, order_clause, all_images=not req.only_first_image
         )
         # possible sql injection avec le replace
         sql = (
-            select_clause
+            select_clause.get_sql()
             + " FROM "
             + from_.get_sql().replace(":projid", str(params["projid"]))
             + where.get_sql()
+            + "\n"
             + order_clause.get_sql()
         )
         logger.info("Execute SQL : %s" % sql)
@@ -816,7 +872,7 @@ class ProjectExport(JobServiceBase):
         """
         @see https://github.com/ecotaxa/ecotaxa/issues/615
         """
-        self.update_progress(1, "Start Abundance Summary export")
+        self.update_progress(1, "Start Count Summary export")
 
         # We want count, in the end of the line
         aug_qry.set_aliases({aug_qry.COUNT_STAR: "count"})
@@ -895,7 +951,7 @@ class ProjectExport(JobServiceBase):
         object_set: Union[DescribedObjectSet, DescribedObjectBOSet],
     ):
         """
-        Produce lines with 0 abundance/concentration/biovolume for relevant (sample, status, category) triplets
+        Produce lines with 0 count/concentration/biovolume for relevant (sample, status, category) triplets
         or (sample, acquisition, status, category) tuples.
         Specs: https://github.com/ecotaxa/ecotaxa/issues/615#issuecomment-1158781701
         """
@@ -919,7 +975,7 @@ class ProjectExport(JobServiceBase):
         # Get possible taxa names
         txo_qry = (
             ObjectSetQueryPlus(object_set)
-            .remap_categories(self.req.pre_mapping)
+            .remap_categories(self.pre_mapping)
             .add_selects(["txo.display_name"])
             .set_aliases({"txo.display_name": "txo"})
             .set_grouping(ResultGrouping.BY_TAXO)
@@ -978,7 +1034,7 @@ class ProjectExport(JobServiceBase):
         )
         # The specialized SQL builder operates from the object set
         aug_qry = ObjectSetQueryPlus(object_set)
-        aug_qry.remap_categories(req.pre_mapping)
+        aug_qry.remap_categories(self.pre_mapping)
         # Formulae default from the project but are overriden by the query
         formulae: Dict[str, str] = {}
         for project_id in project_ids:
@@ -1031,6 +1087,31 @@ class ProjectExport(JobServiceBase):
         self.update_progress(90, msg)
 
         return 0
+
+    def query_taxo_recast(
+        self,
+        target_id: Union[ProjectIDT, CollectionIDT],
+        operation: RecastOperation,
+        is_collection: bool = False,
+    ) -> Optional[Dict[ClassifIDT, Optional[ClassifIDT]]]:
+        qry = self.ro_session.query(TaxoRecast)
+        qry = qry.filter(TaxoRecast.operation == operation)
+        if is_collection:
+            qry = qry.filter(TaxoRecast.collection_id == target_id)
+        else:
+            qry = qry.filter(TaxoRecast.project_id == target_id)
+        res = qry.all()
+        if res is None or len(res) != 1:
+            return None
+        the_one = json.loads(res[0].transforms)
+        transforms: Dict[ClassifIDT, Optional[ClassifIDT]] = {}
+        for k, v in the_one.items():
+            if v is None:
+                val = 0
+            else:
+                val = int(v)
+            transforms.update({int(k): val})
+        return transforms
 
 
 class SpecializedProjectExport(ProjectExport):
@@ -1105,7 +1186,6 @@ class SummaryProjectExport(SpecializedProjectExport):
             project_id=req.project_id,
             exp_type=new_type_to_old[req.quantity],
             sum_subtotal=new_level_to_old[req.summarise_by],
-            pre_mapping=req.taxo_mapping,
             formulae=req.formulae,
             out_to_ftp=req.out_to_ftp,
         )

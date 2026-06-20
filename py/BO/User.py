@@ -11,23 +11,16 @@ from BO.Classification import ClassifIDListT
 from BO.Rights import RightsBO
 from BO.helpers.TSVHelpers import none_to_empty
 from DB import Session
-from DB.User import User, Person, Guest, Organization, OrganizationIDT
+from DB.User import Guest, Organization, OrganizationIDT, Person, User, UserIDT
 from DB.UserPreferences import UserPreferences
 from DB.helpers.ORM import any_, or_, func, text
 from helpers.DynamicLogs import get_logger
-
-
-# Typings, to be clear that these are not e.g. object IDs
-UserIDT = int
-UserIDListT = List[int]
-GuestIDT = int
-GuestIDListT = List[int]
 
 logger = get_logger(__name__)
 
 MISSING_USER = {"id": -1, "name": "", "email": ""}
 
-USER_PWD_REGEXP = r"^(?:(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#?%^&*-+])).{8,20}$"
+USER_PWD_REGEXP = r"^(?:(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#?%^&+*-])).{8,20}$"
 USER_PWD_REGEXP_DESCRIPTION = "8 char. minimum, at least one uppercase, one lowercase, one number and one special char in '#?!@%^&*-+' "
 SHORT_TOKEN_AGE = 1
 PROFILE_TOKEN_AGE = 24

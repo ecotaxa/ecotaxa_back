@@ -24,7 +24,7 @@ PROJECT_SETTINGS_UPDATE_URL = (
 def test_update_prj(fastapi):
     from tests.test_project_vars import BODC_VARS_KEY
 
-    prj_id = do_import_uvp6(fastapi, "Test Project Updates")
+    prj_id, _ = do_import_uvp6(fastapi, "Test Project Updates")
     # Do like in legacy app, i.e. fetch/modify/resend
     url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
@@ -234,7 +234,7 @@ def test_update_prj(fastapi):
 
 def test_update_prj_pred_settings(fastapi):
 
-    prj_id = do_import_uvp6(fastapi, "Test Project Settings Updates")
+    prj_id, _ = do_import_uvp6(fastapi, "Test Project Settings Updates")
     # Do like in legacy app, i.e. fetch/modify/resend
     qry_url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
     rsp = fastapi.get(qry_url, headers=ADMIN_AUTH)
@@ -282,7 +282,7 @@ def test_update_prj_pred_settings(fastapi):
 def test_update_prj_bodc_vars(fastapi):
     from tests.test_project_vars import BODC_VARS_KEY
 
-    prj_id = do_import_uvp6(fastapi, "Test Project Variables Updates")
+    prj_id, _ = do_import_uvp6(fastapi, "Test Project Variables Updates")
 
     # Do like in legacy app, i.e. fetch/modify/resend
     qry_url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)

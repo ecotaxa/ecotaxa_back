@@ -1,4 +1,4 @@
-FROM ubuntu:18.04 as builder
+FROM ubuntu:18.04 AS builder
 
 MAINTAINER grololo06 <grololo06@users.noreply.github.com>
 
@@ -39,11 +39,11 @@ COPY docker/prod_image/start.sh /app
 
 
 ##### Switch to target #####
-FROM ubuntu:18.04 as target
+FROM ubuntu:18.04 AS target
 
 # Minimum install
 RUN apt-get update && \
-apt-get install vim python3.8 libpq5 --no-install-recommends --yes && \
+apt-get install vim python3.8 libpq5 dumb-init --no-install-recommends --yes && \
 apt-get clean && \
 rm -rf /var/lib/apt/lists/* && \
 rm -rf /var/log/*
@@ -78,4 +78,7 @@ ENV WEB_CONCURRENCY=8
 # ./vault
 WORKDIR /app/
 ENV APP_CONFIG='/config.ini'
+
+ENTRYPOINT ["/usr/bin/dumb-init", "--"]
+
 CMD ["./start.sh"]
