@@ -50,20 +50,28 @@ class DeepFeatures(object):
         """
         Delete all CNN features from DB, for this project.
         """
-        qry = session.query(ObjectCNNFeatureVector)
-        qry = qry.join(
-            ObjectHeader, ObjectHeader.objid == ObjectCNNFeatureVector.objcnnid
+        sub_qry = session.query(ObjectHeader.objid)
+        sub_qry = sub_qry.join(
+            Acquisition, Acquisition.acquisid == ObjectHeader.acquisid
         )
-        qry = qry.where(ObjectHeader.objid.op("<@")(func.obj_in_prj(proj_id)))
-        qry = qry.join(Acquisition, Acquisition.acquisid == ObjectHeader.acquisid)
-        qry = qry.where(Acquisition.acquisid.op("<@")(func.acq_in_prj(proj_id)))
-        qry = qry.join(
+        sub_qry = sub_qry.join(
             Sample,
             and_(
                 Sample.sampleid == Acquisition.acq_sample_id, Sample.projid == proj_id
             ),
         )
-        nb_deleted = qry.delete(synchronize_session=False)
+        sub_qry = sub_qry.where(
+            and_(
+                ObjectHeader.objid == ObjectCNNFeatureVector.objcnnid,
+                ObjectHeader.objid.op("<@")(func.obj_in_prj(proj_id)),
+                Acquisition.acquisid.op("<@")(func.acq_in_prj(proj_id)),
+            )
+        )
+        nb_deleted = (
+            session.query(ObjectCNNFeatureVector)
+            .filter(sub_qry.exists())
+            .delete(synchronize_session=False)
+        )
         return nb_deleted
 
     @staticmethod
