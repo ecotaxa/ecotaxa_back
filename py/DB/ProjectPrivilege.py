@@ -2,17 +2,16 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from __future__ import annotations
-
 from typing import TYPE_CHECKING
 
 from .helpers.DDL import Column, Sequence, ForeignKey, Index
-from .helpers.ORM import Model
-from .helpers.ORM import relationship
+from .helpers.ORM import Model, Mapped
 from .helpers.Postgres import VARCHAR, INTEGER
 
 if TYPE_CHECKING:
-    pass
+    from .Project import Project
+    from .User import User
+# from .Project import Project
 
 
 class ProjectPrivilege(Model):
@@ -40,9 +39,10 @@ class ProjectPrivilege(Model):
     # complement of the privilege, so far just 'C' for Contact who is a manager
     extra = Column(VARCHAR(1), nullable=True)
 
-    # relationships
-    project = relationship("Project", cascade="all, delete-orphan", single_parent=True)
-    user = relationship("User", cascade="all, delete-orphan", single_parent=True)
+    if TYPE_CHECKING:
+        # The relationship(s) are created in Relations.py but the typing here helps IDE
+        project: Mapped[Project]
+        user: Mapped[User]
 
     def __str__(self):
         return "{0} ({1})".format(self.member, self.privilege)

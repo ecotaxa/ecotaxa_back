@@ -2,18 +2,20 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import List, Dict
+from typing import List, Dict, TYPE_CHECKING
 
 from sqlalchemy import func
 
-from .Acquisition import Acquisition
 from .Project import Project, ProjectIDT
 from .helpers import Result
 from .helpers.DDL import Index, Column, ForeignKey
 from .helpers.Direct import text
 from .helpers.Hints import RECURS_HINT
-from .helpers.ORM import Model, Session, relationship
+from .helpers.ORM import Model, Session, Mapped
 from .helpers.Postgres import VARCHAR, DOUBLE_PRECISION, INTEGER, BIGINT
+
+if TYPE_CHECKING:
+    from .Acquisition import Acquisition
 
 SAMPLE_FREE_COLUMNS = 61
 
@@ -35,9 +37,10 @@ class Sample(Model):
     longitude = Column(DOUBLE_PRECISION)
     dataportal_descriptor = Column(VARCHAR(8000))
 
-    # The relationships are created in Relations.py but the typing here helps IDE
-    project = relationship(Project)
-    all_acquisitions = relationship(Acquisition, viewonly=True)
+    if TYPE_CHECKING:
+        # The relationship(s) are created in Relations.py but the typing here helps IDE
+        project: Mapped[Project]
+        all_acquisitions: Mapped[List[Acquisition]]
 
     def pk(self) -> int:
         return self.sampleid

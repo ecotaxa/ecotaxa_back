@@ -44,7 +44,7 @@ class Constants(BaseModel):
         title="Project access",
         description="Project access levels.",
         default={st.name: st.value for st in AccessLevelEnum},
-        example={"PUBLIC": "", "OPEN": "O", "PRIVATE": "P"},
+        examples=[{"PUBLIC": "", "OPEN": "O", "PRIVATE": "P"}],
     )
 
     app_manager: List[str] = Field(
@@ -66,7 +66,7 @@ class Constants(BaseModel):
         title="People and organizations directories",
         description="Available directories to identify people and organizations in collections settings",
         default={st.name: st.value for st in PeopleOrganizationDirectory},
-        example={"https://edmo.seadatanet.org/": "edmo", "https://orcid.org/": "orcid"},
+        examples=[{"https://edmo.seadatanet.org/": "edmo", "https://orcid.org/": "orcid"}],
     )
     user_status: Dict[str, int] = Field(
         title="User status",
@@ -78,7 +78,7 @@ class Constants(BaseModel):
         title="User status",
         description="Application User type values",
         default={st.name: st.value for st in UserType},
-        example={"guest": "guest"},
+        examples=[{"guest": "guest"}],
     )
     password_regexp: str = Field(
         title="Password regexp",
@@ -159,9 +159,9 @@ class Constants(BaseModel):
         title="Recast operation",
         description="Taxonomy recast operation name",
         default={st.name: st.value for st in RecastOperation},
-        example={
+        examples=[{
             "prediction_input": "pre_predict",
             "dwca_export_occurrence": "dwca_export_occurrence",
             "dwca_export_emof": "dwca_export_emof",
-        },
+        }],
     )

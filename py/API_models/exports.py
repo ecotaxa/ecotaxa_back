@@ -89,12 +89,12 @@ class ProjectIdReq(BaseModel):
         title="Collection Id",
         description="The Collection to export if requested.",
         default=None,
-        example=1,
+        examples=[1],
     )
     project_id: Union[int, str] = Field(
         title="Project Id",
         description="The project(int) or projects (str, project ids list) to export.",
-        example=1,
+        examples=[1],
     )
 
 

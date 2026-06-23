@@ -4,7 +4,7 @@
 #
 #  Models used in Objects API operations.
 #
-from datetime import datetime
+from datetime import datetime, date, time
 from typing import List, Optional, Dict, Any
 
 from API_models.helpers.DBtoModel import combine_models
@@ -21,58 +21,64 @@ from helpers.pydantic import BaseModel, Field, DescriptiveModel
 
 # TODO JCE - examples - ?default?
 class _ObjectHeaderModel(DescriptiveModel):
-    objid = Field(title="Object Id", description="The object Id.", examples=[264409236])
-    acquisid = Field(
+    objid: int = Field(
+        title="Object Id", description="The object Id.", examples=[264409236]
+    )
+    acquisid: int = Field(
         title="Acquisition Id", description="The parent acquisition Id.", examples=[144]
     )
-    orig_id = Field(
+    orig_id: str = Field(
         title="Original id",
         description="Original object ID from initial TSV load.",
         examples=["deex_leg1_48_406"],
     )
-    objdate = Field(title="Object date", description="")
-    objtime = Field(title="Object time", description="")
-    latitude = Field(
+    objdate: Optional[date] = Field(title="Object date", description="")
+    objtime: Optional[time] = Field(title="Object time", description="")
+    latitude: Optional[float] = Field(
         title="Latitude", description="The latitude.", examples=[42.0231666666667]
     )
-    longitude = Field(
+    longitude: Optional[float] = Field(
         title="Longitude", description="The longitude.", examples=[4.71766666666667]
     )
-    depth_min = Field(title="Depth min", description="The min depth.", examples=[0])
-    depth_max = Field(title="Depth max", description="The min depth.", examples=[300])
-    sunpos = Field(
+    depth_min: Optional[float] = Field(
+        title="Depth min", description="The min depth.", examples=[0]
+    )
+    depth_max: Optional[float] = Field(
+        title="Depth max", description="The min depth.", examples=[300]
+    )
+    sunpos: Optional[str] = Field(
         title="Sun position",
         description="Sun position, from date, time and coords.",
         examples=["N"],
     )
-    classif_id = Field(
+    classif_id: Optional[int] = Field(
         title="Classification Id",
         description="The classification Id.",
         examples=[82399],
     )
-    classif_qual = Field(
+    classif_qual: Optional[str] = Field(
         title="Classification qualification",
         description="The classification qualification. Could be **P** for predicted, **V** for validated or **D** for Dubious.",
         examples=["P"],
     )
-    classif_who = Field(
+    classif_who: Optional[int] = Field(
         title="Classification who",
         description="The user who manually classified this object, if **V** or **D**.",
-        example="null",
+        examples=["null"],
     )
-    classif_score = Field(
+    classif_score: Optional[float] = Field(
         title="Classification score",
         description="The ML score for this object, if **P**.",
-        example="null",
+        examples=["null"],
     )
-    complement_info = Field(
-        title="Complement info", description="", example="Part of ostracoda"
+    complement_info: Optional[str] = Field(
+        title="Complement info", description="", examples=["Part of ostracoda"]
     )
     # random_value = Field(title="random_value", description="")
-    object_link = Field(
+    object_link: Optional[str] = Field(
         title="Object link",
         description="Object link.",
-        example="http://www.zooscan.obs-vlfr.fr//",
+        examples=["http://www.zooscan.obs-vlfr.fr//"],
     )
 
 

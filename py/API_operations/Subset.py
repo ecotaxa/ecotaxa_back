@@ -173,7 +173,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         ret = select(
             ObjectHeader,
             ObjectFields,
-            ObjectCNNFeature,
+            ObjectCNNFeatureVector,
             Image,
             Sample,
             Acquisition,

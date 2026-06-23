@@ -18,6 +18,7 @@ from BO.User import UserIDT
 from DB.User import User
 from FS.CommonDir import CommonFolder
 from FS.UserFilesDir import UserFilesDirectory
+from helpers.CustomException import UnprocessableEntityException
 from helpers.DynamicLogs import get_logger
 from helpers.httpexception import DETAIL_NOTHING_DONE, DETAIL_UNKNOWN_ERROR
 from .helpers.Service import Service
@@ -61,6 +62,7 @@ class UserFilesFolderService(Service):
         TODO: Quotas
         """
         current_user: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
+        assert file.filename is not None, "No filename in store def"
         file_name = self._sanitize_filename_throw(file.filename)
         if path is not None:
             path = self._can_use_dir_throw(path)

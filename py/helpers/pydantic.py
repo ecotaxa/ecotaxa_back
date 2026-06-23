@@ -42,9 +42,10 @@ PydanticDescriptionT = Type[DescriptiveModel]
 if not TYPE_CHECKING:
 
     def Field(**kwargs) -> PydanticField:  # type: ignore
-        if "examples" in kwargs:
-            arg = kwargs.pop("examples")
-            kwargs["example"] = arg[0]
+        if "example" in kwargs:
+            val = kwargs.pop("example")
+            if "examples" not in kwargs:
+                kwargs["examples"] = [val]
         return PydanticField(**kwargs)  # type: ignore
 
 else:

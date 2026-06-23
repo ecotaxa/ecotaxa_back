@@ -7,15 +7,14 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import Sequence, Column, ForeignKey, TIMESTAMP
 from sqlalchemy.dialects.postgresql import VARCHAR, INTEGER
-from sqlalchemy.orm import relationship
 
-from .helpers.ORM import Model
+from .helpers.ORM import Model, Mapped
 
 # Typings, to be clear that these are not e.g. task IDs
 JobIDT = int
 
 if TYPE_CHECKING:
-    pass
+    from .User import User
 
 
 class DBJobStateEnum(str, Enum):
@@ -68,7 +67,9 @@ class Job(Model):
     updated_on = Column(TIMESTAMP, nullable=False)
     """ Last time that anything changed in present line """
 
-    owner = relationship("User")  # TODO: Repeat should not be needed, mypy bug
+    if TYPE_CHECKING:
+        # The relationship(s) are created in Relations.py but the typing here helps IDE
+        owner: Mapped[User]
 
     def __str__(self):
         return "{0} ({1}): {2}/{3}".format(

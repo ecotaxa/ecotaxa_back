@@ -101,7 +101,7 @@ class SimilaritySearchForProject(Service):
         FROM {from_.get_sql()} {where_clause.get_sql()} \n{order_clause.get_sql()}
         """
 
-        result = self.ro_session.execute(text(query), params).fetchall()
+        result = self.ro_session.execute(text(query), params).mappings().fetchall()
         neighbors = [res["objcnnid"] for res in result]
         distances = [res["l2_dist"] for res in result]
         if len(distances) >= 1:

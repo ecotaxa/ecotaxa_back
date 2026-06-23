@@ -238,6 +238,12 @@ ProjectFiltersModel = typed_dict_to_model(ProjectFiltersDict, _ProjectFilters2Mo
 
 
 class ProjectFilters(ProjectFiltersModel):
+    def get(self, key: str, default: Any = None) -> Any:
+        # Pydantic v2 has its own __getattr__ but we want to mimic .get() for dict-like access
+        if key in self.model_fields:
+            return getattr(self, key)
+        return default
+
     def base(self) -> ProjectFiltersDict:
         return self.model_dump()  # type: ignore
 

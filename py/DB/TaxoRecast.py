@@ -2,9 +2,6 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2023  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-
-from __future__ import annotations
-
 from enum import Enum
 
 from sqlalchemy import Identity

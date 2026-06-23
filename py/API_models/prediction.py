@@ -96,7 +96,7 @@ class PredictionInfoRsp(BaseModel):
     result: List[PredictionInfoT] = Field(
         title="Result",
         description="List of lists [object ID, category ID, score for category].",
-        example=[[23456, 1234, 0.7], [23457, 768, 0.2]],
+        examples=[[[23456, 1234, 0.7], [23457, 768, 0.2]]],
         default=[],
     )
 

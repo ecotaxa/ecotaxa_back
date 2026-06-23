@@ -2,11 +2,9 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-# noinspection PyPackageRequirements
-from __future__ import annotations
 
 import datetime
-from typing import Dict, Set, List
+from typing import List, TYPE_CHECKING
 
 # noinspection PyPackageRequirements
 from sqlalchemy import Index, Column, ForeignKey, Integer, text, func, event, DDL  # fmt:skip
@@ -23,14 +21,17 @@ from sqlalchemy.dialects.postgresql import (
     TIMESTAMP,
 )  # fmt:skip
 # noinspection PyPackageRequirements
-from sqlalchemy.orm import relationship, Session
+from sqlalchemy.orm import Session
 
 from BO.helpers.TSVHelpers import convert_degree_minute_float_to_decimal_degree
 from .Acquisition import Acquisition
 from .Image import Image
-from .Project import Project, ProjectIDT
-from .Sample import Sample
-from .helpers.ORM import Model
+from .helpers.ORM import Model, Mapped
+
+if TYPE_CHECKING:
+    from .Taxonomy import Taxonomy
+    from .User import User
+    from .CNNFeatureVector import ObjectCNNFeatureVector
 
 # Typings
 ObjectIDT = int
@@ -102,30 +103,15 @@ class ObjectHeader(Model):
 
     complement_info = Column(VARCHAR)  # e.g. "Part of ostracoda"
 
-    fields = relationship("ObjectFields", uselist=False, viewonly=True)
-    cnn_features = relationship("ObjectCNNFeatureVector", uselist=False)
-    classif = relationship(
-        "Taxonomy",
-        primaryjoin="Taxonomy.id==ObjectHeader.classif_id",
-        foreign_keys="Taxonomy.id",
-        uselist=False,
-    )
-    # classif_auto = relationship(
-    #     "Taxonomy",
-    #     primaryjoin="Taxonomy.id==foreign(ObjectHeader.classif_auto_id)",
-    #     uselist=False,
-    # )
-    classifier = relationship(
-        "User",
-        primaryjoin="User.id==ObjectHeader.classif_who",
-        foreign_keys="User.id",
-        uselist=False,
-    )
-    all_images = relationship("Image")  # TODO: Repeat should not be needed, mypy bug
-    acquisition = relationship(
-        "Acquisition"
-    )  # TODO: Repeat should not be needed, mypy bug
-    history = relationship("ObjectsClassifHisto", viewonly=True)
+    if TYPE_CHECKING:
+        # The relationship(s) are created in Relations.py but the typing here helps IDE
+        fields: Mapped["ObjectFields"]
+        cnn_features: Mapped[ObjectCNNFeatureVector]
+        classif: Mapped[Taxonomy]
+        classifier: Mapped[User]
+        all_images: Mapped[List[Image]]
+        acquisition: Mapped[Acquisition]
+        history: Mapped[List["ObjectsClassifHisto"]]
 
     @classmethod
     def get_next_pk(cls, session: Session, prj_id: int) -> int:
@@ -140,30 +126,6 @@ class ObjectHeader(Model):
             .scalar()
         )
         return res + 1 if res else prj_id * OBJ_PRJ_OFFSET + 1
-
-    @classmethod
-    def fetch_existing_objects(
-        cls, session: Session, prj_id: ProjectIDT
-    ) -> Dict[str, int]:
-        qry = session.query(ObjectHeader.orig_id, ObjectHeader.objid)
-        qry = qry.join(Acquisition).join(Sample).join(Project)
-        qry = qry.filter(Project.projid.__eq__(prj_id))
-        qry = qry.filter(ObjectHeader.objid.op("<@")(func.obj_in_prj(prj_id)))
-        ret = {orig_id: objid for orig_id, objid in qry}
-        return ret
-
-    @classmethod
-    def fetch_existing_ranks(
-        cls, session: Session, prj_id: ProjectIDT
-    ) -> Dict[int, Set[int]]:
-        ret: Dict[int, Set[int]] = {}
-        qry = session.query(Image.objid, Image.imgrank)
-        qry = qry.join(ObjectHeader).join(Acquisition).join(Sample).join(Project)
-        qry = qry.filter(ObjectHeader.objid.op("<@")(func.obj_in_prj(prj_id)))
-        qry = qry.filter(Project.projid == prj_id)
-        for objid, imgrank in qry:
-            ret.setdefault(objid, set()).add(imgrank)
-        return ret
 
     @staticmethod
     def _geo_from_txt(txt: str, min_v: float, max_v: float) -> float:
@@ -236,7 +198,9 @@ class ObjectFields(Model):
     # TODO: Remove in favor of PK projid header
     acquis_id = Column(BIGINT, nullable=False)
 
-    object = relationship("ObjectHeader", uselist=False)
+    if TYPE_CHECKING:
+        # The relationship(s) are created in Relations.py but the typing here helps IDE
+        object: Mapped[ObjectHeader]
 
 
 # TODO
@@ -322,7 +286,6 @@ class ObjectsClassifHisto(Model):
     classif_score = Column(DOUBLE_PRECISION)  # 8 bytes align d
     classif_who = Column(Integer, ForeignKey("users.id"))  # 4 bytes align i
 
-    object = relationship("ObjectHeader")  # TODO: Repeat should not be needed, mypy bug
     classif_id = Column(
         INTEGER, ForeignKey("taxonomy.id", ondelete="CASCADE"), nullable=False
     )  # 4 bytes align i
@@ -331,9 +294,12 @@ class ObjectsClassifHisto(Model):
     classif_qual = Column(
         CHAR(1), nullable=False
     )  # 2 bytes (len + content) align c as len < 127
-    object = relationship("ObjectHeader")
-    classif = relationship("Taxonomy")
-    classifier = relationship("User")
+
+    if TYPE_CHECKING:
+        # The relationship(s) are created in Relations.py but the typing here helps IDE
+        object: Mapped[ObjectHeader]
+        classif: Mapped[Taxonomy]
+        classifier: Mapped[User]
 
 
 # Usage, e.g.

@@ -5,9 +5,9 @@
 #
 # Description on how to move from DB rows to JSON-compatible dicts
 #
-from typing import Dict, Union, Callable
+from typing import Dict, Union, Callable, Any, List
 
-from sqlalchemy.orm import InstrumentedAttribute
+from sqlalchemy.orm import InstrumentedAttribute, Mapped
 
 from DB.Acquisition import Acquisition
 from DB.Image import Image
@@ -15,10 +15,12 @@ from DB.Object import ObjectHeader, ObjectFields
 from DB.Process import Process
 from DB.Project import Project
 from DB.Sample import Sample
-from DB.helpers.ORM import ModelT, RelationshipProperty
+from DB.helpers.ORM import ModelT, Model
 
 # Typing for the clarity. Key = DB Column, Value = string in target dict
-JSONDesc = Dict[Union[InstrumentedAttribute, RelationshipProperty, Callable], str]
+JSONDesc = Dict[
+    Union[Model, List[Any], InstrumentedAttribute[Any], Mapped[Any], Callable], str
+]
 
 JSON_FIELDS: Dict[ModelT, JSONDesc] = {
     Project: {

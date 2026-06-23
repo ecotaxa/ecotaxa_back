@@ -7,7 +7,7 @@
 from typing import List, Optional, Any, Dict
 
 from fastapi import HTTPException
-from pydantic import validator, Extra
+from pydantic import field_validator, ConfigDict
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 from API_models.crud import ProjectSummaryModel
@@ -27,28 +27,29 @@ class TaxoRecastRsp(BaseModel):
         title="Categories mapping",
         description="Mapping from seen taxon (key) to output replacement one (value)."
         " Use a null replacement to _discard_ the present taxon. Note: keys are strings. Every",
-        example={"456": 956, "2456": 213, "9134": None},
+        examples=[{"456": 956, "2456": 213, "9134": None}],
     )
     doc: Optional[Dict[str, str]] = Field(
         title="Mapping documentation",
         description="To keep memory of the reasons for the above mapping. Note: keys are strings.",
-        example={
-            "456": "Up to species",
-            "2456": "Up to nearest non-morpho",
-            "9134": "Detritus",
-        },
+        examples=[
+            {
+                "456": "Up to species",
+                "2456": "Up to nearest non-morpho",
+                "9134": "Detritus",
+            }
+        ],
     )
 
-    # noinspection PyMethodParameters
-    @validator("from_to")
+    @field_validator("from_to")
+    @classmethod
     def ensure_consistent_renaming(cls, v):
         resp = TaxoRecastBO.valid_remap(v)
         if resp is not None:
             raise HTTPException(HTTP_422_UNPROCESSABLE_ENTITY, detail=[resp])
         return v
 
-    class Config:
-        extra = Extra.forbid
+    model_config = ConfigDict(extra="forbid")
 
 
 class TaxaSearchRsp(BaseModel):
@@ -70,14 +71,8 @@ class TaxaSearchRsp(BaseModel):
         title="Aphia ID",
         description="The WoRMS aphia_id of the taxon.",
         default=None,
-        example="null",
+        examples=["null"],
     )
-
-
-# TODO: dataclass_to_model(TaxonBO) to avoid repeated fields
-class TaxonModel(BaseModel):
-    __config__ = OrmConfig
-    id: int = Field(title="Id", description="The taxon/category IDs.", examples=[1])
     renm_id: Optional[int] = Field(
         title="Renm id",
         description="The advised replacement ID if the taxon/category is deprecated.",
@@ -90,7 +85,7 @@ class TaxonModel(BaseModel):
 # TODO: dataclass_to_model(TaxonBO) to avoid repeated fields
 class TaxonModel(BaseModel):
     __config__ = OrmConfig
-    id: int = Field(title="Id", description="The taxon/category IDs.", example=1)
+    id: int = Field(title="Id", description="The taxon/category IDs.", examples=[1])
     name: str = Field(
         title="Name",
         description="The taxon/category verbatim name.",
@@ -101,20 +96,10 @@ class TaxonModel(BaseModel):
         description="The taxon/category type, 'M' for Morpho or 'P' for Phylo.",
         examples=["P"],
     )
-    nb_objects: int = Field(
-        title="Nb objects",
-        description="How many objects are classified in this category.",
-        examples=[34118],
-    )
-    nb_children_objects: int = Field(
-        title="Nb children objects",
-        description="How many objects are classified in this category children (not itself).",
-        examples=[30091727],
-    )
     status: str = Field(
         title="Status",
         description="The taxon/category status, 'D' for Deprecated, 'A' for Approved or 'N' for Notapproved.",
-        example="P",
+        examples=["P"],
     )
     display_name: str = Field(
         title="Display name",
@@ -134,35 +119,35 @@ class TaxonModel(BaseModel):
     lineage_status: str = Field(
         title="Id lineage",
         description="The taxon ancestors' status, including self, in first.",
-        example="DDAAA",
+        examples=["DDAAA"],
     )
     renm_id: Optional[int] = Field(
         title="Renm id",
         description="The advised replacement ID if the taxon/category is deprecated.",
         default=None,
-        example="null",
+        examples=["null"],
     )
     nb_objects: int = Field(
         title="Nb objects",
         description="How many objects are classified in this category.",
-        example=34118,
+        examples=[34118],
     )
     nb_children_objects: int = Field(
         title="Nb children objects",
         description="How many objects are classified in this category children (not itself).",
-        example=30091727,
+        examples=[30091727],
     )
     aphia_id: Optional[int] = Field(
         title="Aphia ID",
         description="The WoRMS aphia_id of the taxon.",
         default=None,
-        example="null",
+        examples=["null"],
     )
     rank: Optional[str] = Field(
         title="Rank",
         description="The WoRMS rank of the taxon.",
         default=None,
-        example="null",
+        examples=["null"],
     )
     children: List[int] = Field(
         title="Children",
@@ -208,18 +193,18 @@ class AddWormsTaxonModel(BaseModel):
     aphia_id: Optional[int] = Field(
         title="AphiaId",
         description="The unique numeric aphia_id of the taxon in WoRMS.",
-        example=12876,
+        examples=[12876],
     )
 
 
 class TaxonomyRecastReq(BaseModel):
     target_id: int = Field(
-        title="Target Id", description="The Collection or Project Id.", example=3
+        title="Target Id", description="The Collection or Project Id.", examples=[3]
     )
     operation: RecastOperation = Field(
         title="Recast operation",
         description="Recast operation name.",
-        example=RecastOperation.dwca_export_emof,
+        examples=[RecastOperation.dwca_export_emof],
     )
     is_collection: bool = Field(
         title="Is collection",
@@ -230,14 +215,16 @@ class TaxonomyRecastReq(BaseModel):
         title="Recast mapping and doc",
         description="Recast taxonomy from key to value.",
         default=TaxoRecastRsp(from_to={}, doc=None),
-        example={
-            "from_to": {"234": 12, "124": 7},
-            "doc": {"234": "up to the nearest non morpho"},
-        },
+        examples=[
+            {
+                "from_to": {"234": 12, "124": 7},
+                "doc": {"234": "up to the nearest non morpho"},
+            }
+        ],
     )
 
-    # noinspection PyMethodParameters
-    @validator("recast")
+    @field_validator("recast")
+    @classmethod
     def ensure_consistent_renaming(cls, v):
         resp = TaxoRecastBO.valid_remap(v.from_to)
         if resp is not None:
@@ -267,18 +254,15 @@ class _Taxo2Model(DescriptiveModel):
     aphia_id: Optional[int] = Field(
         title="AphiaId",
         description="The unique numeric aphia_id of the taxon if in Worms.",
-        example=12876,
+        examples=[12876],
     )
     rank: Optional[str] = Field(
         title="Rank",
         description="The WoRMS rank of the taxon.",
-        example="Subphylum",
+        examples=["Subphylum"],
     )
     id_instance = Field(
         title="Id instance", description="The instance Id.", examples=[1]
-    )
-    id_source = Field(
-        title="Id source", description="The source ID.", examples=["70372"]
     )
     lastupdate_datetime: Any = Field(
         title="Last update datetime",
@@ -327,8 +311,9 @@ class _Taxo2Model(DescriptiveModel):
         examples=["54800"],
     )
 
-    class Config:
-        json_schema_extra = {"title": "Create collection request Model"}
+    model_config = ConfigDict(
+        json_schema_extra={"title": "Create collection request Model"}
+    )
 
 
 _TaxonCentralModelFromDB = combine_models(Taxonomy, _Taxo2Model)

@@ -8,7 +8,7 @@
 # Only exception to this rule is when predicted objects disappear.
 #
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List
 
 from sqlalchemy.dialects.postgresql import (
     VARCHAR,
@@ -17,11 +17,13 @@ from sqlalchemy.dialects.postgresql import (
 )
 
 from .helpers.DDL import Column, ForeignKey, Index
+from .helpers.ORM import Mapped
 from .helpers.ORM import Model
-from .helpers.ORM import relationship
 
 if TYPE_CHECKING:
-    pass
+    from .User import User
+    from .Prediction import Prediction
+    from .Project import Project
 
 TrainingIDT = int
 IN_PROGRESS_DATE = datetime.fromtimestamp(0)
@@ -43,10 +45,11 @@ class Training(Model):
     # The settings used?
     training_path: str = Column(VARCHAR(80), nullable=False)
 
-    # The relationships are created in Relations.py but the typing here helps the IDE
-    author = relationship("User")
-    predictions = relationship("Prediction")
-    project = relationship("Project")
+    if TYPE_CHECKING:
+        # The relationship(s) are created in Relations.py but the typing here helps IDE
+        author: Mapped[User]
+        predictions: Mapped[List[Prediction]]
+        project: Mapped[Project]
 
     def __str__(self):
         return "Training #{0} by user {1} on the {2}".format(

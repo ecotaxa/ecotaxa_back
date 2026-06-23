@@ -11,6 +11,7 @@ import hmac
 from typing import Union
 
 from passlib.context import CryptContext  # type: ignore
+from sqlalchemy import select, func
 
 from API_operations.helpers.Service import Service
 from BO.Rights import NOT_AUTHORIZED

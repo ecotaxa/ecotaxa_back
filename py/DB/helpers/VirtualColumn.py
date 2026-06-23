@@ -2,8 +2,6 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2024  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from __future__ import annotations
-
 import functools
 from typing import Callable, List, Any, Dict
 from typing import TYPE_CHECKING
@@ -46,7 +44,7 @@ class VirtualColumnSet(VirtualColumnSetT):
         data[idx] = trsf(data[idx])
 
     def get_transformers(self, res: Result, offset_to_data: int) -> List[partial]:
-        col_descs = res.cursor.description  # type:ignore # case5
+        col_descs = res.cursor.description  # type: ignore # case5
         ret = []
         vc: VirtualColumn
         for name, vc in self.items():

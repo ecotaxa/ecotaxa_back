@@ -10,11 +10,11 @@ from pgvector.sqlalchemy import Vector
 ObjectIDT = int  # TODO: workaround for circular dep
 from .helpers.Bean import Bean
 from .helpers.DDL import ForeignKey, Index
-from .helpers.ORM import Column, relationship, Model
+from .helpers.ORM import Column, Mapped, Model
 from .helpers.Postgres import BIGINT
 
 if TYPE_CHECKING:
-    pass
+    from .Object import ObjectHeader
 
 N_DEEP_FEATURES = 50
 
@@ -27,8 +27,9 @@ class ObjectCNNFeatureVector(Model):
         primary_key=True,
     )
     features: Vector = Column(Vector(N_DEEP_FEATURES))
-    # The relationships are created in Relations.py but the typing here helps the IDE
-    object = relationship("ObjectHeader")
+    if TYPE_CHECKING:
+        # The relationship(s) are created in Relations.py but the typing here helps IDE
+        object: Mapped[ObjectHeader]
 
 
 # Note: below is OK for CI but different in PROD, see TODO

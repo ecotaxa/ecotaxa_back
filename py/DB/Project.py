@@ -2,14 +2,24 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from __future__ import annotations
+from typing import List, TYPE_CHECKING, Dict, Set
 
-from typing import List, TYPE_CHECKING
+from sqlalchemy import func
+from sqlalchemy.orm import Session
 
 from BO.DataLicense import AccessLevelEnum
-from DB.helpers.ORM import Model, relationship
-from .Instrument import Instrument
-from .ProjectPrivilege import ProjectPrivilege
+from DB.helpers.ORM import Model, Mapped
+
+if TYPE_CHECKING:
+    from .Object import ObjectHeader
+    from .Acquisition import Acquisition
+    from .Image import Image
+    from .Sample import Sample
+    from .User import User
+    from .ProjectVariables import ProjectVariables
+    from .Instrument import Instrument
+    from .ProjectPrivilege import ProjectPrivilege
+
 from .helpers.DDL import Column, Sequence, ForeignKey
 from .helpers.Postgres import VARCHAR, INTEGER, DOUBLE_PRECISION
 
@@ -24,8 +34,6 @@ EXPLORE_ONLY = "ExploreOnly"
 # Typings, to be clear that these are not e.g. object IDs
 ProjectIDT = int
 ProjectIDListT = List[int]
-if TYPE_CHECKING:
-    pass
 
 
 class Project(Model):
@@ -37,7 +45,7 @@ class Project(Model):
     projid: int = Column(INTEGER, Sequence("seq_projects"), primary_key=True)
     title: str = Column(VARCHAR(255), nullable=False)
     instrument_id: str = Column(
-        VARCHAR(32), ForeignKey(Instrument.instrument_id), nullable=False
+        VARCHAR(32), ForeignKey("instrument.instrument_id"), nullable=False
     )
     access = Column(VARCHAR(1), default=AccessLevelEnum.OPEN, nullable=False)
     status = Column(
@@ -71,23 +79,50 @@ class Project(Model):
     # Associated taxonomy statistics. Commented out to avoid that the ORM loads the whole list, which can be big.
     # taxo_stats = relationship("ProjectTaxoStat")
 
-    # The relationships are created in Relations.py but the typing here helps IDE
-    all_samples = relationship("Sample", viewonly=True)
-    # The users involved somehow in this project
-    privs_for_members = relationship("ProjectPrivilege", viewonly=True)
-    # owner: relationship
-    members = relationship(
-        "User", secondary=ProjectPrivilege.__tablename__, viewonly=True
-    )
-    # The twin EcoPart project
-    # ecopart_project: relationship
-    # The related instrument full definition
-    instrument = relationship("Instrument", viewonly=True)
-    # The variables which can be applied in this project
-    variables = relationship("ProjectVariables", uselist=False)
+    if TYPE_CHECKING:
+        # The relationship(s) are created in Relations.py but the typing here helps IDE
+        all_samples: Mapped[List[Sample]]
+        # The users involved somehow in this project
+        privs_for_members: Mapped[List[ProjectPrivilege]]
+        # owner: relationship
+        members: Mapped[List[User]]
+        # The twin EcoPart project
+        # ecopart_project: relationship
+        # The related instrument full definition
+        instrument: Mapped[Instrument]
+        # The variables which can be applied in this project
+        variables: Mapped[ProjectVariables]
 
     def __str__(self):
         return "{0} ({1})".format(self.title, self.projid)
+
+    @classmethod
+    def fetch_existing_objects(
+        cls, session: Session, prj_id: ProjectIDT
+    ) -> Dict[str, int]:
+        from .Relations import ObjectHeader, Sample, Acquisition
+
+        qry = session.query(ObjectHeader.orig_id, ObjectHeader.objid)
+        qry = qry.join(Acquisition).join(Sample).join(Project)
+        qry = qry.filter(Project.projid.__eq__(prj_id))
+        qry = qry.filter(ObjectHeader.objid.op("<@")(func.obj_in_prj(prj_id)))
+        ret = {orig_id: objid for orig_id, objid in qry}
+        return ret
+
+    @classmethod
+    def fetch_existing_ranks(
+        cls, session: Session, prj_id: ProjectIDT
+    ) -> Dict[int, Set[int]]:
+        from .Relations import ObjectHeader, Sample, Image, Acquisition
+
+        ret: Dict[int, Set[int]] = {}
+        qry = session.query(Image.objid, Image.imgrank)
+        qry = qry.join(ObjectHeader).join(Acquisition).join(Sample).join(Project)
+        qry = qry.filter(ObjectHeader.objid.op("<@")(func.obj_in_prj(prj_id)))
+        qry = qry.filter(Project.projid == prj_id)
+        for objid, imgrank in qry:
+            ret.setdefault(objid, set()).add(imgrank)
+        return ret
 
 
 class ProjectTaxoStat(Model):

@@ -7,10 +7,9 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import func, DDL, event  # fmt: skip
 
-from .Project import Project
 from .helpers.DDL import Column, ForeignKey, Index
 from .helpers.Direct import text
-from .helpers.ORM import Model, Session, relationship
+from .helpers.ORM import Model, Session, Mapped
 from .helpers.Postgres import VARCHAR, BIGINT
 
 # noinspection PyProtectedMember
@@ -18,7 +17,11 @@ from .helpers.Postgres import VARCHAR, BIGINT
 ACQUISITION_FREE_COLUMNS = 31
 
 if TYPE_CHECKING:
-    from .Sample import Sample
+    from .Process import Process
+    from .Object import ObjectHeader
+
+from .Project import Project
+from .Sample import Sample
 
 ACQ_PRJ_OFFSET = 10_000_000  # AKA 1e7
 
@@ -44,10 +47,11 @@ class Acquisition(Model):
     # TODO: Put into a dedicated table
     instrument = Column(VARCHAR(255))
 
-    # The relationships are created in Relations.py but the typing here helps IDE
-    sample = relationship("Sample")  # TODO: Repeat should not be needed, mypy bug
-    process = relationship("Process", uselist=False)
-    all_objects = relationship("ObjectHeader", viewonly=True)
+    if TYPE_CHECKING:
+        # The relationship(s) are created in Relations.py but the typing here helps IDE
+        sample: Mapped[Sample]
+        process: Mapped[Process]
+        all_objects: Mapped[List[ObjectHeader]]
 
     def pk(self) -> int:
         return self.acquisid

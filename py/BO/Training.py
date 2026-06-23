@@ -7,7 +7,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional, List, Dict, NamedTuple, Tuple
 
-from sqlalchemy import tuple_, values, column, String, Integer, Date
+from sqlalchemy import tuple_, values, column, Integer, Date
 
 from BO.Classification import (
     HistoricalLastClassif,
@@ -262,7 +262,7 @@ class PredictionBO(object):
         if len(pred_histos) == 0:
             return
         pred_histos_vals = values(
-            column("objid", String),
+            column("objid", Integer),
             column("histo_classif_date", Date),
             column("histo_classif_id", Integer),
             name="histo",

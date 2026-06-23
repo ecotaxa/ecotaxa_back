@@ -5,12 +5,11 @@
 from typing import TYPE_CHECKING, List
 
 from .helpers.DDL import Column, ForeignKey
-from .helpers.ORM import Model
-from .helpers.ORM import relationship
+from .helpers.ORM import Model, Mapped
 from .helpers.Postgres import VARCHAR, BIGINT
 
 if TYPE_CHECKING:
-    pass
+    from .Acquisition import Acquisition
 
 PROCESS_FREE_COLUMNS = 31
 
@@ -31,8 +30,9 @@ class Process(Model):
     # i.e. process_id from TSV
     orig_id = Column(VARCHAR(255), nullable=False)
 
-    # Relationship
-    acquisition = relationship("Acquisition", uselist=False, viewonly=True)
+    if TYPE_CHECKING:
+        # The relationship(s) are created in Relations.py but the typing here helps IDE
+        acquisition: Mapped[Acquisition]
 
     def pk(self) -> int:
         return self.processid

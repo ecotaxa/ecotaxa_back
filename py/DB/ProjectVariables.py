@@ -2,19 +2,15 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from __future__ import annotations
-
 from typing import Dict, Optional, TYPE_CHECKING
 
 from DB.helpers.ORM import Model
 from .helpers.DDL import Column, ForeignKey
-from .helpers.ORM import relationship
+from .helpers.ORM import Mapped
 from .helpers.Postgres import VARCHAR, INTEGER
 
 if TYPE_CHECKING:
-    pass
-else:
-    Project = "Project"
+    from .Project import Project
 
 KNOWN_PROJECT_VARS = {"subsample_coef", "total_water_volume", "individual_volume"}
 
@@ -36,8 +32,9 @@ class ProjectVariables(Model):
     # Python expression, the implied unit is mm3
     individual_volume = Column(VARCHAR)
 
-    # The relationship(s) are created in Relations.py but the typing here helps IDE
-    project = relationship("Project", viewonly=True)
+    if TYPE_CHECKING:
+        # The relationship(s) are created in Relations.py but the typing here helps IDE
+        project: Mapped[Project]
 
     def __str__(self):
         return "{0}:{1}{2}{3}".format(

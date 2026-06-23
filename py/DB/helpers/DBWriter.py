@@ -9,10 +9,10 @@ from .Bean import Bean
 from .Direct import text
 from .ORM import Session, MetaData, minimal_table_of
 from .Postgres import SequenceCache, LocalSequenceCache
-from .. import Prediction
 from ..CNNFeatureVector import ObjectCNNFeatureVector
 from ..Image import Image
 from ..Object import ObjectHeader, ObjectFields, ObjectsClassifHisto
+from ..Prediction import Prediction
 
 logger = get_logger(__name__)
 

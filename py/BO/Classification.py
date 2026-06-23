@@ -33,10 +33,10 @@ class HistoricalLastClassif:
     classif_id: Optional[ClassifIDT]
     histo_classif_date: Optional[datetime.datetime]
     histo_classif_id: Optional[ClassifIDT]
-    histo_classif_type: str  # TODO:  HistoClassifType Enum
+    histo_classif_type: Optional[str]  # TODO:  HistoClassifType Enum
     histo_classif_qual: Optional[str]
     histo_classif_who: Optional[int]
-    histo_classif_score: float
+    histo_classif_score: Optional[float]
 
 
 HistoricalClassificationListT = List["HistoricalClassification"]

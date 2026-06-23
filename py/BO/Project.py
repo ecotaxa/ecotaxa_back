@@ -662,8 +662,6 @@ class ProjectBO(object):
         if project_ids != "":
             pids = [p.strip() for p in project_ids.split(",")]
             qry = qry.filter(Project.projid.in_(pids))
-        qry = qry.filter(Project.visible.__eq__(True))
-        qry = qry.filter(Project.title.ilike(pattern))
         ret = [an_id for an_id, in qry]
         return ret
 

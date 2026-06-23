@@ -1,79 +1,12 @@
 #
 # Note: Tox does not manage dependencies changes. Remove .tox directory after changes here.
 #
-# START OF BACK-END REQUIREMENTS
-# Typings there depend on SQLA 2.0 interface
-SQLAlchemy[mypy]==2.0.54
-# sqlalchemy2-stubs are now installed with [mypy] above
-sqlalchemy_views==0.3.1
-# When SQLAlchemy moves to 2.0 we'll be able to use psycopg3
-psycopg[binary]==3.1.19
-#psycopg2-binary==2.9.9
-# Pillow needs manual testing
-# mac: brew install libjpeg
-Pillow==10.4.0
-# astral needs pytz
-astral==2.2
-pytz==2021.1
-types-pytz==2021.1.2
-# Needed by TF EXACTLY
-numpy~=1.26.4
-# Backbone of the app
-fastapi==0.111.1
-#fastapi-utils==0.2.1
-# Last (April 2023) pydantic
-#pydantic[mypy]==1.10.7
-# Speed up openapi response serialization
-orjson==3.11.5
-types-orjson==3.6.2
-#graphene==2.1.8
-uvloop==0.22.1
-httptools==0.7.1
-# With 0.16.0: Error "INFO:     ASGI 'lifespan' protocol appears unsupported." and the process
-# does not exit. Seen with 0.15.0 as well.
-# Note: there was a reg. in 0.17.0 with file upload, not visible during UT. So, to test manually.
-uvicorn
-gunicorn
-httpx==0.23.0
-lxml==5.2.2
-lxml-stubs==0.5.1
-requests==2.31.0
-types-requests==2.25.6
-python-multipart==0.0.7
-# Auth validation
-itsdangerous==2.0.1
-passlib==1.7.4
-# A bit of html
-jinja2==3.1.3
-aiofiles==0.7.0
-# Analyzis of XLSX data sources
-openpyxl==3.0.9
-openpyxl-stubs==0.1.21
-# Image processing libs.
-# Machine learning with no GPU
-#scikit-learn==1.5.0
-# Machine learning with GPU. NOT automatically regression-tested so to upgrade with caution.
-#tensorflow==2.6.0
-#tensorflow-hub==0.12.0
-#tensorflow_addons==0.14.0
-# Used same place as TF, CNN generation
-#pandas==2.2.2
-##lycon==0.2.0 # Conflicts with the version required by TF
-#opencv-python-headless==4.5.3.56
-#imgaug==0.4.0
-# DB upgrade generator
-alembic==1.13.2
-# CLI tools, for "cmds" subdirectory
-typer[all]==0.12.3
-# More recent mypy
-mypy==1.10.0
-# OpenId lib, latest 1.6.6 Requires-Python >=3.9
-authlib==1.3.2
-# END OF BACK-END REQUIREMENTS
+-r ../../py/requirements.txt
 # Testing & QA additions
 pandas
 tox==4.16.0
 pytest==8.2.2
+pytest-mock==3.14.1
 pytest-asyncio==0.15.1
 coverage==7.6.0
 flake8==3.9.2

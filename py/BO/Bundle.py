@@ -22,8 +22,7 @@ from BO.helpers.ImportHelpers import (
 )
 from DB.Acquisition import Acquisition
 from DB.Image import Image
-from DB.Object import ObjectHeader
-from DB.Project import ProjectIDT
+from DB.Project import ProjectIDT, Project
 from DB.Sample import Sample
 from DB.helpers import Session
 from helpers.DynamicLogs import get_logger
@@ -188,7 +187,7 @@ class InBundle(object):
         Get existing object IDs (orig_id AKA object_id in TSV) from the project
         """
         with CodeTimer("Existing objects for %d: " % prj_id, logger):
-            return ObjectHeader.fetch_existing_objects(session, prj_id)
+            return Project.fetch_existing_objects(session, prj_id)
 
     @staticmethod
     def fetch_existing_ranks(
@@ -197,7 +196,7 @@ class InBundle(object):
         """
         Get existing image ranks from the project
         """
-        return ObjectHeader.fetch_existing_ranks(session, prj_id)
+        return Project.fetch_existing_ranks(session, prj_id)
 
     @staticmethod
     def fetch_existing_parents(

@@ -39,19 +39,19 @@ class _OrganizationModel(DescriptiveModel):
     id: OrganizationIDT = Field(
         title="Organization Id",
         description="OrganizationIDT unique identifier.",
-        example=1,
+        examples=[1],
         default=-1,
     )
     name: str = Field(
         title="Organization Name",
         description="Organization's full name, as text.",
-        example="OrganizationName",
+        examples=["OrganizationName"],
     )
     directories: Optional[str] = Field(
         default=None,
         title="Directories",
         description="References to official directories where the organization is referenced, separated by ,.",
-        example="edmo:1278",
+        examples=["edmo:1278"],
     )
 
 
@@ -80,12 +80,12 @@ class _DBGuestModel(_MinimalUserModel):
     orcid: str = Field(
         title="ORCID ID",
         description="The orcid id https://support.orcid.org.",
-        example="0000-0001-2345-6789",
+        examples=["0000-0001-2345-6789"],
     )
     country: str = Field(
         title="Country",
         description="The country name, as text (but chosen in a consistent list).",
-        example="France",
+        examples=["France"],
     )
 
 
@@ -96,7 +96,7 @@ class MinUserModel(_MinUserModel):
     organisation: str = Field(
         title="Organisation",
         description="User's organisation name, as text.",
-        example="Oceanographic Laboratory of Villefranche sur Mer - LOV",
+        examples=["Oceanographic Laboratory of Villefranche sur Mer - LOV"],
     )
 
 
@@ -167,18 +167,11 @@ _UserModelFromDB = combine_models(User, _FullUserModel)
 
 # TODO JCE - description example
 class _Project2Model(DescriptiveModel):
-    projid = Field(title="Project Id", description="The project Id.", examples=[4824])
-    title = Field(
-        title="Title", description="The project title.", examples=["MyProject"]
-    )
-    visible = Field(
-        title="Visible", description="The project visibility.", examples=[False]
-    )
-    projid: ProjectIDT = Field(
-        title="Project Id", description="The project Id.", example=4824
+    projid: int = Field(
+        title="Project Id", description="The project Id.", examples=[4824]
     )
     title: str = Field(
-        title="Title", description="The project title.", example="MyProject"
+        title="Title", description="The project title.", examples=["MyProject"]
     )
     status: str = Field(
         title="Status", description="The project status.", examples=["Annotate"]
@@ -220,11 +213,6 @@ class _Project2Model(DescriptiveModel):
     comments = Field(
         title="Comments", description="The project comments.", examples=[""]
     )
-    description = Field(
-        title="Description",
-        description="The project description, i.e. main traits.",
-        examples=[""],
-    )
     rf_models_used: str = Field(title="Rf models used", description="", examples=[""])
     cnn_network_id: str = Field(
         title="Cnn network id", description="", examples=["SCN_zooscan_group1"]
@@ -239,13 +227,13 @@ class _Project2Model(DescriptiveModel):
             ]
         ),
         default=AccessLevelEnum.PUBLIC,
-        example=AccessLevelEnum.PUBLIC,
+        examples=[AccessLevelEnum.PUBLIC],
     )
     formulae: Optional[str] = Field(
         title="Formulae",
         description="Concentration formulae.",
         default=FORMULAE,
-        example="",
+        examples=[""],
     )
 
 
@@ -267,7 +255,7 @@ class UserModelWithRights(_UserModelFromDB):
     organisation: str = Field(
         title="Organisation",
         description="User's organisation name, as text.",
-        example="Oceanographic Laboratory of Villefranche sur Mer - LOV",
+        examples=["Oceanographic Laboratory of Villefranche sur Mer - LOV"],
     )
     can_do: List[int] = Field(
         title="User's permissions",
@@ -292,10 +280,10 @@ class UserModelWithRights(_UserModelFromDB):
 # We exclude free columns from base model, they will be mapped in a dedicated sub-entity
 class _Sample2Model(DescriptiveModel):
     sampleid: SampleIDT = Field(
-        title="Sample Id", description="The sample Id.", example=100
+        title="Sample Id", description="The sample Id.", examples=[100]
     )
     projid: ProjectIDT = Field(
-        title="Project Id", description="The project Id.", example=4
+        title="Project Id", description="The project Id.", examples=[4]
     )
     orig_id: str = Field(
         title="Original id",
@@ -503,7 +491,7 @@ class CollectionAggregatedRsp(BaseModel):
         title="Instrument",
         description="The collection instrument from projects.",
         default=UNKNOWN_INSTRUMENT,
-        example="UVP5",
+        examples=["UVP5"],
     )
     access: AccessLevelEnum = Field(
         title="Access",
@@ -514,7 +502,7 @@ class CollectionAggregatedRsp(BaseModel):
                 for access in AccessLevelEnum
             ]
         ),
-        example=AccessLevelEnum.OPEN,
+        examples=[AccessLevelEnum.OPEN],
         default=AccessLevelEnum.OPEN,
     )
     initclassiflist: str = Field(
@@ -541,29 +529,33 @@ class CollectionAggregatedRsp(BaseModel):
     privileges: Dict[str, List[MinUserModel]] = Field(
         title="privileges",
         description="Aggregated user privileges of projects with user minimal right on projects",
-        example={
-            "managers": [],
-            "annotators": [],
-            "viewers": [],
-        },
+        examples=[
+            {
+                "managers": [],
+                "annotators": [],
+                "viewers": [],
+            }
+        ],
         default={"managers": [], "annotators": [], "viewers": []},
     )
     freecols: Dict[str, Dict[str, str]] = Field(
         title="freecols",
         description="Common free cols of projects.",
         default={},
-        example={
-            "mappingobj": {"n01": "annotation_confidencepmax"},
-            "mappingsample": {"t01": "cruise", "t02": "vessel", "t03": "barcode"},
-            "mappingprocess": {},
-            "mappingacq": {},
-        },
+        examples=[
+            {
+                "mappingobj": {"n01": "annotation_confidencepmax"},
+                "mappingsample": {"t01": "cruise", "t02": "vessel", "t03": "barcode"},
+                "mappingprocess": {},
+                "mappingacq": {},
+            }
+        ],
     )
     excluded: Dict[str, ProjectIDListT] = Field(
         title="excluded",
         default={},
         description="Excluded projects for common values ",
-        example={"status": [1, 5, 12], "access": [1]},
+        examples=[{"status": [1, 5, 12], "access": [1]}],
     )
 
 
@@ -661,7 +653,7 @@ class CreateProjectReq(BaseModel):
             ]
         ),
         default=AccessLevelEnum.PUBLIC,
-        example=AccessLevelEnum.PUBLIC,
+        examples=[AccessLevelEnum.PUBLIC],
     )
 
     class Config:
@@ -837,10 +829,12 @@ class _AddedToCollection(BaseModel):
         title="Creators and associates display order",
         description="display order of creators and asosciates (users and organizations) needed to publish",
         default={"creators": [], "associates": []},
-        example={
-            "creators": ["123_o", "657_u", "213_u"],
-            "associates": ["13_u", "823_o", "3_u"],
-        },
+        examples=[
+            {
+                "creators": ["123_o", "657_u", "213_u"],
+                "associates": ["13_u", "823_o", "3_u"],
+            }
+        ],
     )
     is_private: bool = Field(
         title="Is the collection private.",
@@ -863,75 +857,101 @@ class CollectionReq(BaseModel):
     update full or partial collection Request model
     """
 
-    external_id: Union[str, None] = Field(
-        title="External Id", description="The external Id.", example=""
+    external_id: Optional[str] = Field(
+        title="External Id",
+        description="The external Id.",
+        examples=[""],
+        default=None,
     )
-    title: Union[str, None] = Field(
-        title="Title", description="The collection title.", example="My collection"
+    title: Optional[str] = Field(
+        title="Title",
+        description="The collection title.",
+        examples=["My collection"],
+        default=None,
     )
-    short_title: Union[str, None] = Field(
+    short_title: Optional[str] = Field(
         title="Short title",
         description="The collection short title.",
-        example="My coll",
+        examples=["My coll"],
+        default=None,
     )
     provider_user: Union[UserIDT, Any] = Field(
         title="Provider user Id",
         description="""Id of the person who
         is responsible for the content of this metadata record. Writer of the title and abstract.""",
+        default=None,
     )
     contact_user: Union[UserIDT, Any] = Field(
         title="Contact user Id",
         description="""Id of the person who
         should be contacted in cases of questions regarding the content of the dataset or any data restrictions.
         This is also the person who is most likely to stay involved in the dataset the longest.""",
+        default=None,
     )
-    project_ids: Union[ProjectIDListT, None] = Field(
+    project_ids: Optional[ProjectIDListT] = Field(
         title="Project ids",
         description="The list of composing project IDs.",
-        example=[1],
-        min_items=1,
+        examples=[[1]],
+        min_length=1,
+        default=None,
     )
-    license: Union[LicenseEnum, None] = Field(
+    license: Optional[LicenseEnum] = Field(
         title="License",
         description="The collection license.",
-        example=LicenseEnum.CC_BY,
+        examples=[LicenseEnum.CC_BY],
+        default=None,
     )
-    citation: Union[str, None] = Field(
-        title="Citation", description="The collection citation.", example=""
+    citation: Optional[str] = Field(
+        title="Citation",
+        description="The collection citation.",
+        examples=[""],
+        default=None,
     )
-    abstract: Union[str, None] = Field(
-        title="Abstract", description="The collection abstract.", example=""
+    abstract: Optional[str] = Field(
+        title="Abstract",
+        description="The collection abstract.",
+        examples=[""],
+        default=None,
     )
-    description: Union[str, None] = Field(
-        title="Description", description="The collection description.", example=""
+    description: Optional[str] = Field(
+        title="Description",
+        description="The collection description.",
+        examples=[""],
+        default=None,
     )
-    creator_users: Union[List[Union[UserIDT, Any]], None] = Field(
+    creator_users: Optional[List[Union[UserIDT, Any]]] = Field(
         title="Creator users Ids",
         description="""List of users id's or dict with name, organization for external persons.""",
+        default=None,
     )
-    associate_users: Union[List[Union[UserIDT, Any]], None] = Field(
+    associate_users: Optional[List[Union[UserIDT, Any]]] = Field(
         title="Associate users",
         description="""List of users id's or dict with name, organization for external persons.""",
+        default=None,
     )
-    creator_organisations: Union[List[Union[OrganizationIDT, Any]], None] = Field(
+    creator_organisations: Optional[List[Union[OrganizationIDT, Any]]] = Field(
         title="Creator organisations Ids or names",
         description="""All
         organisations who are responsible for the creation of the collection. Data creators should
         receive credit for their work and should therefore be included in the citation.""",
+        default=None,
     )
-    associate_organisations: Union[List[Union[OrganizationIDT, Any]], None] = Field(
+    associate_organisations: Optional[List[Union[OrganizationIDT, Any]]] = Field(
         title="Associate organisations",
         description="""Other
         organisation(s) Ids or names associated with the collection.""",
+        default=None,
     )
     display_order: Dict[str, Any] = Field(
         title="Creators and associates display order",
         description="display order of creators and asosciates (users and organizations) needed to publish",
         default={"creators": [], "associates": []},
-        example={
-            "creators": ["123_o", "657_u", "213_u"],
-            "associates": ["13_u", "823_o", "3_u"],
-        },
+        examples=[
+            {
+                "creators": ["123_o", "657_u", "213_u"],
+                "associates": ["13_u", "823_o", "3_u"],
+            }
+        ],
     )
 
     class Config:

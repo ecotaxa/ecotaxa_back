@@ -106,7 +106,7 @@ def get_predictions_stats(obj_ids):
         }
         pred_objects = list()
         trainings = set()
-        for rec in res.fetchall():
+        for rec in res.mappings().fetchall():
             # print(rec, file=stderr)
             if rec["object_id"] not in pred_objects:
                 pred_objects.append(rec["object_id"])

@@ -575,9 +575,9 @@ class CollectionBO(object):
 
 class MinimalCollectionBO(BaseModel):
     id: CollectionIDT
-    external_id: Union[str, None] = None
+    external_id: Optional[str] = None
     title: str
-    short_title: Union[str, None] = None
-    provider_user: Union[UserIDT, None] = None
-    contact_user: Union[UserIDT, None] = None
+    short_title: Optional[str] = None
+    provider_user: Optional[UserIDT] = None
+    contact_user: Optional[UserIDT] = None
     project_ids: ProjectIDListT

@@ -5,18 +5,16 @@
 #
 # Collection i.e. set of projects.
 #
-from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List
 
-from DB.helpers.ORM import Model, relationship
+from DB.helpers.ORM import Model, Mapped
 from .helpers.DDL import Column, Sequence, ForeignKey, Index
 from .helpers.Postgres import VARCHAR, INTEGER
 
 if TYPE_CHECKING:
-    pass
-else:
-    Project = "Project"
+    from .Project import Project
+    from .User import User, Guest, Organization
 
 
 class CollectionProject(Model):
@@ -49,22 +47,13 @@ class Collection(Model):
     abstract = Column(VARCHAR)
     description = Column(VARCHAR)
 
-    # The relationships are created in Relations.py but the typing here helps IDE
-    projects = relationship("Project", secondary=CollectionProject.__tablename__)
-    contact_user = relationship(
-        "User",
-        foreign_keys="Collection.contact_user_id",
-        uselist=False,
-    )
-    provider_user = relationship(
-        "User",
-        foreign_keys="Collection.provider_user_id",
-        uselist=False,
-    )
-    users_by_role = relationship("CollectionUserRole", viewonly=True)
-    organisations_by_role = relationship(
-        "CollectionOrgaRole"
-    )  # TODO: Repeat should not be needed, mypy bug
+    if TYPE_CHECKING:
+        # The relationship(s) are created in Relations.py but the typing here helps IDE
+        projects: Mapped[List[Project]]
+        contact_user: Mapped[User]
+        provider_user: Mapped[User]
+        users_by_role: Mapped[List["CollectionUserRole"]]
+        organisations_by_role: Mapped[List["CollectionOrgaRole"]]
 
     def __str__(self) -> str:
         return "{0} ({1})".format(self.id, self.title)
@@ -86,12 +75,12 @@ class CollectionUserRole(Model):
     user_id: int = Column(INTEGER, ForeignKey("users.id"), primary_key=True)
     role: str = Column(VARCHAR(1), nullable=False, primary_key=True)
 
-    # Relationships
-    collection = relationship("Collection", uselist=False)
-    user = relationship("User", uselist=False)
-    display_order: int = Column(INTEGER)
-    # The relationships are created in Relations.py but the typing here helps IDE
-    guest = relationship("Guest")
+    if TYPE_CHECKING:
+        # The relationship(s) are created in Relations.py but the typing here helps IDE
+        collection: Mapped[Collection]
+        user: Mapped[User]
+        display_order: int = Column(INTEGER)
+        guest: Mapped[Guest]
 
     def __str__(self) -> str:
         return "{0},{1}:{2}".format(self.collection_id, self.user_id, self.role)
@@ -104,14 +93,17 @@ class CollectionOrgaRole(Model):
     organization_id: str = Column(
         INTEGER, ForeignKey("organizations.id"), nullable=False, primary_key=True
     )
-    collection = relationship("Collection")
-    organization = relationship("Organization")
     role: str = Column(
         VARCHAR(1),  # 'C' for data Creator, 'A' for Associated 'person'
         nullable=False,
         primary_key=True,
     )
     display_order: int = Column(INTEGER)
+
+    if TYPE_CHECKING:
+        # The relationship(s) are created in Relations.py but the typing here helps IDE
+        collection: Mapped[Collection]
+        organization: Mapped[Organization]
 
     @property
     def organisation(self):
