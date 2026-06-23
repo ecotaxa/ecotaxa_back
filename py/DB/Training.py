@@ -8,6 +8,7 @@
 # Only exception to this rule is when predicted objects disappear.
 #
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy.dialects.postgresql import (
     VARCHAR,
@@ -15,11 +16,12 @@ from sqlalchemy.dialects.postgresql import (
     TIMESTAMP,
 )
 
-from .Project import Project
-from .User import User
 from .helpers.DDL import Column, ForeignKey, Index
 from .helpers.ORM import Model
 from .helpers.ORM import relationship
+
+if TYPE_CHECKING:
+    pass
 
 TrainingIDT = int
 IN_PROGRESS_DATE = datetime.fromtimestamp(0)
@@ -31,10 +33,10 @@ class Training(Model):
     training_id: int = Column(INTEGER, primary_key=True)
     # The target project.
     projid: int = Column(
-        INTEGER, ForeignKey(Project.projid, ondelete="CASCADE"), nullable=True
+        INTEGER, ForeignKey("projects.projid", ondelete="CASCADE"), nullable=True
     )
     # Who launched or is responsible for the training operation
-    training_author: int = Column(INTEGER, ForeignKey(User.id), nullable=False)
+    training_author: int = Column(INTEGER, ForeignKey("users.id"), nullable=False)
     # When it occurred
     training_start: datetime = Column(TIMESTAMP, nullable=False)
     training_end: datetime = Column(TIMESTAMP, nullable=False)
@@ -42,9 +44,9 @@ class Training(Model):
     training_path: str = Column(VARCHAR(80), nullable=False)
 
     # The relationships are created in Relations.py but the typing here helps the IDE
-    author: relationship
-    predictions: relationship
-    project: relationship
+    author = relationship("User")
+    predictions = relationship("Prediction")
+    project = relationship("Project")
 
     def __str__(self):
         return "Training #{0} by user {1} on the {2}".format(

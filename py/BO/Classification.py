@@ -4,7 +4,8 @@
 #
 import datetime
 from dataclasses import dataclass
-from typing import Set, List, Iterable
+from enum import Enum
+from typing import Set, List, Iterable, Optional
 
 # Typings, to be clear that these are not e.g. object IDs
 ClassifIDT = int
@@ -14,19 +15,27 @@ ClassifIDSetT = Set[int]
 ClassifIDCollT = Iterable[int]
 
 
+class HistoClassifType(str, Enum):
+    MANUAL = "M"
+    AUTO = "A"
+    NOTHING = "n"
+
+
 @dataclass()
 class HistoricalLastClassif:
     """
-    Association b/w an object and a former taxonomy entry.
+    Association b/w an object and a former taxonomy entry, if any.
+    This is _not_ the last historical line from DB table. If there is no history, it reflects
+    current state of the object, including nothing if it was simply imported. Arguable.
     """
 
     objid: int
-    classif_id: ClassifIDT  # Present classification
-    histo_classif_date: datetime.datetime
-    histo_classif_id: ClassifIDT
-    histo_classif_type: str
-    histo_classif_qual: str
-    histo_classif_who: int
+    classif_id: Optional[ClassifIDT]
+    histo_classif_date: Optional[datetime.datetime]
+    histo_classif_id: Optional[ClassifIDT]
+    histo_classif_type: str  # TODO:  HistoClassifType Enum
+    histo_classif_qual: Optional[str]
+    histo_classif_who: Optional[int]
     histo_classif_score: float
 
 
@@ -42,9 +51,9 @@ class HistoricalClassification:
     objid: int
     classif_id: ClassifIDT
     classif_date: datetime.datetime
-    classif_who: int  # 'UserIDT' makes a circular dependency issue
+    classif_who: Optional[int]  # TODO: 'UserIDT' makes a circular dependency issue
     classif_type: str
     classif_qual: str
-    classif_score: float
-    user_name: str
+    classif_score: Optional[float]
+    user_name: Optional[str]
     taxon_name: str

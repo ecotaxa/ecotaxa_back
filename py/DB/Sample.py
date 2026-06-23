@@ -6,12 +6,13 @@ from typing import List, Dict
 
 from sqlalchemy import func
 
+from .Acquisition import Acquisition
 from .Project import Project, ProjectIDT
 from .helpers import Result
 from .helpers.DDL import Index, Column, ForeignKey
 from .helpers.Direct import text
 from .helpers.Hints import RECURS_HINT
-from .helpers.ORM import Model, relationship, Session
+from .helpers.ORM import Model, Session, relationship
 from .helpers.Postgres import VARCHAR, DOUBLE_PRECISION, INTEGER, BIGINT
 
 SAMPLE_FREE_COLUMNS = 61
@@ -35,8 +36,8 @@ class Sample(Model):
     dataportal_descriptor = Column(VARCHAR(8000))
 
     # The relationships are created in Relations.py but the typing here helps IDE
-    project: Project
-    all_acquisitions: relationship
+    project = relationship(Project)
+    all_acquisitions = relationship(Acquisition, viewonly=True)
 
     def pk(self) -> int:
         return self.sampleid

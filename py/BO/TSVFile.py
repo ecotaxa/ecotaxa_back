@@ -624,7 +624,7 @@ class TSVFile(object):
                 upper_level_orig_id = parent_orig_id
             else:
                 # Fetch the process from DB, it's same PK as Acquisition
-                parent = session.query(Process).get(upper_level_pk)
+                parent = session.get(Process, upper_level_pk)
                 assert parent is not None
 
             # OK we have something to update

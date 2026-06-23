@@ -7,6 +7,8 @@ import json
 from dataclasses import dataclass
 from typing import Any, Final, List, Optional, Union, Dict, Type
 
+from sqlalchemy import select
+
 from BO.Classification import ClassifIDListT
 from BO.Rights import RightsBO
 from BO.helpers.TSVHelpers import none_to_empty
@@ -183,16 +185,14 @@ class UserBO(PersonBO):
         """
         Get a preference, for given project and user. Keys are not standardized (for now).
         """
-        # current_user = session.query(User).get(user_id)
-        # assert (
-        #    current_user is not None and current_user.status == UserStatus.active.value
-        # )
-        current_user: User = RightsBO.get_user_throw(ro_session, user_id)
-        prefs_for_proj: UserPreferences = (
-            current_user.preferences_for_projects.filter_by(
-                project_id=project_id
-            ).first()
+        RightsBO.get_user_throw(ro_session, user_id)
+        qry = (
+            select(UserPreferences)
+            .where(UserPreferences.project_id.__eq__(project_id))
+            .where(UserPreferences.user_id.__eq__(user_id))
         )
+        prefs_for_proj = ro_session.scalars(qry).first()
+
         if prefs_for_proj:
             all_prefs_for_proj = json.loads(prefs_for_proj.json_prefs)
         else:
@@ -206,16 +206,17 @@ class UserBO(PersonBO):
         """
         Set preference for a key, for given project and user. The key disappears if set to empty string.
         """
-        # current_user = session.query(User).get(user_id)
+        # current_user = session.get(User,user_id)
         # assert (
         #    current_user is not None and current_user.status == UserStatus.active.value
         # )
         current_user: User = RightsBO.get_user_throw(session, user_id)
-        prefs_for_proj: UserPreferences = (
-            current_user.preferences_for_projects.filter_by(
-                project_id=project_id
-            ).first()
+        qry = (
+            select(UserPreferences)
+            .where(UserPreferences.project_id.__eq__(project_id))
+            .where(UserPreferences.user_id.__eq__(user_id))
         )
+        prefs_for_proj = session.scalars(qry).first()
         if prefs_for_proj:
             all_prefs_for_proj = json.loads(prefs_for_proj.json_prefs)
         else:

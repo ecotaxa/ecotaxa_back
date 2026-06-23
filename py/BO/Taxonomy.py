@@ -4,8 +4,11 @@
 #
 # Taxon/Category/Classification
 #
+from collections.abc import Sequence
 from datetime import datetime
 from typing import List, Set, Dict, Tuple, Optional, Final, Any
+
+from sqlalchemy import RowMapping
 
 from BO.Classification import ClassifIDCollT, ClassifIDT, ClassifIDListT
 from DB.Project import ProjectTaxoStat
@@ -153,12 +156,10 @@ class TaxonomyBO(object):
         Get taxa names from id list.
         """
         ret = {}
-        sql = text(
-            """SELECT t.id, t.name, p.name AS parent_name
+        sql = text("""SELECT t.id, t.name, p.name AS parent_name
                  FROM taxonomy t
                 LEFT JOIN taxonomy p ON t.parent_id = p.id
-                WHERE t.id = ANY(:ids) """
-        )
+                WHERE t.id = ANY(:ids) """)
         res: Result = session.execute(sql, {"ids": list(id_coll)})
         for rec_taxon in res.mappings():
             ret[rec_taxon["id"]] = (rec_taxon["name"], rec_taxon["parent_name"])
@@ -199,9 +200,7 @@ class TaxonomyBO(object):
                     SELECT string_agg(name,'>') 
                       FROM (SELECT name 
                               FROM rq 
-                          ORDER BY rrank desc) q)""".format(
-            ref_obj_id
-        )
+                          ORDER BY rrank desc) q)""".format(ref_obj_id)
         return sql
 
     @staticmethod
@@ -232,7 +231,7 @@ class TaxonomyBO(object):
         priority_set: ClassifIDListT,
         display_name_filter: str,
         name_filters: List[str],
-    ):
+    ) -> Sequence[RowMapping]:
         """
         :param session:
         :param restrict_to: If not None, limit the query to given IDs.
@@ -245,7 +244,7 @@ class TaxonomyBO(object):
         # bind = None  # For portable SQL, no 'ilike'
         bind = session.get_bind()
         priority: Label = case(
-            [(tf.c.id == any_(priority_set), text("0"))], else_=text("1")
+            (tf.c.id == any_(priority_set), text("0")), else_=text("1")
         ).label("prio")
         qry = select(
             [
@@ -282,7 +281,7 @@ class TaxonomyBO(object):
         )
 
         res: Result = session.execute(qry)
-        return res.fetchall()
+        return res.mappings().fetchall()
 
     @classmethod
     def _add_recursive_query(cls, qry, tf, do_concat):
@@ -326,8 +325,7 @@ class TaxonomyBO(object):
         nbrobj is the number of validated objects in the category, nbrobjcum is the sum
         of nbrobj for all children recursively.
         """
-        sql = text(
-            """
+        sql = text("""
         -- Reset all
         UPDATE taxonomy 
            SET nbrobj=0, nbrobjcum=NULL 
@@ -355,8 +353,7 @@ class TaxonomyBO(object):
         UPDATE taxonomy
            SET nbrobjcum=cml.nbr
           FROM cml
-         WHERE taxonomy.id = cml.classif_id;"""
-        )
+         WHERE taxonomy.id = cml.classif_id;""")
         session.execute(sql)
 
     @staticmethod
@@ -492,8 +489,6 @@ class TaxonBOSet(object):
 
     def __init__(self, session: Session, taxon_ids: ClassifIDListT):
         tf = Taxonomy.__table__.alias("tf")
-        # bind = None  # For portable SQL, no 'ilike'
-        bind = session.get_bind()
         select_list = [
             tf.c.nbrobj,
             tf.c.nbrobjcum,
@@ -511,12 +506,11 @@ class TaxonBOSet(object):
                 text(
                     "t%d.id, t%d.name, t%d.aphia_id, t%d.taxotype, t%d.taxostatus, t%d.rank, t%d.rename_to"
                     % (level, level, level, level, level, level, level)
-                )  # type:ignore
+                )  # type: ignore
                 for level in range(1, TaxonomyBO.MAX_TAXONOMY_LEVELS)
             ]
         )
-        qry = select(select_list, bind=bind)
-
+        qry = select(*select_list)
         # Inject the recursive query, for getting parents
         _dumm, qry = TaxonomyBO._add_recursive_query(qry, tf, do_concat=False)
         qry = qry.where(tf.c.id == any_(taxon_ids))
@@ -554,9 +548,9 @@ class TaxonBOSet(object):
                 cat_status,
                 display_name,
                 nbobj1,
-                nbobj2,  # type:ignore
+                nbobj2,
                 lineage,
-                lineage_id,  # type:ignore
+                lineage_id,  # type: ignore
                 lineage_status,
                 rename_id=rename_id,
                 aphia_id=aphia_id,

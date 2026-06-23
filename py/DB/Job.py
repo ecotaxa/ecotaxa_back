@@ -3,6 +3,7 @@
 # Copyright (C) 2015-2021  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 from enum import Enum
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Sequence, Column, ForeignKey, TIMESTAMP
 from sqlalchemy.dialects.postgresql import VARCHAR, INTEGER
@@ -12,6 +13,9 @@ from .helpers.ORM import Model
 
 # Typings, to be clear that these are not e.g. task IDs
 JobIDT = int
+
+if TYPE_CHECKING:
+    pass
 
 
 class DBJobStateEnum(str, Enum):
@@ -64,7 +68,7 @@ class Job(Model):
     updated_on = Column(TIMESTAMP, nullable=False)
     """ Last time that anything changed in present line """
 
-    owner: relationship
+    owner = relationship("User")  # TODO: Repeat should not be needed, mypy bug
 
     def __str__(self):
         return "{0} ({1}): {2}/{3}".format(

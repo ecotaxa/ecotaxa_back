@@ -88,7 +88,7 @@ class FileNameVirtualColumn(VirtualColumn):
     @staticmethod
     def result_to_py(from_sel: Any) -> Any:
         # For some SQLAlchemy reason we select a tuple (row/record) but we get a str
-        imgid, orig_file_name = from_sel[1:-1].split(",", 1)
+        imgid, orig_file_name = from_sel
         # The name on the right gets enclosed in double quote if it contains a space
         orig_file_name = orig_file_name.strip('"')
         imgid = int(imgid)
@@ -103,10 +103,10 @@ class ThumbFileNameVirtualColumn(VirtualColumn):
     @staticmethod
     def result_to_py(from_sel: Any) -> Any:
         # For some SQLAlchemy reason we select a tuple (row) but we get a str
-        if from_sel[1] == ",":
+        if from_sel[1] is None:
             return None  # No height, 99% of the cases
-        thumb_height, imgid = [int(n) for n in from_sel[1:-1].split(",", 1)]
-        return Image.thumb_img_from_id_if_there(imgid, thumb_height)
+        thumb_height, imgid = from_sel
+        return Image.thumb_img_from_id_if_there(int(imgid), thumb_height)
 
 
 IMAGE_VIRTUAL_COLUMNS: VirtualColumnSet = VirtualColumnSet(

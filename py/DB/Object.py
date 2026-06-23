@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import datetime
-from typing import Dict, Set, Iterable, TYPE_CHECKING, List
+from typing import Dict, Set, List
 
 # noinspection PyPackageRequirements
 from sqlalchemy import Index, Column, ForeignKey, Integer, text, func, event, DDL  # fmt:skip
@@ -30,8 +30,6 @@ from .Acquisition import Acquisition
 from .Image import Image
 from .Project import Project, ProjectIDT
 from .Sample import Sample
-from .Taxonomy import Taxonomy
-from .User import User
 from .helpers.ORM import Model
 
 # Typings
@@ -39,10 +37,6 @@ ObjectIDT = int
 ObjectIDListT = List[int]
 
 OBJ_PRJ_OFFSET = 100_000_000  # AKA 1e8
-
-if TYPE_CHECKING:
-    pass
-    # from .Image import Image
 
 # Classification qualification
 PREDICTED_CLASSIF_QUAL = "P"  # ML found, during the training starting at 'classif_date' moment, that the object _could be_ a 'classif_id' with 'classif_score' confidence.
@@ -72,9 +66,9 @@ class ObjectHeader(Model):
         nullable=False,
     )  # 8 bytes align d
     # Author of last change in/to 'V' or 'D'
-    classif_who = Column(Integer, ForeignKey(User.id))  # 4 bytes align i
+    classif_who = Column(Integer, ForeignKey("users.id"))  # 4 bytes align i
     # User-visible classification
-    classif_id = Column(INTEGER, ForeignKey(Taxonomy.id))  # 4 bytes align i
+    classif_id = Column(INTEGER, ForeignKey("taxonomy.id"))  # 4 bytes align i
 
     # 86400 different values, basically all possible minutes of day
     objtime = Column(TIME)  # 8 bytes align d
@@ -108,14 +102,30 @@ class ObjectHeader(Model):
 
     complement_info = Column(VARCHAR)  # e.g. "Part of ostracoda"
 
-    # The relationships are created in Relations.py but the typing here helps the IDE
-    fields: ObjectFields
-    cnn_features: relationship
-    classif: relationship
-    classifier: relationship
-    all_images: Iterable[Image]
-    acquisition: relationship
-    history: relationship
+    fields = relationship("ObjectFields", uselist=False, viewonly=True)
+    cnn_features = relationship("ObjectCNNFeatureVector", uselist=False)
+    classif = relationship(
+        "Taxonomy",
+        primaryjoin="Taxonomy.id==ObjectHeader.classif_id",
+        foreign_keys="Taxonomy.id",
+        uselist=False,
+    )
+    # classif_auto = relationship(
+    #     "Taxonomy",
+    #     primaryjoin="Taxonomy.id==foreign(ObjectHeader.classif_auto_id)",
+    #     uselist=False,
+    # )
+    classifier = relationship(
+        "User",
+        primaryjoin="User.id==ObjectHeader.classif_who",
+        foreign_keys="User.id",
+        uselist=False,
+    )
+    all_images = relationship("Image")  # TODO: Repeat should not be needed, mypy bug
+    acquisition = relationship(
+        "Acquisition"
+    )  # TODO: Repeat should not be needed, mypy bug
+    history = relationship("ObjectsClassifHisto", viewonly=True)
 
     @classmethod
     def get_next_pk(cls, session: Session, prj_id: int) -> int:
@@ -137,13 +147,15 @@ class ObjectHeader(Model):
     ) -> Dict[str, int]:
         qry = session.query(ObjectHeader.orig_id, ObjectHeader.objid)
         qry = qry.join(Acquisition).join(Sample).join(Project)
-        qry = qry.filter(Project.projid == prj_id)
+        qry = qry.filter(Project.projid.__eq__(prj_id))
         qry = qry.filter(ObjectHeader.objid.op("<@")(func.obj_in_prj(prj_id)))
         ret = {orig_id: objid for orig_id, objid in qry}
         return ret
 
     @classmethod
-    def fetch_existing_ranks(cls, session: Session, prj_id) -> Dict[int, Set[int]]:
+    def fetch_existing_ranks(
+        cls, session: Session, prj_id: ProjectIDT
+    ) -> Dict[int, Set[int]]:
         ret: Dict[int, Set[int]] = {}
         qry = session.query(Image.objid, Image.imgrank)
         qry = qry.join(ObjectHeader).join(Acquisition).join(Sample).join(Project)
@@ -223,8 +235,8 @@ class ObjectFields(Model):
     # Not a real FK, this is used for a cluster which groups together data blocks by acquisition
     # TODO: Remove in favor of PK projid header
     acquis_id = Column(BIGINT, nullable=False)
-    # The relationships are created in Relations.py but the typing here helps the IDE
-    object: relationship
+
+    object = relationship("ObjectHeader", uselist=False)
 
 
 # TODO
@@ -241,7 +253,6 @@ for i in range(1, 501):
     setattr(ObjectFields, "n%02d" % i, Column(FLOAT))
 for i in range(1, 21):
     setattr(ObjectFields, "t%02d" % i, Column(VARCHAR(250)))
-
 
 Index(  # We CLUSTER using this one, object ids tend to be consecutively read
     "obj_field_acquisid_objfid_idx",
@@ -309,18 +320,20 @@ class ObjectsClassifHisto(Model):
     classif_date = Column(TIMESTAMP, primary_key=True)  # 8 bytes align d
     # The score associated with 'P' state
     classif_score = Column(DOUBLE_PRECISION)  # 8 bytes align d
+    classif_who = Column(Integer, ForeignKey("users.id"))  # 4 bytes align i
+
+    object = relationship("ObjectHeader")  # TODO: Repeat should not be needed, mypy bug
     classif_id = Column(
-        INTEGER, ForeignKey(Taxonomy.id, ondelete="CASCADE"), nullable=False
+        INTEGER, ForeignKey("taxonomy.id", ondelete="CASCADE"), nullable=False
     )  # 4 bytes align i
     # The person who caused the 'D' or 'V' state
-    classif_who = Column(Integer, ForeignKey(User.id))  # 4 bytes align i
+    classif_who = Column(Integer, ForeignKey("users.id"))  # 4 bytes align i
     classif_qual = Column(
         CHAR(1), nullable=False
     )  # 2 bytes (len + content) align c as len < 127
-    # The relationships are created in Relations.py but the typing here helps the IDE
-    object: relationship
-    classif: relationship
-    classifier: relationship
+    object = relationship("ObjectHeader")
+    classif = relationship("Taxonomy")
+    classifier = relationship("User")
 
 
 # Usage, e.g.

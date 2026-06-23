@@ -825,7 +825,9 @@ def test_classif(fastapi, tstlogs):
     sce_check_consistency("revert of force after revert")
 
     # Delete some object via API, leave the one which was predicted twice (#1)
-    rsp = fastapi.delete(OBJECT_SET_DELETE_URL, headers=ADMIN_AUTH, json=obj_ids[2:6])
+    rsp = fastapi.request(
+        "DELETE", OBJECT_SET_DELETE_URL, headers=ADMIN_AUTH, json=obj_ids[2:6]
+    )  # TODO: This DELETE+body is discouraged
     assert rsp.status_code == status.HTTP_200_OK
     # They should disappear from some predictions
     assert get_predictions_stats(obj_ids) == {

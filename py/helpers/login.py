@@ -47,18 +47,14 @@ class LoginService(Service):
         assert username is not None, NOT_AUTHORIZED
         account_validation = self.config.get_account_validation() == "on"
         # if account validation is "on" and account is pending
-        from sqlalchemy import func
 
+        user_qry = select(User)
+        user_qry = user_qry.where(func.lower(User.email).__eq__(func.lower(username)))
         if account_validation == True:
-            user_qry = self.session.query(User).filter(
-                func.lower(User.email) == func.lower(username)
-            )
+            pass
         else:
-            user_qry = self.session.query(User).filter(
-                func.lower(User.email) == func.lower(username),
-                User.status == UserStatus.active.value,
-            )
-        db_users = user_qry.all()
+            user_qry = user_qry.where(User.status == UserStatus.active.value)
+        db_users = self.session.execute(user_qry).scalars().all()
         assert len(db_users) == 1, NOT_AUTHORIZED
         the_user: User = db_users[0]
         # verif even user is not active , in order to let modify email only if mail_status is False

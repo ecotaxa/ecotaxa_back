@@ -4,12 +4,17 @@
 #
 from __future__ import annotations
 
-from typing import Dict, Optional
+from typing import Dict, Optional, TYPE_CHECKING
 
 from DB.helpers.ORM import Model
 from .helpers.DDL import Column, ForeignKey
 from .helpers.ORM import relationship
 from .helpers.Postgres import VARCHAR, INTEGER
+
+if TYPE_CHECKING:
+    pass
+else:
+    Project = "Project"
 
 KNOWN_PROJECT_VARS = {"subsample_coef", "total_water_volume", "individual_volume"}
 
@@ -32,7 +37,7 @@ class ProjectVariables(Model):
     individual_volume = Column(VARCHAR)
 
     # The relationship(s) are created in Relations.py but the typing here helps IDE
-    project: relationship
+    project = relationship("Project", viewonly=True)
 
     def __str__(self):
         return "{0}:{1}{2}{3}".format(

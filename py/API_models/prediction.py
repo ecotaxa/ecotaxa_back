@@ -20,7 +20,7 @@ class PredictionReq(BaseModel):
     source_project_ids: List[int] = Field(
         title="Source project Ids",
         description="The source projects, objects in them will serve as reference.",
-        min_items=1,
+        min_length=1,
     )
     learning_limit: Optional[int] = Field(
         title="Source projects fetching limit",
@@ -31,13 +31,13 @@ class PredictionReq(BaseModel):
         title="Features",
         description="The object features AKA free column, to use in the algorithm. "
         "Features must be common to all projects, source ones and destination one.",
-        min_items=1,
+        min_length=1,
     )
     categories: List[int] = Field(
         title="Categories",
         description="In source projects, only objects validated with these categories "
         "will be considered.",
-        min_items=1,
+        min_length=1,
     )
     use_scn: bool = Field(
         title="Use scn",
@@ -51,7 +51,7 @@ class PredictionReq(BaseModel):
     )
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "title": "Prediction Request",
             "description": "How to predict, in details.",
             "example": {
@@ -71,19 +71,19 @@ class PredictionRsp(BaseModel):
     errors: List[str] = Field(
         title="Errors",
         description="Showstopper problems found while preparing the prediction.",
-        example=[],
+        examples=[[]],
         default=[],
     )
     warnings: List[str] = Field(
         title="Warnings",
         description="Problems found while preparing the prediction.",
-        example=[],
+        examples=[[]],
         default=[],
     )
     job_id: int = Field(
         title="Job Id",
         description="The created job, 0 if there were problems.",
-        example=482,
+        examples=[482],
         default=0,
     )
 
@@ -109,5 +109,5 @@ class MLModel(BaseModel):
     name: str = Field(
         title="Name",
         description="A usable model for features extraction.",
-        example="zoocam_2022_04_06",
+        examples=["zoocam_2022_04_06"],
     )

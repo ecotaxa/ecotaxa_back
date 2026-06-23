@@ -163,8 +163,8 @@ class DeepFeatures(object):
     #     Read CNN lines AKA features, in order, for given object_ids, into a NumPy array
     #     """
     #     res = cls.read_for_objects(session, oid_lst)
-    #     ret: np.ndarray = np.ndarray(
-    #         shape=(len(oid_lst), N_DEEP_FEATURES), dtype=np.float32
+    #     ret: ndarray = np.ndarray(
+    #         shape=(len(oid_lst), len(res.keys())), dtype=np.float32
     #     )
     #     ndx = 0
     #     for a_row in res:

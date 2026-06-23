@@ -19,20 +19,22 @@ from sqlalchemy import (
     func,
     case,
     text,
-    select,
     column,
     Integer,
+    SmallInteger,
     Float,
     FLOAT,
+    event,
+    select,
+    update,
+    delete,
     desc,
     values,
 )
-
 # For exporting
 # noinspection PyUnresolvedReferences
 from sqlalchemy.engine.row import Row
 from sqlalchemy.ext.declarative import declarative_base
-
 # noinspection PyUnresolvedReferences
 from sqlalchemy.orm import (
     Query,
@@ -41,20 +43,16 @@ from sqlalchemy.orm import (
     joinedload,
     subqueryload,
     selectinload,
+    InstrumentedAttribute,
 )
-
 # noinspection PyUnresolvedReferences
 from sqlalchemy.orm import relationship, RelationshipProperty, aliased, Mapped
-
 # noinspection PyUnresolvedReferences
 from sqlalchemy.sql import Delete, Update, Insert, ColumnElement
-
 # noinspection PyUnresolvedReferences
-from sqlalchemy.sql.elements import Label
-
+from sqlalchemy.sql.elements import Label, CollectionAggregate
 # noinspection PyUnresolvedReferences
 from sqlalchemy.sql.functions import concat
-
 # noinspection PyUnresolvedReferences
 from sqlalchemy.sql.selectable import Alias
 
@@ -65,6 +63,7 @@ _Base: type = declarative_base()
 
 class Model(_Base):  # type: ignore
     __abstract__ = True  # prevent SQLAlchemy from trying to map
+    __allow_unmapped__ = True
     __tablename__: str
     __table__: Any
 
@@ -209,7 +208,7 @@ def minimal_model_of(
     return Ret
 
 
-def any_(items_list: Union[List[int], List[str]]):
+def any_(items_list: Union[List[int], List[str]]) -> CollectionAggregate[bool]:
     # TODO: Get proper mapping, it seems a bit too much for sqlalchemy-stubs
     # noinspection PyTypeChecker
     return _pg_any(items_list)  # type: ignore

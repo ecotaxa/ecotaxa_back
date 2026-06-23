@@ -8,6 +8,8 @@ import json
 from collections import OrderedDict, namedtuple
 from typing import Dict, Tuple, List, Union, Type, Optional, Set, Final, Any
 
+import orjson
+
 from DB.Acquisition import Acquisition
 from DB.Image import Image
 from DB.Object import ObjectFields, ObjectHeader
@@ -527,7 +529,8 @@ class TableMapping(object):
             # None or "" => nothing to do
             return self
         if str_mapping.startswith("{"):
-            self.tsv_cols_to_real = json.loads(str_mapping)
+            # e.g. {"area": "n01", "bbox-0": "n02", "bbox-1": "n03"}
+            self.tsv_cols_to_real = orjson.loads(str_mapping)
             tsv_cols_to_real = self.tsv_cols_to_real
             self.real_cols_to_tsv = {
                 v: k for k, v in sorted(tsv_cols_to_real.items(), key=lambda kv: kv[1])

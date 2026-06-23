@@ -14,6 +14,8 @@ from pathlib import Path
 from typing import Optional, Tuple, TextIO, Dict, List, Set, Any, Union
 from zipfile import ZipFile
 
+from sqlalchemy import bindparam
+
 from API_models.exports import (
     ExportRsp,
     ExportReq,
@@ -36,7 +38,7 @@ from BO.ObjectSetQueryPlus import ResultGrouping, IterableRowsT, ObjectSetQueryP
 from BO.Rights import RightsBO, Action
 from BO.Taxonomy import TaxonomyBO
 from BO.Vocabulary import Vocabulary, Units
-from DB import Image
+from DB.Image import Image
 from DB.Object import (
     VALIDATED_CLASSIF_QUAL,
     DUBIOUS_CLASSIF_QUAL,
@@ -53,6 +55,7 @@ from helpers import (
     DateTime,
 )  # Need to keep the whole module imported, as the function is mocked
 from helpers.DynamicLogs import get_logger, LogsSwitcher
+# TODO: Move somewhere else
 from ..helpers.JobService import JobServiceBase, ArgsDict  # fmt:skip
 
 logger = get_logger(__name__)
@@ -194,6 +197,9 @@ class ProjectExport(JobServiceBase):
         out_file_name = None
         if req.out_to_ftp:
             progress_before_copy = 95
+        # Fetch the source project
+        src_project = self.ro_session.get(Project, req.project_id)
+        assert src_project is not None
         # Force some implied (in UI) options.
         if req.only_annotations:
             req.exp_type = ExportTypeEnum.general_tsv  # No need for a subdir in ZIP
@@ -306,10 +312,13 @@ class ProjectExport(JobServiceBase):
 
     def _get_fast_count(self, project_ids: ProjectIDListT) -> int:
         # Get a fast count of the maximum of what to do
-        count_sql = (
+        count_sql = text(
             "SELECT SUM(nbr) AS cnt FROM projects_taxo_stat WHERE projid IN :prjs"
+        ).bindparams(bindparam("prjs", expanding=True))
+        res = self.ro_session.execute(
+            count_sql,
+            {"prjs": tuple(project_ids)},
         )
-        res = self.ro_session.execute(text(count_sql), {"prjs": tuple(project_ids)})
         obj_count = res.one()[0]
         return obj_count
 
@@ -547,7 +556,7 @@ class ProjectExport(JobServiceBase):
         # Prepare TSV structure
         col_descs = [
             a_desc
-            for a_desc in res.cursor.description  # type:ignore # case2
+            for a_desc in res.cursor.description  # type: ignore # case2
             if a_desc.name != "img_internal_id"
         ]
         # read latitude column to get float DB type

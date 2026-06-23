@@ -1,6 +1,7 @@
 import logging
 
 from API_operations.helpers.Service import Service
+from sqlalchemy import text
 from starlette import status
 
 from tests.api_wrappers import api_wait_for_stable_job, api_get_log_file
@@ -58,7 +59,9 @@ def test_nightly_job(fastapi, caplog, tstlogs):
     test_export_roundtrip(fastapi, tstlogs)  # Import/Export/Import
     with Service() as sce:
         sce.session.execute(
-            "update job set creation_date='2022-06-01' where id in (select id from job order by id desc limit 3)"
+            text(
+                "update job set creation_date='2022-06-01' where id in (select id from job order by id desc limit 3)"
+            )
         )
         sce.session.commit()
 

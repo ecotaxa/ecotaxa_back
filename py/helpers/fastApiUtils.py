@@ -64,12 +64,17 @@ def dump_openapi(app: FastAPI, main_path: str):  # pragma: no cover
     import json
     from pathlib import Path
 
+    try:
+        openapi = app.openapi()
+    except Exception as e:
+        print(f"Failed to dump openapi", e)
     json_def = json.dumps(
-        app.openapi(),
+        openapi,
         ensure_ascii=False,
         allow_nan=False,
         indent=2,
         separators=(",", ":"),
+        sort_keys=True,
         # sort_keys=True, # Uncomment for easier comparison b/w versions
     )
     # Copy here for Git commit but also into another dev tree
@@ -263,7 +268,7 @@ class MyORJSONResponse(JSONResponse):
 
     @classmethod
     def register(cls, a_class: Type[Any], its_model: Type[BaseModel]):
-        cls.type_to_fields[a_class] = list(its_model.__fields__.keys())
+        cls.type_to_fields[a_class] = list(its_model.model_fields.keys())
 
     @classmethod
     def orjson_default(cls, obj: Any) -> Union[str, Dict[str, Any]]:

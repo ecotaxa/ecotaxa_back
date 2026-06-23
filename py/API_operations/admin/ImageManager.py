@@ -126,7 +126,7 @@ class ImageManagerService(Service):
             logger.exception(e)
             img_file.state = ImageFileStateEnum.ERROR.value
 
-    def do_cleanup_dup_same_obj(
+    def do_cleanup_dup_same_obj(  # TODO: Not working and not tested anyway, now to adjust with Virtual Columns
         self, current_user_id: UserIDT, prj_id: ProjectIDT, max_deletes: int
     ) -> str:  #
         """
@@ -138,7 +138,7 @@ class ImageManagerService(Service):
         orig_img = aliased(Image, name="orig")
         orig_file = aliased(ImageFile, name="orig_file")
         qry = self.session.query(
-            orig_img.orig_file_name, orig_img.imgid, Image, ImageFile
+            orig_img.imgid, Image, ImageFile
         )  # Select what to delete
         qry = (
             qry.join(ObjectHeader, ObjectHeader.objid == Image.objid)
@@ -165,6 +165,14 @@ class ImageManagerService(Service):
                 ImageFile.state == ImageFileStateEnum.OK.value,
             ),
         )
+        qry = qry.join(
+            orig_file,
+            and_(
+                # orig_file.path == orig_img.file_name,
+                orig_file.state
+                == ImageFileStateEnum.OK.value,
+            ),
+        )
         # and the same value of course
         qry = qry.filter(
             and_(
@@ -172,7 +180,7 @@ class ImageManagerService(Service):
                 ImageFile.digest == orig_file.digest,
             )
         )
-        qry = qry.filter(Project.projid == prj_id)
+        qry = qry.filter(Project.projid.__eq__(prj_id))
         qry = qry.order_by(Image.objid, orig_img.imgid, Image.imgid)
         qry = qry.limit(max_deletes)
         with CodeTimer(

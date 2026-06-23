@@ -46,7 +46,7 @@ class TxtFileWithModel(object):
         model_fields = model.__fields__
         ret = None, True
         for a_field_name, a_field in model_fields.items():
-            field_extra = a_field.field_info.extra
+            field_extra = a_field.json_schema_extra
             if field_extra.get("is_id"):
                 ret = a_field_name, field_extra.get("dup_id")
                 break
@@ -73,7 +73,7 @@ class TxtFileWithModel(object):
 
     def _sorted_fields(self):
         ret = []
-        model_fields = self.model.__fields__
+        model_fields = self.model.model_fields
         # Loop over fields in the model order, with id first
         for a_field_name in ["id"] + list(model_fields.keys()):
             if a_field_name not in self.fields:
@@ -126,10 +126,12 @@ class TxtFileWithModel(object):
         blocks.append(id_block)
         # Next fields start at 1
         field_start = 1 if self.id_col_name is not None else 0
-        model_fields = self.model.__fields__
+        model_fields = self.model.model_fields
         for ndx, a_field in enumerate(fields[field_start:], field_start):
             field_desc = model_fields[a_field]
-            term = field_desc.field_info.extra.get("term")
+            if not isinstance(field_desc.json_schema_extra, Dict):
+                continue
+            term = field_desc.json_schema_extra.get("term")
             blocks.append('    <field index="%d" term="%s"/>' % (ndx, term))
         blocks.append(self.meta_end())
         return self.LINE_SEP.join(blocks)

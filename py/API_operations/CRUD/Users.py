@@ -2,7 +2,7 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from datetime import timedelta, timezone
+from datetime import timedelta
 from typing import Optional, List, Any, Tuple
 
 from fastapi import HTTPException
@@ -62,7 +62,7 @@ logger = get_logger(__name__)
 
 class TempPasswordModel(BaseModel):
     user_id: int = Field(
-        title="User Id", description="Internal, numeric id of the user.", example=1
+        title="User Id", description="Internal, numeric id of the user.", examples=[1]
     )
     temp_password: str = Field(
         title="Temporary password",
@@ -87,16 +87,6 @@ class UserService(Service):
 
     # Configuration keys TODO
 
-    ADMIN_UPDATABLE_COLS = [
-        User.email,
-        User.password,
-        User.name,
-        User.status,
-        User.organisation,
-        User.country,
-        User.orcid,
-        User.usercreationreason,
-    ]
     COMMON_UPDATABLE_COLS = [
         User.email,
         User.password,
@@ -105,6 +95,9 @@ class UserService(Service):
         User.country,
         User.orcid,
         User.usercreationreason,
+    ]
+    ADMIN_UPDATABLE_COLS = COMMON_UPDATABLE_COLS + [
+        User.status,
     ]
 
     EXCLUDE_KEYS = ["password", "last_used_projects", "can_do"]
@@ -277,7 +270,7 @@ class UserService(Service):
         user_id = self._verify_token_throw(new_user.id, token, short=False)
         # token verified,  user found and access verified by email and password - now check compatibility with other users in DB
         self._is_valid_user_throw(new_user, user_id)
-        usr: Optional[User] = self.session.query(User).get(user_id)
+        usr: Optional[User] = self.session.get(User, user_id)
         if usr is None:
             raise HTTPException(
                 status_code=422,
@@ -313,7 +306,7 @@ class UserService(Service):
         Update a user, who can be myself or anybody if I'm an app admin.
         """
         current_user: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
-        user_to_update: Optional[User] = self.session.query(User).get(user_id)
+        user_to_update: Optional[User] = self.session.get(User, user_id)
         if user_to_update is None:
             raise HTTPException(status_code=422, detail=[NOT_FOUND])
         self._is_valid_user_throw(update_src, user_to_update.id)
@@ -370,7 +363,7 @@ class UserService(Service):
                     status_code=422,
                     detail=[DETAIL_INVALID_STATUS],
                 )
-            # current_user: Optional[User] = self.ro_session.query(User).get(current_user_id )
+            # current_user: Optional[User] = self.ro_session.get(User,current_user_id )
             current_user: User = RightsBO.get_user_throw(
                 self.ro_session, current_user_id
             )
@@ -387,7 +380,7 @@ class UserService(Service):
 
     def search_by_id(self, user_id: UserIDT) -> Optional[User]:
         # TODO: Not consistent with others e.g. project.query()
-        ret = self.ro_session.query(User).get(user_id)
+        ret = self.ro_session.get(User, user_id)
         return ret
 
     def find_by_email(self, email: str) -> Optional[User]:
@@ -403,7 +396,7 @@ class UserService(Service):
         self, current_user_id: UserIDT, user_id: UserIDT
     ) -> UserModelWithRights:
         _: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
-        db_usr = self.ro_session.query(User).get(user_id)
+        db_usr = self.ro_session.get(User, user_id)
         if db_usr is None:
             raise HTTPException(status_code=404, detail=DETAIL_NOT_FOUND)
         else:
@@ -484,10 +477,10 @@ class UserService(Service):
                 get_user_details = self._get_user_with_rights
             else:
                 get_user_details = self._get_user_profile
-            qry = self.ro_session.query(User)
+            qry = select(User)
             if len(user_ids) > 0:
                 qry = qry.filter(User.id.in_(user_ids))
-            for db_usr in qry:
+            for db_usr in self.session.execute(qry).scalars():
                 ret.append(get_user_details(db_usr))
         ret = sorted(ret, key=lambda d: d.id, reverse=True)
         return ret
@@ -972,10 +965,10 @@ class UserService(Service):
 
         if not self._current_is_admin(current_user, True):
             raise HTTPException(status_code=403, detail=[NOT_AUTHORIZED])
-        inactive_user: Optional[User] = self.session.query(User).get(user_id)
+        inactive_user: Optional[User] = self.session.get(User, user_id)
         if inactive_user is None:
             raise HTTPException(status_code=422, detail=[NOT_FOUND])
-        cols_to_upd = []
+        cols_to_upd: List[InstrumentedAttribute] = []
         update_src = UserModelWithRights.from_orm(inactive_user)
         if inactive_user.status != status.value:
             update_src.status = status.value
@@ -1052,7 +1045,7 @@ class UserService(Service):
         password: Optional[str] = None,
     ) -> None:
         self._uservalidation = self._is_validation_active_throw()
-        user: Optional[User] = self.session.query(User).get(user_id)
+        user: Optional[User] = self.session.get(User, user_id)
         if user is None or user.status == UserStatus.blocked.value:
             # no action if wrong id or user is blocked
             raise HTTPException(status_code=403, detail=[NOT_AUTHORIZED])
@@ -1203,10 +1196,10 @@ class UserService(Service):
         user_id = self._uservalidation.get_id_from_token(token)
         err = True
         if temp_password is not None and user_id != -1:
-            user_to_reset: Optional[User] = self.session.query(User).get(user_id)
+            user_to_reset: Optional[User] = self.session.get(User, user_id)
             if user_to_reset is not None:
                 # find temporary password
-                temp = self.ro_session.query(TempPasswordReset).get(user_id)
+                temp = self.ro_session.get(TempPasswordReset, user_id)
                 if temp is not None:
                     verified = self._verify_temp_password(str(temp_password), temp)
                     if verified:

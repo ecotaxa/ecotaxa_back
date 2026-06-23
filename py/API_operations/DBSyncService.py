@@ -9,7 +9,7 @@ import time
 
 from API_operations.helpers.Service import Service
 from DB.helpers.Core import select
-from DB.helpers.ORM import Session, Table, ModelT, text
+from DB.helpers.ORM import Session, Table, ModelT
 from helpers.DynamicLogs import get_logger
 
 logger = get_logger(__name__)
@@ -25,11 +25,13 @@ class DBSyncService(Service):
         super().__init__()
         table: Table = a_table.__table__
         self.table_name = table.name
-        qry = select([text("%s.*" % table.name)])
+        # Not OK as the ORM maps back the relationships, we need just atomic DB values here
+        # qry = select(a_table)
+        qry = select("*").select_from(table)
         for a_col, a_val in zip(args[::2], args[1::2]):
             qry = qry.where(a_col == a_val)
         self.qry = qry
-        self.ref_val = self._get_result(self.get_session())
+        self.ref_val = self._get_result(self.session)
 
     MAX_WAIT = 2  # 2 seconds is quite a lot
 

@@ -1,5 +1,6 @@
-from typing import Optional
+from typing import Optional, Any
 
+from pydantic import model_validator
 from typing_extensions import TypedDict
 
 from API_models.helpers.TypedDictToModel import typed_dict_to_model
@@ -76,17 +77,17 @@ class ProjectFiltersDict(TypedDict, total=False):
 
 
 class _ProjectFilters2Model(DescriptiveModel):
-    taxo = Field(
+    taxo: Optional[str] = Field(
         title="Taxo",
         description="Coma-separated list of numeric taxonomy/category ids. Only include objects classified with one of them.",
-        example="12,7654,5409",
+        examples=["12,7654,5409"],
     )
-    taxochild = Field(
+    taxochild: Optional[str] = Field(
         title="Taxo child",
         description="If 'Y' and taxo is set, also include children of each member of 'taxo' list in taxonomy tree.",
-        example="Y",
+        examples=["Y"],
     )
-    statusfilter: str = Field(
+    statusfilter: Optional[str] = Field(
         title="",
         description="""Include objects with given status:
             'NV': Not validated 
@@ -97,110 +98,110 @@ class _ProjectFilters2Model(DescriptiveModel):
             'U': Not classified
             other: direct equality comparison with DB value 
         """,
-        example="NV",
+        examples=["NV"],
         max_length=3,
     )
-    MapN = Field(
+    MapN: Optional[str] = Field(
         title="Map North",
         description="If all 4 are set (MapN, MapW, MapE, MapS), include objects inside the defined bounding rectangle.",
-        example=44.34,
+        examples=[44.34],
     )
-    MapW = Field(
+    MapW: Optional[str] = Field(
         title="Map West",
         description="If all 4 are set (MapN, MapW, MapE, MapS), include objects inside the defined bounding rectangle.",
-        example=3.88,
+        examples=[3.88],
     )
-    MapE = Field(
+    MapE: Optional[str] = Field(
         title="Map East",
         description="If all 4 are set (MapN, MapW, MapE, MapS), include objects inside the defined bounding rectangle.",
-        example=7.94,
+        examples=[7.94],
     )
-    MapS = Field(
+    MapS: Optional[str] = Field(
         title="Map South",
         description="If all 4 are set (MapN, MapW, MapE, MapS), include objects inside the defined bounding rectangle.",
-        example=42.42,
+        examples=[42.42],
     )
-    depthmin = Field(
+    depthmin: Optional[str] = Field(
         title="Depthmin",
         description="Positive values. If both are set (depthmin, depthmax), include objects for which both depths (min and max) are inside the range.",
-        example="10",
+        examples=["10"],
     )
-    depthmax = Field(
+    depthmax: Optional[str] = Field(
         title="Depthmax",
         description="Positive values. If both are set (depthmin, depthmax), include objects for which both depths (min and max) are inside the range.",
-        example="110",
+        examples=["110"],
     )
-    samples = Field(
+    samples: Optional[str] = Field(
         title="Samples",
         description="Coma-separated list of sample IDs, include only objects for these samples.",
-        example="10987,3456,987,38",
+        examples=["10987,3456,987,38"],
     )
-    instrum = Field(
+    instrum: Optional[str] = Field(
         title="Instrument",
         description="Instrument name, include objects for which sampling was done using this instrument.",
-        example="uvp5",
+        examples=["uvp5"],
     )
-    daytime = Field(
+    daytime: Optional[str] = Field(
         title="Day time",
         description="Coma-separated list of sun position values: D for Day, U for Dusk, N for Night, A for Dawn (Aube in French).",
-        example="N,A",
+        examples=["N,A"],
     )
-    month = Field(
+    month: Optional[str] = Field(
         title="Month",
         description="Coma-separated list of month numbers, 1=Jan and so on.",
-        example="11,12",
+        examples=["11,12"],
     )
-    fromdate = Field(
+    fromdate: Optional[str] = Field(
         title="From date",
         description="Format is 'YYYY-MM-DD', include objects collected after this date.",
-        example="2020-10-09",
+        examples=["2020-10-09"],
     )
-    todate = Field(
+    todate: Optional[str] = Field(
         title="To date",
         description="Format is 'YYYY-MM-DD', include objects collected before this date.",
-        example="2021-10-09",
+        examples=["2021-10-09"],
     )
-    fromtime = Field(
+    fromtime: Optional[str] = Field(
         title="From time",
         description="Format is 'HH24:MM:SS', include objects collected after this time of day.",
-        example="1:17:00",
+        examples=["1:17:00"],
     )
-    totime = Field(
+    totime: Optional[str] = Field(
         title="To time",
         description="Format is 'HH24:MM:SS', include objects collected before this time of day.",
-        example="23:32:00",
+        examples=["23:32:00"],
     )
-    inverttime = Field(
+    inverttime: Optional[str] = Field(
         title="Invert time",
         description="If '1', include objects outside fromtime and totime range.",
-        example="0",
+        examples=["0"],
     )
-    validfromdate = Field(
+    validfromdate: Optional[str] = Field(
         title="Valid from date",
         description="Format is 'YYYY-MM-DD HH24:MI', include objects validated/set to dubious after this date+time.",
-        example="2020-10-09 10:00:00",
+        examples=["2020-10-09 10:00:00"],
     )
-    validtodate = Field(
+    validtodate: Optional[str] = Field(
         title="Valid to date",
         description="Format is 'YYYY-MM-DD HH24:MI', include objects validated/set to dubious before this date+time.",
-        example="2021-10-09 10:00:00",
+        examples=["2021-10-09 10:00:00"],
     )
-    freenum = Field(
+    freenum: Optional[str] = Field(
         title="Free num",
         description="Numerical DB column number in Object as basis for the 2 following criteria (freenumst, freenumend).",
-        example="n01",
+        examples=["n01"],
     )
-    freenumst = Field(
+    freenumst: Optional[str] = Field(
         title="Freenum start",
         description="Start of included range for the column defined by freenum, in which objects are included.",
-        example="0",
+        examples=["0"],
     )
-    freenumend = Field(
+    freenumend: Optional[str] = Field(
         title="Free num end",
         description="End of included range for the column defined by freenum, in which objects are included.",
-        example="999999",
+        examples=["999999"],
     )
-    freetxt = Field(
+    freetxt: Optional[str] = Field(
         title="Free text",
         description=""" Textual DB column number as basis for following criteria (freetxtval)
             If starts with 's' then it's a text column in Sample
@@ -208,26 +209,26 @@ class _ProjectFilters2Model(DescriptiveModel):
             If starts with 'p' then it's a text column in Process 
             If starts with 'o' then it's a text column in Object .
         """,
-        example="p01",
+        examples=["p01"],
     )
-    freetxtval = Field(
+    freetxtval: Optional[str] = Field(
         title="Free text val",
         description="Text to match in the column defined by freetxt, for an object to be include.",
-        example="zooprocess",
+        examples=["zooprocess"],
     )
-    filt_annot = Field(
+    filt_annot: Optional[str] = Field(
         title="Filter annotator",
         description="Coma-separated list of annotators, i.e. persons who validated the classification at any point in time.",
-        example="34,67,67",
+        examples=[["34,67,67"]],
     )
-    filt_last_annot = Field(
+    filt_last_annot: Optional[str] = Field(
         title="Filter last annotator",
         description="Coma-separated list of annotators, i.e. persons who validated the classification in last.",
-        example="34,67",
+        examples=["34,67"],
     )
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "title": "Project filters Model",
             "description": "How to reduce project data.",
         }
@@ -238,7 +239,16 @@ ProjectFiltersModel = typed_dict_to_model(ProjectFiltersDict, _ProjectFilters2Mo
 
 class ProjectFilters(ProjectFiltersModel):
     def base(self) -> ProjectFiltersDict:
-        return self.dict()  # type:ignore
+        return self.model_dump()  # type: ignore
 
     def min_base(self) -> ProjectFiltersDict:
-        return {k: v for k, v in self.dict().items() if v}  # type:ignore
+        return {k: v for k, v in self.model_dump().items() if v}  # type: ignore
+
+
+class LaxProjectFilters(ProjectFilters):
+    @model_validator(mode="before")
+    @classmethod
+    def allow_empty_list_or_none(cls, v: Any) -> Any:
+        if v == [] or v is None:
+            return {}
+        return v

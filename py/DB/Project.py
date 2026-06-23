@@ -4,13 +4,13 @@
 #
 from __future__ import annotations
 
-from typing import List, TYPE_CHECKING, Iterable
+from typing import List, TYPE_CHECKING
 
 from BO.DataLicense import AccessLevelEnum
-from DB.helpers.ORM import Model
+from DB.helpers.ORM import Model, relationship
 from .Instrument import Instrument
+from .ProjectPrivilege import ProjectPrivilege
 from .helpers.DDL import Column, Sequence, ForeignKey
-from .helpers.ORM import relationship
 from .helpers.Postgres import VARCHAR, INTEGER, DOUBLE_PRECISION
 
 """
@@ -25,8 +25,7 @@ EXPLORE_ONLY = "ExploreOnly"
 ProjectIDT = int
 ProjectIDListT = List[int]
 if TYPE_CHECKING:
-    from .Sample import Sample
-    from .ProjectPrivilege import ProjectPrivilege
+    pass
 
 
 class Project(Model):
@@ -45,7 +44,6 @@ class Project(Model):
         VARCHAR(40), default=ANNOTATE_STATUS
     )  # Annotate, ExploreOnly, Annotate No Prediction
     # The mappings for this Project
-    # TODO: What happens if there is a conflict from one import to another?
     mappingobj = Column(VARCHAR)
     mappingsample = Column(VARCHAR)
     mappingacq = Column(VARCHAR)
@@ -74,17 +72,19 @@ class Project(Model):
     # taxo_stats = relationship("ProjectTaxoStat")
 
     # The relationships are created in Relations.py but the typing here helps IDE
-    all_samples: Iterable[Sample]
+    all_samples = relationship("Sample", viewonly=True)
     # The users involved somehow in this project
-    privs_for_members: Iterable[ProjectPrivilege]
+    privs_for_members = relationship("ProjectPrivilege", viewonly=True)
     # owner: relationship
-    members: relationship
+    members = relationship(
+        "User", secondary=ProjectPrivilege.__tablename__, viewonly=True
+    )
     # The twin EcoPart project
-    ecopart_project: relationship
+    # ecopart_project: relationship
     # The related instrument full definition
-    instrument: relationship
+    instrument = relationship("Instrument", viewonly=True)
     # The variables which can be applied in this project
-    variables: relationship
+    variables = relationship("ProjectVariables", uselist=False)
 
     def __str__(self):
         return "{0} ({1})".format(self.title, self.projid)

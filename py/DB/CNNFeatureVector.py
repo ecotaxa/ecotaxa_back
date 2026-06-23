@@ -2,15 +2,19 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2022-2024 LOVNOWER : Amblard, Colin, Irisson, Reutenauer (UPMC-CNRS-FOTONOWER)
 #
-from typing import List
+from typing import List, TYPE_CHECKING
 
 from pgvector.sqlalchemy import Vector
 
-from .Object import ObjectIDT
+# from .Object import ObjectIDT
+ObjectIDT = int  # TODO: workaround for circular dep
 from .helpers.Bean import Bean
 from .helpers.DDL import ForeignKey, Index
 from .helpers.ORM import Column, relationship, Model
 from .helpers.Postgres import BIGINT
+
+if TYPE_CHECKING:
+    pass
 
 N_DEEP_FEATURES = 50
 
@@ -24,7 +28,7 @@ class ObjectCNNFeatureVector(Model):
     )
     features: Vector = Column(Vector(N_DEEP_FEATURES))
     # The relationships are created in Relations.py but the typing here helps the IDE
-    object: relationship
+    object = relationship("ObjectHeader")
 
 
 # Note: below is OK for CI but different in PROD, see TODO

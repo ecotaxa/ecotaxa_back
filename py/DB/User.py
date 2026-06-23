@@ -5,9 +5,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Iterable, TYPE_CHECKING, Optional, List
-
-from sqlalchemy import event, SmallInteger
+from typing import TYPE_CHECKING, Optional, List
 
 from data.Countries import countries_by_name
 from .helpers.DDL import (
@@ -20,10 +18,11 @@ from .helpers.DDL import (
 )
 from .helpers.Direct import func
 from .helpers.ORM import Model, relationship, Insert
+from .helpers.ORM import event, SmallInteger
 from .helpers.Postgres import TIMESTAMP, INTEGER
 
 if TYPE_CHECKING:
-    from .ProjectPrivilege import ProjectPrivilege
+    pass
 
 # Typings, to be clear that these are not e.g. object IDs
 UserIDT = int
@@ -56,6 +55,7 @@ class PeopleOrganizationDirectory(str, Enum):
 
 class Organization(Model):
     __tablename__ = "organizations"
+    __table_args__ = {"extend_existing": True}
     id: int = Column(Integer, Sequence("organizations_id_seq"), primary_key=True)
     name: str = Column(String(512), unique=True, nullable=False)
     directories: Optional[str] = Column(String(2000), nullable=True)
@@ -66,6 +66,7 @@ class Organization(Model):
 
 class Person(Model):
     __tablename__ = "users"
+    __table_args__ = {"extend_existing": True}
     id: int = Column(Integer, Sequence("seq_users"), primary_key=True)
     email: str = Column(String(255), unique=True, nullable=False)
     name: str = Column(String(255), nullable=False)
@@ -74,7 +75,7 @@ class Person(Model):
     type = Column(String(10))
     usercreationdate = Column(TIMESTAMP, default=func.now())
     organization_id = Column(INTEGER, ForeignKey("organizations.id"), nullable=True)
-    organization: Organization
+    organization = relationship("Organization", uselist=False)
     __mapper_args__ = {
         "polymorphic_on": type,
         "polymorphic_identity": "person",
@@ -108,6 +109,7 @@ class Guest(Person):
 
 
 class User(Person):
+    __table_args__ = {"extend_existing": True}
     password: str = Column(String(255))
     status: int = Column(SmallInteger(), default=1)
     status_date = Column(TIMESTAMP)
@@ -121,13 +123,16 @@ class User(Person):
         TIMESTAMP
     )  # The relationships are created in Relations.py but the typing here helps the IDE
 
-    roles: relationship
+    # relationships
+    roles = relationship("Role", secondary="users_roles")
     # The projects that user has rights in, so he/she can participate at various levels.
-    privs_on_projects: Iterable[ProjectPrivilege]
+    privs_on_projects = relationship("ProjectPrivilege", viewonly=True)
     # The objects of which _present_ classification was done by the user
-    classified_objects: relationship
-    # Preferences, per project, the global ones kept in field above.
-    preferences_for_projects: relationship
+    classified_objects = relationship(
+        "ObjectHeader"
+    )  # TODO: Repeat should not be needed, mypy bug
+    # Preferences, one instance for each project
+    preferences_for_projects = relationship("UserPreferences", lazy="dynamic")
     __mapper_args__ = {
         "polymorphic_identity": "user",
     }
@@ -148,11 +153,12 @@ class Role(Model):
     """
 
     __tablename__ = "roles"
+    __table_args__ = {"extend_existing": True}
     id = Column(Integer(), primary_key=True)  # ,Sequence('seq_roles')
     name = Column(String(80), unique=True, nullable=False)
-    # The relationships are created in Relations.py but the typing here helps the IDE
-    users: relationship
 
+    # Relationships
+    users = relationship("User", secondary="users_roles", viewonly=True)
     APP_ADMINISTRATOR = "Application Administrator"
     USERS_ADMINISTRATOR = "Users Administrator"
 
@@ -180,6 +186,7 @@ class UserRole(Model):
     """
 
     __tablename__ = "users_roles"
+    __table_args__ = {"extend_existing": True}
     user_id = Column(Integer(), ForeignKey("users.id"), primary_key=True)
     role_id = Column(Integer(), ForeignKey("roles.id"), primary_key=True)
 

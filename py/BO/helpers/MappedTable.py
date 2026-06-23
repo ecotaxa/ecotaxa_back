@@ -12,9 +12,9 @@ from typing import Dict, List
 
 from BO.ColumnUpdate import ColUpdateList, ColUpdate
 from BO.Mappings import MappedTableTypeT, ProjectMapping
-from DB import Session, Query
+from DB import Session
 from DB.Project import Project
-from DB.helpers.ORM import non_key_cols, ModelT
+from DB.helpers.ORM import non_key_cols, ModelT, update, Update
 
 
 class MappedTable(metaclass=ABCMeta):
@@ -26,8 +26,7 @@ class MappedTable(metaclass=ABCMeta):
         self.session = session
 
     @abc.abstractmethod
-    def add_filter(self, upd: Query) -> Query:
-        ...  # pragma:nocover
+    def add_filter(self, upd: Update) -> Update: ...  # pragma:nocover
 
     def _apply_on_all(
         self, clazz: MappedTableTypeT, project: Project, updates: List[ColUpdate]
@@ -77,10 +76,10 @@ class MappedTable(metaclass=ABCMeta):
         if len(updates) == 0:
             # Eventually there is nothing left after filtering
             return 0
-        upd = self.session.query(clazz)
+        upd = update(clazz)
         upd = self.add_filter(upd)
-        affected_rows = upd.update(
-            values=ColUpdateList(updates).as_dict_for_db(), synchronize_session=False
-        )
+        upd = upd.values(ColUpdateList(updates).as_dict_for_db())
+        upd = upd.execution_options(synchronize_session=False)
+        affected_rows: int = self.session.execute(upd).rowcount  # type: ignore # case1
         self.session.commit()
         return affected_rows

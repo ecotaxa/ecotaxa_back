@@ -127,7 +127,7 @@ class ProjectsService(Service):
             projects = ProjectBOSet(self.session, matching_ids, public=True)
         else:
             # No rights checking as basically everyone can see all projects
-            # current_user = self.ro_session.query(User).get(current_user_id)
+            # current_user = self.ro_session.get(User,current_user_id)
             current_user: User = RightsBO.get_user_throw(
                 self.ro_session, current_user_id
             )

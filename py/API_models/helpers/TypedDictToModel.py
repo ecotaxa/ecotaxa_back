@@ -8,34 +8,37 @@
 #
 from typing import Optional, Dict, Any, Type
 
-# noinspection PyPackageRequirements
-from pydantic import create_model
+from pydantic import create_model, ConfigDict, Field
 
 from API_models.helpers import PydanticModelT
 from helpers.pydantic import PydanticDescriptionT
 
 
-# noinspection PyPackageRequirements
-
-
 def typed_dict_to_model(
-    typed_dict_class: Type, pydantic_class: PydanticDescriptionT
+    typed_dict_class: Type, pydantic_descrip: PydanticDescriptionT
 ) -> PydanticModelT:
     annotations: Dict[str, Any] = {}
+    descrips = pydantic_descrip.get_fields()
     for name, field in typed_dict_class.__annotations__.items():
         if field == Optional[str]:
-            annotations[name] = (field, None)
+            field_info = descrips[name]
+            # Create a new FieldInfo with default=None, copying other properties
+            new_field_info = Field(
+                default=None,
+                title=field_info.title,
+                description=field_info.description,
+                examples=field_info.examples,
+            )
+            annotations[name] = (field, new_field_info)
         else:
             # app doesn't even start if below is raised -> nocover
             raise Exception("Not managed yet")  # pragma:nocover
 
-    ret: PydanticModelT = create_model(
-        typed_dict_class.__name__, __config__=pydantic_class.__config__, **annotations
+    config = ConfigDict(
+        coerce_numbers_to_str=True, from_attributes=True, populate_by_name=True
     )
-
-    # Amend with Field() calls, for doc. Let crash (KeyError) if desync with base.
-    for a_field_name, a_field_desc in pydantic_class.__fields__.items():
-        the_desc_field = ret.__fields__[a_field_name]
-        the_desc_field.field_info = a_field_desc.field_info
+    ret: PydanticModelT = create_model(
+        typed_dict_class.__name__, __config__=config, **annotations
+    )
 
     return ret

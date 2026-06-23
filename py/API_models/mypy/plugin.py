@@ -24,6 +24,7 @@ from mypy.plugin import (
     DynamicClassDefContext,
 )
 from mypy.types import Instance, Type
+from pydantic.mypy import METADATA_KEY
 
 ColTypesT = Dict[str, Type]
 
@@ -54,7 +55,7 @@ def _db_model_2_pydantic_class_maker_callback(ctx: DynamicClassDefContext) -> No
         for a_col, a_type in a_class.names.items():
             if "Mapped" in str(a_type.type):
                 # e.g. sqlalchemy.orm.attributes.Mapped[Union[builtins.int, None]]
-                col_types[a_col] = a_type.type.args[0]  # type:ignore
+                col_types[a_col] = a_type.type.args[0]  # type: ignore
     class_name = ctx.name
     _add_pydantic_clone(
         ctx, class_name, pydantic_model_type_info, col_types, from_orm=True
@@ -81,7 +82,7 @@ def _dataclass_2_pydantic_class_maker_callback(
     col_types: ColTypesT = {}
     for a_col, a_type in data_class_type_info.names.items():
         try:
-            col_types[a_col] = a_type.type  # type:ignore
+            col_types[a_col] = a_type.type  # type: ignore
         except ValueError:
             pass
 
@@ -126,7 +127,7 @@ def _get_class_info(ctx: DynamicClassDefContext, class_name: str) -> TypeInfo:
     if class_info is None:
         ctx.api.msg.fail("EcoTaxa plugin: Cannot find class:" + class_name, None)
     assert class_info
-    class_type_info: Optional[TypeInfo] = class_info.node  # type:ignore
+    class_type_info: Optional[TypeInfo] = class_info.node  # type: ignore
     if class_type_info is None:
         ctx.api.msg.fail("EcoTaxa plugin: Class '" + class_name + "' has no node", None)
     assert class_type_info
@@ -136,13 +137,15 @@ def _get_class_info(ctx: DynamicClassDefContext, class_name: str) -> TypeInfo:
 def _add_pydantic_clone(
     ctx: DynamicClassDefContext,
     class_name: str,
-    pydantic_model_type_info: TypeInfo,
+    pydantic_descrip_type_info: TypeInfo,
     col_types: ColTypesT,
     from_orm: bool = False,
 ):
     # Fetch from context the base & metaclasses
     base_model_info = _get_class_info(ctx, "pydantic.main.BaseModel")
-    metaclass_info = _get_class_info(ctx, "pydantic.main.ModelMetaclass")
+    metaclass_info = _get_class_info(
+        ctx, "pydantic._internal._model_construction.ModelMetaclass"
+    )
     # Build the class to register
     cls = ClassDef(ctx.name, Block([]))
     cls.fullname = ctx.api.qualified_name(class_name)
@@ -152,38 +155,46 @@ def _add_pydantic_clone(
     info.bases = [Instance(base_model_info, [])]
     info.mro = [info] + base_model_info.mro
     info.fallback_to_any = False  # Strict check of fields
-    info.metadata = pydantic_model_type_info.metadata.copy()
+    info.metadata = pydantic_descrip_type_info.metadata.copy()
     if from_orm:
-        info.metadata["pydantic-mypy-metadata"]["config"]["orm_mode"] = True
+        # Not really a pydantic model anymore in this case
+        info.metadata[METADATA_KEY] = {
+            "fields": {},
+            "class_vars": {},
+            "config": {"from_attributes": True},
+        }
     # Clone names
     info_names = SymbolTable()
-    for a_name, a_sym in pydantic_model_type_info.names.items():
-        sym_copy = a_sym.copy()
-        sym_node = sym_copy.node
-        # detach from copied class
-        if isinstance(sym_node, Var):  # e.g. depthmax
-            sym_node.info = info
-            if a_name not in col_types:
-                ctx.api.msg.fail(
-                    "EcoTaxa plugin: No type info for field '"
-                    + a_name
-                    + "' while augmenting "
-                    + str(pydantic_model_type_info.fullname),
-                    None,
-                )
+    for ancestor in pydantic_descrip_type_info.mro:
+        if ancestor.name == "object":
+            break
+        for a_name, a_sym in ancestor.names.items():
+            sym_copy = a_sym.copy()
+            sym_node = sym_copy.node
+            # detach from copied class
+            if isinstance(sym_node, Var):  # e.g. depthmax
+                sym_node.info = info
+                if a_name not in col_types:
+                    ctx.api.msg.fail(
+                        "EcoTaxa plugin: No type info for field '"
+                        + a_name
+                        + "' while augmenting "
+                        + str(pydantic_descrip_type_info.fullname),
+                        None,
+                    )
+                else:
+                    sym_node.type = col_types[a_name]
+            elif isinstance(sym_node, FuncDef):  # e.g.  __init__
+                continue
+            elif isinstance(sym_node, TypeInfo):  # e.g. Config
+                continue
+            elif isinstance(sym_node, TypeVarExpr):  # e.g. _PydanticBaseModel
+                continue
+            elif isinstance(sym_node, Decorator):  # e.g. construct
+                continue
             else:
-                sym_node.type = col_types[a_name]
-        elif isinstance(sym_node, FuncDef):  # e.g.  __init__
-            continue
-        elif isinstance(sym_node, TypeInfo):  # e.g. Config
-            continue
-        elif isinstance(sym_node, TypeVarExpr):  # e.g. _PydanticBaseModel
-            continue
-        elif isinstance(sym_node, Decorator):  # e.g. construct
-            continue
-        else:
-            ctx.api.msg.fail("EcoTaxa plugin: Cannot clone:" + str(sym_copy), None)
-        info_names[a_name] = sym_copy
+                ctx.api.msg.fail("EcoTaxa plugin: Cannot clone:" + str(sym_copy), None)
+            info_names[a_name] = sym_copy
     info.names = info_names
     # For debugging: info.dump()
     # Store in context

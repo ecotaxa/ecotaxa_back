@@ -7,21 +7,23 @@
 #
 from typing import Dict, Union, Callable
 
+from sqlalchemy.orm import InstrumentedAttribute
+
 from DB.Acquisition import Acquisition
 from DB.Image import Image
 from DB.Object import ObjectHeader, ObjectFields
 from DB.Process import Process
 from DB.Project import Project
 from DB.Sample import Sample
-from DB.helpers.ORM import ModelT, Column, RelationshipProperty
+from DB.helpers.ORM import ModelT, RelationshipProperty
 
 # Typing for the clarity. Key = DB Column, Value = string in target dict
-JSONDesc = Dict[Union[Column, RelationshipProperty, Callable], str]
+JSONDesc = Dict[Union[InstrumentedAttribute, RelationshipProperty, Callable], str]
 
 JSON_FIELDS: Dict[ModelT, JSONDesc] = {
     Project: {
         Project.title: "ttl",
-        Project.all_samples: "samples",  # type:ignore # case2
+        Project.all_samples: "samples",
     },
     Sample: {
         Sample.sampleid: "id",
@@ -44,13 +46,13 @@ JSON_FIELDS: Dict[ModelT, JSONDesc] = {
         ObjectHeader.classif_id: "ccat",
         ObjectHeader.classif_date: "cdte",
         ObjectHeader.classif_who: "mwho",
-        ObjectHeader.all_images: "images",  # type:ignore # case2
+        ObjectHeader.all_images: "images",
         ObjectHeader.depth_min: "depth_min",
         ObjectHeader.depth_max: "depth_max",
         ObjectHeader.latitude: "latitude",
         ObjectHeader.longitude: "longitude",
         ObjectHeader.complement_info: "cmt",
-        ObjectHeader.fields: "fields",  # type:ignore # 1-1 so should be joined right away and disappear
+        ObjectHeader.fields: "fields",  # 1-1 so should be joined right away and disappear
     },
     ObjectFields: {},
     Image: {Image.img_to_file: "fil", Image.imgrank: "rnk"},

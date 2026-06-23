@@ -48,7 +48,8 @@ SELECT prj.projid,
 def views_deletion_queries(metadata) -> List:
     objects = Table("objects", metadata)
 
-    drop_view = DropView(objects, if_exists=True)
+    # drop_view = DropView(objects, if_exists=True)
+    drop_view = text("drop view if exists objects")
 
     return [drop_view]
 
@@ -56,6 +57,7 @@ def views_deletion_queries(metadata) -> List:
 def views_creation_queries(metadata) -> List:
     objects = Table("objects", metadata)
 
-    create_view = CreateView(objects, OBJECTS_DEF)
+    # create_view = CreateView(objects, OBJECTS_DEF)
+    create_view = text("create view objects as " + OBJECTS_SQL)
 
     return [create_view]

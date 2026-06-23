@@ -44,18 +44,7 @@ def test_project_stats(fastapi):
     assert rsp.status_code == 200
     expected = [
         "Stats test project",
-        "OrderedDict([('by', 'n01'), ('width', 'n02'), ('height', 'n03'), ('area', "
-        "'n04'), ('mean', 'n05'), ('major', 'n06'), ('minor', 'n07'), ('feret', "
-        "'n08'), ('area_exc', 'n09'), ('thickr', 'n10'), ('esd', 'n11'), "
-        "('elongation', 'n12'), ('range', 'n13'), ('meanpos', 'n14'), ('centroids', "
-        "'n15'), ('cv', 'n16'), ('sr', 'n17'), ('perimareaexc', 'n18'), "
-        "('feretareaexc', 'n19'), ('perimferet', 'n20'), ('perimmajor', 'n21'), "
-        "('circex', 'n22'), ('cdexc', 'n23'), ('kurt_mean', 'n24'), ('skew_mean', "
-        "'n25'), ('convperim_perim', 'n26'), ('convarea_area', 'n27'), "
-        "('symetrieh_area', 'n28'), ('symetriev_area', 'n29'), ('nb1_area', 'n30'), "
-        "('nb2_area', 'n31'), ('nb3_area', 'n32'), ('nb1_range', 'n33'), "
-        "('nb2_range', 'n34'), ('nb3_range', 'n35'), ('median_mean', 'n36'), "
-        "('median_mean_range', 'n37'), ('skeleton_area', 'n38'), ('extra', 't01')])",
+        "OrderedDict({'by': 'n01', 'width': 'n02', 'height': 'n03', 'area': 'n04', 'mean': 'n05', 'major': 'n06', 'minor': 'n07', 'feret': 'n08', 'area_exc': 'n09', 'thickr': 'n10', 'esd': 'n11', 'elongation': 'n12', 'range': 'n13', 'meanpos': 'n14', 'centroids': 'n15', 'cv': 'n16', 'sr': 'n17', 'perimareaexc': 'n18', 'feretareaexc': 'n19', 'perimferet': 'n20', 'perimmajor': 'n21', 'circex': 'n22', 'cdexc': 'n23', 'kurt_mean': 'n24', 'skew_mean': 'n25', 'convperim_perim': 'n26', 'convarea_area': 'n27', 'symetrieh_area': 'n28', 'symetriev_area': 'n29', 'nb1_area': 'n30', 'nb2_area': 'n31', 'nb3_area': 'n32', 'nb1_range': 'n33', 'nb2_range': 'n34', 'nb3_range': 'n35', 'median_mean': 'n36', 'median_mean_range': 'n37', 'skeleton_area': 'n38', 'extra': 't01'})",
         " (0): ",
         "Total: 0 values, dup 0 values",
         "generic_m106_mn01_n1_sml (5): "

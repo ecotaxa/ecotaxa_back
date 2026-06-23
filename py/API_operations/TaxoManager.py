@@ -141,7 +141,7 @@ class CentralTaxonomyService(Service):
             )
             must_delete = a_json_taxon["taxostatus"] == "X"
             # Read taxon from DB
-            taxon = self.session.query(Taxonomy).get(json_taxon_id)
+            taxon = self.session.get(Taxonomy, json_taxon_id)
             if taxon is not None:
                 if must_delete:
                     to_delete.append(json_taxon_id)

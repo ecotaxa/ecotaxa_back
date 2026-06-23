@@ -16,42 +16,44 @@ class ImportReq(BaseModel):
         description="Source path on server, to zip or plain directory."
         " \n \n The path can be returned by a file upload (absolute),"
         " \n \n otherwise it's relative to shared file area root.",
-        example="/import_test.zip",
+        examples=["/import_test.zip"],
     )
     taxo_mappings: Dict[str, str] = Field(
         title="Taxo mappings",
         description="Optional taxonomy mapping, the key specifies the taxonomy ID found in file and the value specifies the final taxonomy ID to write.",
         default={},
-        example={23444: 76543},
+        examples=[{23444: 76543}],
     )
     skip_loaded_files: bool = Field(
         default=False,
         title="Skip loaded files",
         description="If true skip loaded files, else don't.",
-        example=False,
+        examples=[False],
     )
     skip_existing_objects: bool = Field(
         default=False,
         title="Skip existing objects",
         description="If true skip existing objects, else don't.",
-        example=False,
+        examples=[False],
     )
     update_mode: str = Field(
         title="Update mode",
         description="Update data ('Yes'), including classification ('Cla').",
         default="",
-        example="Yes",
+        examples=["Yes"],
     )
 
     class Config:
-        schema_extra = {"title": "Import request Model"}
+        json_schema_extra = {"title": "Import request Model"}
 
 
 class ImportRsp(BaseModel):
     """Import response."""
 
     job_id: int = Field(
-        title="Job Id", description="The job which was created for the run.", example=1
+        title="Job Id",
+        description="The job which was created for the run.",
+        examples=[1],
     )
     # OrderedDict is not available in typings of python 3.6
     # mappings: Dict[str, OrderedDict[str, str]] = Field(title="Fields mapping", default={})
@@ -70,7 +72,7 @@ class ImportRsp(BaseModel):
         title="Errors",
         description="Errors from analysis.",
         default=[],
-        example=["new TSV file(s) are not compliant"],
+        examples=[["new TSV file(s) are not compliant"]],
     )
     # rowcount: int = Field(title="Number of TSV rows, just counted during validation, or loaded", default=0)
 
@@ -114,15 +116,17 @@ class SimpleImportReq(BaseModel):
     source_path: str = Field(
         title="Source path",
         description="Source path on server, to zip or plain directory.",
-        example="/import_test",
+        examples=["/import_test"],
     )
     values: Dict[SimpleImportFields, str] = Field(
         title="Constant values, per field, to write for all images. If a field has no value don't include it.",
         description=":" + ", ".join(SimpleImportFields),
-        example={
-            SimpleImportFields.latitude: 43.69,
-            SimpleImportFields.longitude: 7.30,
-        },
+        examples=[
+            {
+                SimpleImportFields.latitude: 43.69,
+                SimpleImportFields.longitude: 7.30,
+            }
+        ],
     )
     # TODO: How to transmit a constant via OpenApi+FastApi ?
     # possible_values: List[str] = Field(title="Possible field values", const=True,
@@ -130,7 +134,7 @@ class SimpleImportReq(BaseModel):
     possible_values: List[str] = [v for v in SimpleImportFields.__members__]
 
     class Config:
-        schema_extra = {"title": "Simple import request Model"}
+        json_schema_extra = {"title": "Simple import request Model"}
 
 
 class SimpleImportRsp(BaseModel):
@@ -139,14 +143,16 @@ class SimpleImportRsp(BaseModel):
     job_id: int = Field(
         title="Job Id",
         description="The job which was created for the run. 0 if called with dry_run option.",
-        example=1,
+        examples=[1],
     )
     errors: List[str] = Field(
         title="Errors",
         description="Validation errors, dry_run or not.",
-        example=[
-            "'abcde' is not a valid value for SimpleImportFields.latitude",
-            "'456.5' is not a valid value for SimpleImportFields.longitude",
-            "'very very low' is not a valid value for SimpleImportFields.depthmin",
+        examples=[
+            [
+                "'abcde' is not a valid value for SimpleImportFields.latitude",
+                "'456.5' is not a valid value for SimpleImportFields.longitude",
+                "'very very low' is not a valid value for SimpleImportFields.depthmin",
+            ]
         ],
     )

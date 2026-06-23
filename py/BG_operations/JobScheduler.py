@@ -62,7 +62,7 @@ class BaseJobRunner:
         to create it. Report here.
         """
         session = Service().session
-        the_job = session.query(Job).get(job_id)
+        the_job = session.get(Job, job_id)
         assert the_job is not None
         the_job.state = DBJobStateEnum.Error
         the_job.progress_msg = str(te)

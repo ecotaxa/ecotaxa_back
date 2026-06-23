@@ -4,7 +4,7 @@
 #
 import shutil
 from pathlib import Path
-from typing import List, Tuple, Dict, Set, Iterable
+from typing import List, Tuple, Dict, Set, Iterable, Sequence
 
 from API_models.subset import SubsetReq, SubsetRsp, LimitMethods, GroupDefinitions
 from BO.Bundle import InBundle
@@ -32,6 +32,7 @@ from DB.helpers.Bean import bean_of, Bean
 from DB.helpers.DBWriter import DBWriter
 from DB.helpers.Direct import text
 from DB.helpers.ORM import any_
+from DB.helpers.ORM import select
 from DB.helpers.SQL import SelectClause
 from FS.Vault import Vault
 from helpers.DynamicLogs import get_logger, LogsSwitcher
@@ -161,7 +162,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         # Copy mappings to destination. We could narrow them to the minimum?
         custom_mapping.write_to_project(self.dest_prj)
 
-    def _db_fetch(self, object_ids: ObjectIDListT) -> Iterable[DBObjectTupleT]:
+    def _db_fetch(self, object_ids: ObjectIDListT) -> Sequence[DBObjectTupleT]:
         """
         Do a DB read of given objects, with auxiliary objects.
         :param object_ids: The list of IDs
@@ -169,7 +170,15 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         """
         # TODO: Depending on filter, the joins could be plain (not outer)
         # E.g. if asked for a set of samples
-        ret = self.ro_session.query(ObjectHeader)
+        ret = select(
+            ObjectHeader,
+            ObjectFields,
+            ObjectCNNFeature,
+            Image,
+            Sample,
+            Acquisition,
+            Process,
+        )
         ret = (
             ret.join(ObjectHeader.acquisition)
             .join(Acquisition.process)
@@ -196,7 +205,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
             logger.info("Query: %s", str(ret))
             self.first_query = False
 
-        return ret
+        return self.session.execute(ret).tuples().fetchall()
 
     def _db_fetch_histo(
         self, object_ids: ObjectIDListT

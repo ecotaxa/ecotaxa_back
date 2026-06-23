@@ -55,4 +55,4 @@ class Preferences(object):
         qry = session.query(Project.projid, Project.title)
         qry = qry.filter(Project.projid.in_(mru))
         qry = qry.order_by(Project.title)
-        return qry
+        return qry.tuples()

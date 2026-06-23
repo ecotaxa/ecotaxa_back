@@ -28,7 +28,7 @@ class SimilaritySearchRsp(BaseModel):
     )
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "title": "Similarity Search Response",
             "description": "The list of similar objects.",
             "example": {

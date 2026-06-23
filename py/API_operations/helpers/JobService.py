@@ -137,12 +137,12 @@ class JobServiceBase(Service, LogEmitter, ABC):
         self.session.commit()
 
     def _get_job(self) -> Job:
-        job: Optional[Job] = self.session.query(Job).get(self.job_id)
+        job: Optional[Job] = self.session.get(Job, self.job_id)
         assert job is not None
         return job
 
     def _get_owner_id(self) -> UserIDT:
-        job: Optional[Job] = self.session.query(Job).get(self.job_id)
+        job: Optional[Job] = self.session.get(Job, self.job_id)
         assert job is not None
         return job.owner_id
 

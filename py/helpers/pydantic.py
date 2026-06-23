@@ -2,33 +2,53 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-
+import inspect
 # noinspection PyUnresolvedReferences,PyPackageRequirements
-from typing import List, Any, Optional, Dict, Type
+from typing import List, Any, Optional, Dict, Type, TYPE_CHECKING
 
 # Just to avoid tagging every "pydantic" reference in PyCharm, as pydantic is included in FastAPI
 # noinspection PyUnresolvedReferences
 from pydantic import (
-    BaseConfig,
+    ConfigDict,
     BaseModel,
-    Field,
+    Field as PydanticField,
     create_model,
     root_validator,
     dataclasses,
 )
+# noinspection PyUnresolvedReferences
+from pydantic.fields import FieldInfo
+# noinspection PyUnresolvedReferences
+from pydantic.fields import FieldInfo
+# noinspection PyUnresolvedReferences
+from pydantic.fields import FieldInfo
+# noinspection PyUnresolvedReferences
+from pydantic.fields import FieldInfo
 
 
-class DescriptiveModel(BaseModel):
+class DescriptiveModel:
     """Just fields descriptions, these models can be combined
     with various containers to be sent across the wire."""
 
-    class Config:
-        arbitrary_types_allowed = (
-            True  # We don't check that classes inside models are models themselves
-        )
+    # model_config = ConfigDict(from_attributes=True)
+
+    @classmethod
+    def get_fields(cls) -> Dict[str, FieldInfo]:
+        return dict(inspect.getmembers(cls, lambda value: isinstance(value, FieldInfo)))
 
 
 PydanticDescriptionT = Type[DescriptiveModel]
+
+if not TYPE_CHECKING:
+
+    def Field(**kwargs) -> PydanticField:  # type: ignore
+        if "examples" in kwargs:
+            arg = kwargs.pop("examples")
+            kwargs["example"] = arg[0]
+        return PydanticField(**kwargs)  # type: ignore
+
+else:
+    Field = PydanticField
 
 
 def sort_and_prune(
@@ -45,8 +65,8 @@ def sort_and_prune(
             reverse = True
         if order_field in model_cols:
             default_if_none = model_cols[order_field]
-            sort_lambda = (
-                lambda elem: getattr(elem, order_field)
+            sort_lambda = lambda elem: (
+                getattr(elem, order_field)
                 if getattr(elem, order_field)
                 else default_if_none
             )

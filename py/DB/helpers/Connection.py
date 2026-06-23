@@ -7,7 +7,7 @@ import time
 from typing import ClassVar
 
 import sqlalchemy
-from sqlalchemy import MetaData, text
+from sqlalchemy import MetaData
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import QueuePool
 from sqlalchemy.util.queue import Queue
@@ -20,7 +20,7 @@ logger = get_logger(__name__)
 def check_sqlalchemy_version() -> None:
     # noinspection PyUnresolvedReferences
     version = sqlalchemy.__version__
-    expected_version = "1.4.31"
+    expected_version = "2.0.51"
     if version != expected_version:  # pragma: no cover
         logger.fatal(
             "Not the expected SQLAlchemy version (%s instead of %s), exiting to avoid data corruption",
@@ -103,8 +103,8 @@ class Connection(object):
             }
         else:
             exec_options = {}
-        # We connect with the help of the PostgreSQL URL
-        url = "postgresql://{}:{}@{}:{}/{}"
+        # We connect with help of the PostgreSQL URL
+        url = "postgresql+psycopg://{}:{}@{}:{}/{}"
         url = url.format(user, password, host, port, db)
         engine = sqlalchemy.create_engine(
             url,
@@ -112,7 +112,7 @@ class Connection(object):
             echo=False,
             echo_pool=False,
             # echo=True, echo_pool="debug",
-            executemany_mode="batch",
+            # executemany_mode="batch",
             poolclass=TimeEvictedQueuePool,
             pool_use_lifo=True,
             # We have our own age-based eviction strategy, the pool below will contain invalidated connections
@@ -135,8 +135,8 @@ class Connection(object):
             # Default cache_size is up to 500*1.5, but we have big text in queries, e.g. all obj_field columns
         )
         self.session_factory = sessionmaker(bind=engine)
-        self._meta: MetaData = sqlalchemy.MetaData(bind=engine)
-        self._meta.reflect()
+        self._meta: MetaData = sqlalchemy.MetaData()
+        self._meta.reflect(bind=engine)
         self.engine = engine
 
     @property
@@ -155,8 +155,8 @@ class Connection(object):
         Execute raw SQL outside any transaction (which is created by default by SQLA)
         """
         with self.engine.connect() as conn:
-            conn.execute(text("commit"))
-            conn.execute(text(statement))
+            conn.connection.dbapi_connection.autocommit = True
+            conn.exec_driver_sql(statement)
 
     def get_metadata(self) -> MetaData:
         """

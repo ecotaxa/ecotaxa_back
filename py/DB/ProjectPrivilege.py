@@ -12,7 +12,7 @@ from .helpers.ORM import relationship
 from .helpers.Postgres import VARCHAR, INTEGER
 
 if TYPE_CHECKING:
-    from .User import User
+    pass
 
 
 class ProjectPrivilege(Model):
@@ -41,9 +41,8 @@ class ProjectPrivilege(Model):
     extra = Column(VARCHAR(1), nullable=True)
 
     # relationships
-    # The relationships are created in Relations.py but the typing here helps the IDE
-    project: relationship
-    user: User
+    project = relationship("Project", cascade="all, delete-orphan", single_parent=True)
+    user = relationship("User", cascade="all, delete-orphan", single_parent=True)
 
     def __str__(self):
         return "{0} ({1})".format(self.member, self.privilege)

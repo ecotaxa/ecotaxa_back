@@ -130,8 +130,10 @@ class FeatureConsistentProjectSet(object):
         res: Result = self.session.execute(text(sql))
         vals = res.one()
         total = vals[0]  # first in result line is the count
-        counts = vals[1::2]  # then count() every second column
-        variances = vals[2::2]  # and variance() the other one
+        counts: List[int]
+        counts = vals[1::2]  # type: ignore # then count() is in every second column...
+        variances: List[Optional[float]]
+        variances = vals[2::2]  # type: ignore # ...and variance() the other one
         ret = ProjectSetColumnStats(
             self.prj_ids, total, self.column_names, counts, variances
         )

@@ -443,7 +443,7 @@ class CollectionBO(object):
         Find a Collection by its ID and return it, None if not found.
         """
         # Find the collection
-        ret = session.query(Collection).get(coll_id)
+        ret = session.get(Collection, coll_id)
         if ret is None:
             return None
         else:

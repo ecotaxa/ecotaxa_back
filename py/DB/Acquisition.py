@@ -3,19 +3,22 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 from typing import Dict, Tuple, List
+from typing import TYPE_CHECKING
 
 from sqlalchemy import func, DDL, event  # fmt: skip
-# noinspection PyProtectedMember
-from sqlalchemy.orm import relationship, Session
 
 from .Project import Project
-from .Sample import Sample
 from .helpers.DDL import Column, ForeignKey, Index
 from .helpers.Direct import text
-from .helpers.ORM import Model
+from .helpers.ORM import Model, Session, relationship
 from .helpers.Postgres import VARCHAR, BIGINT
 
+# noinspection PyProtectedMember
+
 ACQUISITION_FREE_COLUMNS = 31
+
+if TYPE_CHECKING:
+    from .Sample import Sample
 
 ACQ_PRJ_OFFSET = 10_000_000  # AKA 1e7
 
@@ -42,9 +45,9 @@ class Acquisition(Model):
     instrument = Column(VARCHAR(255))
 
     # The relationships are created in Relations.py but the typing here helps IDE
-    sample: relationship
-    process: relationship
-    all_objects: relationship
+    sample = relationship("Sample")  # TODO: Repeat should not be needed, mypy bug
+    process = relationship("Process", uselist=False)
+    all_objects = relationship("ObjectHeader", viewonly=True)
 
     def pk(self) -> int:
         return self.acquisid

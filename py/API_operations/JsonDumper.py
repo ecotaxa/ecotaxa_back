@@ -6,6 +6,8 @@ import json
 from datetime import datetime
 from typing import Dict, List, Any, Set, TextIO
 
+from sqlalchemy import select
+
 from API_models.filters import ProjectFiltersDict
 from BO.Mappings import ProjectMapping
 from BO.ObjectSet import DescribedObjectSet
@@ -183,7 +185,7 @@ class JsonDumper(Service):
         :param objids:
         :return:
         """
-        ret = self.session.query(
+        ret = select(
             Project, Sample, Acquisition, Process, ObjectHeader, ObjectFields, Image
         )
         ret = ret.join(Sample, Project.all_samples).options(
@@ -204,7 +206,7 @@ class JsonDumper(Service):
             self.first_query = False
 
         with CodeTimer("Get Objects:", logger):
-            objs = [an_obj for an_obj in ret]
+            objs = [an_obj for an_obj in self.session.execute(ret).unique().scalars()]
 
         # We get as many lines as images
         logger.info("NB ROWS JOIN=%d", len(objs))

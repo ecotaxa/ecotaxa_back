@@ -5,11 +5,11 @@
 from enum import IntEnum
 from typing import Optional, Tuple, List, Dict
 
+from BO.DataLicense import AccessLevelEnum
 from DB.Project import Project
 from DB.ProjectPrivilege import ProjectPrivilege
 from DB.User import User, Role, UserStatus
 from DB.helpers.ORM import Session
-from BO.DataLicense import AccessLevelEnum
 from .Preferences import Preferences
 from .ProjectPrivilege import ProjectPrivilegeBO
 
@@ -41,7 +41,7 @@ class RightsBO(object):
         """
         query user by id and active status
         """
-        user = session.query(User).get(user_id)
+        user = session.get(User, user_id)
         # not indicating not found -
         assert (
             user is not None and user.status == UserStatus.active.value
@@ -53,7 +53,7 @@ class RightsBO(object):
         """
         query optional user by id and active status
         """
-        user = session.query(User).get(user_id)
+        user = session.get(User, user_id)
         if user is None or user.status != UserStatus.active.value:
             return None
         else:
@@ -71,10 +71,10 @@ class RightsBO(object):
         Check rights for the user to do this specific action onto this project.
         """
         # Load ORM entities
-        # user: Optional[User] = session.query(User).get(user_id)
+        # user: Optional[User] = session.get(User,user_id)
         user: User = RightsBO.get_user_throw(session, user_id)
         # assert user is not None, NOT_AUTHORIZED
-        project: Optional[Project] = session.query(Project).get(prj_id)
+        project: Optional[Project] = session.get(Project, prj_id)
         assert project is not None, NOT_FOUND
         # Check
         if user.has_role(Role.APP_ADMINISTRATOR):
@@ -200,7 +200,7 @@ class RightsBO(object):
         Check rights for the user to do this specific action.
         """
         # Load ORM entity
-        # user: Optional[User] = session.query(User).get(user_id)
+        # user: Optional[User] = session.get(User,user_id)
         user: User = RightsBO.get_user_throw(session, user_id)
         # assert user is not None, NOT_AUTHORIZED
         # Check
@@ -253,7 +253,7 @@ class RightsBO(object):
         Check rights for an anonymous user to do this action.
         """
         # Load ORM entities
-        project: Optional[Project] = session.query(Project).get(prj_id)
+        project: Optional[Project] = session.get(Project, prj_id)
         # Check
         if project and action == Action.READ:
             assert project.access == AccessLevelEnum.OPEN.value, NOT_AUTHORIZED
@@ -267,7 +267,7 @@ class RightsBO(object):
         Check user role. Should be temporary until a proper action is defined, e.g. refresh taxo tree.
         """
         # Load ORM entity
-        # user = session.query(User).get(user_id)
+        # user = session.get(User,user_id)
         user: User = RightsBO.get_user_throw(session, user_id)
         # assert user is not None, NOT_FOUND
         # Check
@@ -281,7 +281,7 @@ class RightsBO(object):
         or on any project.
         """
         # Load ORM entity
-        # user = session.query(User).get(user_id)
+        # user = session.get(User,user_id)
         user: User = RightsBO.get_user_throw(session, user_id)
         # assert user is not None, NOT_FOUND
         # Check

@@ -8,15 +8,16 @@
 from __future__ import annotations
 
 from typing import NamedTuple
+from typing import TYPE_CHECKING
 
 from sqlalchemy import PrimaryKeyConstraint
 
 from DB.helpers.DDL import Column, ForeignKey, Index
 from DB.helpers.ORM import Model
 from DB.helpers.Postgres import BIGINT, INTEGER, DOUBLE_PRECISION
-from .Object import ObjectHeader
-from .Taxonomy import Taxonomy
-from .Training import Training
+
+if TYPE_CHECKING:
+    pass
 
 PSEUDO_TRAINING_SCORE = 1.0
 
@@ -37,17 +38,17 @@ class Prediction(Model):
 
     object_id: int = Column(
         BIGINT,
-        ForeignKey(ObjectHeader.objid, ondelete="CASCADE", onupdate="CASCADE"),
+        ForeignKey("obj_head.objid", ondelete="CASCADE", onupdate="CASCADE"),
         nullable=False,
     )
     training_id: int = Column(
         INTEGER,
-        ForeignKey(Training.training_id, ondelete="CASCADE"),
+        ForeignKey("training.training_id", ondelete="CASCADE"),
         nullable=False,
     )
     classif_id: int = Column(
         INTEGER,
-        ForeignKey(Taxonomy.id, ondelete="CASCADE"),
+        ForeignKey("taxonomy.id", ondelete="CASCADE"),
         nullable=False,
     )
     score = Column(DOUBLE_PRECISION, nullable=False)  # payload
@@ -68,17 +69,17 @@ class PredictionHisto(Model):
 
     object_id: int = Column(
         BIGINT,
-        ForeignKey(ObjectHeader.objid, ondelete="CASCADE", onupdate="CASCADE"),
+        ForeignKey("obj_head.objid", ondelete="CASCADE", onupdate="CASCADE"),
         nullable=False,
     )
     training_id: int = Column(
         INTEGER,
-        ForeignKey(Training.training_id, ondelete="CASCADE"),
+        ForeignKey("training.training_id", ondelete="CASCADE"),
         nullable=False,
     )
     classif_id: int = Column(
         INTEGER,
-        ForeignKey(Taxonomy.id, ondelete="CASCADE"),
+        ForeignKey("taxonomy.id", ondelete="CASCADE"),
         nullable=False,
     )
     score = Column(DOUBLE_PRECISION, nullable=False)  # payload

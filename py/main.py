@@ -6,7 +6,9 @@
 #
 import os
 import re
+import sys
 import time
+from dataclasses import asdict
 from logging import INFO
 from typing import Union, Tuple, List, Dict, Any, Optional
 
@@ -25,13 +27,14 @@ from fastapi import (
     Body,
     Path,
 )
+from fastapi.exceptions import RequestValidationError
 from fastapi.logger import logger as fastapi_logger
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.templating import Jinja2Templates
-from fastapi_utils.timing import add_timing_middleware
-from sqlalchemy.sql.expression import null
+# from fastapi_utils.timing import add_timing_middleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.responses import JSONResponse
 
 from API_models.constants import Constants
 from API_models.crud import (
@@ -67,7 +70,7 @@ from API_models.exports import (
     BackupExportReq,
 )
 from API_models.filesystem import DirectoryModel
-from API_models.filters import ProjectFilters
+from API_models.filters import LaxProjectFilters
 from API_models.helpers.Introspect import plain_columns
 from API_models.imports import ImportReq, SimpleImportRsp, SimpleImportReq, ImportRsp
 from API_models.login import LoginReq
@@ -83,6 +86,7 @@ from API_models.objects import (
     ClassifyAutoReq,
     ClassifyAutoReqMult,
     ObjectHeaderModel,
+    HistoricalLastClassificationModel,
 )
 from API_models.prediction import (
     PredictionRsp,
@@ -159,11 +163,11 @@ from BO.ProjectSet import ProjectSetColumnStats
 from BO.Sample import SampleTaxoStats
 from BO.Taxonomy import TaxonBO
 from BO.WoRMSification import WoRMSBO
-from DB import Sample
 from DB.Job import DBJobStateEnum
 from DB.Object import ObjectIDListT
 from DB.Project import ProjectTaxoStat, Project
 from DB.ProjectPrivilege import ProjectPrivilege
+from DB.Sample import Sample
 from DB.TaxoRecast import RecastOperation
 from DB.User import GuestIDT, OrganizationIDT, User, UserIDT
 from helpers.AppConfig import Config
@@ -181,6 +185,9 @@ from helpers.fastApiUtils import (
 )
 from helpers.login import LoginService
 from helpers.pydantic import sort_and_prune
+
+# from fastapi_utils.timing import add_timing_middleware
+# from sqlalchemy.sql.expression import null
 
 # from fastapi.middleware.gzip import GZipMiddleware
 
@@ -210,7 +217,7 @@ init_openid()
 app.include_router(openid_router)
 
 # Instrument a bit
-add_timing_middleware(app, record=logger.info, prefix="app", exclude="untimed")
+# add_timing_middleware(app, record=logger.info, prefix="app", exclude="untimed")
 
 app.add_middleware(
     SessionMiddleware,
@@ -341,7 +348,7 @@ def show_current_user(
     "/users/{user_id}",
     operation_id="update_user",
     tags=["users"],
-    responses={200: {"content": {"application/json": {"example": null}}}},
+    responses={200: {"content": {"application/json": {"example": None}}}},
 )
 def update_user(
     user: UserModelWithRights,
@@ -370,7 +377,7 @@ def update_user(
     "/users/create",
     operation_id="create_user",
     tags=["users"],
-    responses={200: {"content": {"application/json": {"example": null}}}},
+    responses={200: {"content": {"application/json": {"example": None}}}},
 )
 def create_user(
     user: UserModelWithRights = Body(...),
@@ -443,7 +450,7 @@ def get_current_user_prefs(
     "/users/my_preferences/{project_id}",
     operation_id="set_current_user_prefs",
     tags=["users"],
-    responses={200: {"content": {"application/json": {"example": null}}}},
+    responses={200: {"content": {"application/json": {"example": None}}}},
 )
 def set_current_user_prefs(
     project_id: int = Path(
@@ -557,7 +564,7 @@ def get_user(
     "/users/activate/{user_id}/{status}",
     operation_id="activate_user",
     tags=["users"],
-    responses={200: {"content": {"application/json": {"example": null}}}},
+    responses={200: {"content": {"application/json": {"example": None}}}},
 )
 def activate_user(
     user_id: int = Path(
@@ -604,7 +611,7 @@ def activate_user(
     "/users/reset_user_password",
     operation_id="reset_user_password",
     tags=["users"],
-    responses={200: {"content": {"application/json": {"example": null}}}},
+    responses={200: {"content": {"application/json": {"example": None}}}},
 )
 def reset_user_password(
     resetreq: ResetPasswordReq = Body(...),
@@ -719,7 +726,7 @@ def get_organizations(
     "/organizations/create",
     operation_id="create_organization",
     tags=["organizations"],
-    responses={200: {"content": {"application/json": {"example": null}}}},
+    responses={200: {"content": {"application/json": {"example": None}}}},
 )
 def create_organization(
     organization: OrganizationModel = Body(...),
@@ -742,7 +749,7 @@ def create_organization(
     "/organizations/{organization_id}",
     operation_id="update_organization",
     tags=["organizations"],
-    responses={200: {"content": {"application/json": {"example": null}}}},
+    responses={200: {"content": {"application/json": {"example": None}}}},
 )
 def update_organization(
     organization: OrganizationModel,
@@ -802,7 +809,7 @@ def get_guests(
     "/guests/create",
     operation_id="create_guest",
     tags=["guests"],
-    responses={200: {"content": {"application/json": {"example": null}}}},
+    responses={200: {"content": {"application/json": {"example": None}}}},
 )
 def create_guest(
     guest: GuestModel = Body(...),
@@ -828,7 +835,7 @@ def create_guest(
     "/guests/{guest_id}",
     operation_id="update_guest",
     tags=["guests"],
-    responses={200: {"content": {"application/json": {"example": null}}}},
+    responses={200: {"content": {"application/json": {"example": None}}}},
 )
 def update_guests(
     guest: GuestModel,
@@ -1120,7 +1127,7 @@ def get_collection(
     "/collections/{collection_id}",
     operation_id="update_collection",
     tags=["collections"],
-    responses={200: {"content": {"application/json": {"example": null}}}},
+    responses={200: {"content": {"application/json": {"example": None}}}},
 )
 def update_collection(
     collection: CollectionReq = Body(...),
@@ -1149,7 +1156,7 @@ def update_collection(
     "/collections/{collection_id}",
     operation_id="patch_collection",
     tags=["collections"],
-    responses={200: {"content": {"application/json": {"example": null}}}},
+    responses={200: {"content": {"application/json": {"example": None}}}},
 )
 def patch_collection(
     collection: CollectionReq = Body(...),
@@ -1714,7 +1721,7 @@ def project_dump(
     project_id: int = Path(
         ..., description="Internal, numeric id of the project.", example=1
     ),
-    filters: ProjectFilters = Body(...),
+    filters: LaxProjectFilters = Body(None),
     current_user: int = Depends(get_current_user),
 ) -> None:
     """
@@ -1852,7 +1859,7 @@ def project_stats(
     "/projects/{project_id}/recompute_geo",
     operation_id="project_recompute_geography",
     tags=["projects"],
-    responses={200: {"content": {"application/json": {"example": null}}}},
+    responses={200: {"content": {"application/json": {"example": None}}}},
 )
 def project_recompute_geography(
     project_id: int = Path(
@@ -1876,7 +1883,7 @@ def project_recompute_geography(
     "/projects/{project_id}/recompute_sunpos",
     operation_id="project_recompute_sunpos",
     tags=["projects"],
-    responses={200: {"content": {"application/json": {"example": null}}}},
+    responses={200: {"content": {"application/json": {"example": None}}}},
 )
 def project_recompute_sunpos(
     project_id: int = Path(
@@ -1983,7 +1990,7 @@ def erase_project(
     "/projects/{project_id}",
     operation_id="update_project",
     tags=["projects"],
-    responses={200: {"content": {"application/json": {"example": null}}}},
+    responses={200: {"content": {"application/json": {"example": None}}}},
 )
 def update_project(
     project: ProjectModel,
@@ -2033,7 +2040,7 @@ def update_project(
     "/projects/{project_id}/prediction_settings",
     operation_id="set_project_predict_settings",
     tags=["projects"],
-    responses={200: {"content": {"application/json": {"example": null}}}},
+    responses={200: {"content": {"application/json": {"example": None}}}},
 )
 def set_project_predict_settings(
     settings: str = Query(
@@ -2083,7 +2090,7 @@ def object_similarity_search(
         description="Return at maximum this number of object IDs, by default 100.",
         example="120",
     ),
-    filters: ProjectFilters = Body(...),
+    filters: LaxProjectFilters = Body(None),
     current_user: Optional[int] = Depends(get_optional_current_user),
 ) -> SimilaritySearchRsp:
     """
@@ -2392,7 +2399,7 @@ async def get_object_set(
     project_id: int = Path(
         ..., description="Internal, numeric id of the project.", example=1
     ),
-    filters: ProjectFilters = Body(...),
+    filters: LaxProjectFilters = Body(None),
     fields: Optional[str] = Query(
         title="Fields",
         description="""
@@ -2510,7 +2517,7 @@ def get_object_set_summary(
         title="Only total",
         description="If True, returns only the **Total number of objects**. Else returns also the **Number of validated ones**, the **number of Dubious ones** and the number of **predicted ones**.",
     ),
-    filters: ProjectFilters = Body(...),
+    filters: LaxProjectFilters = Body(None),
     current_user: Optional[int] = Depends(get_optional_current_user),
 ) -> ObjectSetSummaryRsp:
     """For the given project, with given filters, **return the classification summary**.
@@ -2542,13 +2549,13 @@ def get_object_set_summary(
     operation_id="reset_object_set_to_predicted",
     tags=["objects"],
     response_model=None,
-    responses={200: {"content": {"application/json": {"example": null}}}},
+    responses={200: {"content": {"application/json": {"example": None}}}},
 )
 def force_object_set_to_predicted(
     project_id: int = Path(
         ..., description="Internal, numeric id of the project.", example=1
     ),
-    filters: ProjectFilters = Body(...),
+    filters: LaxProjectFilters = Body(None),
     current_user: int = Depends(get_current_user),
 ) -> None:
     """
@@ -2571,7 +2578,7 @@ def revert_object_set_to_history(
     project_id: int = Path(
         ..., description="Internal, numeric id of the project.", example=1
     ),
-    filters: ProjectFilters = Body(...),
+    filters: LaxProjectFilters = Body(None),
     dry_run: bool = Query(
         ...,
         title="Dry run",
@@ -2595,7 +2602,11 @@ def revert_object_set_to_history(
                 current_user, project_id, filters.base(), dry_run, target
             )
         ret = ObjectSetRevertToHistoryRsp(
-            last_entries=obj_hist, classif_info=classif_info
+            last_entries=[
+                HistoricalLastClassificationModel.model_validate(asdict(a_cl))
+                for a_cl in obj_hist
+            ],
+            classif_info=classif_info,
         )
     return ret
 
@@ -2611,7 +2622,7 @@ def reclassify_object_set(
     project_id: int = Path(
         ..., description="Internal, numeric id of the project.", example=1
     ),
-    filters: ProjectFilters = Body(...),
+    filters: LaxProjectFilters = Body(None),
     forced_id: ClassifIDT = Query(
         ..., title="Forced Id", description="The new classification Id.", example=23025
     ),
@@ -2802,7 +2813,7 @@ async def query_object_set_parents(  # MyORJSONResponse -> JSONResponse -> Respo
     response_model=ExportRsp,
 )
 def export_object_set(
-    filters: ProjectFilters = Body(...),
+    filters: LaxProjectFilters = Body(None),
     request: ExportReq = Body(..., deprecated=True),
     current_user: int = Depends(get_current_user),
 ) -> ExportRsp:
@@ -2826,7 +2837,7 @@ def export_object_set(
     response_model=ExportRsp,
 )
 def export_object_set_general(
-    filters: ProjectFilters = Body(...),
+    filters: LaxProjectFilters = Body(None),
     request: GeneralExportReq = Body(...),
     current_user: int = Depends(get_current_user),
 ) -> ExportRsp:
@@ -2848,7 +2859,7 @@ def export_object_set_general(
     response_model=ExportRsp,
 )
 def export_object_set_summary(
-    filters: ProjectFilters = Body(...),
+    filters: LaxProjectFilters = Body(None),
     request: SummaryExportReq = Body(...),
     current_user: int = Depends(get_current_user),
 ) -> ExportRsp:
@@ -2870,7 +2881,7 @@ def export_object_set_summary(
     response_model=ExportRsp,
 )
 def export_object_set_backup(
-    filters: ProjectFilters = Body(...),
+    filters: LaxProjectFilters = Body(None),
     request: BackupExportReq = Body(...),
     current_user: int = Depends(get_current_user),
 ) -> ExportRsp:
@@ -2893,7 +2904,7 @@ def export_object_set_backup(
     response_model=PredictionRsp,
 )
 def predict_object_set(
-    filters: ProjectFilters = Body(...),
+    filters: LaxProjectFilters = Body(None),
     request: PredictionReq = Body(...),
     current_user: int = Depends(get_current_user),
 ) -> PredictionRsp:
@@ -3084,7 +3095,7 @@ def taxa_tree_status(
                     "example": [
                         {
                             "id": 12876,
-                            "renm_id": null,
+                            "renm_id": None,
                             "name": "Echinodermata X",
                             "type": "P",
                             "nb_objects": 24,
@@ -3164,7 +3175,7 @@ def reclassif_project_stats(
                 "application/json": {
                     "example": {
                         "id": 12876,
-                        "renm_id": null,
+                        "renm_id": None,
                         "name": "Echinodermata X",
                         "type": "P",
                         "nb_objects": 24,
@@ -3359,7 +3370,6 @@ def add_taxon_in_central(
         description="The email of the taxo creator.",
         example="user.creator@email.com",
     ),
-    request: Request = Query(..., title="Request", description=""),
     source_desc: Optional[str] = Query(
         default=None,
         title="Source desc",
@@ -3373,6 +3383,7 @@ def add_taxon_in_central(
         example="http://www.google.fr/",
     ),
     current_user: int = Depends(get_current_user),
+    request: Request = None,  # type: ignore # injected by FastAPI
 ) -> str:
     """
     **Create a taxon** on EcoTaxoServer.
@@ -3478,7 +3489,7 @@ def add_worms_taxon(
     "/taxo_recast",
     operation_id="update_taxonomy_recast",
     tags=["Taxonomy Tree"],
-    responses={200: {"content": {"application/json": {"example": null}}}},
+    responses={200: {"content": {"application/json": {"example": None}}}},
 )
 def update_taxonomy_recast(
     recast: TaxonomyRecastReq = Body(...),
@@ -3618,7 +3629,7 @@ def cleanup_images_1(
     operation_id="nightly_maintenance",
     tags=["WIP"],
     include_in_schema=False,
-    response_model=str,
+    response_model=int,
 )
 def nightly_maintenance(current_user: int = Depends(get_current_user)) -> int:
     """
@@ -3732,7 +3743,7 @@ def get_job(
     "/jobs/{job_id}/answer",
     operation_id="reply_job_question",
     tags=["jobs"],
-    responses={200: {"content": {"application/json": {"example": null}}}},
+    responses={200: {"content": {"application/json": {"example": None}}}},
 )
 def reply_job_question(
     job_id: int = Path(
@@ -3762,7 +3773,7 @@ def reply_job_question(
     "/jobs/{job_id}/restart",
     operation_id="restart_job",
     tags=["jobs"],
-    responses={200: {"content": {"application/json": {"example": null}}}},
+    responses={200: {"content": {"application/json": {"example": None}}}},
 )
 def restart_job(
     job_id: int = Path(
@@ -3844,7 +3855,7 @@ async def get_job_file(  # async due to StreamingResponse
     "/jobs/{job_id}",
     operation_id="erase_job",
     tags=["jobs"],
-    responses={200: {"content": {"application/json": {"example": null}}}},
+    responses={200: {"content": {"application/json": {"example": None}}}},
 )
 def erase_job(
     job_id: int = Path(
@@ -3933,7 +3944,7 @@ def list_user_files(
     response_model=str,
 )
 async def put_user_file(  # async due to await file store
-    file: UploadFile = File(..., title="File", description=""),
+    file: UploadFile = File(..., title="File", description="data stream"),
     path: Optional[str] = Form(
         title="Path",
         description="The destination path of the file.",
@@ -4284,6 +4295,23 @@ def startup_event() -> None:
     # Don't run predictions, they are left to a specialized runner
     JobScheduler.FILTER = [PredictForProject.JOB_TYPE]
     JobScheduler.launch_at_interval(JOB_INTERVAL)
+
+
+def register_exception(app: FastAPI):
+    @app.exception_handler(RequestValidationError)
+    async def validation_exception_handler(
+        request: Request, exc: RequestValidationError
+    ):
+        exc_str = f"{exc}".replace("\n", " ").replace("   ", " ")
+        # or logger.error(f'{exc}')
+        print(request.url, exc_str, file=sys.stderr)
+        content = {"status_code": 10422, "message": exc_str, "data": None}
+        return JSONResponse(
+            content=content, status_code=status.HTTP_422_UNPROCESSABLE_ENTITY
+        )
+
+
+register_exception(app)
 
 
 @app.on_event("shutdown")

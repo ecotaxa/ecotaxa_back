@@ -165,8 +165,8 @@ class ProjectBO(object):
     def __init__(self, project: Project):
         self._project = project
         # Added/copied values
-        self.instrument = project.instrument_id
-        self.instrument_url = None
+        self.instrument: Optional[str] = project.instrument_id
+        self.instrument_url: Optional[str] = None
         self.highest_right = (
             ""  # This field depends on the user asking for the information
         )
@@ -308,7 +308,7 @@ class ProjectBO(object):
         }
         # Remove all to avoid tricky diffs
         session.query(ProjectPrivilege).filter(
-            ProjectPrivilege.projid == proj_id
+            ProjectPrivilege.projid.__eq__(proj_id)
         ).delete()
         # Add all
         contact_used = False
@@ -349,7 +349,7 @@ class ProjectBO(object):
         """
         from DB.helpers.ORM import MetaData
 
-        metadata = MetaData(bind=session.get_bind())
+        metadata = MetaData()
         # TODO: Cache in a member
         mappings = ProjectMapping().load_from_project(self._project)
         num_fields_cols = set(
@@ -378,10 +378,13 @@ class ProjectBO(object):
 
     @staticmethod
     def update_taxo_stats(session: Session, projid: int):
-        sql = text(
-            f"""
+        sql = text(f"""
         DELETE FROM projects_taxo_stat pts
          WHERE pts.projid = :prjid;
+         """)
+        session.execute(sql, {"prjid": projid})
+        sql = text(
+            f"""
         INSERT INTO projects_taxo_stat(projid, id, nbr, nbr_v, nbr_d, nbr_p)
         SELECT {RECURS_HINT} sam.projid, COALESCE(obh.classif_id, -1) id, COUNT(*) nbr,
                COUNT(CASE WHEN obh.classif_qual = '"""
@@ -441,7 +444,7 @@ class ProjectBO(object):
             sql += ", pts.id"
         res: Result = session.execute(text(sql), params)
         with CodeTimer("stats for %d projects:" % len(prj_ids), logger):
-            ret = [ProjectTaxoStats(**rec) for rec in res]  # type: ignore # case4
+            ret = [ProjectTaxoStats(**rec) for rec in res.mappings()]
         for a_stat in ret:
             a_stat.used_taxa.sort()
         return ret
@@ -633,9 +636,9 @@ class ProjectBO(object):
                      AND NOT prj.title ILIKE '%%subset%%'  """
         if project_ids != "":
             sql_params.update(
-                {"pids": tuple([int(p.strip()) for p in project_ids.split(",")])}
+                {"pids": [int(p.strip()) for p in project_ids.split(",")]}
             )
-            sql += """ AND prj.projid IN :pids """
+            sql += """ AND prj.projid = ANY(:pids) """
         with CodeTimer("Projects.projects_for_user query (ids):", logger):
             res: Result = session.execute(text(sql), sql_params)
             # single-element tuple :( DBAPI
@@ -659,6 +662,8 @@ class ProjectBO(object):
         if project_ids != "":
             pids = [p.strip() for p in project_ids.split(",")]
             qry = qry.filter(Project.projid.in_(pids))
+        qry = qry.filter(Project.visible.__eq__(True))
+        qry = qry.filter(Project.title.ilike(pattern))
         ret = [an_id for an_id, in qry]
         return ret
 
@@ -817,7 +822,7 @@ class ProjectBO(object):
             )
             qry = qry.filter(Process.processid.in_(acqs_4_samples))
         elif table == ObjectFields:
-            samples_4_prj = Query(Sample.sampleid).filter(Sample.projid == prj_id)
+            samples_4_prj = Query(Sample.sampleid).filter(Sample.projid.__eq__(prj_id))
             acqs_4_samples = Query(Acquisition.acquisid).filter(
                 Acquisition.acq_sample_id.in_(samples_4_prj)
             )
@@ -950,7 +955,7 @@ class ProjectBO(object):
                 new_pos = compute_sun_position(Bean(vals_dict))
                 cache[vals] = new_pos
             if new_pos != sunpos:
-                obj = session.query(ObjectHeader).get(objid)
+                obj = session.get(ObjectHeader, objid)
                 assert obj is not None
                 obj.sunpos = new_pos
                 ret += 1

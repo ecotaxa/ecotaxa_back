@@ -7,17 +7,26 @@
 #
 from __future__ import annotations
 
-from typing import Optional, TYPE_CHECKING, Iterable, List
+from typing import TYPE_CHECKING
 
-from DB.Project import Project
-from DB.User import Organization, Guest
-from DB.helpers.ORM import Model
+from DB.helpers.ORM import Model, relationship
 from .helpers.DDL import Column, Sequence, ForeignKey, Index
-from .helpers.ORM import relationship
 from .helpers.Postgres import VARCHAR, INTEGER
 
 if TYPE_CHECKING:
-    from .User import User
+    pass
+else:
+    Project = "Project"
+
+
+class CollectionProject(Model):
+    __tablename__ = "collection_project"
+    """ n<->n plain relationship b/w collection and projects """
+    collection_id: int = Column(INTEGER, ForeignKey("collection.id"), primary_key=True)
+    project_id: int = Column(INTEGER, ForeignKey("projects.projid"), primary_key=True)
+
+    def __str__(self) -> str:
+        return "{0},{1}".format(self.collection_id, self.project_id)
 
 
 class Collection(Model):
@@ -41,11 +50,21 @@ class Collection(Model):
     description = Column(VARCHAR)
 
     # The relationships are created in Relations.py but the typing here helps IDE
-    projects: List["Project"]
-    contact_user: Optional[User]
-    provider_user: Optional[User]
-    users_by_role: Iterable["CollectionUserRole"]
-    organisations_by_role: Iterable["CollectionOrgaRole"]
+    projects = relationship("Project", secondary=CollectionProject.__tablename__)
+    contact_user = relationship(
+        "User",
+        foreign_keys="Collection.contact_user_id",
+        uselist=False,
+    )
+    provider_user = relationship(
+        "User",
+        foreign_keys="Collection.provider_user_id",
+        uselist=False,
+    )
+    users_by_role = relationship("CollectionUserRole", viewonly=True)
+    organisations_by_role = relationship(
+        "CollectionOrgaRole"
+    )  # TODO: Repeat should not be needed, mypy bug
 
     def __str__(self) -> str:
         return "{0} ({1})".format(self.id, self.title)
@@ -54,17 +73,6 @@ class Collection(Model):
 # Unique index as we want no duplicate title
 Index("CollectionTitle", Collection.__table__.c.title, unique=True)
 Index("CollectionShortTitle", Collection.__table__.c.short_title, unique=True)
-
-
-class CollectionProject(Model):
-    __tablename__ = "collection_project"
-    """ n<->n plain relationship b/w collection and projects """
-    collection_id = Column(INTEGER, ForeignKey("collection.id"), primary_key=True)
-    project_id = Column(INTEGER, ForeignKey("projects.projid"), primary_key=True)
-
-    def __str__(self) -> str:
-        return "{0},{1}".format(self.collection_id, self.project_id)
-
 
 COLLECTION_ROLE_DATA_CREATOR = "C"
 COLLECTION_ROLE_ASSOCIATED_PERSON = "A"
@@ -77,11 +85,13 @@ class CollectionUserRole(Model):
     collection_id: int = Column(INTEGER, ForeignKey("collection.id"), primary_key=True)
     user_id: int = Column(INTEGER, ForeignKey("users.id"), primary_key=True)
     role: str = Column(VARCHAR(1), nullable=False, primary_key=True)
+
+    # Relationships
+    collection = relationship("Collection", uselist=False)
+    user = relationship("User", uselist=False)
     display_order: int = Column(INTEGER)
     # The relationships are created in Relations.py but the typing here helps IDE
-    collection: relationship
-    user: User
-    guest: Guest
+    guest = relationship("Guest")
 
     def __str__(self) -> str:
         return "{0},{1}:{2}".format(self.collection_id, self.user_id, self.role)
@@ -94,8 +104,8 @@ class CollectionOrgaRole(Model):
     organization_id: str = Column(
         INTEGER, ForeignKey("organizations.id"), nullable=False, primary_key=True
     )
-    collection: relationship
-    organization: Organization
+    collection = relationship("Collection")
+    organization = relationship("Organization")
     role: str = Column(
         VARCHAR(1),  # 'C' for data Creator, 'A' for Associated 'person'
         nullable=False,

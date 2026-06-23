@@ -2,7 +2,7 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import List, Dict, Union, Any
+from typing import List, Dict, Union
 
 from sqlalchemy.orm import Session
 
@@ -16,7 +16,7 @@ from DB.Acquisition import Acquisition, AcquisitionIDT, ACQ_PRJ_OFFSET
 from DB.Object import ObjectHeader, ObjectFields, OBJ_PRJ_OFFSET
 from DB.Project import Project
 from DB.Sample import Sample, SampleIDT, SAM_PRJ_OFFSET
-from DB.helpers.ORM import orm_equals, any_, all_, func
+from DB.helpers.ORM import orm_equals, any_, all_, func, update, delete
 from DB.helpers.Postgres import values_cte, text
 from helpers.DynamicLogs import get_logger
 from .helpers.Service import Service
@@ -57,9 +57,9 @@ class MergeService(Service):
             self.session, current_user_id, Action.ADMINISTRATE, self.src_prj_id
         )
         # OK
-        prj = self.session.query(Project).get(self.prj_id)
+        prj = self.session.get(Project, self.prj_id)
         assert prj is not None
-        src_prj = self.session.query(Project).get(self.src_prj_id)
+        src_prj = self.session.get(Project, self.src_prj_id)
         assert src_prj is not None
 
         logger.info("Validating Merge of '%s'", prj.title)
@@ -258,9 +258,8 @@ class MergeService(Service):
         )
 
         # Align foreign keys, to Project, Sample and Acquisition
-        upd_values: Dict[str, Any] = {}
         for a_fk_to_proj_tbl in [Sample, Acquisition, ObjectHeader, ObjectFields]:
-            upd = self.session.query(a_fk_to_proj_tbl)
+            upd = update(a_fk_to_proj_tbl)
             if a_fk_to_proj_tbl == Sample:
                 # Move (i.e. change project) samples which are 'new' from merged project,
                 #    so take all of them from src project...
@@ -268,7 +267,7 @@ class MergeService(Service):
                 # ...but not the ones with same orig_id, which will be merged below with Acquisition
                 upd = upd.filter(Sample.sampleid != all_(list(common_samples.keys())))
                 # And update the column
-                upd_values = {"projid": self.prj_id}
+                upd = upd.values({"projid": self.prj_id})
             elif a_fk_to_proj_tbl == Acquisition:
                 if len(common_samples) == 0:
                     # Nothing to do. There were only new samples, all of them moved to self.
@@ -286,12 +285,14 @@ class MergeService(Service):
                 smp_subqry = self.session.query(smp_cte.c.column2).filter(
                     smp_cte.c.column1 == Acquisition.acq_sample_id
                 )
-                upd_values = {
-                    "acq_sample_id": func.coalesce(
-                        smp_subqry.scalar_subquery(),  # type: ignore
-                        Acquisition.acq_sample_id,
-                    )
-                }
+                upd = upd.values(
+                    {
+                        "acq_sample_id": func.coalesce(
+                            smp_subqry.scalar_subquery(),
+                            Acquisition.acq_sample_id,
+                        )
+                    }
+                )
                 upd = upd.filter(
                     Acquisition.acq_sample_id == any_(list(common_samples.keys()))
                 )
@@ -316,11 +317,13 @@ class MergeService(Service):
                 acq_subqry = self.session.query(acq_cte.c.column2).filter(
                     acq_cte.c.column1 == ObjectHeader.acquisid
                 )
-                upd_values = {
-                    "acquisid": func.coalesce(
-                        acq_subqry.scalar_subquery(), ObjectHeader.acquisid
-                    )
-                }
+                upd = upd.values(
+                    {
+                        "acquisid": func.coalesce(
+                            acq_subqry.scalar_subquery(), ObjectHeader.acquisid
+                        )
+                    }
+                )
                 upd = upd.filter(
                     ObjectHeader.acquisid == any_(list(common_acquisitions.keys()))
                 )
@@ -342,37 +345,39 @@ class MergeService(Service):
                 acq_subqry = self.session.query(acq_cte.c.column2).filter(
                     acq_cte.c.column1 == ObjectFields.acquis_id
                 )
-                upd_values = {
-                    "acquis_id": func.coalesce(
-                        acq_subqry.scalar_subquery(), ObjectFields.acquis_id
-                    )
-                }
+                upd = upd.values(
+                    {
+                        "acquis_id": func.coalesce(
+                            acq_subqry.scalar_subquery(), ObjectFields.acquis_id
+                        )
+                    }
+                )
                 upd = upd.filter(
                     ObjectFields.acquis_id == any_(list(common_acquisitions.keys()))
                 )
-            rowcount = upd.update(values=upd_values, synchronize_session=False)
-            table_name = a_fk_to_proj_tbl.__tablename__  # type: ignore
-            logger.info("Update in %s: %s rows", table_name, rowcount)
+            upd_rowcount = self.session.execute(upd).rowcount  # type: ignore # case1
+            table_name = a_fk_to_proj_tbl.__tablename__  # type: ignore # case7
+            logger.info("Update in %s: %s rows", table_name, upd_rowcount)
 
         # Acquisition & twin Process have followed their enclosing Sample
 
         # Remove the parents which are duplicate from orig_id point of view.
         # They should be empty due to transfers above.
         for a_fk_to_proj_tbl in [Acquisition, Sample]:
-            to_del = self.session.query(a_fk_to_proj_tbl)
+            del_qry = delete(a_fk_to_proj_tbl)
             if a_fk_to_proj_tbl == Acquisition:
                 # Remove conflicting acquisitions, they should be empty?
-                to_del = to_del.filter(
+                del_qry = del_qry.filter(
                     Acquisition.acquisid == any_(list(common_acquisitions.keys()))
                 )
             elif a_fk_to_proj_tbl == Sample:
                 # Remove conflicting samples
-                to_del = to_del.filter(
+                del_qry = del_qry.filter(
                     Sample.sampleid == any_(list(common_samples.keys()))
                 )
-            rowcount = to_del.delete(synchronize_session=False)
-            table_name = a_fk_to_proj_tbl.__tablename__  # type: ignore
-            logger.info("Delete in %s: %s rows", table_name, rowcount)
+            del_rowcount = self.session.execute(del_qry).rowcount  # type: ignore # case1
+            table_name = a_fk_to_proj_tbl.__tablename__  # type: ignore # case7
+            logger.info("Delete in %s: %s rows", table_name, del_rowcount)
 
         self.dest_augmented_mappings.write_to_project(dest_prj)
 

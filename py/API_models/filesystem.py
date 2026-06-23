@@ -17,20 +17,20 @@ class DirectoryEntryModel(BaseModel):
     name: str = Field(
         title="Name",
         description="atomic entry name.",
-        example="task_281167_export_reduced_20200120_15_05.zip",
+        examples=["task_281167_export_reduced_20200120_15_05.zip"],
     )
     type: str = Field(
         title="Type",
         description="entry type, 'D' for directory, 'F' for file.",
-        example="F",
+        examples=["F"],
     )
     size: int = Field(
-        title="Size", description="Entry size, for zips.", example=173804090
+        title="Size", description="Entry size, for zips.", examples=[173804090]
     )
     mtime: str = Field(
         title="Modification time",
         description="Modification time, in ISO format.",
-        example="2020-01-20 15:10:54.834571",
+        examples=["2020-01-20 15:10:54.834571"],
     )
 
 
@@ -42,7 +42,7 @@ class DirectoryModel(BaseModel):
     path: str = Field(
         title="Path",
         description="A /-separated path from root to this directory.",
-        example="/ftp_plankton/Ecotaxa_Exported_data",
+        examples=["/ftp_plankton/Ecotaxa_Exported_data"],
     )
     entries: List[DirectoryEntryModel] = Field(
         title="Entries",

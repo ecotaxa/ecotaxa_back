@@ -18,6 +18,7 @@ from typing import Dict, List, Optional, Tuple, cast, Set, Any, Iterable
 from urllib.parse import quote_plus
 
 from fastapi import HTTPException
+from sqlalchemy import bindparam
 
 import BO.ProjectVarsDefault as DefaultVars
 from API_models.exports import ExportRsp, SciExportTypeEnum
@@ -150,7 +151,7 @@ class DarwinCoreExport(JobServiceBase):
     ):
         super().__init__()
         # Input params
-        collection = self.ro_session.query(Collection).get(collection_id)
+        collection = self.ro_session.get(Collection, collection_id)
         assert collection is not None, "Invalid collection ID"
         self.collection: Collection = collection
         self.the_collection: CollectionBO = CollectionBO(self.collection).enrich()
@@ -904,8 +905,13 @@ class DarwinCoreExport(JobServiceBase):
 
     def _get_fast_count(self, project_ids: ProjectIDListT) -> int:
         # Get a fast count of the maximum of what to do
-        count_sql = "SELECT COUNT(*) FROM samples WHERE projid IN :prjs"
-        res = self.ro_session.execute(text(count_sql), {"prjs": tuple(project_ids)})
+        count_sql = text(
+            "SELECT COUNT(*) FROM samples WHERE projid IN :prjs"
+        ).bindparams(bindparam("prjs", expanding=True))
+        res = self.ro_session.execute(
+            count_sql,
+            {"prjs": tuple(project_ids)},
+        )
         sample_count = res.one()[0]
         return sample_count
 

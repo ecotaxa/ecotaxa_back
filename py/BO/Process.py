@@ -14,7 +14,7 @@ from DB import Session
 from DB.Process import Process, ProcessIDT, ProcessIDListT
 from DB.Project import ProjectIDListT, Project
 from DB.Sample import Sample
-from DB.helpers.ORM import any_
+from DB.helpers.ORM import any_, Update
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
 
@@ -36,7 +36,7 @@ class ProcessBO(MappedEntity):
 
     def __init__(self, session: Session, process_id: ProcessIDT):
         super().__init__(session)
-        self.process = session.query(Process).get(process_id)
+        self.process = session.get(Process, process_id)
 
     def __getattr__(self, item):
         """Fallback for 'not found' field after the C getattr() call.
@@ -71,5 +71,5 @@ class EnumeratedProcessSet(MappedTable):
         """
         return self._apply_on_all(Process, project, updates.lst)
 
-    def add_filter(self, upd):
+    def add_filter(self, upd: Update) -> Update:
         return upd.filter(Process.processid == any_(self.ids))
