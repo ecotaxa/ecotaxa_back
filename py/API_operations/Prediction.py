@@ -7,7 +7,7 @@
 # - Use selected features on source projects to train a Random Forest classifier
 # - Use the trained classifier on the target project.
 #
-# Here is just the job registering part, the rest is in GPU_Prediction class.
+# Here is just the job registering part, the rest is in ecotaxa_ML_back project.
 #
 from pathlib import Path
 from typing import cast, List

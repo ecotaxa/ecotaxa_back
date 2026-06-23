@@ -3647,44 +3647,6 @@ async def activity_monitor(
 
 
 @app.get(
-    "/admin/machine_learning/train",
-    operation_id="machine_learning_train",
-    tags=["WIP"],
-    include_in_schema=False,
-    response_model=str,
-)
-def machine_learning_train(
-    project_id: int = Query(
-        ...,
-        title="Input project #",
-        description="Images will be fetched from this project.",
-        example="1040",
-    ),
-    model_name: str = Query(
-        ...,
-        title="Produced model name",
-        description="File where the CNN model will be written.",
-        example="zooscan",
-    ),
-    current_user: int = Depends(get_current_user),
-) -> str:
-    """
-    Entry point for training the CNN features, from a reference project.
-    """
-    assert project_id is not None, "Please provide a project_id e.g. ?project_id=1234"
-    assert (
-        model_name is not None
-    ), "Please provide a model name e.g. &model_name=zooscan"
-    # Import here only because of numpy version conflict b/w lycon and tensorflow
-    from API_operations.admin.MachineLearning import MachineLearningService
-
-    with MachineLearningService() as sce:
-        with RightsThrower():
-            ret: str = sce.train(current_user, project_id, model_name)
-    return ret
-
-
-@app.get(
     "/admin/db/query",
     operation_id="db_direct_query",
     tags=["admin"],

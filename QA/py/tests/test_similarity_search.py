@@ -1,9 +1,11 @@
 import logging
+from typing import Any
 
 import numpy as np
 import pandas as pd
 from API_operations.CRUD.ObjectParents import SamplesService
-from BO.Prediction import DeepFeatures
+from DB.helpers import Session
+from DB.CNNFeatureVector import ObjectCNNFeatureVector
 from starlette import status
 
 from tests.credentials import ADMIN_AUTH
@@ -18,6 +20,27 @@ crustacea = 12846
 
 def similarity_scores(distances_to_target):
     return [round(1 - d / max(distances_to_target), 4) for d in distances_to_target]
+
+
+SAVE_EVERY = 4
+
+
+def save_features(session: Any, features: Any) -> int:
+    """
+    Insert CNN features to DB.
+    Features is an iterable dict-like, a pandas dataframe for the moment.
+    """
+    nb_rows = 0
+    bulks = []
+    for obj_id, row in features.iterrows():
+        bulks.append({"objcnnid": obj_id, "features": row.tolist()})
+        nb_rows += 1
+        if nb_rows % SAVE_EVERY == 0:
+            session.execute(ObjectCNNFeatureVector.__table__.insert(), bulks)
+            bulks = []
+    if bulks:
+        session.execute(ObjectCNNFeatureVector.__table__.insert(), bulks)
+    return nb_rows
 
 
 def test_similarity_search(fastapi):
@@ -59,7 +82,7 @@ def test_similarity_search(fastapi):
 
     # Insert dummy features
     with SamplesService() as sce:
-        n_inserts = DeepFeatures.save(sce.session, prj_id, features_df)
+        n_inserts = save_features(sce.session, features_df)
         assert n_inserts == 8
         sce.session.commit()
 

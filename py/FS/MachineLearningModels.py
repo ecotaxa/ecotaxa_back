@@ -2,7 +2,6 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2021  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-import os
 from pathlib import Path
 from typing import Any, List
 
@@ -46,33 +45,33 @@ class SavedModels(object):
                 ret.append(dir_name)
         return ret
 
-    def _prefix(self, name: str) -> str:
-        return self.PRFX + name
-
-    def get_checkpoints_dir(self, model_name: str) -> Path:
-        # Directory to save training checkpoints
-        # Used during training only
-        model_name = self._prefix(model_name)
-        ckpt_dir = self.path / model_name / "checkpoints"
-        os.makedirs(ckpt_dir, exist_ok=True)
-        return ckpt_dir
-
-    def best_model_path(self, model_name: str) -> Path:
-        # Used during training only
-        model_name = self._prefix(model_name)
-        return self.path / model_name / "best_model"
-
-    def extractor_path(self, model_name: str) -> Path:
-        # Used during both training and extraction
-        model_name = self._prefix(model_name)
-        return self.path / model_name / self.FEATURE_EXTRACTOR_DIR
-
-    def reducer_pickle_path(self, model_name: str) -> Path:
-        # Used during both training and extraction
-        model_name = self._prefix(model_name)
-        return self.path / model_name / self.DIM_REDUCER_FILE
-
-    def crop_values_path(self, model_name: str) -> Path:
-        # Used during both training and extraction
-        model_name = self._prefix(model_name)
-        return self.path / model_name / self.CROP_FILE
+    # def _prefix(self, name: str) -> str:
+    #     return self.PRFX + name
+    #
+    # def get_checkpoints_dir(self, model_name: str) -> Path:
+    #     # Directory to save training checkpoints
+    #     # Used during training only
+    #     model_name = self._prefix(model_name)
+    #     ckpt_dir = self.path / model_name / "checkpoints"
+    #     os.makedirs(ckpt_dir, exist_ok=True)
+    #     return ckpt_dir
+    #
+    # def best_model_path(self, model_name: str) -> Path:
+    #     # Used during training only
+    #     model_name = self._prefix(model_name)
+    #     return self.path / model_name / "best_model"
+    #
+    # def extractor_path(self, model_name: str) -> Path:
+    #     # Used during both training and extraction
+    #     model_name = self._prefix(model_name)
+    #     return self.path / model_name / self.FEATURE_EXTRACTOR_DIR
+    #
+    # def reducer_pickle_path(self, model_name: str) -> Path:
+    #     # Used during both training and extraction
+    #     model_name = self._prefix(model_name)
+    #     return self.path / model_name / self.DIM_REDUCER_FILE
+    #
+    # def crop_values_path(self, model_name: str) -> Path:
+    #     # Used during both training and extraction
+    #     model_name = self._prefix(model_name)
+    #     return self.path / model_name / self.CROP_FILE

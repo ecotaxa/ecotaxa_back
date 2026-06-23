@@ -206,12 +206,6 @@ class Service(BaseService, ContextManager):
         # assert self._in_with == 0  # To track issues
         self.close_db_sessions()
 
-    @classmethod
-    def re_init_after_fork(cls):
-        cls.the_connection.engine.dispose()
-        cls.the_connection = None
-        cls.the_readonly_connection = None
-
 
 if __name__ == "__main__":
     _get_default_gateway()
