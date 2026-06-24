@@ -89,7 +89,7 @@ def test_user_search(fastapi):
     url = "/users/search?by_name=%s"
     response = fastapi.get(url % "jo")
     assert response.status_code == status.HTTP_403_FORBIDDEN
-    response = fastapi.get(url % "%adm%", headers=USER_AUTH)
+    response = fastapi.get(url % "%25adm%", headers=USER_AUTH)
     assert response.status_code == status.HTTP_200_OK
     rsp = response.json()
     assert len(rsp) == 1

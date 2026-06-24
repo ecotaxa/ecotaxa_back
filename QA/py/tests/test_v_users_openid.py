@@ -79,7 +79,7 @@ async def test_login_existing_user(config, database, fastapi, monkeypatch):
     hdrs = response.headers
     assert hdrs.get("location") == FAKE_SERVER
     cooks = response.cookies
-    assert {"token", "id_token"}.issubset(set(cooks.iterkeys()))
+    assert {"token", "id_token"}.issubset(set(cooks.keys()))
 
 
 @pytest.mark.asyncio
@@ -108,7 +108,7 @@ async def test_login_new_user(config, database, fastapi, monkeypatch):
     hdrs = response.headers
     assert hdrs.get("location") == FAKE_SERVER
     cooks = response.cookies
-    assert {"token", "id_token"}.issubset(set(cooks.iterkeys()))
+    assert {"token", "id_token"}.issubset(set(cooks.keys()))
 
     # Verify user was created in DB
     from API_operations.CRUD.Users import UserService

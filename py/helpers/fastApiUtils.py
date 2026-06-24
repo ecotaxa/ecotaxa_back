@@ -280,6 +280,16 @@ class MyORJSONResponse(JSONResponse):
                 return str(obj)
             raise TypeError
         ret = {fld: getattr(obj, fld) for fld in fields}
+        # In case of issue with a model field, comment out the following lines.
+        # The exception is not visible, I guess ORJSON consumes it.
+        # ret = {}
+        # for fld in fields:
+        #     try:
+        #         ret[fld] = getattr(obj, fld)
+        #     except AttributeError:
+        #         msg = "Field " + fld + "declared in model but not found in " + obj.__class__.__name__
+        #         print(msg, sys.stderr)
+        #         raise TypeError(msg)
         return ret
 
     try:
@@ -297,6 +307,7 @@ class MyORJSONResponse(JSONResponse):
                 err_msg = str(te)
                 logging.warning("Orjson problem '%s' encoding %s", err_msg, content)
                 # Switch to more permissive encoding
+                # assert err_msg is None, err_msg
                 ret = json.dumps(content).encode("utf-8", errors="replace")
             return ret
 

@@ -1435,7 +1435,7 @@ class ObjectSetFilter(object):
         if self.invert_time:
             if self.from_time and self.to_time:
                 prfx_where_clause("obh").chain(
-                    "(obh.objtime <= time :fromtime OR obh.objtime >= time :totime)"
+                    "(obh.objtime <= (:fromtime)::time OR obh.objtime >= (:totime)::time)"
                 ).add_param("fromtime", self.from_time).add_param(
                     "totime", self.to_time
                 )

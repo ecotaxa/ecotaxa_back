@@ -11,6 +11,7 @@ import pytest
 from starlette.testclient import TestClient
 
 # noinspection PyPackageRequirements
+from API_models.filters import ProjectFiltersDict
 from API_models.merge import MergeRsp
 from API_models.subset import SubsetReq, SubsetRsp
 
@@ -1426,7 +1427,7 @@ def test_empty_subset_uvp6(database, fastapi, caplog):
 
     subset_prj_id = create_project(ADMIN_USER_ID, "Empty subset")
     # OK this test is just for covering the code in filters
-    filters: ProjectFilters = {
+    filters: ProjectFiltersDict = {
         "taxo": "23456",
         "taxochild": "Y",
         "statusfilter": "V",
@@ -1480,7 +1481,7 @@ def test_empty_subset_uvp6_other(fastapi, caplog):
 
     subset_prj_id = create_project(ADMIN_USER_ID, "Empty subset")
     # OK this test is just for covering (more) the code in filters
-    filters: ProjectFilters = {
+    filters: ProjectFiltersDict = {
         "taxo": "23456",
         "taxochild": "N",
         "statusfilter": "NVW",

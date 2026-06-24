@@ -23,9 +23,8 @@ from DB.Project import Project, ProjectIDListT, ProjectIDT
 from DB.Sample import Sample, SampleIDT
 from DB.User import Guest, Organization, OrganizationIDT, User, UserIDT
 from helpers.pydantic import BaseModel, DescriptiveModel, Field
-
-from .helpers.DataclassToModel import dataclass_to_model_with_suffix
 from .helpers.DBtoModel import combine_models
+from .helpers.DataclassToModel import dataclass_to_model_with_suffix
 
 # Enriched model
 FreeColT = Dict[str, str]
@@ -60,8 +59,11 @@ OrganizationModel = combine_models(Organization, _OrganizationModel)
 
 # Minimal user information
 class _MinimalUserModel(DescriptiveModel):
-    id: UserIDT = Field(
-        title="Id", description="The unique numeric id of this user.", examples=[1]
+    id: Optional[UserIDT] = Field(
+        title="Id",
+        description="The unique numeric id of this user.",
+        examples=[1],
+        default=-1,  # For creation
     )
     email: str = Field(
         title="Email",
@@ -463,13 +465,6 @@ class _AddedToProject(BaseModel):
         default="",
         examples=["View"],
     )
-    license: LicenseEnum = Field(
-        title="License",
-        description="Data licence.",
-        default=LicenseEnum.Copyright,
-        examples=[LicenseEnum.CC_BY],
-    )
-
     # owner: UserModel = Field(title="Owner of this project")
 
 

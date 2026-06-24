@@ -105,7 +105,7 @@ class Connection(object):
             exec_options = {}
         # We connect with help of the PostgreSQL URL
         url = "postgresql+psycopg://{}:{}@{}:{}/{}"
-        url = url.format(user, password, host, port, db)
+        self.url = url.format(user, password, host, port, db)
         engine = sqlalchemy.create_engine(
             url,
             client_encoding="utf8",
@@ -138,10 +138,6 @@ class Connection(object):
         self._meta: MetaData = sqlalchemy.MetaData()
         self._meta.reflect(bind=engine)
         self.engine = engine
-
-    @property
-    def url(self):
-        return self.engine.url
 
     def get_session(self) -> Session:
         """

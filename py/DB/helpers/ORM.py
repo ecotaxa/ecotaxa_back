@@ -31,12 +31,9 @@ from sqlalchemy import (
     desc,
     values,
 )
-
 # For exporting
 # noinspection PyUnresolvedReferences
 from sqlalchemy.engine.row import Row
-from sqlalchemy.ext.declarative import declarative_base
-
 # noinspection PyUnresolvedReferences
 from sqlalchemy.orm import (
     Query,
@@ -45,34 +42,27 @@ from sqlalchemy.orm import (
     joinedload,
     subqueryload,
     selectinload,
-    InstrumentedAttribute,
+    InstrumentedAttribute, DeclarativeBase,
 )
-
 # noinspection PyUnresolvedReferences
 from sqlalchemy.orm import relationship, RelationshipProperty, aliased, Mapped
-
 # noinspection PyUnresolvedReferences
 from sqlalchemy.sql import Delete, Update, Insert, ColumnElement
-
 # noinspection PyUnresolvedReferences
 from sqlalchemy.sql.elements import Label, CollectionAggregate
-
 # noinspection PyUnresolvedReferences
 from sqlalchemy.sql.functions import concat
-
 # noinspection PyUnresolvedReferences
 from sqlalchemy.sql.selectable import Alias
 
 from . import Session
 
-_Base: type = declarative_base()
 
-
-class Model(_Base):  # type: ignore
-    __abstract__ = True  # prevent SQLAlchemy from trying to map
-    __allow_unmapped__ = True
-    __tablename__: str
-    __table__: Any
+class Model(DeclarativeBase):  # type: ignore
+    # __abstract__ = True  # prevent SQLAlchemy from trying to map
+    # __allow_unmapped__ = True
+    # __tablename__: str
+    pass
 
 
 # Just forD fun :)
