@@ -116,10 +116,8 @@ class ObjectBO(MappedEntity):
             och.classif_date,
             och.classif_who,
             case(  # Emulate previous value
-                [
-                    (och.classif_qual.in_(MANUAL_STATES_TEXT), "M"),
-                    (och.classif_qual == PREDICTED_STATE_TEXT, "A"),
-                ]
+                (och.classif_qual.in_(MANUAL_STATES_TEXT), "M"),
+                (och.classif_qual == PREDICTED_STATE_TEXT, "A"),
             ).label("classif_type"),
             och.classif_qual,
             och.classif_score,

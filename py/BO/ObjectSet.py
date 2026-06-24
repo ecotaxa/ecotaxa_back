@@ -70,8 +70,8 @@ from DB.Prediction import (
 from DB.Process import Process
 from DB.Project import ProjectIDListT, Project
 from DB.Sample import Sample
-from DB.Taxonomy import Taxonomy
-from DB.User import User
+from DB.Taxonomy import Taxonomy, TaxoStatus
+from DB.User import User, UserIDT
 from DB.helpers import Result
 from DB.helpers.Core import select
 from DB.helpers.Direct import func
@@ -614,8 +614,8 @@ class EnumeratedObjectSet(MappedTable):
         prev_nb_objs = len(self.object_ids)
         new_objects_ids = []
         for rec in qry:
-            new_objects_ids.append(rec["objid"])
-            classif_id_lists.append([rec["classif_id"]])  # Single-elem list
+            new_objects_ids.append(rec.objid)
+            classif_id_lists.append([rec.classif_id])  # Single-elem list
             classif_score_lists.append([PSEUDO_TRAINING_SCORE])  # Ditto
 
         # Classify with new training
@@ -677,14 +677,12 @@ class EnumeratedObjectSet(MappedTable):
         ]
         # What we want to historize, as a subquery - The current state
         sel_subqry = select(
-            [
-                oh.objid,
-                oh.classif_qual,
-                oh.classif_id,
-                oh.classif_date,
-                oh.classif_who,  # Is NULL when 'P' or initial
-                oh.classif_score,  # Is NULL when not 'P'
-            ]
+            oh.objid,
+            oh.classif_qual,
+            oh.classif_id,
+            oh.classif_date,
+            oh.classif_who,  # Is NULL when 'P' or initial
+            oh.classif_score,  # Is NULL when not 'P'
         )
         if only_qual is not None:
             # Pick only the required states # TODO: Unused, to keep?
@@ -774,10 +772,8 @@ class EnumeratedObjectSet(MappedTable):
             ObjectHeader.classif_id,
             subq_alias.c.classif_date.label("histo_classif_date"),
             case(  # Emulate previous value
-                [
-                    (subq_alias.c.classif_qual.in_(MANUAL_STATES_TEXT), "M"),
-                    (subq_alias.c.classif_qual == PREDICTED_STATE_TEXT, "A"),
-                ]
+                (subq_alias.c.classif_qual.in_(MANUAL_STATES_TEXT), "M"),
+                (subq_alias.c.classif_qual == PREDICTED_STATE_TEXT, "A"),
             ).label("histo_classif_type"),
             func.coalesce(
                 subq_alias.c.classif_qual,

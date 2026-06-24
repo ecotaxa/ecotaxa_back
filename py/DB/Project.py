@@ -11,9 +11,6 @@ from BO.DataLicense import AccessLevelEnum
 from DB.helpers.ORM import Model, Mapped
 
 if TYPE_CHECKING:
-    from .Object import ObjectHeader
-    from .Acquisition import Acquisition
-    from .Image import Image
     from .Sample import Sample
     from .User import User
     from .ProjectVariables import ProjectVariables

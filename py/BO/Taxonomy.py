@@ -241,22 +241,17 @@ class TaxonomyBO(object):
         :return:
         """
         tf = Taxonomy.__table__.alias("tf")
-        # bind = None  # For portable SQL, no 'ilike'
-        bind = session.get_bind()
         priority: Label = case(
             (tf.c.id == any_(priority_set), text("0")), else_=text("1")
         ).label("prio")
         qry = select(
-            [
-                tf.c.taxotype,
-                tf.c.id,
-                tf.c.aphia_id,
-                tf.c.rename_to,
-                tf.c.display_name,
-                tf.c.taxostatus,
-                priority,
-            ],
-            bind=bind,
+            tf.c.taxotype,
+            tf.c.id,
+            tf.c.aphia_id,
+            tf.c.rename_to,
+            tf.c.display_name,
+            tf.c.taxostatus,
+            priority,
         )
         if len(name_filters) > 0:
             # Add to the query enough to get the full hierarchy for filtering

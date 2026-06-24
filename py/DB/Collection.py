@@ -17,16 +17,6 @@ if TYPE_CHECKING:
     from .User import User, Guest, Organization
 
 
-class CollectionProject(Model):
-    __tablename__ = "collection_project"
-    """ n<->n plain relationship b/w collection and projects """
-    collection_id: int = Column(INTEGER, ForeignKey("collection.id"), primary_key=True)
-    project_id: int = Column(INTEGER, ForeignKey("projects.projid"), primary_key=True)
-
-    def __str__(self) -> str:
-        return "{0},{1}".format(self.collection_id, self.project_id)
-
-
 class Collection(Model):
     """A set of projects see #82, #335, #519"""
 
@@ -63,6 +53,17 @@ class Collection(Model):
 Index("CollectionTitle", Collection.__table__.c.title, unique=True)
 Index("CollectionShortTitle", Collection.__table__.c.short_title, unique=True)
 
+
+class CollectionProject(Model):
+    __tablename__ = "collection_project"
+    """ n<->n plain relationship b/w collection and projects """
+    collection_id = Column(INTEGER, ForeignKey("collection.id"), primary_key=True)
+    project_id = Column(INTEGER, ForeignKey("projects.projid"), primary_key=True)
+
+    def __str__(self) -> str:
+        return "{0},{1}".format(self.collection_id, self.project_id)
+
+
 COLLECTION_ROLE_DATA_CREATOR = "C"
 COLLECTION_ROLE_ASSOCIATED_PERSON = "A"
 COLLECTION_ROLE_INSTITUTION_CODE_PROVIDER = "P"
@@ -74,12 +75,12 @@ class CollectionUserRole(Model):
     collection_id: int = Column(INTEGER, ForeignKey("collection.id"), primary_key=True)
     user_id: int = Column(INTEGER, ForeignKey("users.id"), primary_key=True)
     role: str = Column(VARCHAR(1), nullable=False, primary_key=True)
+    display_order: int = Column(INTEGER)
 
     if TYPE_CHECKING:
         # The relationship(s) are created in Relations.py but the typing here helps IDE
         collection: Mapped[Collection]
         user: Mapped[User]
-        display_order: int = Column(INTEGER)
         guest: Mapped[Guest]
 
     def __str__(self) -> str:
