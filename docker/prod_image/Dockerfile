@@ -1,15 +1,11 @@
-FROM ubuntu:18.04 AS builder
+FROM ubuntu:24.04 AS builder
 
 MAINTAINER grololo06 <grololo06@users.noreply.github.com>
 
 RUN apt-get update
 
-# postgresql-client # for psycopg2
-# gcc make file cython3 # for uvloop for uvicorn needs cython needs make
 RUN apt-get install \
-    python3.8 python3-venv python3.8-dev python3.8-venv \
-    postgresql-client-10 libpq-dev \
-    gcc make file cython3 \
+    python3.12 python3-venv python3.12-dev python3.12-venv \
     --no-install-recommends --yes
 
 # Get reqs from host
@@ -18,7 +14,7 @@ COPY py/requirements.txt ./reqs_orig.txt
 RUN grep -Ev "(-stubs|^types-)" reqs_orig.txt > reqs.txt
 
 # Create venv, mandatory as we switched away from the python bundled with the OS
-RUN python3.8 -m venv /venv
+RUN python3.12 -m venv /venv
 # Install wheel & upgrade pip which is pip-9.0.1 thus knows only manylinux1 repository
 RUN PATH=/venv/bin pip3 install --upgrade pip wheel
 RUN PATH=/venv/bin:$PATH pip3 install -r reqs.txt
@@ -26,9 +22,8 @@ RUN PATH=/venv/bin:$PATH pip3 install -r reqs.txt
 # Strip a bit...
 RUN find /venv -name "*.pyc" -delete && \
 rm -rf /venv/share/* && \
-rm /venv/lib/python3.8/site-packages/uvloop/loop.c && \
 find /venv -name tests -type d -exec rm -rf {} + && \
-find /venv/lib/python3.8/site-packages -name "*.exe" -delete
+find /venv/lib/python3.12/site-packages -name "*.exe" -delete
 
 # Get source
 WORKDIR /app/
@@ -39,11 +34,11 @@ COPY docker/prod_image/start.sh /app
 
 
 ##### Switch to target #####
-FROM ubuntu:18.04 AS target
+FROM ubuntu:24.04 AS target
 
 # Minimum install
 RUN apt-get update && \
-apt-get install vim python3.8 libpq5 dumb-init --no-install-recommends --yes && \
+apt-get install vim python3.12 libpq5 dumb-init --no-install-recommends --yes && \
 apt-get clean && \
 rm -rf /var/lib/apt/lists/* && \
 rm -rf /var/log/*
@@ -73,7 +68,6 @@ ENV WEB_CONCURRENCY=8
 # Of course the path below is seen from the container. Check your mounts.
 # Needed directory contents can be found in config.ini.template
 # ./appli
-# ./appli/config.cfg
 # ./temptask
 # ./vault
 WORKDIR /app/

@@ -15,7 +15,8 @@ jobs:
     # The type of runner that the job will run on
     runs-on: [ubuntu-latest]
     # Virgin container
-    container: ubuntu:22.04
+    container: ubuntu:24.04
+    container: ubuntu:24.04
 
     # Service containers to run with `container-job`
     services:
@@ -46,11 +47,10 @@ jobs:
     - run: apt-get install -y git
     # python & psql (for the test DB) from repo, same as prod docker
     - run: apt-get install
-        python3.8 python3-venv python3.8-dev python3.8-venv
-        postgresql-client-14 libpq-dev
-        gcc make file cython3
+        python3.12 python3-venv python3.12-dev python3.12-venv
+        postgresql-client-18 libpq-dev
         --no-install-recommends --yes
-    - run: python3.8 -m venv /venv
+    - run: python3.12 -m venv /venv
     - run: PATH=/venv/bin pip3 install --upgrade pip wheel
     # Checkout.
     - uses: actions/checkout@v4
