@@ -4,19 +4,19 @@
 #
 #  Models used in Objects API operations.
 #
-from datetime import datetime, date, time
-from typing import List, Optional, Dict, Any
+from datetime import date, datetime, time
+from typing import Any, Dict, List, Optional
 
-from API_models.helpers.DBtoModel import combine_models
 from API_models.helpers.DataclassToModel import (
     dataclass_to_model,
     dataclass_to_model_with_suffix,
 )
-from BO.Classification import HistoricalLastClassif, HistoricalClassification
+from API_models.helpers.DBtoModel import combine_models
+from BO.Classification import HistoricalClassification, HistoricalLastClassif
 from BO.ReClassifyLog import ClassifSetInfoT
 from DB.Image import Image
 from DB.Object import ObjectHeader, ObjectIDListT
-from helpers.pydantic import BaseModel, Field, DescriptiveModel
+from helpers.pydantic import BaseModel, DescriptiveModel, Field
 
 
 # TODO JCE - examples - ?default?
@@ -32,53 +32,68 @@ class _ObjectHeaderModel(DescriptiveModel):
         description="Original object ID from initial TSV load.",
         examples=["deex_leg1_48_406"],
     )
-    objdate: Optional[date] = Field(title="Object date", description="")
-    objtime: Optional[time] = Field(title="Object time", description="")
+    objdate: Optional[date] = Field(title="Object date", description="", default=None)
+    objtime: Optional[time] = Field(title="Object time", description="", default=None)
     latitude: Optional[float] = Field(
-        title="Latitude", description="The latitude.", examples=[42.0231666666667]
+        title="Latitude",
+        description="The latitude.",
+        examples=[42.0231666666667],
+        default=None,
     )
     longitude: Optional[float] = Field(
-        title="Longitude", description="The longitude.", examples=[4.71766666666667]
+        title="Longitude",
+        description="The longitude.",
+        examples=[4.71766666666667],
+        default=None,
     )
     depth_min: Optional[float] = Field(
-        title="Depth min", description="The min depth.", examples=[0]
+        title="Depth min", description="The min depth.", examples=[0], default=None
     )
     depth_max: Optional[float] = Field(
-        title="Depth max", description="The min depth.", examples=[300]
+        title="Depth max", description="The min depth.", examples=[300], default=None
     )
     sunpos: Optional[str] = Field(
         title="Sun position",
         description="Sun position, from date, time and coords.",
         examples=["N"],
+        default=None,
     )
     classif_id: Optional[int] = Field(
         title="Classification Id",
         description="The classification Id.",
         examples=[82399],
+        default=None,
     )
     classif_qual: Optional[str] = Field(
         title="Classification qualification",
         description="The classification qualification. Could be **P** for predicted, **V** for validated or **D** for Dubious.",
         examples=["P"],
+        default=None,
     )
     classif_who: Optional[int] = Field(
         title="Classification who",
         description="The user who manually classified this object, if **V** or **D**.",
         examples=["null"],
+        default=None,
     )
     classif_score: Optional[float] = Field(
-        title="Classification score",
+        title="Classification who",
         description="The ML score for this object, if **P**.",
         examples=["null"],
+        default=None,
     )
     complement_info: Optional[str] = Field(
-        title="Complement info", description="", examples=["Part of ostracoda"]
+        title="Complement info",
+        description="",
+        examples=["Part of ostracoda"],
+        default=None,
     )
     # random_value = Field(title="random_value", description="")
     object_link: Optional[str] = Field(
         title="Object link",
         description="Object link.",
         examples=["http://www.zooscan.obs-vlfr.fr//"],
+        default=None,
     )
 
 
@@ -91,20 +106,24 @@ class _ObjectHeaderComplement(BaseModel):
         title="Classification when",
         description="The human classification date, if **P** or **V**.",
         examples=["2021-09-21T14:59:01.007110"],
+        default=None,
     )
     classif_auto_id: Optional[int] = Field(
         title="Classification auto Id",
         description="Set if the object was ever predicted, remains forever with these value. Reflect the 'last state' only if classif_qual is 'P'. ",
+        default=None,
     )  # Used to be directly available, now needs more calculations.
     classif_auto_score: Optional[float] = Field(
         title="Classification auto score",
         description="Set if the object was ever predicted, remains forever with these value. Reflect the 'last state' only if classif_qual is 'P'. The classification auto score is generally between 0 and 1. This is a confidence score, in the fact that, the taxon prediction for this object is correct.",
         examples=[0.085],
+        default=None,
     )
     classif_auto_when: Optional[datetime] = Field(
         title="Classification auto when",
         description="Set if the object was ever predicted, remains forever with these value. Reflect the 'last state' only if classif_qual is 'P'. The classification date.",
         examples=["2021-09-21T14:59:01.007110"],
+        default=None,
     )
     complement_info: str = Field(
         title="Complement info", description="", examples=["Part of ostracoda"]
@@ -166,6 +185,7 @@ class ImageModel(_ImageModelFromDB):
         title="Thumb file name",
         description="If image was too large at import time, the generated thumbnail file name.",
         examples=["null"],
+        default=None,
     )
 
 
@@ -179,6 +199,7 @@ class ObjectModel(ObjectHeaderModel, _ObjectHeaderComplement):
         title="Object link",
         description="Object link.",
         examples=["http://www.zooscan.obs-vlfr.fr//"],
+        default=None,
     )
     sample_id: int = Field(
         title="Sample id",

@@ -489,6 +489,7 @@ class TaxonomyRecast(BaseModel):
                 "9134": "Detritus",
             }
         ],
+        default=None,
     )
 
     class Config:

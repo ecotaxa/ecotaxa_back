@@ -25,6 +25,7 @@ class SimilaritySearchRsp(BaseModel):
     message: Optional[str] = Field(
         title="Message",
         description="A message to the user. If not 'Success' then some condition prevented the computation.",
+        default=None,
     )
 
     class Config:

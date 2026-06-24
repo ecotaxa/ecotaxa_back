@@ -1,10 +1,10 @@
-from typing import Optional, Any
+from typing import Any, Optional
 
 from pydantic import model_validator
 from typing_extensions import TypedDict
 
 from API_models.helpers.TypedDictToModel import typed_dict_to_model
-from helpers.pydantic import Field, DescriptiveModel
+from helpers.pydantic import DescriptiveModel, Field
 
 
 class ProjectFiltersDict(TypedDict, total=False):
@@ -81,11 +81,13 @@ class _ProjectFilters2Model(DescriptiveModel):
         title="Taxo",
         description="Coma-separated list of numeric taxonomy/category ids. Only include objects classified with one of them.",
         examples=["12,7654,5409"],
+        default=None,
     )
     taxochild: Optional[str] = Field(
         title="Taxo child",
         description="If 'Y' and taxo is set, also include children of each member of 'taxo' list in taxonomy tree.",
         examples=["Y"],
+        default=None,
     )
     statusfilter: Optional[str] = Field(
         title="",
@@ -100,106 +102,127 @@ class _ProjectFilters2Model(DescriptiveModel):
         """,
         examples=["NV"],
         max_length=3,
+        default=None,
     )
     MapN: Optional[str] = Field(
         title="Map North",
         description="If all 4 are set (MapN, MapW, MapE, MapS), include objects inside the defined bounding rectangle.",
         examples=[44.34],
+        default=None,
     )
     MapW: Optional[str] = Field(
         title="Map West",
         description="If all 4 are set (MapN, MapW, MapE, MapS), include objects inside the defined bounding rectangle.",
         examples=[3.88],
+        default=None,
     )
     MapE: Optional[str] = Field(
         title="Map East",
         description="If all 4 are set (MapN, MapW, MapE, MapS), include objects inside the defined bounding rectangle.",
         examples=[7.94],
+        default=None,
     )
     MapS: Optional[str] = Field(
         title="Map South",
         description="If all 4 are set (MapN, MapW, MapE, MapS), include objects inside the defined bounding rectangle.",
         examples=[42.42],
+        default=None,
     )
     depthmin: Optional[str] = Field(
         title="Depthmin",
         description="Positive values. If both are set (depthmin, depthmax), include objects for which both depths (min and max) are inside the range.",
         examples=["10"],
+        default=None,
     )
     depthmax: Optional[str] = Field(
         title="Depthmax",
         description="Positive values. If both are set (depthmin, depthmax), include objects for which both depths (min and max) are inside the range.",
         examples=["110"],
+        default=None,
     )
     samples: Optional[str] = Field(
         title="Samples",
         description="Coma-separated list of sample IDs, include only objects for these samples.",
         examples=["10987,3456,987,38"],
+        default=None,
     )
     instrum: Optional[str] = Field(
         title="Instrument",
         description="Instrument name, include objects for which sampling was done using this instrument.",
         examples=["uvp5"],
+        default=None,
     )
     daytime: Optional[str] = Field(
         title="Day time",
         description="Coma-separated list of sun position values: D for Day, U for Dusk, N for Night, A for Dawn (Aube in French).",
         examples=["N,A"],
+        default=None,
     )
     month: Optional[str] = Field(
         title="Month",
         description="Coma-separated list of month numbers, 1=Jan and so on.",
         examples=["11,12"],
+        default=None,
     )
     fromdate: Optional[str] = Field(
         title="From date",
         description="Format is 'YYYY-MM-DD', include objects collected after this date.",
         examples=["2020-10-09"],
+        default=None,
     )
     todate: Optional[str] = Field(
         title="To date",
         description="Format is 'YYYY-MM-DD', include objects collected before this date.",
         examples=["2021-10-09"],
+        default=None,
     )
     fromtime: Optional[str] = Field(
         title="From time",
         description="Format is 'HH24:MM:SS', include objects collected after this time of day.",
         examples=["1:17:00"],
+        default=None,
     )
     totime: Optional[str] = Field(
         title="To time",
         description="Format is 'HH24:MM:SS', include objects collected before this time of day.",
         examples=["23:32:00"],
+        default=None,
     )
     inverttime: Optional[str] = Field(
         title="Invert time",
         description="If '1', include objects outside fromtime and totime range.",
         examples=["0"],
+        default=None,
     )
     validfromdate: Optional[str] = Field(
         title="Valid from date",
         description="Format is 'YYYY-MM-DD HH24:MI', include objects validated/set to dubious after this date+time.",
         examples=["2020-10-09 10:00:00"],
+        default=None,
     )
     validtodate: Optional[str] = Field(
         title="Valid to date",
         description="Format is 'YYYY-MM-DD HH24:MI', include objects validated/set to dubious before this date+time.",
         examples=["2021-10-09 10:00:00"],
+        default=None,
     )
     freenum: Optional[str] = Field(
         title="Free num",
         description="Numerical DB column number in Object as basis for the 2 following criteria (freenumst, freenumend).",
         examples=["n01"],
+        default=None,
     )
     freenumst: Optional[str] = Field(
         title="Freenum start",
         description="Start of included range for the column defined by freenum, in which objects are included.",
         examples=["0"],
+        default=None,
     )
     freenumend: Optional[str] = Field(
         title="Free num end",
         description="End of included range for the column defined by freenum, in which objects are included.",
         examples=["999999"],
+        default=None,
     )
     freetxt: Optional[str] = Field(
         title="Free text",
@@ -210,21 +233,25 @@ class _ProjectFilters2Model(DescriptiveModel):
             If starts with 'o' then it's a text column in Object .
         """,
         examples=["p01"],
+        default=None,
     )
     freetxtval: Optional[str] = Field(
         title="Free text val",
         description="Text to match in the column defined by freetxt, for an object to be include.",
         examples=["zooprocess"],
+        default=None,
     )
     filt_annot: Optional[str] = Field(
         title="Filter annotator",
         description="Coma-separated list of annotators, i.e. persons who validated the classification at any point in time.",
         examples=[["34,67,67"]],
+        default=None,
     )
     filt_last_annot: Optional[str] = Field(
         title="Filter last annotator",
         description="Coma-separated list of annotators, i.e. persons who validated the classification in last.",
         examples=["34,67"],
+        default=None,
     )
 
     class Config:

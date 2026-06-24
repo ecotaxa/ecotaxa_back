@@ -39,6 +39,7 @@ class TaxoRecastRsp(BaseModel):
                 "9134": "Detritus",
             }
         ],
+        default=None,
     )
 
     @field_validator("from_to")
@@ -185,7 +186,7 @@ class TaxonomyTreeStatus(BaseModel):
         title="Last refresh",
         description="Taxonomy tree last refresh/sync from taxonomy server. "
         "Date, with format YYYY-MM-DDThh:mm:ss.",
-        examples=["2021-10-07T01:26:47"],
+        default=None,
     )
 
 
@@ -194,6 +195,7 @@ class AddWormsTaxonModel(BaseModel):
         title="AphiaId",
         description="The unique numeric aphia_id of the taxon in WoRMS.",
         examples=[12876],
+        default=None,
     )
 
 
@@ -255,11 +257,13 @@ class _Taxo2Model(DescriptiveModel):
         title="AphiaId",
         description="The unique numeric aphia_id of the taxon if in Worms.",
         examples=[12876],
+        default=None,
     )
     rank: Optional[str] = Field(
         title="Rank",
         description="The WoRMS rank of the taxon.",
         examples=["Subphylum"],
+        default=None,
     )
     id_instance = Field(
         title="Id instance", description="The instance Id.", examples=[1]

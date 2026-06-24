@@ -31,6 +31,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.logger import logger as fastapi_logger
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.templating import Jinja2Templates
+
 # from fastapi_utils.timing import add_timing_middleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
@@ -1264,6 +1265,7 @@ project_model_columns = plain_columns(ProjectModel)
     operation_id="list_projects",
     tags=["projects"],
     response_model=List[ProjectModel],
+    response_class=MyORJSONResponse,
 )
 async def list_projects(  # MyORJSONResponse -> JSONResponse -> Response -> await
     current_user: Optional[int] = Depends(get_optional_current_user),
@@ -1336,6 +1338,7 @@ async def list_projects(  # MyORJSONResponse -> JSONResponse -> Response -> awai
     operation_id="search_projects",
     tags=["projects"],
     response_model=List[ProjectModel],
+    response_class=MyORJSONResponse,
 )
 async def search_projects(  # MyORJSONResponse -> JSONResponse -> Response -> await
     current_user: Optional[int] = Depends(get_optional_current_user),
@@ -3384,7 +3387,7 @@ def add_taxon_in_central(
     ),
     current_user: int = Depends(get_current_user),
     request: Request = None,  # type: ignore # injected by FastAPI
-) -> str:
+) -> Any: # json
     """
     **Create a taxon** on EcoTaxoServer.
 
@@ -3434,7 +3437,7 @@ def pull_taxa_update_from_central(
     operation_id="query_taxa_in_worms",
     tags=["Taxonomy Tree"],
     include_in_schema=False,
-    response_model=TaxonModel,
+    response_model=Optional[TaxonModel],
 )
 def query_taxa_in_worms(
     aphia_id: int,

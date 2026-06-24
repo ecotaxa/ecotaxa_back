@@ -3,7 +3,7 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 from enum import Enum
-from typing import Optional, List, Any
+from typing import Any, List, Optional
 
 from helpers.pydantic import BaseModel, Field, root_validator
 
@@ -39,7 +39,7 @@ class EMODNetMeta(BaseModel):
     )
     title: str = DwcField(title="Dataset title in English")
     orig_title: Optional[str] = DwcField(
-        title="Dataset title in original language (and language)"
+        title="Dataset title in original language (and language)", default=None
     )
     contact: str = DwcField(
         title="Contact person for the dataset: name, institute, email"
@@ -54,7 +54,7 @@ class EMODNetMeta(BaseModel):
     license: str = DwcField(title="License or terms of use")
     abstract: str = DwcField(title="Abstract")
     extended_description: Optional[str] = DwcField(
-        title="Extended description-Highly recommended"
+        title="Extended description-Highly recommended", default=None
     )
     geo_coverage: str = DwcField(title="Geographical coverage")
     temporal_coverage: str = DwcField(title="Temporal coverage")
@@ -94,7 +94,7 @@ class DwcEvent(BaseModel):
     # Record DwC field
     type: RecordTypeEnum = DwcField(term="http://purl.org/dc/terms/type")
     parentEventID: Optional[str] = DwcField(
-        term="http://rs.tdwg.org/dwc/terms/parentEventID"
+        term="http://rs.tdwg.org/dwc/terms/parentEventID", default=None
     )
 
     institutionCode: str = DwcField(term="http://rs.tdwg.org/dwc/terms/institutionCode")
@@ -111,22 +111,26 @@ class DwcEvent(BaseModel):
         term="http://rs.tdwg.org/dwc/terms/decimalLongitude"
     )
     geodeticDatum: Optional[str] = DwcField(
-        term="http://rs.tdwg.org/dwc/terms/geodeticDatum"
+        term="http://rs.tdwg.org/dwc/terms/geodeticDatum", default=None
     )
 
     coordinateUncertaintyInMeters: Optional[str] = DwcField(
-        term="http://rs.tdwg.org/dwc/terms/coordinateUncertaintyInMeters"
+        term="http://rs.tdwg.org/dwc/terms/coordinateUncertaintyInMeters", default=None
     )
     minimumDepthInMeters: Optional[str] = DwcField(
-        term="http://rs.tdwg.org/dwc/terms/minimumDepthInMeters"
+        term="http://rs.tdwg.org/dwc/terms/minimumDepthInMeters", default=None
     )
     maximumDepthInMeters: Optional[str] = DwcField(
-        term="http://rs.tdwg.org/dwc/terms/maximumDepthInMeters"
+        term="http://rs.tdwg.org/dwc/terms/maximumDepthInMeters", default=None
     )
-    footprintWKT: Optional[str] = DwcField(term="http://purl.org/dc/terms/type")
+    footprintWKT: Optional[str] = DwcField(
+        term="http://purl.org/dc/terms/type", default=None
+    )
 
     # Record DwC field
-    modified: Optional[str] = DwcField(term="http://purl.org/dc/terms/modified")
+    modified: Optional[str] = DwcField(
+        term="http://purl.org/dc/terms/modified", default=None
+    )
 
 
 # An alias I find clearer
@@ -187,16 +191,20 @@ class DwcOccurrence(BaseModel):
 
     # Count field
     individualCount: Optional[str] = DwcField(
-        term="http://rs.tdwg.org/dwc/terms/individualCount"
+        term="http://rs.tdwg.org/dwc/terms/individualCount", default=None
     )
 
     # Taxon fields
     # Even if the LSID is not ambiguous from marinespecies.org, the GBIF backbone mixes several
     # sources of taxonomy so setting the below helps in solving ambiguities.
-    kingdom: Optional[str] = DwcField(term="http://rs.tdwg.org/dwc/terms/kingdom")
-    taxonRank: Optional[str] = DwcField(term="http://rs.tdwg.org/dwc/terms/taxonRank")
+    kingdom: Optional[str] = DwcField(
+        term="http://rs.tdwg.org/dwc/terms/kingdom", default=None
+    )
+    taxonRank: Optional[str] = DwcField(
+        term="http://rs.tdwg.org/dwc/terms/taxonRank", default=None
+    )
     scientificNameAuthorship: Optional[str] = DwcField(
-        term="http://rs.tdwg.org/dwc/terms/scientificNameAuthorship"
+        term="http://rs.tdwg.org/dwc/terms/scientificNameAuthorship", default=None
     )
 
     # Occurrence fields
@@ -206,19 +214,21 @@ class DwcOccurrence(BaseModel):
 
     # For museum
     collectionCode: Optional[str] = DwcField(
-        term="http://rs.tdwg.org/dwc/terms/collectionCode"
+        term="http://rs.tdwg.org/dwc/terms/collectionCode", default=None
     )
     catalogNumber: Optional[str] = DwcField(
-        term="http://rs.tdwg.org/dwc/terms/catalogNumber"
+        term="http://rs.tdwg.org/dwc/terms/catalogNumber", default=None
     )
 
     # Identification fields, eg. "cf."
     identificationQualifier: Optional[str] = DwcField(
-        term="http://rs.tdwg.org/dwc/terms/identificationQualifier"
+        term="http://rs.tdwg.org/dwc/terms/identificationQualifier", default=None
     )
 
     # Record DwC fields
-    modified: Optional[str] = DwcField(term="http://purl.org/dc/terms/modified")
+    modified: Optional[str] = DwcField(
+        term="http://purl.org/dc/terms/modified", default=None
+    )
 
 
 DwC_Occurrence = DwcOccurrence
@@ -237,7 +247,7 @@ class DwcExtendedMeasurementOrFact(BaseModel):
     )
     # ...if related to the whole event, occurrenceID must not be present
     occurrenceID: Optional[str] = DwcField(
-        term="http://rs.tdwg.org/dwc/terms/occurrenceID"
+        term="http://rs.tdwg.org/dwc/terms/occurrenceID", default=None
     )
 
     # Note: although measurementType, measurementValue and measurementUnit are free text fields,
@@ -254,6 +264,7 @@ class DwcExtendedMeasurementOrFact(BaseModel):
     measurementUnit: Optional[str] = DwcField(
         title="measurement unit, free text",
         term="http://rs.tdwg.org/dwc/terms/measurementUnit",
+        default=None,
     )
     # Controlled vocabulary
     # https://www.bodc.ac.uk/resources/vocabularies/vocabulary_search/P01/
@@ -265,6 +276,7 @@ class DwcExtendedMeasurementOrFact(BaseModel):
     measurementValueID: Optional[str] = DwcField(
         title="controlled vocabulary value ID",
         term="http://rs.iobis.org/obis/terms/measurementValueID",
+        default=None,
     )
 
     measurementTypeID: str = DwcField(
@@ -275,10 +287,13 @@ class DwcExtendedMeasurementOrFact(BaseModel):
     measurementUnitID: Optional[str] = DwcField(
         title="controlled vocabulary unit ID",
         term="http://rs.iobis.org/obis/terms/measurementUnitID",
+        default=None,
     )
 
     measurementRemarks: Optional[str] = DwcField(
-        title="free text", term="http://rs.iobis.org/obis/terms/measurementRemarks"
+        title="free text",
+        term="http://rs.iobis.org/obis/terms/measurementRemarks",
+        default=None,
     )
 
 
@@ -429,24 +444,24 @@ class EMLProject(BaseModel):
     """
 
     title: str
-    identifier: Optional[str]
+    identifier: Optional[str] = None
     personnel: List[EMLAssociatedPerson]
     """ The personnel field is used to document people involved in a research project by providing contact information 
     and their role in the project. """
-    description: Optional[str]
-    funding: Optional[str]  # goes to para
+    description: Optional[str] = None
+    funding: Optional[str] = None  # goes to para
     """ The funding field is used to provide information about funding sources for the project 
     such as: grant and contract numbers; names and addresses of funding sources. """
-    studyAreaDescription: Optional[str]
-    designDescription: Optional[str]
+    studyAreaDescription: Optional[str] = None
+    designDescription: Optional[str] = None
     """ The description of research design. """
-    qualityControl: Optional[str]
+    qualityControl: Optional[str] = None
     """Description of actions taken to either control or assess the quality of data resulting 
     from the associated method step."""
 
 
 class EMLAdditionalMetaBibliographyCitation(BaseModel):
-    citation: Optional[str]
+    citation: Optional[str] = None
     """ A single citation for use when citing the dataset. The IPT can also auto-generate 
     a citation based on the metadata (people, title, organization, onlineURL, DOI etc)."""
 
@@ -465,7 +480,7 @@ class EMLAdditionalMeta(BaseModel):
     citation: Optional[str] = None
     """ A single citation for use when citing the dataset. The IPT can also auto-generate 
     a citation based on the metadata (people, title, organization, onlineURL, DOI etc)."""
-    bibliography: Optional[List[EMLAdditionalMetaBibliographyCitation]]
+    bibliography: Optional[List[EMLAdditionalMetaBibliographyCitation]] = None
     """ A list of citations that form a bibliography on literature related / used in the dataset """
     resourceLogoUrl: Optional[str] = None
     """ URL of the logo associated with a dataset."""

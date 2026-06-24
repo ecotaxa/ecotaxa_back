@@ -26,6 +26,7 @@ class PredictionReq(BaseModel):
         title="Source projects fetching limit",
         description="When set (to a positive value), there will be this number "
         " of objects, _per category_, in the learning set.",
+        default=None,
     )
     features: List[str] = Field(
         title="Features",

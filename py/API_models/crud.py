@@ -4,14 +4,14 @@
 #
 #  Models used in CRUD API_operations.
 #
-from typing import Optional, Dict, List, Any, Union
+from typing import Any, Dict, List, Optional, Union
 
 from API_models.constants import FORMULAE
 from BO.Collection import CollectionIDT
 from BO.ColumnUpdate import ColUpdate
-from BO.DataLicense import LicenseEnum, AccessLevelEnum
+from BO.DataLicense import AccessLevelEnum, LicenseEnum
 from BO.Job import DBJobStateEnum
-from BO.Project import ProjectUserStats, ProjectColumns
+from BO.Project import ProjectColumns, ProjectUserStats
 from BO.ProjectSet import ProjectSetColumnStats
 from BO.Sample import SampleTaxoStats
 from DB.Acquisition import Acquisition
@@ -19,13 +19,13 @@ from DB.Collection import Collection
 from DB.Instrument import UNKNOWN_INSTRUMENT
 from DB.Job import Job, JobIDT
 from DB.Process import Process
-from DB.Project import Project, ProjectIDT, ProjectIDListT
+from DB.Project import Project, ProjectIDListT, ProjectIDT
 from DB.Sample import Sample, SampleIDT
-from DB.User import User, Guest, Organization, OrganizationIDT
-from DB.User import UserIDT
-from helpers.pydantic import BaseModel, Field, DescriptiveModel
-from .helpers.DBtoModel import combine_models
+from DB.User import Guest, Organization, OrganizationIDT, User, UserIDT
+from helpers.pydantic import BaseModel, DescriptiveModel, Field
+
 from .helpers.DataclassToModel import dataclass_to_model_with_suffix
+from .helpers.DBtoModel import combine_models
 
 # Enriched model
 FreeColT = Dict[str, str]
@@ -442,11 +442,13 @@ class _AddedToProject(BaseModel):
     contact: Optional[MinUserModel] = Field(
         title="Contact",
         description="The contact person is a manager who serves as the contact person for other users and EcoTaxa's managers.",
+        default=None,
     )
     instrument: Optional[str] = Field(
         title="Instrument",
         description="This project's instrument code.",
         examples=["Zooscan"],
+        default=None,
     )
     instrument_url: Optional[str] = Field(
         title="Instrument URL",
@@ -792,12 +794,14 @@ class _AddedToCollection(BaseModel):
         title="Provider user",
         description="""Is the person who
         is responsible for the content of this metadata record. Writer of the title and abstract.""",
+        default=None,
     )
     contact_user: Optional[MinUserModel] = Field(
         title="Contact user",
         description="""Is the person who
         should be contacted in cases of questions regarding the content of the dataset or any data restrictions.
         This is also the person who is most likely to stay involved in the dataset the longest.""",
+        default=None,
     )
     creator_users: List[MinUserModel] = Field(
         title="Creator users",
