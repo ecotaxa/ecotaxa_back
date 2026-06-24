@@ -23,9 +23,3 @@ jobs:
           push: true
           tags: ecotaxa/ecotaxa_back:${{github.ref_name}}
           file: ./docker/prod_image/Dockerfile
-      - name: Build and push GPU backend
-        uses: docker/build-push-action@v6
-        with:
-          push: true
-          tags: ecotaxa/ecotaxa_gpu_back:${{github.ref_name}}
-          file: ./docker/gpu_prod_image/Dockerfile          
