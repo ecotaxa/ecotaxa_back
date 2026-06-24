@@ -107,7 +107,7 @@ class Connection(object):
         url = "postgresql+psycopg://{}:{}@{}:{}/{}"
         self.url = url.format(user, password, host, port, db)
         engine = sqlalchemy.create_engine(
-            url,
+            self.url,
             client_encoding="utf8",
             echo=False,
             echo_pool=False,
