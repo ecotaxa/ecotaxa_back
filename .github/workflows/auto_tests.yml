@@ -40,13 +40,14 @@ jobs:
     - run: apt-get install software-properties-common gpg-agent --no-install-recommends --yes
     # - run: apt-get update
     - run: TZ=Etc/UTC ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
-    - run: add-apt-repository ppa:deadsnakes/ppa
+#    - run: add-apt-repository ppa:deadsnakes/ppa
     - run: apt-get update
     # git is needed by codecov
     - run: apt-get install -y git
     # python & psql (for the test DB) from repo, same as prod docker
     - run: apt-get install
         python3.12 python3-venv python3.12-dev python3.12-venv
+        postgresql-client
         --no-install-recommends --yes
     - run: python3.12 -m venv /venv
     - run: PATH=/venv/bin pip3 install --upgrade pip wheel
