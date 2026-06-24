@@ -47,7 +47,6 @@ jobs:
     # python & psql (for the test DB) from repo, same as prod docker
     - run: apt-get install
         python3.12 python3-venv python3.12-dev python3.12-venv
-        postgresql-client-18 libpq-dev
         --no-install-recommends --yes
     - run: python3.12 -m venv /venv
     - run: PATH=/venv/bin pip3 install --upgrade pip wheel
