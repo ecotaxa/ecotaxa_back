@@ -5,7 +5,7 @@
 from enum import Enum
 from typing import List, Dict
 
-from helpers.pydantic import BaseModel, Field
+from helpers.pydantic import BaseModel, ConfigDict, Field
 
 
 class ImportReq(BaseModel):
@@ -43,8 +43,7 @@ class ImportReq(BaseModel):
         examples=["Yes"],
     )
 
-    class Config:
-        json_schema_extra = {"title": "Import request Model"}
+    model_config = ConfigDict(json_schema_extra={"title": "Import request Model"})
 
 
 class ImportRsp(BaseModel):
@@ -133,8 +132,9 @@ class SimpleImportReq(BaseModel):
     #                                    default=[v for v in PossibleSimpleImportFields.__members__])
     possible_values: List[str] = [v for v in SimpleImportFields.__members__]
 
-    class Config:
-        json_schema_extra = {"title": "Simple import request Model"}
+    model_config = ConfigDict(
+        json_schema_extra={"title": "Simple import request Model"}
+    )
 
 
 class SimpleImportRsp(BaseModel):

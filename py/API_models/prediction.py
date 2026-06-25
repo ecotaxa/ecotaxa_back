@@ -5,7 +5,7 @@
 from typing import List, Optional, Dict
 
 from BO.Training import PredictionInfoT
-from helpers.pydantic import BaseModel, Field
+from helpers.pydantic import BaseModel, ConfigDict, Field
 
 
 class PredictionReq(BaseModel):
@@ -51,8 +51,8 @@ class PredictionReq(BaseModel):
         "launching the ML algorithm. Any unknown value is ignored.",
     )
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "title": "Prediction Request",
             "description": "How to predict, in details.",
             "example": {
@@ -62,6 +62,7 @@ class PredictionReq(BaseModel):
                 "use_scn": True,
             },
         }
+    )
 
 
 class PredictionRsp(BaseModel):

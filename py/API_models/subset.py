@@ -5,7 +5,7 @@
 from enum import Enum
 
 from API_models.filters import ProjectFiltersDict
-from helpers.pydantic import BaseModel, Field
+from helpers.pydantic import BaseModel, ConfigDict, Field
 
 
 class LimitMethods(str, Enum):
@@ -51,8 +51,7 @@ class SubsetReq(BaseModel):
         examples=[10.0],
     )
 
-    class Config:
-        json_schema_extra = {"title": "Subset request Model"}
+    model_config = ConfigDict(json_schema_extra={"title": "Subset request Model"})
 
 
 class SubsetRsp(BaseModel):

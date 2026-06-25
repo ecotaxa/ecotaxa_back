@@ -4,7 +4,7 @@
 #
 from typing import List, Optional
 
-from helpers.pydantic import BaseModel, Field
+from helpers.pydantic import BaseModel, ConfigDict, Field
 
 
 class SimilaritySearchRsp(BaseModel):
@@ -28,8 +28,8 @@ class SimilaritySearchRsp(BaseModel):
         default=None,
     )
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "title": "Similarity Search Response",
             "description": "The list of similar objects.",
             "example": {
@@ -38,3 +38,4 @@ class SimilaritySearchRsp(BaseModel):
                 "message": "Success",
             },
         }
+    )

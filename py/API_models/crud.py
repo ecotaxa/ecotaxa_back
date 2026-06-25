@@ -22,7 +22,7 @@ from DB.Process import Process
 from DB.Project import Project, ProjectIDListT, ProjectIDT
 from DB.Sample import Sample, SampleIDT
 from DB.User import Guest, Organization, OrganizationIDT, User, UserIDT
-from helpers.pydantic import BaseModel, DescriptiveModel, Field
+from helpers.pydantic import BaseModel, ConfigDict, DescriptiveModel, Field
 from .helpers.DBtoModel import combine_models
 from .helpers.DataclassToModel import dataclass_to_model_with_suffix
 
@@ -653,8 +653,9 @@ class CreateProjectReq(BaseModel):
         examples=[AccessLevelEnum.PUBLIC],
     )
 
-    class Config:
-        json_schema_extra = {"title": "Create project request Model"}
+    model_config = ConfigDict(
+        json_schema_extra={"title": "Create project request Model"}
+    )
 
 
 class BulkUpdateReq(BaseModel):
@@ -673,8 +674,7 @@ class BulkUpdateReq(BaseModel):
         examples=[[{"ucol": "sub_part", "uval": "2"}]],
     )
 
-    class Config:
-        json_schema_extra = {"title": "Update request Model"}
+    model_config = ConfigDict(json_schema_extra={"title": "Update request Model"})
 
 
 # TODO: Derive from ProjectTaxoStats
@@ -770,8 +770,9 @@ class CreateCollectionReq(BaseModel):
         min_length=1,
     )
 
-    class Config:
-        json_schema_extra = {"title": "Create collection request Model"}
+    model_config = ConfigDict(
+        json_schema_extra={"title": "Create collection request Model"}
+    )
 
 
 class _AddedToCollection(BaseModel):
@@ -847,8 +848,7 @@ class CollectionModel(_AddedToCollection, _CollectionModelFromDB):
     Basic and computed information about the Collection.
     """
 
-    class Config:
-        json_schema_extra = {"title": "Collection Model"}
+    model_config = ConfigDict(json_schema_extra={"title": "Collection Model"})
 
 
 class CollectionReq(BaseModel):
@@ -953,8 +953,9 @@ class CollectionReq(BaseModel):
         ],
     )
 
-    class Config:
-        json_schema_extra = {"title": "Update full or partial Collection Model"}
+    model_config = ConfigDict(
+        json_schema_extra={"title": "Update full or partial Collection Model"}
+    )
 
 
 class _Job2Model(DescriptiveModel):

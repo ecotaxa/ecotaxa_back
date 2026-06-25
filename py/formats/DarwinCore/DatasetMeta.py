@@ -46,7 +46,7 @@ class DatasetMetadata(object):
     def content(self) -> str:
         dataset = etree.Element("dataset")
         meta = self.meta
-        for a_title in sorted(meta.titles, key=lambda title: title.json()):
+        for a_title in sorted(meta.titles, key=lambda title: title.model_dump_json()):
             xml_title = etree_sub_element(dataset, "title")
             xml_title.set("lang", a_title.lang)
             xml_title.text = a_title.title
@@ -55,7 +55,7 @@ class DatasetMetadata(object):
             xml_person = etree_sub_element(dataset, "creator")
             self.person_to_xml(xml_person, a_person)
         for a_person in sorted(
-            meta.metadataProviders, key=lambda provider: provider.json()
+            meta.metadataProviders, key=lambda provider: provider.model_dump_json()
         ):
             xml_person = etree_sub_element(dataset, "metadataProvider")
             self.person_to_xml(xml_person, a_person)
@@ -119,7 +119,9 @@ class DatasetMetadata(object):
                 meta.maintenanceUpdateFrequency
             )
         # Contacts
-        for a_person in sorted(meta.contacts, key=lambda person: person.json()):
+        for a_person in sorted(
+            meta.contacts, key=lambda person: person.model_dump_json()
+        ):
             # TODO: Not reached by tests
             xml_person = etree_sub_element(dataset, "contact")
             self.person_to_xml(xml_person, a_person)

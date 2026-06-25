@@ -5,7 +5,7 @@
 from enum import Enum
 from typing import List, Dict, Optional, Union
 
-from pydantic import Extra, validator
+from pydantic import validator, ConfigDict
 
 from helpers.pydantic import BaseModel, Field
 
@@ -213,8 +213,7 @@ class ExportReq(ProjectIdReq):
         default=False,
     )
 
-    class Config:
-        json_schema_extra = {"title": "Export request Model"}
+    model_config = ConfigDict(json_schema_extra={"title": "Export request Model"})
 
 
 class GeneralExportReq(ProjectIdReq):
@@ -269,8 +268,9 @@ class GeneralExportReq(ProjectIdReq):
         examples=[False],
     )
 
-    class Config:
-        json_schema_extra = {"title": "General Export request Model"}
+    model_config = ConfigDict(
+        json_schema_extra={"title": "General Export request Model"}
+    )
 
 
 class SummaryExportReq(ProjectIdReq):
@@ -331,8 +331,9 @@ class SummaryExportReq(ProjectIdReq):
         ), "inconsistent pre_mapping, can't do remap chains or loops"
         return v
 
-    class Config:
-        json_schema_extra = {"title": "Summary Export request Model"}
+    model_config = ConfigDict(
+        json_schema_extra={"title": "Summary Export request Model"}
+    )
 
 
 class BackupExportReq(ProjectIdReq):
@@ -350,8 +351,9 @@ class BackupExportReq(ProjectIdReq):
         examples=[False],
     )
 
-    class Config:
-        json_schema_extra = {"title": "Backup Export request Model"}
+    model_config = ConfigDict(
+        json_schema_extra={"title": "Backup Export request Model"}
+    )
 
 
 class DarwinCoreExportReq(BaseModel):
@@ -433,8 +435,7 @@ class DarwinCoreExportReq(BaseModel):
         default=[],
     )
 
-    class Config:
-        extra = Extra.forbid
+    model_config = ConfigDict(extra="forbid")
 
 
 class ExportRsp(BaseModel):
@@ -492,5 +493,4 @@ class TaxonomyRecast(BaseModel):
         default=None,
     )
 
-    class Config:
-        extra = Extra.forbid
+    model_config = ConfigDict(extra="forbid")

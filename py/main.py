@@ -8,6 +8,7 @@ import os
 import re
 import sys
 import time
+from contextlib import asynccontextmanager
 from dataclasses import asdict
 from logging import INFO
 from typing import Union, Tuple, List, Dict, Any
@@ -198,9 +199,10 @@ fastapi_logger.setLevel(INFO)
 
 api_logger = get_api_logger()
 
+
 app = FastAPI(
     title="EcoTaxa",
-    version="0.0.45",
+    version="0.0.50",
     # openapi URL as seen from navigator, this is included when /docs is required
     # which serves swagger-ui JS app. Stay in /api sub-path.
     openapi_url="/api/openapi.json",
@@ -2140,7 +2142,7 @@ def samples_search(
         proj_ids = _split_num_list(project_ids)
         with RightsThrower():
             ret = sce.search(current_user, proj_ids, id_pattern)
-        return [SampleModel.from_orm(sam) for sam in ret]
+        return [SampleModel.model_validate(sam) for sam in ret]
 
 
 @app.get(
@@ -2232,7 +2234,7 @@ def sample_query(
             ret = sce.query(current_user, sample_id)
         if ret is None:
             raise HTTPException(status_code=404, detail="Sample not found")
-        return SampleModel.from_orm(ret)
+        return SampleModel.model_validate(ret)
 
 
 # ######################## END OF SAMPLE
@@ -2256,7 +2258,7 @@ def acquisitions_search(
     with AcquisitionsService() as sce:
         with RightsThrower():
             ret = sce.search(current_user, project_id)
-        return [AcquisitionModel.from_orm(acq) for acq in ret]
+        return [AcquisitionModel.model_validate(acq) for acq in ret]
 
 
 @app.post(
@@ -2303,7 +2305,7 @@ def acquisition_query(
             ret = sce.query(current_user, acquisition_id)
         if ret is None:
             raise HTTPException(status_code=404, detail="Acquisition not found")
-        return AcquisitionModel.from_orm(ret)
+        return AcquisitionModel.model_validate(ret)
 
 
 # ######################## END OF ACQUISITION
@@ -2388,7 +2390,7 @@ def process_query(
             ret = sce.query(current_user, process_id)
         if ret is None:
             raise HTTPException(status_code=404, detail="Process not found")
-        return ProcessModel.from_orm(ret)
+        return ProcessModel.model_validate(ret)
 
 
 # ######################## END OF PROCESS
@@ -3728,7 +3730,7 @@ def list_jobs(
         None,
         title="Job status",
         description="The job status: P(ending), R(unning), A(sking), E(rror), F(inished).",
-        example=DBJobStateEnum.Finished,
+        examples=[DBJobStateEnum.Finished],
     ),
     current_user: int = Depends(get_current_user),
 ) -> List[JobBO]:
@@ -4317,22 +4319,6 @@ dump_openapi(app, __file__)
 JOB_INTERVAL = 5
 
 
-@app.on_event("startup")
-def startup_event() -> None:
-    # Small service construction & check, to ensure config and the DB are OK
-    with ConstantsService() as sce:
-        sce.config.validate()
-
-    # The router for big files needs a valid USERSFILESAREA config
-    app.include_router(create_big_files_router())
-
-    # Clean memory every minute
-    JobScheduler.todo_on_idle = regular_mem_cleanup
-    # Don't run predictions, they are left to a specialized runner
-    JobScheduler.FILTER = [PredictForProject.JOB_TYPE]
-    JobScheduler.launch_at_interval(JOB_INTERVAL)
-
-
 def register_exception(app: FastAPI):
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(
@@ -4350,9 +4336,29 @@ def register_exception(app: FastAPI):
 register_exception(app)
 
 
-@app.on_event("shutdown")
-def shutdown_event() -> None:
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup logic
+    # Small service construction & check, to ensure config and the DB are OK
+    with ConstantsService() as sce:
+        sce.config.validate()
+
+    # The router for big files needs a valid USERSFILESAREA config
+    app.include_router(create_big_files_router())
+
+    # Clean memory every minute
+    JobScheduler.todo_on_idle = regular_mem_cleanup
+    # Don't run predictions, they are left to a specialized runner
+    JobScheduler.FILTER = [PredictForProject.JOB_TYPE]
+    JobScheduler.launch_at_interval(JOB_INTERVAL)
+
+    yield
+
+    # Shutdown logic
     JobScheduler.shutdown()
+
+
+app.router.lifespan_context = lifespan
 
 
 def _split_num_list(ids: str) -> List[int]:

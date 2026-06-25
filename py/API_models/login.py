@@ -5,7 +5,7 @@
 # Login-related model(s)
 #
 
-from helpers.pydantic import BaseModel, Field
+from helpers.pydantic import BaseModel, ConfigDict, Field
 
 
 class LoginReq(BaseModel):
@@ -18,5 +18,4 @@ class LoginReq(BaseModel):
         examples=["ecotaxa.api.user@gmail.com"],
     )
 
-    class Config:
-        json_schema_extra = {"title": "Login request Model"}
+    model_config = ConfigDict(json_schema_extra={"title": "Login request Model"})

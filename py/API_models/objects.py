@@ -16,7 +16,7 @@ from BO.Classification import HistoricalClassification, HistoricalLastClassif
 from BO.ReClassifyLog import ClassifSetInfoT
 from DB.Image import Image
 from DB.Object import ObjectHeader, ObjectIDListT
-from helpers.pydantic import BaseModel, DescriptiveModel, Field
+from helpers.pydantic import BaseModel, ConfigDict, DescriptiveModel, Field
 
 
 # TODO JCE - examples - ?default?
@@ -457,8 +457,8 @@ class ClassifyAutoReqMult(BaseModel):
         description="Set if former automatic classification history is needed. Deprecated, always True.",
     )
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "title": "Classify auto request Model",
             "example": {
                 "target_ids": [634509, 6234516, 976544],
@@ -467,6 +467,7 @@ class ClassifyAutoReqMult(BaseModel):
                 "keep_log": False,
             },
         }
+    )
 
 
 class _DBHistoricalClassificationDescription(DescriptiveModel):

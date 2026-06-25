@@ -174,6 +174,8 @@ def _add_pydantic_clone(
             # detach from copied class
             if isinstance(sym_node, Var):  # e.g. depthmax
                 sym_node.info = info
+                if a_name == "model_config":  # Pydantic V2 config
+                    continue
                 if a_name not in col_types:
                     ctx.api.msg.fail(
                         "EcoTaxa plugin: No type info for field '"

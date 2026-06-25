@@ -5,7 +5,7 @@
 from enum import Enum
 from typing import Any, List, Optional
 
-from helpers.pydantic import BaseModel, Field, root_validator
+from helpers.pydantic import BaseModel, Field, model_validator
 
 # noinspection PyPackageRequirements
 # from urllib3.util import Url
@@ -399,8 +399,8 @@ class EMLTemporalCoverage(BaseModel):
     beginDate: Optional[str] = None
     endDate: Optional[str] = None
 
-    # noinspection PyMethodParameters
-    @root_validator(pre=True)
+    @model_validator(mode="before")
+    @classmethod
     def check_at_least_a_date(cls, values):
         assert "singleDateTime" in values or (
             "beginDate" in values and "endDate" in values

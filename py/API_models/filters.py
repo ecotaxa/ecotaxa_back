@@ -3,7 +3,7 @@ from typing import Optional, cast, Dict
 from typing_extensions import TypedDict
 
 from API_models.helpers.TypedDictToModel import typed_dict_to_model
-from helpers.pydantic import DescriptiveModel, Field
+from helpers.pydantic import ConfigDict, DescriptiveModel, Field
 
 
 class ProjectFiltersDict(TypedDict, total=False):
@@ -253,11 +253,12 @@ class _ProjectFilters2Model(DescriptiveModel):
         default=None,
     )
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(  # type: ignore # TODO: Why mypy complains?
+        json_schema_extra={
             "title": "Project filters Model",
             "description": "How to reduce project data.",
         }
+    )
 
 
 ProjectFiltersModel = typed_dict_to_model(ProjectFiltersDict, _ProjectFilters2Model)
