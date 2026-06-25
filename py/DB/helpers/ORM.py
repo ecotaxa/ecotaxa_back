@@ -3,7 +3,7 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import Tuple, List, Set, Dict, TypeVar, Type, Any, Union
+from typing import Tuple, List, Set, Dict, TypeVar, Type, Any, Union, ClassVar
 
 # noinspection PyUnresolvedReferences
 from sqlalchemy import (
@@ -62,7 +62,10 @@ class Model(DeclarativeBase):  # type: ignore
     # __abstract__ = True  # prevent SQLAlchemy from trying to map
     # __allow_unmapped__ = True
     # __tablename__: str
-    pass
+    __abstract__ = True
+    # All our models are based on Tables. In theory it's a FromClause, but not here.
+    __table__: ClassVar[Table]
+
 
 
 # Just forD fun :)

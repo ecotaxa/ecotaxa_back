@@ -31,7 +31,6 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.logger import logger as fastapi_logger
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.templating import Jinja2Templates
-
 # from fastapi_utils.timing import add_timing_middleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
@@ -681,7 +680,7 @@ def search_organizations(
     **Search for organizations.**
     """
     with OrganizationService() as sce:
-        org_names = sce.search_organizations(name)
+        org_names = sce.search(name)
     return org_names
 
 

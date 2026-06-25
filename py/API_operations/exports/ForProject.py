@@ -1113,7 +1113,7 @@ class ProjectExport(JobServiceBase):
         res = qry.all()
         if res is None or len(res) != 1:
             return None
-        the_one = json.loads(res[0].transforms)
+        the_one = json.loads(str(res[0].transforms))
         transforms: Dict[ClassifIDT, Optional[ClassifIDT]] = {}
         for k, v in the_one.items():
             if v is None:

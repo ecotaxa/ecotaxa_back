@@ -330,6 +330,7 @@ class PredictionBO(object):
         for an_histo in histo:
             if an_histo.histo_classif_qual != PREDICTED_CLASSIF_QUAL:
                 continue
+            assert an_histo.histo_classif_who is not None  # mypy
             # Find matching training
             matching_training = (
                 self.session.query(Training.training_id)

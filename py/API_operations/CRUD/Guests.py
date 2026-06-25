@@ -3,7 +3,7 @@
 # Copyright (C) 2025  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 
-from typing import Optional, List
+from typing import Optional, List, cast
 
 from fastapi import HTTPException
 
@@ -262,7 +262,7 @@ class GuestService(Service):
             .filter(ProjectPrivilege.privilege == ProjectPrivilegeBO.MANAGE)
         )
         collection_ids = qry.all()
-        return collection_ids
+        return cast(CollectionIDListT, collection_ids)
 
     def _can_manage_guest_throw(self, user: User, guest_id: GuestIDT):
         """

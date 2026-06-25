@@ -5,7 +5,7 @@
 from typing import List, TYPE_CHECKING, Dict, Set
 
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, mapped_column
 
 from BO.DataLicense import AccessLevelEnum
 from DB.helpers.ORM import Model, Mapped
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from .Instrument import Instrument
     from .ProjectPrivilege import ProjectPrivilege
 
-from .helpers.DDL import Column, Sequence, ForeignKey
+from .helpers.DDL import Sequence, ForeignKey
 from .helpers.Postgres import VARCHAR, INTEGER, DOUBLE_PRECISION
 
 """
@@ -39,40 +39,40 @@ class Project(Model):
     """
 
     __tablename__ = "projects"
-    projid: int = Column(INTEGER, Sequence("seq_projects"), primary_key=True)
-    title: str = Column(VARCHAR(255), nullable=False)
-    instrument_id: str = Column(
-        VARCHAR(32), ForeignKey("instrument.instrument_id"), nullable=False
+    projid: Mapped[int] = mapped_column(INTEGER, Sequence("seq_projects"), primary_key=True)
+    title: Mapped[str] = mapped_column(VARCHAR(255))
+    instrument_id: Mapped[str] = mapped_column(
+        VARCHAR(32), ForeignKey("instrument.instrument_id")
     )
-    access = Column(VARCHAR(1), default=AccessLevelEnum.OPEN, nullable=False)
-    status = Column(
+    access: Mapped[str] = mapped_column(VARCHAR(1), default=AccessLevelEnum.OPEN)
+    status: Mapped[str | None] = mapped_column(
         VARCHAR(40), default=ANNOTATE_STATUS
     )  # Annotate, ExploreOnly, Annotate No Prediction
     # The mappings for this Project
-    mappingobj = Column(VARCHAR)
-    mappingsample = Column(VARCHAR)
-    mappingacq = Column(VARCHAR)
-    mappingprocess = Column(VARCHAR)
+    mappingobj: Mapped[str | None] = mapped_column(VARCHAR)
+    mappingsample: Mapped[str | None] = mapped_column(VARCHAR)
+    mappingacq: Mapped[str | None] = mapped_column(VARCHAR)
+    mappingprocess: Mapped[str | None] = mapped_column(VARCHAR)
     # Calculated
-    objcount = Column(DOUBLE_PRECISION)
-    pctvalidated = Column(DOUBLE_PRECISION)
-    pctclassified = Column(DOUBLE_PRECISION)
+    objcount: Mapped[float | None] = mapped_column(DOUBLE_PRECISION)
+    pctvalidated: Mapped[float | None] = mapped_column(DOUBLE_PRECISION)
+    pctclassified: Mapped[float | None] = mapped_column(DOUBLE_PRECISION)
     # Settings
-    classifsettings = Column(VARCHAR)  # Settings for Automatic classification.
-    initclassiflist = Column(VARCHAR)  # Initial list of categories
-    classiffieldlist = Column(
+    classifsettings: Mapped[str | None] = mapped_column(VARCHAR)  # Settings for Automatic classification.
+    initclassiflist: Mapped[str | None] = mapped_column(VARCHAR)  # Initial list of categories
+    classiffieldlist: Mapped[str | None] = mapped_column(
         VARCHAR
     )  # Fields available on sort & displayed field of Manual classif screen
-    popoverfieldlist = Column(
+    popoverfieldlist: Mapped[str | None] = mapped_column(
         VARCHAR
     )  # Fields available on popover of Manual classif screen
-    comments = Column(VARCHAR)
+    comments: Mapped[str | None] = mapped_column(VARCHAR)
     # Note: It's loaded file_s_
-    fileloaded = Column(VARCHAR)
-    rf_models_used = Column(VARCHAR)
-    cnn_network_id = Column(VARCHAR(50))
+    fileloaded: Mapped[str | None] = mapped_column(VARCHAR)
+    rf_models_used: Mapped[str | None] = mapped_column(VARCHAR)
+    cnn_network_id: Mapped[str | None] = mapped_column(VARCHAR(50))
     # project specific formulae used to calculate concentration and biovolume ( used in project summary export, and collection DarwinCore export)
-    formulae = Column(VARCHAR)
+    formulae: Mapped[str | None] = mapped_column(VARCHAR)
     # Associated taxonomy statistics. Commented out to avoid that the ORM loads the whole list, which can be big.
     # taxo_stats = relationship("ProjectTaxoStat")
 
@@ -128,18 +128,18 @@ class ProjectTaxoStat(Model):
     """
 
     __tablename__ = "projects_taxo_stat"
-    projid = Column(
+    projid: Mapped[int] = mapped_column(
         INTEGER, ForeignKey("projects.projid", ondelete="CASCADE"), primary_key=True
     )
     # FK to Taxonomy, but there is the special "-1" value (for unclassified) preventing an official FK
-    id = Column(INTEGER, primary_key=True)
+    id: Mapped[int] = mapped_column(INTEGER, primary_key=True)
     # Number of objects in this category for this project.
     # NOTE: This can be larger than nbr_v+nbr_d+nbr_p, as objects can be without state but still belong
     # to a category.
-    nbr = Column(INTEGER)
+    nbr: Mapped[int | None] = mapped_column(INTEGER)
     # Number of validated objects in this category for this project
-    nbr_v = Column(INTEGER)
+    nbr_v: Mapped[int | None] = mapped_column(INTEGER)
     # Number of dubious objects in this category for this project
-    nbr_d = Column(INTEGER)
+    nbr_d: Mapped[int | None] = mapped_column(INTEGER)
     # Number of predicted objects in this category for this project
-    nbr_p = Column(INTEGER)
+    nbr_p: Mapped[int | None] = mapped_column(INTEGER)

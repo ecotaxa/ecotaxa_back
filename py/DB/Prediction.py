@@ -7,16 +7,13 @@
 #
 
 from typing import NamedTuple
-from typing import TYPE_CHECKING
 
 from sqlalchemy import PrimaryKeyConstraint
+from sqlalchemy.orm import mapped_column
 
-from DB.helpers.DDL import Column, ForeignKey, Index
-from DB.helpers.ORM import Model
+from DB.helpers.DDL import ForeignKey, Index
+from DB.helpers.ORM import Model, Mapped
 from DB.helpers.Postgres import BIGINT, INTEGER, DOUBLE_PRECISION
-
-if TYPE_CHECKING:
-    pass
 
 PSEUDO_TRAINING_SCORE = 1.0
 
@@ -35,22 +32,19 @@ class Prediction(Model):
 
     __tablename__ = "prediction"
 
-    object_id: int = Column(
+    object_id: Mapped[int] = mapped_column(
         BIGINT,
         ForeignKey("obj_head.objid", ondelete="CASCADE", onupdate="CASCADE"),
-        nullable=False,
     )
-    training_id: int = Column(
+    training_id: Mapped[int] = mapped_column(
         INTEGER,
         ForeignKey("training.training_id", ondelete="CASCADE"),
-        nullable=False,
     )
-    classif_id: int = Column(
+    classif_id: Mapped[int] = mapped_column(
         INTEGER,
         ForeignKey("taxonomy.id", ondelete="CASCADE"),
-        nullable=False,
     )
-    score = Column(DOUBLE_PRECISION, nullable=False)  # payload
+    score: Mapped[float] = mapped_column(DOUBLE_PRECISION)  # payload
 
     # Define the 'normal' PK, from more general to less general, we had to reorder for space
     __table_args__ = (PrimaryKeyConstraint("object_id", "classif_id"),)
@@ -66,22 +60,19 @@ class PredictionHisto(Model):
 
     __tablename__ = "prediction_histo"
 
-    object_id: int = Column(
+    object_id: Mapped[int] = mapped_column(
         BIGINT,
         ForeignKey("obj_head.objid", ondelete="CASCADE", onupdate="CASCADE"),
-        nullable=False,
     )
-    training_id: int = Column(
+    training_id: Mapped[int] = mapped_column(
         INTEGER,
         ForeignKey("training.training_id", ondelete="CASCADE"),
-        nullable=False,
     )
-    classif_id: int = Column(
+    classif_id: Mapped[int] = mapped_column(
         INTEGER,
         ForeignKey("taxonomy.id", ondelete="CASCADE"),
-        nullable=False,
     )
-    score = Column(DOUBLE_PRECISION, nullable=False)  # payload
+    score: Mapped[float] = mapped_column(DOUBLE_PRECISION)  # payload
 
     # Define the 'normal' PK, from more general to less general, we had to reorder for space
     __table_args__ = (PrimaryKeyConstraint("training_id", "object_id", "classif_id"),)

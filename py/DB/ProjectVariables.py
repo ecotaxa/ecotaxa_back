@@ -2,11 +2,12 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import Dict, Optional, TYPE_CHECKING
+from typing import Dict, TYPE_CHECKING
 
-from DB.helpers.ORM import Model
-from .helpers.DDL import Column, ForeignKey
-from .helpers.ORM import Mapped
+from sqlalchemy.orm import mapped_column
+
+from DB.helpers.ORM import Model, Mapped
+from .helpers.DDL import ForeignKey
 from .helpers.Postgres import VARCHAR, INTEGER
 
 if TYPE_CHECKING:
@@ -21,16 +22,16 @@ class ProjectVariables(Model):
     """
 
     __tablename__ = "projects_variables"
-    project_id: int = Column(
+    project_id: Mapped[int] = mapped_column(
         INTEGER, ForeignKey("projects.projid", ondelete="CASCADE"), primary_key=True
     )
 
     # Python expression, the calculation result complies to http://vocab.nerc.ac.uk/collection/P01/current/SSAMPC01/1/
-    subsample_coef = Column(VARCHAR)
+    subsample_coef: Mapped[str | None] = mapped_column(VARCHAR)
     # Python expression, the calculation result complies to http://vocab.nerc.ac.uk/collection/P01/current/VOLWBSMP/
-    total_water_volume = Column(VARCHAR)
+    total_water_volume: Mapped[str | None] = mapped_column(VARCHAR)
     # Python expression, the implied unit is mm3
-    individual_volume = Column(VARCHAR)
+    individual_volume: Mapped[str | None] = mapped_column(VARCHAR)
 
     if TYPE_CHECKING:
         # The relationship(s) are created in Relations.py but the typing here helps IDE
@@ -44,7 +45,7 @@ class ProjectVariables(Model):
             self.individual_volume,
         )
 
-    def load_from_dict(self, vars_dict: Dict[str, Optional[str]]) -> "ProjectVariables":
+    def load_from_dict(self, vars_dict: Dict[str, str | None]) -> "ProjectVariables":
         """Load self from a dict with proper keys"""
         for a_var in KNOWN_PROJECT_VARS:
             if a_var in vars_dict:

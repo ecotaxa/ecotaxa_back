@@ -4,7 +4,9 @@
 #
 from typing import TYPE_CHECKING, List
 
-from .helpers.DDL import Column, ForeignKey
+from sqlalchemy.orm import mapped_column
+
+from .helpers.DDL import ForeignKey
 from .helpers.ORM import Model, Mapped
 from .helpers.Postgres import VARCHAR, BIGINT
 
@@ -22,13 +24,13 @@ class Process(Model):
     # DB table
     __tablename__ = "process"
     # Twin table with Acquisitions
-    processid: int = Column(
+    processid: Mapped[int] = mapped_column(
         BIGINT,
         ForeignKey("acquisitions.acquisid", ondelete="CASCADE", onupdate="CASCADE"),
         primary_key=True,
     )
     # i.e. process_id from TSV
-    orig_id = Column(VARCHAR(255), nullable=False)
+    orig_id: Mapped[str] = mapped_column(VARCHAR(255))
 
     if TYPE_CHECKING:
         # The relationship(s) are created in Relations.py but the typing here helps IDE
@@ -42,4 +44,4 @@ class Process(Model):
 
 
 for i in range(1, PROCESS_FREE_COLUMNS):
-    setattr(Process, "t%02d" % i, Column(VARCHAR(250)))
+    setattr(Process, "t%02d" % i, mapped_column(VARCHAR(250)))

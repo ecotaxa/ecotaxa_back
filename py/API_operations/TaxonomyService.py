@@ -272,9 +272,9 @@ class TaxonomyService(Service):
             qry = (
                 self.ro_session.query(Taxonomy.id)
                 .filter(Taxonomy.id.in_(remapping.values()))
-                .filter(Taxonomy.aphia_id is None)
+                .filter(Taxonomy.aphia_id.is_(None))
             )
-            not_valid = [t.id for t in qry]
+            not_valid = [str(t.id) for t in qry]
             if len(not_valid):
                 raise HTTPException(
                     HTTP_422_UNPROCESSABLE_ENTITY,

@@ -539,9 +539,9 @@ class EnumeratedObjectSet(MappedTable):
         """
         # Start with physical images, which are not deleted via a CASCADE on DB side
         # This is maybe due to relationship cycle b/w ObjectHeader and Images @See comment in Image class
-        img_del_qry: Delete = Image.__table__.delete()
-        img_del_qry = img_del_qry.where(Image.objid == any_(a_chunk))
-        img_del_qry = img_del_qry.returning(
+        del_qry: Delete = Image.__table__.delete()
+        del_qry = del_qry.where(Image.objid == any_(a_chunk))
+        img_del_qry = del_qry.returning(
             Image.imgid, Image.orig_file_name, Image.thumb_height
         )
         img_from_id_and_orig = Image.img_from_id_and_orig

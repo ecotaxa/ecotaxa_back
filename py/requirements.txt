@@ -4,7 +4,7 @@
 
 # Typings there depend on SQLA 2.0 interface
 SQLAlchemy[mypy]==2.0.51
-# sqlalchemy2-stubs are now installed with [mypy] above
+# sqlalchemy2-stubs are installed with [mypy] above
 sqlalchemy_views==0.3.1
 # When SQLAlchemy moves to 2.0 we'll be able to use psycopg3
 psycopg[binary]==3.1.19
@@ -24,21 +24,22 @@ fastapi==0.111.1
 # Last (April 2023) pydantic
 #pydantic[mypy]==1.10.7
 # Speed up openapi response serialization
-orjson==3.11.5
+orjson==3.11.9
 types-orjson==3.6.2
 #graphene==2.1.8
 uvloop==0.22.1
 httptools==0.8.0
-# With 0.16.0: Error "INFO:     ASGI 'lifespan' protocol appears unsupported." and the process
-# does not exit. Seen with 0.15.0 as well.
-# Note: there was a reg. in 0.17.0 with file upload, not visible during UT. So, to test manually.
+# Web framework
 uvicorn==0.48.0
 gunicorn==23.0.0
 httpx==0.28.1
-lxml==6.1.0
-lxml-stubs==0.2.0
-requests==2.33.0
-types-requests==2.25.6
+
+lxml==6.1.1
+lxml-stubs==0.5.1
+
+requests==2.34.2
+types-requests==2.33.0.20260518
+
 python-multipart==0.0.27
 # Big files import lib
 tuspyserver==4.2.5
@@ -57,7 +58,7 @@ openpyxl-stubs==0.1.21
 alembic==1.13.2
 # CLI tools, for "cmds" subdirectory
 typer[all]==0.12.3
-# More recent mypy as of 28/06/2024
-mypy==1.10.1
+# The last version which is compatible with the custom plugin in API_models/mypy/plugin.py
+mypy==1.19.1
 # OpenId lib, latest 1.6.6 Requires-Python >=3.9
 authlib==1.3.2

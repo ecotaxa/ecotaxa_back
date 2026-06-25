@@ -6,8 +6,9 @@ from typing import Dict, Tuple, List
 from typing import TYPE_CHECKING
 
 from sqlalchemy import func, DDL, event  # fmt: skip
+from sqlalchemy.orm import mapped_column
 
-from .helpers.DDL import Column, ForeignKey, Index
+from .helpers.DDL import ForeignKey, Index
 from .helpers.Direct import text
 from .helpers.ORM import Model, Session, Mapped
 from .helpers.Postgres import VARCHAR, BIGINT
@@ -36,16 +37,16 @@ class Acquisition(Model):
     # Historical (plural) name of the table
     __tablename__ = "acquisitions"
     # Self ID
-    acquisid: int = Column(BIGINT, primary_key=True, autoincrement=False)
+    acquisid: Mapped[int] = mapped_column(BIGINT, primary_key=True, autoincrement=False)
     # Parent ID
     # TODO: Delete cascade
-    acq_sample_id: int = Column(
-        BIGINT, ForeignKey("samples.sampleid", onupdate="CASCADE"), nullable=False
+    acq_sample_id: Mapped[int] = mapped_column(
+        BIGINT, ForeignKey("samples.sampleid", onupdate="CASCADE")
     )
     # i.e. acq_id from TSV
-    orig_id: str = Column(VARCHAR(255), nullable=False)
+    orig_id: Mapped[str] = mapped_column(VARCHAR(255))
     # TODO: Put into a dedicated table
-    instrument = Column(VARCHAR(255))
+    instrument: Mapped[str | None] = mapped_column(VARCHAR(255))
 
     if TYPE_CHECKING:
         # The relationship(s) are created in Relations.py but the typing here helps IDE
@@ -100,7 +101,7 @@ class Acquisition(Model):
 
 
 for i in range(1, ACQUISITION_FREE_COLUMNS):
-    setattr(Acquisition, "t%02d" % i, Column(VARCHAR(250)))
+    setattr(Acquisition, "t%02d" % i, mapped_column(VARCHAR(250)))
 
 Index(
     "is_acquis_sample_orig_id",

@@ -5,10 +5,11 @@
 from typing import List, Dict, TYPE_CHECKING
 
 from sqlalchemy import func
+from sqlalchemy.orm import mapped_column
 
 from .Project import Project, ProjectIDT
 from .helpers import Result
-from .helpers.DDL import Index, Column, ForeignKey
+from .helpers.DDL import Index, ForeignKey
 from .helpers.Direct import text
 from .helpers.Hints import RECURS_HINT
 from .helpers.ORM import Model, Session, Mapped
@@ -29,13 +30,13 @@ SampleOrigIDT = str
 class Sample(Model):
     # Historical (plural) name of the table
     __tablename__ = "samples"
-    sampleid: int = Column(BIGINT, primary_key=True, autoincrement=False)
-    projid: int = Column(INTEGER, ForeignKey("projects.projid"), nullable=False)
+    sampleid: Mapped[int] = mapped_column(BIGINT, primary_key=True, autoincrement=False)
+    projid: Mapped[int] = mapped_column(INTEGER, ForeignKey("projects.projid"))
     # i.e. sample_id from TSV
-    orig_id: str = Column(VARCHAR(255), nullable=False)
-    latitude = Column(DOUBLE_PRECISION)
-    longitude = Column(DOUBLE_PRECISION)
-    dataportal_descriptor = Column(VARCHAR(8000))
+    orig_id: Mapped[str] = mapped_column(VARCHAR(255))
+    latitude: Mapped[float | None] = mapped_column(DOUBLE_PRECISION)
+    longitude: Mapped[float | None] = mapped_column(DOUBLE_PRECISION)
+    dataportal_descriptor: Mapped[str | None] = mapped_column(VARCHAR(8000))
 
     if TYPE_CHECKING:
         # The relationship(s) are created in Relations.py but the typing here helps IDE
@@ -123,7 +124,7 @@ class Sample(Model):
 
 
 for i in range(1, SAMPLE_FREE_COLUMNS):
-    setattr(Sample, "t%02d" % i, Column(VARCHAR(250)))
+    setattr(Sample, "t%02d" % i, mapped_column(VARCHAR(250)))
 
 Index(
     "is_samples_project_orig_id",

@@ -11,7 +11,6 @@ from sqlalchemy.orm import InstrumentedAttribute
 
 from API_models.crud import (
     UserModelWithRights,
-    MinUserModel,
     ProjectSummaryModel,
     ResetPasswordReq,
     UserActivateReq,
@@ -284,6 +283,7 @@ class UserService(Service):
                 detail=detail,
             )
         else:
+            assert new_user.password is not None, "Mdify new user needs a password"
             self._verify_and_update_password_throw(new_user.password, usr)
         # update a profile with information requested by the main user admin - status to 0
         cols_to_upd = self.COMMON_UPDATABLE_COLS
@@ -429,9 +429,7 @@ class UserService(Service):
         ret.password = "?"
         return ret
 
-    def search(
-        self, current_user_id: UserIDT, by_name: Optional[str]
-    ) -> List[MinUserModel]:
+    def search(self, current_user_id: UserIDT, by_name: Optional[str]) -> List[User]:
         _: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
         qry = self.ro_session.query(User).filter(User.status == UserStatus.active.value)
         if by_name is not None:
@@ -617,11 +615,11 @@ class UserService(Service):
         self, update_src: UserModelWithRights, user_to_update: User
     ) -> bool:
         return (
-            self.verify_email == False
-            or update_src.id == -1
+            self.verify_email is False
+            or (update_src.id == -1)
             or (
                 update_src.email.lower() == user_to_update.email.lower()
-                and user_to_update.mail_status
+                and user_to_update.mail_status is True
             )
         )
 
@@ -1017,7 +1015,7 @@ class UserService(Service):
             or self._uservalidation is None
         ):
             return update_src, []
-        mail_status: bool = user.mail_status
+        mail_status: bool = user.mail_status is True
         if token is not None:
             email = self._uservalidation.get_email_from_token(token)
             user_id = self._uservalidation.get_id_from_token(token)
@@ -1086,7 +1084,7 @@ class UserService(Service):
                 self._uservalidation.request_user_to_modify_profile(
                     UserModelWithRights.from_orm(user),
                     self._get_assistance_email(),
-                    reason=user.status_admin_comment,
+                    reason=user.status_admin_comment or "? no reason",
                     action=ActivationType.update,
                 )
                 update_src.status_date = now

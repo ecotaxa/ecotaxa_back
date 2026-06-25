@@ -7,11 +7,11 @@
 from datetime import date, datetime, time
 from typing import Any, Dict, List, Optional
 
+from API_models.helpers.DBtoModel import combine_models
 from API_models.helpers.DataclassToModel import (
     dataclass_to_model,
     dataclass_to_model_with_suffix,
 )
-from API_models.helpers.DBtoModel import combine_models
 from BO.Classification import HistoricalClassification, HistoricalLastClassif
 from BO.ReClassifyLog import ClassifSetInfoT
 from DB.Image import Image
@@ -128,10 +128,11 @@ class _ObjectHeaderComplement(BaseModel):
     complement_info: str = Field(
         title="Complement info", description="", examples=["Part of ostracoda"]
     )
-    object_link: str = Field(
+    object_link: Optional[str] = Field(
         title="Object link",
         description="Object link.",
         examples=["http://www.zooscan.obs-vlfr.fr//"],
+        default=None,
     )
 
 

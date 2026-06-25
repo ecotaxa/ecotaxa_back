@@ -18,7 +18,7 @@ from BO.User import UserIDT
 from DB.User import User
 from FS.CommonDir import CommonFolder
 from FS.UserFilesDir import UserFilesDirectory
-from helpers.CustomException import UnprocessableEntityException
+from helpers.CustomException import UnprocessableEntityException, BaseAppException
 from helpers.DynamicLogs import get_logger
 from helpers.httpexception import DETAIL_NOTHING_DONE, DETAIL_UNKNOWN_ERROR
 from .helpers.Service import Service

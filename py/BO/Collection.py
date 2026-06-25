@@ -303,6 +303,8 @@ class CollectionBO(object):
             for a_role, a_user_list in by_role["user"].items():
                 for a_user in a_user_list:
                     user_id = CollectionBO.get_user_id(session, a_user)
+                    if user_id is None:
+                        continue # mypy
                     collurole = CollectionUserRole()
                     collurole.collection_id = coll_id
                     collurole.user_id = user_id
@@ -329,6 +331,8 @@ class CollectionBO(object):
             for a_role, an_org_list in by_role["org"].items():
                 for an_org in an_org_list:
                     org_id = CollectionBO.get_organisation_id(session, an_org)
+                    if org_id is None:
+                        continue
                     collorole = CollectionOrgaRole()
                     collorole.collection_id = coll_id
                     collorole.organization_id = org_id
@@ -459,7 +463,6 @@ class CollectionBO(object):
         # TODO ugly filter
         published = (
             session.query(Collection.external_id)
-            .filter(Collection.external_id is not None)
             .filter(Collection.external_id != "")
             .filter(Collection.external_id != "?")
             .filter(Collection.id == coll_id)
@@ -541,7 +544,7 @@ class CollectionBO(object):
         qry = (
             session.query(CollectionOrgaRole.collection_id)
             .filter(CollectionOrgaRole.collection_id.in_(collection_ids))
-            .filter(CollectionOrgaRole.organisation == organization)
+            .filter(CollectionOrgaRole.organization_id == organization)
         )
         can_manage = qry.scalar()
         return can_manage is not None

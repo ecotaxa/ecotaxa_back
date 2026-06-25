@@ -812,7 +812,9 @@ class TSVFile(object):
                     # Fetch the record to update, .get is cache-friendly
                     obj = session.query(a_cls).get(objid)
                     assert obj is not None
+                    assert isinstance(obj, (ObjectHeader, ObjectFields))
                     if a_cls == ObjectHeader:
+                        assert isinstance(obj, ObjectHeader)
                         an_upd.update_from_obj(  # Don't kill hidden but useful field(s)
                             obj, set(HIDDEN_FIELDS_FOR_CLASSIF.keys()), force=True
                         )  # TODO: Useless now

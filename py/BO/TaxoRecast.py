@@ -5,7 +5,7 @@
 #
 # Global preferences for a user
 #
-from typing import Union, Optional
+from typing import Union, Optional, List, cast
 
 from sqlalchemy.orm import Session
 
@@ -46,7 +46,7 @@ class TaxoRecastBO(object):
                 .all()
             )
             assert len(ret) > 0, NOT_FOUND
-            project_ids = ret
+            project_ids = cast(List[int], ret)
         else:
             project_ids = [target_id]
         if for_update:

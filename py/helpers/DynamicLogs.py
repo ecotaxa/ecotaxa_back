@@ -19,8 +19,9 @@ LOG_FILE = LOG_FILE_TEMPLATE % 0  # os.getpid()
 
 
 class UTCFormatter(logging.Formatter):
-    converter = time.gmtime
-
+    @staticmethod
+    def converter(timestamp: float | None = None) -> time.struct_time:
+        return time.gmtime(timestamp)
 
 class PerThreadHandler(Handler):
     """

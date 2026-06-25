@@ -19,7 +19,7 @@ def test_collection_taxo_recast(fastapi):
     taxo_recast = {
         "from_to": {
             "12345": 0,
-            "6789": 123,
+            "6789": 25828,
         },
         "doc": {"6789": "Bump up one level"},
     }
@@ -35,7 +35,7 @@ def test_collection_taxo_recast(fastapi):
     taxo_recast = {
         "from_to": {
             "12345": 0,
-            "6789": 123,
+            "6789": 25828,
         },
         "doc": {"6789": "Bump up one level"},
     }

@@ -191,15 +191,6 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         )
         ret = ret.filter(ObjectHeader.objid == any_(object_ids))
         ret = ret.order_by(ObjectHeader.objid, Image.imgid)
-        ret = ret.with_entities(
-            ObjectHeader,
-            ObjectFields,
-            ObjectCNNFeatureVector,
-            Image,
-            Sample,
-            Acquisition,
-            Process,
-        )
 
         if self.first_query:
             logger.info("Query: %s", str(ret))
@@ -342,6 +333,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
             writer.add_classif_log(obj, histo)
         # Do images
         if new_records > 0 and image and image.imgid is not None:
+            assert source_imgid is not None
             # We have an image, with a new imgid
             prev_path = Image.img_from_id_and_orig(source_imgid, image.orig_file_name)
             old_imgpath = Path(self.vault.image_path(prev_path))

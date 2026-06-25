@@ -315,10 +315,6 @@ class _Taxo2Model(DescriptiveModel):
         examples=["54800"],
     )
 
-    model_config = ConfigDict(
-        json_schema_extra={"title": "Create collection request Model"}
-    )
-
 
 _TaxonCentralModelFromDB = combine_models(Taxonomy, _Taxo2Model)
 

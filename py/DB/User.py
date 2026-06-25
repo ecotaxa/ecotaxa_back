@@ -4,7 +4,7 @@
 #
 from datetime import datetime
 from enum import Enum
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, List
 
 from sqlalchemy.orm import mapped_column
 
@@ -59,8 +59,8 @@ class Organization(Model):
     id: Mapped[int] = mapped_column(
         Integer, Sequence("organizations_id_seq"), primary_key=True
     )
-    name: Mapped[str] = mapped_column(String(512), unique=True, nullable=False)
-    directories: Mapped[Optional[str]] = mapped_column(String(2000), nullable=True)
+    name: Mapped[str] = mapped_column(String(512), unique=True)
+    directories: Mapped[str | None] = mapped_column(String(2000))
 
     def __str__(self):
         return "{0} ({1})".format(self.name, self.directories)
@@ -69,14 +69,14 @@ class Organization(Model):
 class Person(Model):
     __tablename__ = "users"
     id: Mapped[int] = mapped_column(Integer, Sequence("seq_users"), primary_key=True)
-    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
-    country: Mapped[Optional[str]] = mapped_column(String(50))
-    orcid: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True)
+    name: Mapped[str] = mapped_column(String(255))
+    country: Mapped[str | None] = mapped_column(String(50))
+    orcid: Mapped[str | None] = mapped_column(String(20))
     type: Mapped[str] = mapped_column(String(10))
-    usercreationdate: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP, default=func.now())
-    organization_id: Mapped[Optional[int]] = mapped_column(
-        INTEGER, ForeignKey("organizations.id"), nullable=True
+    usercreationdate: Mapped[datetime | None] = mapped_column(TIMESTAMP, default=func.now())
+    organization_id: Mapped[int | None] = mapped_column(
+        INTEGER, ForeignKey("organizations.id")
     )
     if TYPE_CHECKING:
         # The relationship(s) are created in Relations.py but the typing here helps IDE
@@ -114,16 +114,16 @@ class Guest(Person):
 
 
 class User(Person):
-    password: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    status: Mapped[Optional[int]] = mapped_column(SmallInteger(), default=1, nullable=True)
-    status_date: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP, nullable=True)
-    status_admin_comment: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    preferences: Mapped[Optional[str]] = mapped_column(String(40000), nullable=True)
-    usercreationreason: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    password: Mapped[str | None] = mapped_column(String(255))
+    status: Mapped[int | None] = mapped_column(SmallInteger(), default=1)
+    status_date: Mapped[datetime | None] = mapped_column(TIMESTAMP)
+    status_admin_comment: Mapped[str | None] = mapped_column(String(255))
+    preferences: Mapped[str | None] = mapped_column(String(40000))
+    usercreationreason: Mapped[str | None] = mapped_column(String(1000))
     # Mail status: True for verified, default NULL
-    mail_status: Mapped[Optional[bool]] = mapped_column(Boolean(), nullable=True)
+    mail_status: Mapped[bool | None] = mapped_column(Boolean())
     # Date the mail status was set
-    mail_status_date: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP, nullable=True)
+    mail_status_date: Mapped[datetime | None] = mapped_column(TIMESTAMP)
     __mapper_args__ = {
         "polymorphic_identity": "user",
     }
@@ -157,7 +157,7 @@ class Role(Model):
 
     __tablename__ = "roles"
     id: Mapped[int] = mapped_column(Integer(), primary_key=True)  # ,Sequence('seq_roles')
-    name: Mapped[str] = mapped_column(String(80), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(80), unique=True)
 
     if TYPE_CHECKING:
         # The relationship(s) are created in Relations.py but the typing here helps IDE
@@ -204,7 +204,7 @@ class Country(Model):
     """
 
     __tablename__ = "countrylist"
-    countryname: Mapped[str] = mapped_column(String(50), primary_key=True, nullable=False)
+    countryname: Mapped[str] = mapped_column(String(50), primary_key=True)
 
 
 @event.listens_for(Country.__table__, "after_create")
@@ -230,9 +230,9 @@ class TempPasswordReset(Model):
         ),
         primary_key=True,
     )
-    temp_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    temp_password: Mapped[str] = mapped_column(String(255))
     creation_date: Mapped[datetime] = mapped_column(
-        TIMESTAMP, default=func.now(), nullable=False
+        TIMESTAMP, default=func.now()
     )
 
 
@@ -247,7 +247,7 @@ class UserQuality(Model):
         ForeignKey("users.id", name="user_quality_user_id_fkey", ondelete="CASCADE"),
         primary_key=True,
     )
-    password_strong: Mapped[bool] = mapped_column(Boolean(), nullable=False)
+    password_strong: Mapped[bool] = mapped_column(Boolean())
     check_date: Mapped[datetime] = mapped_column(
-        TIMESTAMP, default=func.now(), onupdate=func.now(), nullable=False
+        TIMESTAMP, default=func.now(), onupdate=func.now()
     )

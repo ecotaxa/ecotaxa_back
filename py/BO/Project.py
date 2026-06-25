@@ -278,6 +278,7 @@ class ProjectBO(object):
             except TypeError as e:
                 errors.append("Error {} in formula '{}': ".format(str(e), its_def))
         assert len(errors) == 0, "There are formula errors: " + str(errors)
+        assert access is not None, "An access level is required"
         # Field reflexes
         if cnn_network_id != self._project.cnn_network_id:
             # Delete CNN features, which depend on the CNN network
@@ -930,7 +931,7 @@ class ProjectBO(object):
         Recompute sun position for all objects.
         :return the number of objects with sun position changed
         """
-        used_fields = sorted(USED_FIELDS_FOR_SUNPOS)
+        used_fields: List[str] = sorted(USED_FIELDS_FOR_SUNPOS)
         qry_cols = [ObjectHeader.objid, ObjectHeader.sunpos] + [
             getattr(ObjectHeader, fld) for fld in used_fields
         ]

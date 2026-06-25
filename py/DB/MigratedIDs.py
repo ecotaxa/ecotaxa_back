@@ -3,15 +3,16 @@
 # Copyright (C) 2015-2026  Picheral, Colin, Irisson (UPMC-CNRS)
 
 from sqlalchemy import Index
+from sqlalchemy.orm import mapped_column
 
-from .helpers.ORM import Column, Model
+from .helpers.ORM import Model, Mapped
 from .helpers.Postgres import BIGINT, INTEGER
 
 
 class ObjidOld2New(Model):
     __tablename__ = "objid_old_2_new"
-    old_id = Column(BIGINT, primary_key=True, autoincrement=False)
-    new_id = Column(BIGINT, nullable=False)
+    old_id: Mapped[int] = mapped_column(BIGINT, primary_key=True, autoincrement=False)
+    new_id: Mapped[int] = mapped_column(BIGINT)
 
 
 Index(
@@ -30,14 +31,14 @@ Index(
 
 class SampleIdOld2New(Model):
     __tablename__ = "samid_old_2_new"
-    old_id = Column(INTEGER, primary_key=True, autoincrement=False)
-    new_id = Column(BIGINT, nullable=False)
+    old_id: Mapped[int] = mapped_column(INTEGER, primary_key=True, autoincrement=False)
+    new_id: Mapped[int] = mapped_column(BIGINT)
 
 
 class AcquisIdOld2New(Model):
     __tablename__ = "acqid_old_2_new"
-    old_id = Column(INTEGER, primary_key=True, autoincrement=False)
-    new_id = Column(BIGINT, nullable=False)
+    old_id: Mapped[int] = mapped_column(INTEGER, primary_key=True, autoincrement=False)
+    new_id: Mapped[int] = mapped_column(BIGINT)
 
 
 Index(

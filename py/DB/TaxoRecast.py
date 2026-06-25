@@ -3,11 +3,13 @@
 # Copyright (C) 2015-2023  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 from enum import Enum
+from typing import Any
 
 from sqlalchemy import Identity
+from sqlalchemy.orm import mapped_column
 
-from DB.helpers.ORM import Model
-from .helpers.DDL import Column, ForeignKey
+from DB.helpers.ORM import Model, Mapped
+from .helpers.DDL import ForeignKey
 from .helpers.Postgres import VARCHAR, INTEGER, JSONB
 
 
@@ -34,22 +36,22 @@ class TaxoRecast(Model):
     """
 
     __tablename__ = "taxo_recast"
-    recast_id = Column(INTEGER, Identity(always=True), primary_key=True)
+    recast_id: Mapped[int] = mapped_column(INTEGER, Identity(always=True), primary_key=True)
     # The context is: all projects in this specific collection
-    collection_id: int = Column(
-        INTEGER, ForeignKey("collection.id", ondelete="CASCADE"), nullable=True
+    collection_id: Mapped[int | None] = mapped_column(
+        INTEGER, ForeignKey("collection.id", ondelete="CASCADE")
     )
     # The context is: this specific project
-    project_id: int = Column(
-        INTEGER, ForeignKey("projects.projid", ondelete="CASCADE"), nullable=True
+    project_id: Mapped[int | None] = mapped_column(
+        INTEGER, ForeignKey("projects.projid", ondelete="CASCADE")
     )
     # During this operation
-    operation: str = Column(VARCHAR(32), nullable=False)
+    operation: Mapped[str] = mapped_column(VARCHAR(32))
     # Transforms in the form of a JSON object {from:to}, both taxa IDs, but from is a str
     # with 'to being null' means "filter out". Do some JSONB in case we need to query there.
-    transforms = Column(JSONB, nullable=False)
+    transforms: Mapped[Any] = mapped_column(JSONB)
     # Some doc per transform, JSON object with {from:doc}, from being str(ID) and doc being string
-    documentation = Column(JSONB, nullable=False)
+    documentation: Mapped[Any] = mapped_column(JSONB)
 
     def __str__(self):
         return "{0}/{1}/{2}".format(self.collection_id, self.project_id, self.operation)

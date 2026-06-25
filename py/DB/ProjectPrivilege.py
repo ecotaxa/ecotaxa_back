@@ -4,7 +4,9 @@
 #
 from typing import TYPE_CHECKING
 
-from .helpers.DDL import Column, Sequence, ForeignKey, Index
+from sqlalchemy.orm import mapped_column
+
+from .helpers.DDL import Sequence, ForeignKey, Index
 from .helpers.ORM import Model, Mapped
 from .helpers.Postgres import VARCHAR, INTEGER
 
@@ -22,22 +24,22 @@ class ProjectPrivilege(Model):
 
     __tablename__ = "projectspriv"
     # TODO: Isn't there a natural PK with all columns?
-    id: int = Column(INTEGER, Sequence("seq_projectspriv"), primary_key=True)
+    id: Mapped[int] = mapped_column(INTEGER, Sequence("seq_projectspriv"), primary_key=True)
 
     # links
-    projid: int = Column(
-        INTEGER, ForeignKey("projects.projid", ondelete="CASCADE"), nullable=False
+    projid: Mapped[int] = mapped_column(
+        INTEGER, ForeignKey("projects.projid", ondelete="CASCADE")
     )
     # TODO: Same as project: if a user is gone, no interest in keeping its privileges.
     # OTOH we don't so far (17 Aug 2020) delete users.
-    member: int = Column(
-        INTEGER, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    member: Mapped[int] = mapped_column(
+        INTEGER, ForeignKey("users.id", ondelete="CASCADE")
     )
 
     # association value
-    privilege = Column(VARCHAR(255), nullable=False)
+    privilege: Mapped[str] = mapped_column(VARCHAR(255))
     # complement of the privilege, so far just 'C' for Contact who is a manager
-    extra = Column(VARCHAR(1), nullable=True)
+    extra: Mapped[str | None] = mapped_column(VARCHAR(1))
 
     if TYPE_CHECKING:
         # The relationship(s) are created in Relations.py but the typing here helps IDE

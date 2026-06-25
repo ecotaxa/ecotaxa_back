@@ -2,12 +2,15 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+from datetime import datetime
 from enum import Enum
 from typing import List
 
-from .helpers.DDL import Index, Column, Sequence, ForeignKey
+from sqlalchemy.orm import mapped_column
+
+from .helpers.DDL import Index, Sequence, ForeignKey
 from .helpers.Direct import func
-from .helpers.ORM import Model
+from .helpers.ORM import Model, Mapped
 from .helpers.Postgres import VARCHAR, INTEGER, CHAR, TIMESTAMP
 
 TaxonomyIDT = int
@@ -39,32 +42,32 @@ class Taxonomy(Model):
 
     __tablename__ = "taxonomy"
     # TODO: Remove the sequence. In fact, the unicity comes from EcoTaxoServer
-    id: int = Column(INTEGER, Sequence("seq_taxonomy"), primary_key=True)
-    parent_id = Column(INTEGER)
-    aphia_id = Column(INTEGER)
-    rank = Column(VARCHAR(24))
-    name: str = Column(VARCHAR(100), nullable=False)
-    taxotype: str = Column(
-        CHAR(1), nullable=False, server_default="P"
+    id: Mapped[int] = mapped_column(INTEGER, Sequence("seq_taxonomy"), primary_key=True)
+    parent_id: Mapped[int | None] = mapped_column(INTEGER)
+    aphia_id: Mapped[int | None] = mapped_column(INTEGER)
+    rank: Mapped[str | None] = mapped_column(VARCHAR(24))
+    name: Mapped[str] = mapped_column(VARCHAR(100))
+    taxotype: Mapped[str] = mapped_column(
+        CHAR(1), server_default="P"
     )  # P = Phylo , M = Morpho
     # display_name is suffixed in EcoTaxoServer with (Deprecated) when taxostatus is 'D'
-    display_name = Column(VARCHAR(200))  # Unique, to disambiguate ties in names
-    lastupdate_datetime = Column(TIMESTAMP(precision=0))
-    id_instance = Column(INTEGER)
-    taxostatus: str = Column(
-        CHAR(1), nullable=False, server_default="A"
+    display_name: Mapped[str | None] = mapped_column(VARCHAR(200))  # Unique, to disambiguate ties in names
+    lastupdate_datetime: Mapped[datetime | None] = mapped_column(TIMESTAMP(precision=0))
+    id_instance: Mapped[int | None] = mapped_column(INTEGER)
+    taxostatus: Mapped[str] = mapped_column(
+        CHAR(1), server_default="A"
     )  # N = Not approved, A = Approved, D = Deprecated
     # Was used to store temporarily a target id which current taxon should join
     # with all its assigned objects. Then the original category was deleted. So there is (as of 24/08/2021)
     # no DB line with this value set.
     # Is now used to store the _advised_ target taxon for a mass category change.
-    rename_to = Column(INTEGER)
-    source_url = Column(VARCHAR(200))
-    source_desc = Column(VARCHAR(1000))
-    creator_email = Column(VARCHAR(255))
-    creation_datetime = Column(TIMESTAMP(precision=0))
-    nbrobj = Column(INTEGER)  # Number of objects with this as classif_id
-    nbrobjcum = Column(
+    rename_to: Mapped[int | None] = mapped_column(INTEGER)
+    source_url: Mapped[str | None] = mapped_column(VARCHAR(200))
+    source_desc: Mapped[str | None] = mapped_column(VARCHAR(1000))
+    creator_email: Mapped[str | None] = mapped_column(VARCHAR(255))
+    creation_datetime: Mapped[datetime | None] = mapped_column(TIMESTAMP(precision=0))
+    nbrobj: Mapped[int | None] = mapped_column(INTEGER)  # Number of objects with this as classif_id
+    nbrobjcum: Mapped[int | None] = mapped_column(
         INTEGER
     )  # Number of objects with this, or any descendant, as classif_id
 
@@ -86,8 +89,8 @@ class TaxonomyTreeInfo(Model):
     """
 
     __tablename__ = "persistantdatatable"  # The most pleonasmic DB table name _ever_
-    id = Column(INTEGER, primary_key=True)
-    lastserverversioncheck_datetime = Column(TIMESTAMP(precision=0))
+    id: Mapped[int] = mapped_column(INTEGER, primary_key=True)
+    lastserverversioncheck_datetime: Mapped[datetime | None] = mapped_column(TIMESTAMP(precision=0))
 
 
 class TaxonomyChangeLog(Model):
@@ -98,32 +101,29 @@ class TaxonomyChangeLog(Model):
 
     __tablename__ = "taxo_change_log"
     # _all_ objects with this category...
-    from_id = Column(
+    from_id: Mapped[int] = mapped_column(
         INTEGER,
         ForeignKey("taxonomy.id", ondelete="CASCADE"),
-        nullable=False,
         primary_key=True,
     )
     # ...moved to this category...
-    to_id = Column(
+    to_id: Mapped[int] = mapped_column(
         INTEGER,
         ForeignKey("taxonomy.id", ondelete="CASCADE"),
-        nullable=False,
         primary_key=True,
     )
     # ...in this project...
-    project_id = Column(
+    project_id: Mapped[int] = mapped_column(
         INTEGER,
         ForeignKey("projects.projid", ondelete="CASCADE"),
-        nullable=False,
         primary_key=True,
     )
     # ...for this reason.
-    why = Column(VARCHAR(1), nullable=False)
+    why: Mapped[str] = mapped_column(VARCHAR(1))
     # It impacted this number of objects
-    impacted = Column(INTEGER, nullable=False)
+    impacted: Mapped[int] = mapped_column(INTEGER)
     # And occurred at this date
-    occurred_on = Column(TIMESTAMP, nullable=False)
+    occurred_on: Mapped[datetime] = mapped_column(TIMESTAMP)
 
     def __str__(self):
         return "{0}->{1} on {2}".format(self.from_id, self.to_id, self.occurred_on)

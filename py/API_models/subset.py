@@ -4,7 +4,7 @@
 #
 from enum import Enum
 
-from API_models.filters import LaxProjectFilters
+from API_models.filters import ProjectFiltersDict
 from helpers.pydantic import BaseModel, Field
 
 
@@ -23,10 +23,10 @@ class GroupDefinitions(str, Enum):
 class SubsetReq(BaseModel):
     """Subset request."""
 
-    filters: LaxProjectFilters = Field(
+    filters: ProjectFiltersDict = Field(
         title="Filters",
         description="The filters to apply to project.",
-        default_factory=dict,
+        default_factory=ProjectFiltersDict,
         examples=[{"freenum": "n01", "freenumst": "0"}],
     )
     dest_prj_id: int = Field(

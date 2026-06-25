@@ -15,8 +15,9 @@ from sqlalchemy.dialects.postgresql import (
     INTEGER,
     TIMESTAMP,
 )
+from sqlalchemy.orm import mapped_column
 
-from .helpers.DDL import Column, ForeignKey, Index
+from .helpers.DDL import ForeignKey, Index
 from .helpers.ORM import Mapped
 from .helpers.ORM import Model
 
@@ -32,18 +33,18 @@ IN_PROGRESS_DATE = datetime.fromtimestamp(0)
 class Training(Model):
     __tablename__ = "training"
     # Below, SQLA/Alembic automatically makes column SERIAL, sequence from PG is 'training_training_id_seq'
-    training_id: int = Column(INTEGER, primary_key=True)
+    training_id: Mapped[int] = mapped_column(INTEGER, primary_key=True)
     # The target project.
-    projid: int = Column(
-        INTEGER, ForeignKey("projects.projid", ondelete="CASCADE"), nullable=True
+    projid: Mapped[int | None] = mapped_column(
+        INTEGER, ForeignKey("projects.projid", ondelete="CASCADE")
     )
     # Who launched or is responsible for the training operation
-    training_author: int = Column(INTEGER, ForeignKey("users.id"), nullable=False)
+    training_author: Mapped[int] = mapped_column(INTEGER, ForeignKey("users.id"))
     # When it occurred
-    training_start: datetime = Column(TIMESTAMP, nullable=False)
-    training_end: datetime = Column(TIMESTAMP, nullable=False)
+    training_start: Mapped[datetime] = mapped_column(TIMESTAMP)
+    training_end: Mapped[datetime] = mapped_column(TIMESTAMP)
     # The settings used?
-    training_path: str = Column(VARCHAR(80), nullable=False)
+    training_path: Mapped[str] = mapped_column(VARCHAR(80))
 
     if TYPE_CHECKING:
         # The relationship(s) are created in Relations.py but the typing here helps IDE

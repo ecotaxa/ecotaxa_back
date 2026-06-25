@@ -2,11 +2,13 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2021  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Sequence, Column, ForeignKey, TIMESTAMP
+from sqlalchemy import Sequence, ForeignKey, TIMESTAMP
 from sqlalchemy.dialects.postgresql import VARCHAR, INTEGER
+from sqlalchemy.orm import mapped_column
 
 from .helpers.ORM import Model, Mapped
 
@@ -37,34 +39,34 @@ class Job(Model):
 
     __tablename__ = "job"
     # Starting 2024 Feb 02, we archive jobs by negating their ids
-    id: int = Column(INTEGER, Sequence("seq_temp_tasks"), primary_key=True)
+    id: Mapped[int] = mapped_column(INTEGER, Sequence("seq_temp_tasks"), primary_key=True)
     """ Unique identifier, from a sequence """
-    owner_id: int = Column(INTEGER, ForeignKey("users.id"), nullable=False)
+    owner_id: Mapped[int] = mapped_column(INTEGER, ForeignKey("users.id"))
     """ The user who created and thus owns the job """
-    type: str = Column(VARCHAR(80), nullable=False)
+    type: Mapped[str] = mapped_column(VARCHAR(80))
     """ The job type, e.g. import, export... """
-    params = Column(VARCHAR())
+    params: Mapped[str | None] = mapped_column(VARCHAR())
     """ JSON-encoded startup parameters """
-    state = Column(VARCHAR(1))
+    state: Mapped[str | None] = mapped_column(VARCHAR(1))
     """ What the job is doing """
-    step = Column(INTEGER)
+    step: Mapped[int | None] = mapped_column(INTEGER)
     """ Where in the workflow the job is """
-    progress_pct = Column(INTEGER)
+    progress_pct: Mapped[int | None] = mapped_column(INTEGER)
     """ The progress percentage for UI """
-    progress_msg = Column(VARCHAR())
+    progress_msg: Mapped[str | None] = mapped_column(VARCHAR())
     """ The message for UI, short version """
-    messages = Column(VARCHAR())
+    messages: Mapped[str | None] = mapped_column(VARCHAR())
     """ The messages for UI, long version """
-    inside = Column(VARCHAR())
+    inside: Mapped[str | None] = mapped_column(VARCHAR())
     """ JSON-encoded internal state, to use b/w steps """
-    question = Column(VARCHAR())
+    question: Mapped[str | None] = mapped_column(VARCHAR())
     """ JSON-encoded last question data """
-    reply = Column(VARCHAR())
+    reply: Mapped[str | None] = mapped_column(VARCHAR())
     """ JSON-encoded reply to last question """
-    result = Column(VARCHAR())
+    result: Mapped[str | None] = mapped_column(VARCHAR())
     """ JSON-encoded execution result """
-    creation_date = Column(TIMESTAMP, nullable=False)
-    updated_on = Column(TIMESTAMP, nullable=False)
+    creation_date: Mapped[datetime] = mapped_column(TIMESTAMP)
+    updated_on: Mapped[datetime] = mapped_column(TIMESTAMP)
     """ Last time that anything changed in present line """
 
     if TYPE_CHECKING:

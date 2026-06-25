@@ -126,14 +126,6 @@ class OrganizationService(Service):
             return []
         return [a_rec for a_rec in qry]
 
-    def search_organizations(self, by_name: Optional[str]) -> List[str]:
-        qry = self.ro_session.query(Organization)
-        if by_name is not None:
-            qry = qry.filter(Organization.name.ilike(by_name))
-        else:
-            return []
-        return [a_rec for a_rec in qry]
-
     def list(
         self,
         current_user_id: UserIDT,
