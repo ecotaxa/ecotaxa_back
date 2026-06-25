@@ -12,7 +12,7 @@ down_revision = "0a3132f436fb"
 
 import sqlalchemy as sa
 from alembic import op
-from pgvector.sqlalchemy import Vector  # type:ignore
+from pgvector.sqlalchemy import Vector  # type: ignore
 
 
 def upgrade():
@@ -24,8 +24,7 @@ def upgrade():
         sa.ForeignKeyConstraint(["objcnnid"], ["obj_head.objid"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("objcnnid"),
     )
-    op.execute(
-        """
+    op.execute("""
         INSERT INTO obj_cnn_features_vector (objcnnid, features)
         SELECT objcnnid, ARRAY[cnn01, cnn02, cnn03, cnn04, cnn05, cnn06, cnn07, cnn08, cnn09, cnn10, 
         cnn11, cnn12, cnn13, cnn14, cnn15, cnn16, cnn17, cnn18, cnn19, cnn20, 
@@ -33,13 +32,10 @@ def upgrade():
         cnn31, cnn32, cnn33, cnn34, cnn35, cnn36, cnn37, cnn38, cnn39, cnn40, 
         cnn41, cnn42, cnn43, cnn44, cnn45, cnn46, cnn47, cnn48, cnn49, cnn50]::vector 
         FROM obj_cnn_features
-    """
-    )
-    op.execute(
-        """
+    """)
+    op.execute("""
         GRANT SELECT ON obj_cnn_features_vector TO readerole
-        """
-    )
+        """)
     op.drop_table("obj_cnn_features")
     # ### end Alembic commands ###
 

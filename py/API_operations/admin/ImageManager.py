@@ -69,7 +69,7 @@ class ImageManagerService(Service):
             obj_imgs_without_images = [rec for rec in qry]
         for imgid, orig_file_name in obj_imgs_without_images:
             cnt += 1
-            img_file = ImageFile(imgid=imgid)  # type: ignore
+            img_file = ImageFile(imgid=imgid)
             self.session.add(img_file)
             self._md5_on_record(img_file, imgid, orig_file_name)
             if cnt % 1000 == 0:
@@ -104,7 +104,7 @@ class ImageManagerService(Service):
                 missing_ones = [an_img_file for an_img_file in miss_qry]
             for imgid, orig_file_name in missing_ones:
                 cnt += 1
-                img_file = ImageFile(imgid=imgid)  # type: ignore
+                img_file = ImageFile(imgid=imgid)
                 self._md5_on_record(img_file, imgid, orig_file_name)
                 if cnt % 1000 == 0:
                     self.session.commit()

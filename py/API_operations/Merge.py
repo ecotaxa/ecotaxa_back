@@ -356,7 +356,7 @@ class MergeService(Service):
                     ObjectFields.acquis_id == any_(list(common_acquisitions.keys()))
                 )
             upd_rowcount = self.session.execute(upd).rowcount  # type: ignore # case1
-            table_name = a_fk_to_proj_tbl.__tablename__  # type: ignore # case7
+            table_name = a_fk_to_proj_tbl.__tablename__
             logger.info("Update in %s: %s rows", table_name, upd_rowcount)
 
         # Acquisition & twin Process have followed their enclosing Sample

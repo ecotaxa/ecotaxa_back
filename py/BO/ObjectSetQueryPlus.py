@@ -22,6 +22,7 @@ from typing import (
     Callable,
     Final,
     Union,
+    cast,
 )
 
 from BO.Classification import ClassifIDT
@@ -72,11 +73,11 @@ class ResultGrouping(enum.IntEnum):
 
     @classmethod
     def without_taxo(cls, val: "ResultGrouping") -> "ResultGrouping":
-        return val & ~cls.BY_TAXO  # type:ignore
+        return cast("ResultGrouping", val & ~cls.BY_TAXO)
 
     @classmethod
     def with_status(cls, val: "ResultGrouping") -> "ResultGrouping":
-        return val + cls.BY_STATUS  # type:ignore
+        return cast("ResultGrouping", val + cls.BY_STATUS)
 
 
 class ObjectSetQueryPlus(object):

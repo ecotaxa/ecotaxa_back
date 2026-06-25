@@ -47,11 +47,11 @@ class DwcArchive(object):
         ]
         for a_file in all_files:
             # Write the objects into real files
-            dest_file = parent_dir / a_file.name  # type:ignore
+            dest_file = parent_dir / a_file.name  # type: ignore
             with open(dest_file, "w") as fd:
-                fd.write(a_file.content())  # type:ignore
+                fd.write(a_file.content())  # type: ignore
             # Add them to the zip
-            zipfile.write(filename=dest_file, arcname=a_file.name)  # type:ignore
+            zipfile.write(filename=dest_file, arcname=a_file.name)  # type: ignore
 
 
 # camelCase is not good for concatenating acronyms

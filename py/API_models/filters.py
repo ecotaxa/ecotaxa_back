@@ -1,6 +1,5 @@
-from typing import Any, Optional
+from typing import Optional, cast, Dict
 
-from pydantic import model_validator
 from typing_extensions import TypedDict
 
 from API_models.helpers.TypedDictToModel import typed_dict_to_model
@@ -265,23 +264,9 @@ ProjectFiltersModel = typed_dict_to_model(ProjectFiltersDict, _ProjectFilters2Mo
 
 
 class ProjectFilters(ProjectFiltersModel):
-    def get(self, key: str, default: Any = None) -> Any:
-        # Pydantic v2 has its own __getattr__ but we want to mimic .get() for dict-like access
-        if key in self.model_fields:
-            return getattr(self, key)
-        return default
-
     def base(self) -> ProjectFiltersDict:
-        return self.model_dump()  # type: ignore
+        return cast(ProjectFiltersDict, self.model_dump())
 
-    def min_base(self) -> ProjectFiltersDict:
-        return {k: v for k, v in self.model_dump().items() if v}  # type: ignore
-
-
-class LaxProjectFilters(ProjectFilters):
-    @model_validator(mode="before")
-    @classmethod
-    def allow_empty_list_or_none(cls, v: Any) -> Any:
-        if v == [] or v is None:
-            return {}
-        return v
+    def min_base(self) -> Dict:
+        # Only dump (few) valuated filters
+        return {k: v for k, v in self.base().items() if v}

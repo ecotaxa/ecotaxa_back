@@ -49,9 +49,9 @@ def upgrade():
     op.drop_column("obj_head", "img0id")
     op.drop_column("obj_head", "imgcount")
     # ### end Alembic commands ###
-    from db_upg.versions.a74a857fe352_no_dup_fk_in_objects import (  # type:ignore
-        OBJECTS_DDL_a74a857fe352,  # type:ignore
-    )  # type:ignore
+    from db_upg.versions.a74a857fe352_no_dup_fk_in_objects import (  # type: ignore
+        OBJECTS_DDL_a74a857fe352,  # type: ignore
+    )  # type: ignore
 
     op.execute(OBJECTS_DDL_a74a857fe352)
 

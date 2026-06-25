@@ -8,7 +8,6 @@
 from typing import List
 
 from sqlalchemy import Table, text
-from sqlalchemy_views import CreateView, DropView  # type: ignore # case6
 
 OBJECTS_DEF = """
 SELECT prj.projid,

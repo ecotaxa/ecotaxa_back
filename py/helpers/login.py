@@ -7,10 +7,11 @@
 import base64
 import hashlib
 import hmac
+
 # TODO: if it exists, find the stubs somewhere
 from typing import Union
 
-from passlib.context import CryptContext  # type: ignore
+from passlib.context import CryptContext
 from sqlalchemy import select, func
 
 from API_operations.helpers.Service import Service

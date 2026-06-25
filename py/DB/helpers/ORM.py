@@ -42,7 +42,8 @@ from sqlalchemy.orm import (
     joinedload,
     subqueryload,
     selectinload,
-    InstrumentedAttribute, DeclarativeBase,
+    InstrumentedAttribute,
+    DeclarativeBase,
 )
 # noinspection PyUnresolvedReferences
 from sqlalchemy.orm import relationship, RelationshipProperty, aliased, Mapped
@@ -58,14 +59,12 @@ from sqlalchemy.sql.selectable import Alias
 from . import Session
 
 
-class Model(DeclarativeBase):  # type: ignore
-    # __abstract__ = True  # prevent SQLAlchemy from trying to map
-    # __allow_unmapped__ = True
-    # __tablename__: str
-    __abstract__ = True
-    # All our models are based on Tables. In theory it's a FromClause, but not here.
+class Model(DeclarativeBase):
+    __abstract__ = (
+        True  # TODO: Should not be needed that high. Maybe in some child classes.
+    )
+    # All our models are based on Tables. In general case it's a FromClause, but not here.
     __table__: ClassVar[Table]
-
 
 
 # Just forD fun :)
@@ -209,12 +208,12 @@ def minimal_model_of(
 
 
 def any_(items_list: Union[List[int], List[str]]) -> CollectionAggregate[bool]:
-    # TODO: Get proper mapping, it seems a bit too much for sqlalchemy-stubs
+    # TODO: Still useful with SQL V2?
     # noinspection PyTypeChecker
-    return _pg_any(items_list)  # type: ignore
+    return _pg_any(items_list)
 
 
 def all_(items_list: Union[List[int], List[str]]):
-    # TODO: Get proper mapping, it seems a bit too much for sqlalchemy-stubs
+    # TODO: Still useful with SQL V2?
     # noinspection PyTypeChecker
-    return _pg_all(items_list)  # type: ignore
+    return _pg_all(items_list)

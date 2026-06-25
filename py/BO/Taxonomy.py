@@ -545,7 +545,7 @@ class TaxonBOSet(object):
                 nbobj1,
                 nbobj2,
                 lineage,
-                lineage_id,  # type: ignore
+                lineage_id,
                 lineage_status,
                 rename_id=rename_id,
                 aphia_id=aphia_id,

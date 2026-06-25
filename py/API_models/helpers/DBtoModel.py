@@ -53,9 +53,9 @@ def combine_models(
         # https://docs.pydantic.dev/2.7/migration/#required-optional-and-nullable-fields
         if field_info.default != PydanticUndefined:
             # A default was provided in the description
-            python_type = Optional[python_type]  # type: ignore
+            python_type = Optional[python_type]  # type: ignore[assignment]
         elif column.nullable:
-            python_type = Optional[python_type]  # type: ignore
+            python_type = Optional[python_type]  # type: ignore[assignment]
             field_info = FieldInfo.merge_field_infos(field_info, default=None)
         elif column.default is not None and type(column.default) in (str, int, float):
             field_info = FieldInfo.merge_field_infos(field_info, default=column.default)

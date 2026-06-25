@@ -10,7 +10,7 @@ from BO.Rights import RightsBO, Action
 from DB.Instrument import Instrument
 from DB.User import Role, User, Country, Organization
 from DB.Views import views_creation_queries, views_deletion_queries
-from cmds.db_upg.db_conn import app_config  # type:ignore
+from cmds.db_upg.db_conn import app_config  # type: ignore
 from data.Countries import countries_by_name
 from data.Instruments import DEFAULT_INSTRUMENTS
 

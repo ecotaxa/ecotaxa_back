@@ -5,10 +5,6 @@
 # After SQL alchemy models are defined individually, setup the relations b/w them
 #
 
-from .Project import Project
-from .Instrument import Instrument
-from .Taxonomy import Taxonomy
-from .Prediction import Prediction
 from .Acquisition import Acquisition
 from .CNNFeatureVector import ObjectCNNFeatureVector
 from .Collection import (
@@ -18,12 +14,16 @@ from .Collection import (
     CollectionProject,
 )
 from .Image import Image
+from .Instrument import Instrument
 from .Job import Job
 from .Object import ObjectHeader, ObjectsClassifHisto, ObjectFields
+from .Prediction import Prediction
 from .Process import Process
+from .Project import Project
 from .ProjectPrivilege import ProjectPrivilege
 from .ProjectVariables import ProjectVariables
 from .Sample import Sample
+from .Taxonomy import Taxonomy
 from .Training import Training
 from .User import (
     User,
@@ -33,7 +33,6 @@ from .User import (
     UserRole,
 )
 from .UserPreferences import UserPreferences
-
 from .helpers.ORM import relationship
 
 # User
@@ -47,9 +46,7 @@ User.organization = relationship(Organization, uselist=False, lazy="joined")
 # Guest organization
 Guest.organization = relationship(Organization, uselist=False, lazy="joined")
 # Collection
-Collection.projects = relationship(
-    Project, secondary=CollectionProject.__table__
-)
+Collection.projects = relationship(Project, secondary=CollectionProject.__table__)
 Collection.contact_user = relationship(
     User,
     foreign_keys=[Collection.__table__.c.contact_user_id],
@@ -65,7 +62,7 @@ Collection.organisations_by_role = relationship(CollectionOrgaRole, viewonly=Tru
 
 CollectionUserRole.collection = relationship(Collection, uselist=False)
 CollectionUserRole.user = relationship(User, uselist=False)
-CollectionUserRole.guest = relationship(Guest, uselist=False)  # type: ignore # case2
+CollectionUserRole.guest = relationship(Guest, uselist=False)
 
 CollectionOrgaRole.collection = relationship(Collection, uselist=False)
 CollectionOrgaRole.organization = relationship(

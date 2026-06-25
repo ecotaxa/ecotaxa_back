@@ -80,11 +80,12 @@ def dataclass_to_model(
         elif type(fld_type) == _GenericAlias:
             # A typing e.g. typing.List[BO.UserBO]
             if typing.get_origin(fld_type) == list:
+                contained_class: type
                 (contained_class,) = typing.get_args(fld_type)
                 if contained_class in BASE_TYPES:
-                    fld_type = List[contained_class]  # type: ignore
+                    fld_type = List[contained_class]  # type: ignore[valid-type]
                 elif dataclasses.is_dataclass(contained_class):
-                    fld_type = List[dataclass_to_model(contained_class)]  # type: ignore
+                    fld_type = List[dataclass_to_model(contained_class)]  # type: ignore[misc]
                 else:
                     raise Exception(
                         "Not list of unknown :", fld_type, contained_class

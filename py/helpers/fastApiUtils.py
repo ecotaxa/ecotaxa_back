@@ -22,7 +22,12 @@ from fastapi import FastAPI, Depends, HTTPException
 from fastapi.openapi.models import OAuthFlows as OAuthFlowsModel
 from fastapi.security import OAuth2
 from fastapi.security.utils import get_authorization_scheme_param
-from itsdangerous import URLSafeTimedSerializer, TimestampSigner, SignatureExpired, BadSignature  # type: ignore
+from itsdangerous import (
+    URLSafeTimedSerializer,
+    TimestampSigner,
+    SignatureExpired,
+    BadSignature,
+)
 from pydantic.main import BaseModel
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request

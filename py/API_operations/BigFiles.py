@@ -121,7 +121,7 @@ async def get_on_complete_handler(
         return lambda *_: None
 
     return lambda file_path, metadata: on_tus_upload_complete(
-        file_path, metadata, current_user_id  # type:ignore
+        file_path, metadata, current_user_id
     )
 
 

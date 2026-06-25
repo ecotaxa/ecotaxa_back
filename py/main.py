@@ -31,6 +31,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.logger import logger as fastapi_logger
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.templating import Jinja2Templates
+
 # from fastapi_utils.timing import add_timing_middleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
@@ -70,7 +71,8 @@ from API_models.exports import (
     BackupExportReq,
 )
 from API_models.filesystem import DirectoryModel
-from API_models.filters import LaxProjectFilters
+from API_models.filters import Optional, ProjectFilters
+
 from API_models.helpers.Introspect import plain_columns
 from API_models.imports import ImportReq, SimpleImportRsp, SimpleImportReq, ImportRsp
 from API_models.login import LoginReq
@@ -1723,7 +1725,7 @@ def project_dump(
     project_id: int = Path(
         ..., description="Internal, numeric id of the project.", example=1
     ),
-    filters: LaxProjectFilters = Body(None),
+    filters: ProjectFilters = Body(...),
     current_user: int = Depends(get_current_user),
 ) -> None:
     """
@@ -2092,7 +2094,7 @@ def object_similarity_search(
         description="Return at maximum this number of object IDs, by default 100.",
         example="120",
     ),
-    filters: LaxProjectFilters = Body(None),
+    filters: ProjectFilters = Body(...),
     current_user: Optional[int] = Depends(get_optional_current_user),
 ) -> SimilaritySearchRsp:
     """
@@ -2401,7 +2403,7 @@ async def get_object_set(
     project_id: int = Path(
         ..., description="Internal, numeric id of the project.", example=1
     ),
-    filters: LaxProjectFilters = Body(None),
+    filters: ProjectFilters = Body(...),
     fields: Optional[str] = Query(
         title="Fields",
         description="""
@@ -2519,7 +2521,7 @@ def get_object_set_summary(
         title="Only total",
         description="If True, returns only the **Total number of objects**. Else returns also the **Number of validated ones**, the **number of Dubious ones** and the number of **predicted ones**.",
     ),
-    filters: LaxProjectFilters = Body(None),
+    filters: ProjectFilters = Body(...),
     current_user: Optional[int] = Depends(get_optional_current_user),
 ) -> ObjectSetSummaryRsp:
     """For the given project, with given filters, **return the classification summary**.
@@ -2557,7 +2559,7 @@ def force_object_set_to_predicted(
     project_id: int = Path(
         ..., description="Internal, numeric id of the project.", example=1
     ),
-    filters: LaxProjectFilters = Body(None),
+    filters: ProjectFilters = Body(...),
     current_user: int = Depends(get_current_user),
 ) -> None:
     """
@@ -2580,7 +2582,7 @@ def revert_object_set_to_history(
     project_id: int = Path(
         ..., description="Internal, numeric id of the project.", example=1
     ),
-    filters: LaxProjectFilters = Body(None),
+    filters: ProjectFilters = Body(...),
     dry_run: bool = Query(
         ...,
         title="Dry run",
@@ -2624,7 +2626,7 @@ def reclassify_object_set(
     project_id: int = Path(
         ..., description="Internal, numeric id of the project.", example=1
     ),
-    filters: LaxProjectFilters = Body(None),
+    filters: ProjectFilters = Body(...),
     forced_id: ClassifIDT = Query(
         ..., title="Forced Id", description="The new classification Id.", example=23025
     ),
@@ -2815,7 +2817,7 @@ async def query_object_set_parents(  # MyORJSONResponse -> JSONResponse -> Respo
     response_model=ExportRsp,
 )
 def export_object_set(
-    filters: LaxProjectFilters = Body(None),
+    filters: ProjectFilters = Body(...),
     request: ExportReq = Body(..., deprecated=True),
     current_user: int = Depends(get_current_user),
 ) -> ExportRsp:
@@ -2839,7 +2841,7 @@ def export_object_set(
     response_model=ExportRsp,
 )
 def export_object_set_general(
-    filters: LaxProjectFilters = Body(None),
+    filters: ProjectFilters = Body(...),
     request: GeneralExportReq = Body(...),
     current_user: int = Depends(get_current_user),
 ) -> ExportRsp:
@@ -2861,7 +2863,7 @@ def export_object_set_general(
     response_model=ExportRsp,
 )
 def export_object_set_summary(
-    filters: LaxProjectFilters = Body(None),
+    filters: ProjectFilters = Body(...),
     request: SummaryExportReq = Body(...),
     current_user: int = Depends(get_current_user),
 ) -> ExportRsp:
@@ -2883,7 +2885,7 @@ def export_object_set_summary(
     response_model=ExportRsp,
 )
 def export_object_set_backup(
-    filters: LaxProjectFilters = Body(None),
+    filters: ProjectFilters = Body(...),
     request: BackupExportReq = Body(...),
     current_user: int = Depends(get_current_user),
 ) -> ExportRsp:
@@ -2906,7 +2908,7 @@ def export_object_set_backup(
     response_model=PredictionRsp,
 )
 def predict_object_set(
-    filters: LaxProjectFilters = Body(None),
+    filters: ProjectFilters = Body(...),
     request: PredictionReq = Body(...),
     current_user: int = Depends(get_current_user),
 ) -> PredictionRsp:
@@ -3348,6 +3350,7 @@ def get_taxon_in_central(
 # noinspection PyUnusedLocal
 @app.put("/taxon/central", operation_id="add_taxon_in_central", tags=["Taxonomy Tree"])
 def add_taxon_in_central(
+    request: Request,  # injected by FastAPI
     name: str = Query(
         ...,
         title="Name",
@@ -3385,8 +3388,7 @@ def add_taxon_in_central(
         example="http://www.google.fr/",
     ),
     current_user: int = Depends(get_current_user),
-    request: Request = None,  # type: ignore # injected by FastAPI
-) -> Any: # json
+) -> Any:  # json
     """
     **Create a taxon** on EcoTaxoServer.
 
@@ -3455,7 +3457,7 @@ def query_taxa_in_worms(
     "/searchworms/{name}",
     operation_id="search_worms_name",
     tags=["Taxonomy Tree"],
-    response_model=Optional[List[Dict]],  # type: ignore
+    response_model=Optional[List[Dict]],
 )
 def search_worms_name(
     name: str,
@@ -3473,7 +3475,7 @@ def search_worms_name(
     "/addworms/",
     operation_id="add_worms_taxon",
     tags=["Taxonomy Tree"],
-    response_model=Any,  # type: ignore
+    response_model=Any,
 )
 def add_worms_taxon(
     taxon: AddWormsTaxonModel = Body(...),
@@ -4149,7 +4151,7 @@ def system_error(_current_user: int = Depends(get_current_user)) -> None:
     "/noop",
     operation_id="do_nothing",
     tags=["misc"],
-    response_model=Union[ObjectHeaderModel, HistoricalClassificationModel],  # type: ignore
+    response_model=Union[ObjectHeaderModel, HistoricalClassificationModel],
 )
 def do_nothing(_current_user: int = Depends(get_current_user)):
     """

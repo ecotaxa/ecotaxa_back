@@ -8,7 +8,7 @@
 #
 from typing import List
 
-from lxml import etree  # type: ignore
+from lxml import etree
 
 from formats.DarwinCore.models import (
     EMLPerson,

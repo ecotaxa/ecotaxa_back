@@ -21,8 +21,7 @@ from typing import (
     Type,
 )
 
-# noinspection PyPackageRequirements
-from PIL import Image as PIL_Image  # type: ignore
+from PIL import Image as PIL_Image
 
 import BO.Mappings as GlobalMapping
 from BO.Mappings import ProjectMapping, ParentTableClassT, TABLE_TO_PREFIX

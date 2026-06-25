@@ -55,7 +55,7 @@ def _db_model_2_pydantic_class_maker_callback(ctx: DynamicClassDefContext) -> No
         for a_col, a_type in a_class.names.items():
             if "Mapped" in str(a_type.type):
                 # e.g. sqlalchemy.orm.attributes.Mapped[Union[builtins.int, None]]
-                col_types[a_col] = a_type.type.args[0]  # type: ignore
+                col_types[a_col] = a_type.type.args[0]  # type: ignore[union-attr]
     class_name = ctx.name
     _add_pydantic_clone(
         ctx, class_name, pydantic_model_type_info, col_types, from_orm=True
