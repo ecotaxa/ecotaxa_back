@@ -4,7 +4,7 @@
 #
 
 from datetime import date, time, datetime
-from typing import List, TYPE_CHECKING
+from typing import List, TYPE_CHECKING, Dict
 
 # noinspection PyPackageRequirements
 from sqlalchemy import Index, ForeignKey, text, func, event, DDL  # fmt:skip
@@ -59,22 +59,30 @@ for k, v in classif_qual_labels.items():
 class ObjectHeader(Model):
     __tablename__ = "obj_head"
     # Self
-    objid: Mapped[int] = mapped_column(BIGINT, primary_key=True, autoincrement=False)  # 8 bytes align d
+    objid: Mapped[int] = mapped_column(
+        BIGINT, primary_key=True, autoincrement=False
+    )  # 8 bytes align d
     # Parent
     acquisid: Mapped[int] = mapped_column(
         BIGINT,
         ForeignKey("acquisitions.acquisid", ondelete="CASCADE", onupdate="CASCADE"),
     )  # 8 bytes align d
     # Author of last change in/to 'V' or 'D'
-    classif_who: Mapped[int | None] = mapped_column(INTEGER, ForeignKey("users.id"))  # 4 bytes align i
+    classif_who: Mapped[int | None] = mapped_column(
+        INTEGER, ForeignKey("users.id")
+    )  # 4 bytes align i
     # User-visible classification
-    classif_id: Mapped[int | None] = mapped_column(INTEGER, ForeignKey("taxonomy.id"))  # 4 bytes align i
+    classif_id: Mapped[int | None] = mapped_column(
+        INTEGER, ForeignKey("taxonomy.id")
+    )  # 4 bytes align i
 
     # 86400 different values, basically all possible minutes of day
     objtime: Mapped[time | None] = mapped_column(TIME)  # 8 bytes align d
     latitude: Mapped[float | None] = mapped_column(DOUBLE_PRECISION)  # 8 bytes align d
     longitude: Mapped[float | None] = mapped_column(DOUBLE_PRECISION)  # 8 bytes align d
-    depth_min: Mapped[float | None] = mapped_column(FLOAT)  # AKA DOUBLE_PRECISION, 8 bytes align d
+    depth_min: Mapped[float | None] = mapped_column(
+        FLOAT
+    )  # AKA DOUBLE_PRECISION, 8 bytes align d
     depth_max: Mapped[float | None] = mapped_column(
         FLOAT
     )  # AKA DOUBLE_PRECISION, 8 bytes align d # max = 99999999999 conventional value prevents move to float4
@@ -82,7 +90,9 @@ class ObjectHeader(Model):
     objdate: Mapped[date | None] = mapped_column(DATE)  # 4 bytes align i
     #
     # One of the *_CLASSIF_QUAL above
-    classif_qual: Mapped[str | None] = mapped_column(CHAR(1))  # 2 bytes (len + content) align c as len < 127
+    classif_qual: Mapped[str | None] = mapped_column(
+        CHAR(1)
+    )  # 2 bytes (len + content) align c as len < 127
     #
     sunpos: Mapped[str | None] = mapped_column(
         CHAR(1)
@@ -90,7 +100,9 @@ class ObjectHeader(Model):
     # Date of move to present classif_qual+classif_id, see top comment on states for details
     classif_date: Mapped[datetime | None] = mapped_column(TIMESTAMP)  # 8 bytes align d
     # If the object is Predicted, its score
-    classif_score: Mapped[float | None] = mapped_column(DOUBLE_PRECISION)  # 8 bytes align d
+    classif_score: Mapped[float | None] = mapped_column(
+        DOUBLE_PRECISION
+    )  # 8 bytes align d
 
     # User-provided identifier
     orig_id: Mapped[str] = mapped_column(
@@ -100,7 +112,9 @@ class ObjectHeader(Model):
     # 176M values in DB as of 2024-02-02
     object_link: Mapped[str | None] = mapped_column(VARCHAR(255))
 
-    complement_info: Mapped[str | None] = mapped_column(VARCHAR)  # e.g. "Part of ostracoda"
+    complement_info: Mapped[str | None] = mapped_column(
+        VARCHAR
+    )  # e.g. "Part of ostracoda"
 
     if TYPE_CHECKING:
         # The relationship(s) are created in Relations.py but the typing here helps IDE
@@ -182,7 +196,7 @@ USED_FIELDS_FOR_CLASSIF = {  # From Import user point of view, only these can be
     ObjectHeader.classif_who.name,
     ObjectHeader.classif_score.name,
 }
-HIDDEN_FIELDS_FOR_CLASSIF = {}  # Internally managed
+HIDDEN_FIELDS_FOR_CLASSIF: Dict[str, str] = {}  # Internally managed
 NON_UPDATABLE_VIA_API = USED_FIELDS_FOR_CLASSIF.union(HIDDEN_FIELDS_FOR_CLASSIF)
 
 
@@ -280,10 +294,16 @@ class ObjectsClassifHisto(Model):
         primary_key=True,
     )  # 8 bytes align d
     # Date of manual setting of 'V' or 'D', training date for 'P'
-    classif_date: Mapped[datetime] = mapped_column(TIMESTAMP, primary_key=True)  # 8 bytes align d
+    classif_date: Mapped[datetime] = mapped_column(
+        TIMESTAMP, primary_key=True
+    )  # 8 bytes align d
     # The score associated with 'P' state
-    classif_score: Mapped[float | None] = mapped_column(DOUBLE_PRECISION)  # 8 bytes align d
-    classif_who: Mapped[int | None] = mapped_column(INTEGER, ForeignKey("users.id"))  # 4 bytes align i
+    classif_score: Mapped[float | None] = mapped_column(
+        DOUBLE_PRECISION
+    )  # 8 bytes align d
+    classif_who: Mapped[int | None] = mapped_column(
+        INTEGER, ForeignKey("users.id")
+    )  # 4 bytes align i
 
     classif_id: Mapped[int] = mapped_column(
         INTEGER, ForeignKey("taxonomy.id", ondelete="CASCADE")

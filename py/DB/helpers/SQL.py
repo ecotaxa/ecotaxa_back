@@ -8,7 +8,7 @@
 import re
 from collections import OrderedDict
 from decimal import Decimal
-from typing import Union, List, Dict, Optional, Set, Generator, Tuple, Any
+from typing import Union, List, Dict, Optional, Set, Generator, Tuple, Any, Self
 
 # A dict for sending parametrized SQL to the engine
 SQLParamDict = Dict[str, Union[int, float, Decimal, str, List[int], List[str]]]
@@ -41,7 +41,7 @@ class SelectClause(object):
         new_clause.aliases = self.aliases[:]
         return new_clause
 
-    def add_expr(self, expr: str, alias: Optional[str] = None) -> "SelectClause":
+    def add_expr(self, expr: str, alias: Optional[str] = None) -> Self:
         self.expressions.append(expr)
         self.aliases.append(alias)
         return self
@@ -189,12 +189,9 @@ class AliasedSelectClause(SelectClause):
 
     def __init__(self):
         SelectClause.__init__(self)
-        self.expressions: List[str]
-        self.aliases: List[str]
+        self.aliases: List[str]  # type: ignore[assignment]
 
-    def add_expr(
-        self, expr: str, alias: str
-    ) -> "AliasedSelectClause":  # type: ignore[override]
+    def add_expr(self, expr: str, alias: Optional[str] = None) -> Self:
         assert alias is not None, "Alias is mandatory for AliasedSelectClause"
         SelectClause.add_expr(self, expr, alias)
         return self

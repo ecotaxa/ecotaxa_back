@@ -208,12 +208,10 @@ def minimal_model_of(
 
 
 def any_(items_list: Union[List[int], List[str]]) -> CollectionAggregate[bool]:
-    # TODO: Still useful with SQL V2?
     # noinspection PyTypeChecker
-    return _pg_any(items_list)
+    return _pg_any(items_list)  # type: ignore
 
 
 def all_(items_list: Union[List[int], List[str]]):
-    # TODO: Still useful with SQL V2?
     # noinspection PyTypeChecker
-    return _pg_all(items_list)
+    return _pg_all(items_list)  # type: ignore
