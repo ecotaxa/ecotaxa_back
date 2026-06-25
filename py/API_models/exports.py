@@ -5,7 +5,7 @@
 from enum import Enum
 from typing import List, Dict, Optional, Union
 
-from pydantic import validator, ConfigDict
+from pydantic import field_validator, ConfigDict
 
 from helpers.pydantic import BaseModel, Field
 
@@ -323,8 +323,8 @@ class SummaryExportReq(ProjectIdReq):
         examples=[False],
     )
 
-    # noinspection PyMethodParameters
-    @validator("taxo_mapping")
+    @field_validator("taxo_mapping")
+    @classmethod
     def ensure_sane_remap(cls, v):
         assert set(v.keys()).isdisjoint(
             set(v.values())

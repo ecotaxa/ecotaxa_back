@@ -740,7 +740,7 @@ class EnumeratedObjectSet(MappedTable):
         Query for last classification history on all objects of self.
         """
         # Get the historical entries
-        subqry = self.session.query(
+        subqry = select(
             ObjectsClassifHisto,
             func.rank()
             .over(
@@ -767,7 +767,7 @@ class EnumeratedObjectSet(MappedTable):
         ).subquery()
 
         # We have a maximum of 1 line from ObjectsClassifHisto (the one with most recent date) from subquery
-        qry = self.session.query(
+        qry = select(
             ObjectHeader.objid,
             ObjectHeader.classif_id,
             subq_alias.c.classif_date.label("histo_classif_date"),
