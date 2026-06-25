@@ -151,7 +151,7 @@ class Connection(object):
         Execute raw SQL outside any transaction (which is created by default by SQLA)
         """
         with self.engine.connect() as conn:
-            assert conn.connection
+            assert conn.connection.dbapi_connection
             conn.connection.dbapi_connection.autocommit = True
             conn.exec_driver_sql(statement)
 
