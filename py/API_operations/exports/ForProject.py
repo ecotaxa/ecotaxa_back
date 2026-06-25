@@ -55,7 +55,6 @@ from helpers import (
     DateTime,
 )  # Need to keep the whole module imported, as the function is mocked
 from helpers.DynamicLogs import get_logger, LogsSwitcher
-
 # TODO: Move somewhere else
 from ..helpers.JobService import JobServiceBase, ArgsDict  # fmt:skip
 
@@ -119,7 +118,7 @@ class ProjectExport(JobServiceBase):
         return ret
 
     def init_args(self, args: ArgsDict) -> ArgsDict:
-        args["req"] = self.req.dict()
+        args["req"] = self.req.model_dump()
         args["filters"] = self.filters
         return args
 
@@ -1048,7 +1047,7 @@ class ProjectExport(JobServiceBase):
         # Formulae default from the project but are overriden by the query
         formulae: Dict[str, str] = {}
         for project_id in project_ids:
-            variables = self.ro_session.query(ProjectVariables).get(project_id)
+            variables = self.ro_session.get(ProjectVariables, project_id)
             assert variables is not None
             if variables is not None:
                 formulae.update(variables.to_dict())
@@ -1137,7 +1136,7 @@ class SpecializedProjectExport(ProjectExport):
         pass
 
     def init_args(self, args: ArgsDict) -> ArgsDict:
-        args["req"] = self.sreq.dict()  # Serialize the specialized version
+        args["req"] = self.sreq.model_dump()  # Serialize the specialized version
         args["filters"] = self.filters
         return args
 

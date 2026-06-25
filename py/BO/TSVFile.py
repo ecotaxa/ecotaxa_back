@@ -809,7 +809,7 @@ class TSVFile(object):
                     [object_head_to_write, object_fields_to_write],
                 ):
                     # Fetch the record to update, .get is cache-friendly
-                    obj = session.query(a_cls).get(objid)
+                    obj = session.get(a_cls, objid)
                     assert obj is not None
                     assert isinstance(obj, (ObjectHeader, ObjectFields))
                     if a_cls == ObjectHeader:

@@ -82,7 +82,7 @@ def test_user_create_ordinary(monkeypatch, fastapi):
     url = USER_CREATE_URL
     usr_json = {
         "email": "ddduser5",
-        "id": -1,
+        "id": None,
         "name": "Ordinary User",
         "organisation": "Homework",
     }

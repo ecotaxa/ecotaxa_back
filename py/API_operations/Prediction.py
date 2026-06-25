@@ -53,7 +53,7 @@ class PredictForProject(JobServiceBase):
         return ret
 
     def init_args(self, args: ArgsDict) -> ArgsDict:
-        args["req"] = self.req.dict()
+        args["req"] = self.req.model_dump()
         args["filters"] = self.filters
         return args
 

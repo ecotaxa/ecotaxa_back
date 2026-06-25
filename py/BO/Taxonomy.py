@@ -471,7 +471,7 @@ class TaxonomyBO(object):
             logger.info("Taxo delete, list: %s", final_delete[i : i + 20])
         try:
             for a_taxon in final_delete:
-                taxon = session.query(Taxonomy).get(a_taxon)
+                taxon = session.get(Taxonomy, a_taxon)
                 session.delete(taxon)
         finally:
             session.execute(text("alter table taxonomy enable trigger all"))

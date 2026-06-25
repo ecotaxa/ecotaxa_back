@@ -1,5 +1,3 @@
-import logging
-
 from API_operations.ObjectManager import ObjectManager
 from starlette import status
 

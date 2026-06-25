@@ -34,7 +34,7 @@ def init_security():
 
 def _init_security(sess):
     for role_id, role in enumerate(Role.ALL_ROLES, 1):
-        db_role = sess.query(Role).get(role_id)
+        db_role = sess.get(Role, role_id)
         if db_role is None:
             typer.echo("Adding role '%s'" % role)
             # noinspection PyArgumentList
@@ -106,7 +106,7 @@ def do_static():
 def _do_static(sess):
     # Countries
     for a_country in countries_by_name.keys():
-        db_country = sess.query(Country).get(a_country)
+        db_country = sess.get(Country, a_country)
         if db_country is None:
             typer.echo("Adding country '%s'" % a_country)
             # noinspection PyArgumentList
@@ -115,7 +115,7 @@ def _do_static(sess):
     # Note: Should do nothing just after table creation, as instruments
     # are loaded then (@see hook in DB/Instrument.py).
     for ins, nam, url in DEFAULT_INSTRUMENTS:
-        db_ins = sess.query(Instrument).get(ins)
+        db_ins = sess.get(Instrument, ins)
         if db_ins is None:
             typer.echo("Adding instrument '%s'" % ins)
             db_ins = Instrument()

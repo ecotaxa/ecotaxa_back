@@ -14,7 +14,7 @@ def plain_columns(a_model: PydanticModelT) -> Dict[str, Any]:
     Return the non-entity columns in given model, with a default value if None
     """
     ret = {}
-    schema = a_model.schema()
+    schema = a_model.model_json_schema()
     for a_col, its_desc in schema["properties"].items():
         fld_type = its_desc.get("type")
         if fld_type is None:

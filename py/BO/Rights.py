@@ -129,7 +129,7 @@ class RightsBO(object):
         # user: Optional[User] = session.query(User).get(user_id)
         user: User = RightsBO.get_user_throw(session, user_id)
         # assert user is not None, NOT_AUTHORIZED
-        project: Optional[Project] = session.query(Project).get(prj_id)
+        project: Optional[Project] = session.get(Project, prj_id)
         assert project is not None, NOT_FOUND
         # Check
         if user.has_role(Role.APP_ADMINISTRATOR):

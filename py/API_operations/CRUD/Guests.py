@@ -79,7 +79,7 @@ class GuestService(Service):
         current_user: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
         self._is_manager_throw(current_user)
         self._can_manage_guest_throw(current_user, guest_id)
-        guest_to_update: Optional[Guest] = self.session.query(Guest).get(guest_id)
+        guest_to_update: Optional[Guest] = self.session.get(Guest, guest_id)
         if guest_to_update is None:
             raise HTTPException(status_code=422, detail=[NOT_FOUND])
         self._is_valid_person_throw(update_src, guest_to_update.id)
@@ -97,7 +97,7 @@ class GuestService(Service):
         current_user: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
         self._is_manager_throw(current_user)
         # TODO: Not consistent with others e.g. project.query()
-        ret = self.ro_session.query(Guest).get(guest_id)
+        ret = self.ro_session.get(Guest, guest_id)
         return ret
 
     def get_full_by_id(
@@ -105,7 +105,7 @@ class GuestService(Service):
     ) -> GuestModel:
         current_user: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
         self._is_manager_throw(current_user)
-        db_guest = self.ro_session.query(Guest).get(guest_id)
+        db_guest = self.ro_session.get(Guest, guest_id)
         if db_guest is None:
             raise HTTPException(status_code=404, detail=DETAIL_NOT_FOUND)
         else:
@@ -114,7 +114,7 @@ class GuestService(Service):
 
     @staticmethod
     def _get_guest_profile(db_guest: Guest) -> GuestModel:
-        ret = GuestModel.from_orm(db_guest)
+        ret = GuestModel.model_validate(db_guest)
         return ret
 
     def _limit_qry(self, current_user: User, qry):

@@ -90,7 +90,7 @@ def test_subset_merge_uvp6(fastapi, tstlogs, ccheck):
     # Add a numerical feature into the subset
     with ProjectsService() as sce:
         session = sce.session
-        db_prj: Project = session.query(Project).get(subset_prj_id)
+        db_prj: Project = session.get(Project, subset_prj_id)
         mapg = ProjectMapping().load_from_project(db_prj)
         mapg.add_column(ObjectFields.__tablename__, "object", "foobar", "n")
         db_col = mapg.search_field("object_foobar")

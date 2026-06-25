@@ -43,7 +43,7 @@ class TxtFileWithModel(object):
 
     @staticmethod
     def id_col_from_model(model) -> Tuple[Optional[str], bool]:
-        model_fields = model.__fields__
+        model_fields = model.model_fields
         ret = None, True
         for a_field_name, a_field in model_fields.items():
             field_extra = a_field.json_schema_extra
@@ -54,7 +54,7 @@ class TxtFileWithModel(object):
 
     def add_entity(self, an_entity):
         # Strip the pydantic model to the minimum.
-        entity_dict = an_entity.dict(
+        entity_dict = an_entity.model_dump(
             exclude_unset=True, exclude_none=True, exclude_defaults=True
         )
         # If the id is provided...

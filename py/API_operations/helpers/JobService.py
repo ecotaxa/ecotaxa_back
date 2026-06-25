@@ -207,7 +207,7 @@ class JobServiceOnProjectBase(JobServiceBase, ABC):
         super().__init__()
         self.prj_id: ProjectIDT = prj_id
         # Work vars, load straight away
-        prj = self.get_session().query(Project).get(prj_id)
+        prj = self.get_session().get(Project, prj_id)
         assert prj is not None
         self.prj = prj
 

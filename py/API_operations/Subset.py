@@ -67,7 +67,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
     def __init__(self, prj_id: int, req: SubsetReq):
         super().__init__(prj_id)
         # Load the destination project
-        dest_prj = self.get_session().query(Project).get(req.dest_prj_id)
+        dest_prj = self.get_session().get(Project, req.dest_prj_id)
         assert dest_prj is not None
         self.dest_prj: Project = dest_prj
         self.req = req
@@ -79,7 +79,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
 
     def init_args(self, args: ArgsDict) -> ArgsDict:
         super().init_args(args)
-        args["req"] = self.req.dict()
+        args["req"] = self.req.model_dump()
         return args
 
     @staticmethod

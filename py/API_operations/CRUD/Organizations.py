@@ -68,8 +68,8 @@ class OrganizationService(Service):
         current_user: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
         self._is_manager_throw(current_user)
         self._can_manage_organization_throw(current_user, organization)
-        org_to_update: Optional[Organization] = self.session.query(Organization).get(
-            organization
+        org_to_update: Optional[Organization] = self.session.get(
+            Organization, organization
         )
         if org_to_update is None:
             raise HTTPException(status_code=422, detail=[NOT_FOUND])
@@ -87,7 +87,7 @@ class OrganizationService(Service):
         current_user: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
         self._is_manager_throw(current_user)
         # TODO: Not consistent with others e.g. project.query()
-        ret = self.ro_session.query(Organization).get(organization)
+        ret = self.ro_session.get(Organization, organization)
         return ret
 
     def get_full_by_id(

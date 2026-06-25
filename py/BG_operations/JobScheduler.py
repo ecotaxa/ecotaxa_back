@@ -219,7 +219,7 @@ class JobScheduler(Service):
         cls.the_timer = threading.Timer(
             interval=interval, function=cls.launch, args=[interval]
         )
-        cls.the_timer.setName("JobTimer")
+        cls.the_timer.name = "JobTimer"
         cls.the_timer.start()
 
     @classmethod

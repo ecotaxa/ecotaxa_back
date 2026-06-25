@@ -295,8 +295,8 @@ def test_user_create_with_confirmation(monkeypatch, fastapi):
         login_code=200,
     )
     res_user = {"email": email, "mail_status": True, "status": UserStatus.active.value}
-    # err = verify_user(fastapi, NEW_USER_WITH_CONFIRMATION_ID, ADMIN_AUTH, res_user)
-    # assert err == []
+    err = verify_user(fastapi, NEW_USER_WITH_CONFIRMATION_ID, ADMIN_AUTH, res_user)
+    assert err == []
     # user can MODIFY account data - bad mail format exist in db , but when updating the user must have a valid email
     url = USER_GET_URL.format(user_id=ORDINARY_USER_USER_ID)
     rsp = fastapi.get(url, headers=USER_AUTH)
@@ -650,7 +650,6 @@ def test_user_create_with_validation(monkeypatch, fastapi):
     rsp = fastapi.post(urlparams, json=req_json)
     assert rsp.json() == {"detail": [NOT_FOUND]}
     assert rsp.status_code == 422
-
     # admin  validates user
     rsp = fastapi.post(
         URL_ACTIVATE_USER.format(

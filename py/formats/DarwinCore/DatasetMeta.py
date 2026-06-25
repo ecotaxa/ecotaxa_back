@@ -247,7 +247,9 @@ class DatasetMetadata(object):
                 meta.generalTaxonomicCoverage
             )
         eml_taxo_cov = meta.taxonomicCoverage
-        for an_eml_taxo in sorted(eml_taxo_cov, key=lambda taxo: taxo.json()):
+        for an_eml_taxo in sorted(
+            eml_taxo_cov, key=lambda taxo: taxo.model_dump_json()
+        ):
             xml_classif = etree_sub_element(xml_taxo_cov, "taxonomicClassification")
             etree_sub_element(xml_classif, "taxonRankName").text = (
                 an_eml_taxo.taxonRankName
