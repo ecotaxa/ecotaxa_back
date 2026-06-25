@@ -556,7 +556,7 @@ class ProjectExport(JobServiceBase):
         # Prepare TSV structure
         col_descs = [
             a_desc
-            for a_desc in res.cursor.description  # type: ignore # case2
+            for a_desc in res.cursor.description  # type: ignore # case5
             if a_desc.name != "img_internal_id"
         ]
         # read latitude column to get float DB type
