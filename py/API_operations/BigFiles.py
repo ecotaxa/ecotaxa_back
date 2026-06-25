@@ -8,12 +8,12 @@ from pathlib import Path
 from typing import Callable, Dict, Any
 
 from fastapi import Depends, Request
+from tuspyserver import create_tus_router
 
 from FS.UserFilesDir import UserFilesDirectory
 from helpers.AppConfig import Config
 from helpers.DynamicLogs import get_logger
 from helpers.fastApiUtils import get_current_user
-from helpers.tuspyserver import create_tus_router
 
 logger = get_logger(__name__)
 
