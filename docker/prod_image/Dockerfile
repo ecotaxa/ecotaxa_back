@@ -2,10 +2,14 @@ FROM ubuntu:24.04 AS builder
 
 MAINTAINER grololo06 <grololo06@users.noreply.github.com>
 
-RUN apt-get update
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    software-properties-common \
+    gpg-agent \
+    && add-apt-repository ppa:deadsnakes/ppa \
+    && apt-get update
 
-RUN apt-get install \
-    python3.12 python3-venv python3.12-dev python3.12-venv \
+RUN apt-get update && apt-get install \
+    python3.14 python3-venv python3.14-dev python3.14-venv \
     --no-install-recommends --yes
 
 # Get reqs from host
@@ -14,16 +18,16 @@ COPY py/requirements.txt ./reqs_orig.txt
 RUN grep -Ev "(-stubs|^types-)" reqs_orig.txt > reqs.txt
 
 # Create venv, mandatory as we switched away from the python bundled with the OS
-RUN python3.12 -m venv /venv
+RUN python3.14 -m venv /venv
 # Install wheel & upgrade pip which is pip-9.0.1 thus knows only manylinux1 repository
 RUN PATH=/venv/bin pip3 install --upgrade pip wheel
 RUN PATH=/venv/bin:$PATH pip3 install -r reqs.txt
 
 # Strip a bit...
 RUN find /venv -name "*.pyc" -delete && \
-rm -rf /venv/share/* && \
-find /venv -name tests -type d -exec rm -rf {} + && \
-find /venv/lib/python3.12/site-packages -name "*.exe" -delete
+    rm -rf /venv/share/* && \
+    find /venv -name tests -type d -exec rm -rf {} + && \
+    find /venv/lib/python3.14/site-packages -name "*.exe" -delete
 
 # Get source
 WORKDIR /app/
@@ -38,14 +42,17 @@ FROM ubuntu:24.04 AS target
 
 # Minimum install
 RUN apt-get update && \
-apt-get install vim python3.12 libpq5 dumb-init --no-install-recommends --yes && \
-apt-get clean && \
-rm -rf /var/lib/apt/lists/* && \
-rm -rf /var/log/*
+    apt-get install vim libpq5 dumb-init --no-install-recommends --yes && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* && \
+    rm -rf /var/log/*
 
-# Copy the venv from builder
+# Copy the venv and deps from builder
 RUN mkdir -p /venv
 COPY --from=builder --chown=root:root /venv /venv
+COPY --from=builder /usr/bin/python3.14 /usr/bin/python3.14
+COPY --from=builder /usr/lib/python3.14 /usr/lib/python3.14
+COPY --from=builder /usr/lib/x86_64-linux-gnu/libpython3.14.so* /usr/lib/x86_64-linux-gnu/
 
 # Copy the app from builder
 RUN mkdir -p /app

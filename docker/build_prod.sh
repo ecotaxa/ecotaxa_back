@@ -10,7 +10,7 @@ VERSION=3.0.0
 (cd .. && git status py --porcelain | grep "??" | sed -e "s/.. py\///g" > docker/not_in_git.lst)
 rsync -avr --delete --exclude-from=not_to_copy.lst --exclude-from=not_in_git.lst ../py/ py/
 mkdir -p docker/prod_image
-rsync prod_image/start.sh  docker/prod_image/
+rsync prod_image/start.sh docker/prod_image/
 # Build
 docker build $NO_CACHE -t ecotaxa/ecotaxa_back -f prod_image/Dockerfile .
 # Publish

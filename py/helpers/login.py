@@ -11,6 +11,9 @@ import hmac
 # TODO: if it exists, find the stubs somewhere
 from typing import Union
 
+# Note: passlib uses in Python3.14 a python implementation of crypto algos
+# as 'crypt' module has been deprecated. It's a bit slower and eats lots of CPUs.
+# but we use it only at each login or account creation. The rest is JWT.
 from passlib.context import CryptContext
 from sqlalchemy import select, func
 

@@ -18,7 +18,7 @@
   
 ## Backend installation
   
-The source code is in `ecotaxa_back/py/`, and requires python3.8.  
+The source code is in `ecotaxa_back/py/`, and requires python3.14.  
   
 ### Installation steps  
   
@@ -26,7 +26,7 @@ The source code is in `ecotaxa_back/py/`, and requires python3.8.
  - Creation of a virtual environment for back libraries  
 ```shell  
 cd ~/ecotaxa_back/py
-python3.8 -m venv myvenv
+python3.14 -m venv myvenv
 source myvenv/bin/activate
 
 ```  
@@ -105,11 +105,11 @@ Once the installations are complete, the server is launched with uvicorn :
 ```shell
 cd ~/ecotaxa_back/py
 source myvenv/bin/activate
-python3.8 run.py uvicorn
+python3.14 run.py uvicorn
 ```  
 If the last command returns the error `[Errno 98] Address already in use`, then run it with a new value for the APP_PORT environment variable (which is 8000 by default), for example :  
 ```shell  
-APP_PORT=8097 python3.8 run.py uvicorn  
+APP_PORT=8097 python3.14 run.py uvicorn  
 ```  
   
 ## Frontend installation
@@ -243,7 +243,9 @@ The resulting .zip export should be placed in the folder given for `SERVERLOADAR
 A question will be asked during import to map the users mentioned in the export archive to the users present in this local version of EcoTaxa. Simply answer “Application Administrator” for each name to complete the import.  
   
 ## Installation for launching predictions
-  
+
+OBSOLETE, see dedicated project on GitHub.
+
 To be able to run predictions, you need to run the `gpu_jobs_runner.py` script, which requires libraries that are not part of the requirements already installed. The best solution is to create a new virtual environment.    
   
 ## Librairies installation  
