@@ -96,11 +96,10 @@ class SimilaritySearchForProject(Service):
         from_, where_clause, params = object_set.get_sql(dist_exp, order_clause)
 
         query = f"""
-        SET LOCAL ivvflat.probes = 10;
         {dist_exp.get_sql()}
         FROM {from_.get_sql()} {where_clause.get_sql()} \n{order_clause.get_sql()}
         """
-
+        self.ro_session.execute(text("SET LOCAL ivvflat.probes = 10"))
         result = self.ro_session.execute(text(query), params).mappings().fetchall()
         neighbors = [res["objcnnid"] for res in result]
         distances = [res["l2_dist"] for res in result]
