@@ -263,7 +263,7 @@ def classify_auto_incorrect(fastapi, obj_ids):
             "keep_log": True,
         },
     )
-    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
 
 # Note: to go faster in a local dev environment, use "filled_database" instead of "database" below

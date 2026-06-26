@@ -1,6 +1,6 @@
-from typing import Optional, cast, Dict
+from typing import Optional, cast, Dict, TypedDict
 
-from typing_extensions import TypedDict
+from pydantic import model_validator
 
 from API_models.helpers.TypedDictToModel import typed_dict_to_model
 from helpers.pydantic import ConfigDict, DescriptiveModel, Field
@@ -265,6 +265,14 @@ ProjectFiltersModel = typed_dict_to_model(ProjectFiltersDict, _ProjectFilters2Mo
 
 
 class ProjectFilters(ProjectFiltersModel):
+    @model_validator(mode="before")
+    @classmethod
+    def allow_empty_list(cls, v):
+        # Accept a list which is sometimes sent by frontend when no filter is active
+        if isinstance(v, list) and len(v) == 0:
+            return {}
+        return v
+
     def base(self) -> ProjectFiltersDict:
         return cast(ProjectFiltersDict, self.model_dump())
 

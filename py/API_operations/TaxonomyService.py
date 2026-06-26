@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import List, Optional, Dict, Any, Union
 
 from fastapi import HTTPException
-from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
+from starlette.status import HTTP_422_UNPROCESSABLE_CONTENT
 
 from API_models.taxonomy import (
     TaxaSearchRsp,
@@ -183,7 +183,7 @@ class TaxonomyService(Service):
         # Just remove and re-add
         if recast.operation not in RecastOperation.__members__:
             raise HTTPException(
-                HTTP_422_UNPROCESSABLE_ENTITY, detail="operation not supported"
+                HTTP_422_UNPROCESSABLE_CONTENT, detail="operation not supported"
             )
         qry = TaxoRecastBO.query_recast(
             self.session,
@@ -220,7 +220,7 @@ class TaxonomyService(Service):
         operation: RecastOperation,
         is_collection: bool = False,
     ) -> Optional[TaxoRecastRsp]:
-        assert operation in RecastOperation.__members__, HTTP_422_UNPROCESSABLE_ENTITY
+        assert operation in RecastOperation.__members__, HTTP_422_UNPROCESSABLE_CONTENT
         qry = TaxoRecastBO.query_recast(
             self.ro_session,
             current_user_id,
@@ -267,7 +267,7 @@ class TaxonomyService(Service):
     ):
         resp = TaxoRecastBO.valid_remap(remapping)
         if resp is not None:
-            raise HTTPException(HTTP_422_UNPROCESSABLE_ENTITY, detail=[resp])
+            raise HTTPException(HTTP_422_UNPROCESSABLE_CONTENT, detail=[resp])
         if isWoRMS:
             qry = (
                 self.ro_session.query(Taxonomy.id)
@@ -277,7 +277,7 @@ class TaxonomyService(Service):
             not_valid = [str(t.id) for t in qry]
             if len(not_valid):
                 raise HTTPException(
-                    HTTP_422_UNPROCESSABLE_ENTITY,
+                    HTTP_422_UNPROCESSABLE_CONTENT,
                     detail=[
                         " error  taxa recast is not WoRMS compatible "
                         + ", ".join(not_valid)

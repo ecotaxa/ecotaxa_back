@@ -82,11 +82,11 @@ def test_organization_create_invalid(fastapi):
     # 1. Create with no name (empty name)
     org_data = {"id": -1, "name": "", "directories": None}
     rsp = fastapi.post(ORGANIZATION_CREATE_URL, headers=ADMIN_AUTH, json=org_data)
-    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
     org_data = {"id": -1, "name": "   ", "directories": None}
     rsp = fastapi.post(ORGANIZATION_CREATE_URL, headers=ADMIN_AUTH, json=org_data)
-    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
     # 2. Create with existing name
     # First, create one
@@ -97,4 +97,4 @@ def test_organization_create_invalid(fastapi):
 
     # Try to create another one with same name
     rsp = fastapi.post(ORGANIZATION_CREATE_URL, headers=ADMIN_AUTH, json=org_data)
-    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT

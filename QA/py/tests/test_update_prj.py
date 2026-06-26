@@ -212,7 +212,7 @@ def test_update_prj(fastapi):
     no_contact_upd["contact"] = None
     url = PROJECT_UPDATE_URL.format(project_id=prj_id)
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=no_contact_upd)
-    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     assert rsp.text == '{"detail":"A valid Contact is needed."}'
 
     # Set a contact with wrong id
@@ -225,7 +225,7 @@ def test_update_prj(fastapi):
     }
     url = PROJECT_UPDATE_URL.format(project_id=prj_id)
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=wrong_contact_upd)
-    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     assert (
         rsp.text
         == '{"detail":"Could not set Contact, the designated user is not in Managers list."}'
@@ -296,7 +296,7 @@ def test_update_prj_bodc_vars(fastapi):
     # Modify with invalid key
     settings_json[BODC_VARS_KEY] = {"a": "toto"}
     rsp = fastapi.put(upd_url, headers=ADMIN_AUTH, json=settings_json)
-    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY, rsp.text
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT, rsp.text
 
     vars = {"subsample_coef": "1", "total_water_volume": "2", "individual_volume": "3"}
     settings_json[BODC_VARS_KEY] = vars

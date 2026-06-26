@@ -4329,7 +4329,7 @@ def register_exception(app: FastAPI):
         print(request.url, exc_str, file=sys.stderr)
         content = {"status_code": 10422, "message": exc_str, "data": None}
         return JSONResponse(
-            content=content, status_code=status.HTTP_422_UNPROCESSABLE_ENTITY
+            content=content, status_code=status.HTTP_422_UNPROCESSABLE_CONTENT
         )
 
 

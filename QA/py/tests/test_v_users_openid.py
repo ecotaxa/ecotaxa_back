@@ -42,7 +42,7 @@ async def test_openid_login(config, fastapi, monkeypatch):
     )
 
     # Initiate login
-    response = fastapi.get("/openid/login", allow_redirects=False)
+    response = fastapi.get("/openid/login", follow_redirects=False)
     # It should redirect to the provider's authorization endpoint
     assert response.status_code in [302, 307]
     location = response.headers.get("location")
@@ -73,7 +73,7 @@ async def test_login_existing_user(config, database, fastapi, monkeypatch):
     response = fastapi.get(
         "/openid/callback",
         params={"code": "abc", "state": "xyz"},
-        allow_redirects=False,
+        follow_redirects=False,
     )
     assert response.status_code == 307
     hdrs = response.headers
@@ -102,7 +102,7 @@ async def test_login_new_user(config, database, fastapi, monkeypatch):
     response = fastapi.get(
         "/openid/callback",
         params={"code": "def", "state": "uvw"},
-        allow_redirects=False,
+        follow_redirects=False,
     )
     assert response.status_code == 307
     hdrs = response.headers
@@ -154,7 +154,7 @@ async def test_login_convert_guest(config, database, fastapi, monkeypatch):
     response = fastapi.get(
         "/openid/callback",
         params={"code": "ghi", "state": "pqr"},
-        allow_redirects=False,
+        follow_redirects=False,
     )
     assert response.status_code == 307
 
@@ -191,7 +191,7 @@ async def test_openid_logout_redirects_to_provider(config, fastapi, monkeypatch)
     # Provide an id_token cookie so it is propagated as id_token_hint
     fastapi.cookies.set("id_token", "logout-id-token")
 
-    response = fastapi.get("/openid/logout", allow_redirects=False)
+    response = fastapi.get("/openid/logout", follow_redirects=False)
     assert response.status_code in [302, 307]
     location = response.headers.get("location")
     assert location is not None

@@ -4,10 +4,9 @@
 #
 # A formalized way to update entities
 #
-from typing import Iterable, List, Dict, Any
+from typing import Iterable, List, Dict, Any, TypedDict
 
 from sqlalchemy.sql.functions import current_timestamp
-from typing_extensions import TypedDict
 
 
 class ColUpdate(TypedDict):

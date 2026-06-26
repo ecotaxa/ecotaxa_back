@@ -61,7 +61,7 @@ def test_project_vars(fastapi):
     upd_json[BODC_VARS_KEY] = "toto"
     url = PROJECT_UPDATE_URL.format(project_id=prj_id)
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=upd_json)
-    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY, rsp.reason + str(
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT, rsp.reason + str(
         rsp.content
     )
     # Good format update with nothing
@@ -72,7 +72,7 @@ def test_project_vars(fastapi):
     # Good format update with bad keys
     vars["e"] = 1
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=upd_json)
-    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY, rsp.reason + str(
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT, rsp.reason + str(
         rsp.text
     )
     # Good format update with good key
@@ -89,10 +89,10 @@ def test_project_vars(fastapi):
     # Syntax error in formula
     vars["subsample_coef"] = "1/toto tutu"
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=upd_json)
-    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY, rsp.reason + str(
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT, rsp.reason + str(
         rsp.text
     )
     # TODO: Unknown col in formula
     # vars["subsample_coef"] = "1/sup_part"
     # rsp = fastapi.put(url, headers=ADMIN_AUTH, json=upd_json)
-    # assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY, rsp.reason + str(rsp.text)
+    # assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT, rsp.reason + str(rsp.text)

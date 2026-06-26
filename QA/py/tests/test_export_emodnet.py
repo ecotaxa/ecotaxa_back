@@ -163,9 +163,7 @@ def exportable_collection(fastapi, admin_or_creator):
 
     # Update the collection to fill in missing data
     def update_cb(the_coll):
-        the_coll[
-            "abstract"
-        ] = """
+        the_coll["abstract"] = """
 This series is part of the long term planktonic monitoring of
     # Villefranche-sur-mer, which is one of the oldest and richest in the world.
     # The data collection and processing has been funded by several projects
@@ -546,7 +544,7 @@ def test_emodnet_invalid_req(fastapi):
         "is_collection": True,
     }
     rsp = fastapi.put(TAXORECAST_URL, json=recastreq, headers=ADMIN_AUTH)
-    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     assert "inconsistent" in str(rsp.content)
 
 

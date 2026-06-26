@@ -255,7 +255,7 @@ class ValidityThrower(object):
             if exc_type == AssertionError:
                 if exc_val.args:
                     raise HTTPException(
-                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                         detail=exc_val.args[0],
                     )
             # Re-raise
@@ -327,7 +327,7 @@ class MyORJSONResponse(JSONResponse):
 def _get_range_header(range_header: str, file_size: int) -> Tuple[int, int]:
     def _invalid_range():
         return HTTPException(
-            status.HTTP_416_REQUESTED_RANGE_NOT_SATISFIABLE,
+            status.HTTP_416_RANGE_NOT_SATISFIABLE,
             detail=f"Invalid/unsupported request range (Range:{range_header!r})",
         )
 

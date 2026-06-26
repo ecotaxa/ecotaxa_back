@@ -8,7 +8,7 @@ from typing import List, Optional, Any, Dict
 
 from fastapi import HTTPException
 from pydantic import field_validator, ConfigDict
-from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
+from starlette.status import HTTP_422_UNPROCESSABLE_CONTENT
 
 from API_models.crud import ProjectSummaryModel
 from API_models.helpers.DBtoModel import OrmConfig, combine_models
@@ -47,7 +47,7 @@ class TaxoRecastRsp(BaseModel):
     def ensure_consistent_renaming(cls, v):
         resp = TaxoRecastBO.valid_remap(v)
         if resp is not None:
-            raise HTTPException(HTTP_422_UNPROCESSABLE_ENTITY, detail=[resp])
+            raise HTTPException(HTTP_422_UNPROCESSABLE_CONTENT, detail=[resp])
         return v
 
     model_config = ConfigDict(extra="forbid")
@@ -230,7 +230,7 @@ class TaxonomyRecastReq(BaseModel):
     def ensure_consistent_renaming(cls, v):
         resp = TaxoRecastBO.valid_remap(v.from_to)
         if resp is not None:
-            raise HTTPException(HTTP_422_UNPROCESSABLE_ENTITY, detail=[resp])
+            raise HTTPException(HTTP_422_UNPROCESSABLE_CONTENT, detail=[resp])
         return v
 
 

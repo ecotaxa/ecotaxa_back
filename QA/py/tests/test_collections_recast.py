@@ -67,16 +67,16 @@ def test_collection_taxo_recast_endpoint(fastapi):
         "doc": {"6789": "Bump up one level"},
     }
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=recast)
-    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     recast = {
         "from_to": {"12345": 0, "6789": 123, 12: 127},
         "doc": {"6789": "Bump up one level"},
     }
     rsp2 = fastapi.put(url, headers=ADMIN_AUTH, json=recast)
-    assert rsp2.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert rsp2.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     recast = {
         "from_to": {"12345": 0, "6789": 123, "12": 127},
         "no_doc": {"6789": "Bump up one level"},
     }
     rsp2 = fastapi.put(url, headers=ADMIN_AUTH, json=recast)
-    assert rsp2.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert rsp2.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
