@@ -7,7 +7,14 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional, List, Dict, NamedTuple, Tuple
 
-from sqlalchemy import tuple_, values, column, Integer, Date
+from sqlalchemy import (
+    tuple_,
+    values,
+    column,
+    Integer,
+    DateTime as sqla_DateTime,
+    BigInteger,
+)
 
 from BO.Classification import (
     HistoricalLastClassif,
@@ -261,66 +268,80 @@ class PredictionBO(object):
         ]
         if len(pred_histos) == 0:
             return
-        pred_histos_vals = values(
-            column("objid", Integer),
-            column("histo_classif_date", Date),
-            column("histo_classif_id", Integer),
-            name="histo",
-        ).data(pred_histos)
-        # Determine historized PredictionHisto rows to resurrect. A bit tricky as all we have is dates.
-        histo_sel = select(
-            PredictionHisto.training_id,
-            PredictionHisto.object_id,
-            PredictionHisto.classif_id,
-            PredictionHisto.score,
-        )
-        histo_sel = histo_sel.join(
-            Training, Training.training_id == PredictionHisto.training_id
-        )
-        histo_sel = histo_sel.join(
-            ObjectsClassifHisto,
-            and_(  # We start from a single line per obj and eventually end up in several, with all possible scores
-                ObjectsClassifHisto.objid == PredictionHisto.object_id,
-                ObjectsClassifHisto.classif_date.between(
-                    Training.training_start, Training.training_end
-                ),
-            ),
-        )
-        histo_sel = histo_sel.join(
-            pred_histos_vals,
-            and_(
-                ObjectsClassifHisto.objid == pred_histos_vals.c.objid,
-                ObjectsClassifHisto.classif_date
-                == pred_histos_vals.c.histo_classif_date,
-                ObjectsClassifHisto.classif_id == pred_histos_vals.c.histo_classif_id,
-            ),
-        )
-        # Insert historized PredictionHisto into Prediction
-        resurrect_qry = Prediction.__table__.insert().from_select(
-            [
-                PredictionHisto.training_id.name,
-                PredictionHisto.object_id.name,
-                PredictionHisto.classif_id.name,
-                PredictionHisto.score.name,
-            ],
-            histo_sel,
-        )
-        res = self.session.execute(resurrect_qry)
-        # If nothing was resurrected from PredictionHisto, rebuild from Training matching dates
-        if res.rowcount == 0:  # type: ignore  # case1
-            self.reconstruct_predictions(histo)
 
-        # Remove history which is now current
-        histo_pred_del_qry: Delete = PredictionHisto.__table__.delete()
-        histo_pred_del_qry = histo_pred_del_qry.where(
-            tuple_(  # type: ignore
+        # Use a chunk size to avoid "too many parameters" SQL error
+        CHUNK_SIZE = 4096
+        any_resurrected = False
+
+        for i in range(0, len(pred_histos), CHUNK_SIZE):
+            chunk = pred_histos[i : i + CHUNK_SIZE]
+
+            pred_histos_vals = values(
+                column("objid", BigInteger),
+                column("histo_classif_date", sqla_DateTime),
+                column("histo_classif_id", Integer),
+                name="histo",
+            ).data(chunk)
+            # Determine historized PredictionHisto rows to resurrect. A bit tricky as all we have is dates.
+            histo_sel = select(
                 PredictionHisto.training_id,
                 PredictionHisto.object_id,
                 PredictionHisto.classif_id,
                 PredictionHisto.score,
-            ).in_(histo_sel)
-        )
-        self.session.execute(histo_pred_del_qry)
+            )
+            histo_sel = histo_sel.join(
+                Training, Training.training_id == PredictionHisto.training_id
+            )
+            histo_sel = histo_sel.join(
+                ObjectsClassifHisto,
+                and_(  # We start from a single line per obj and eventually end up in several, with all possible scores
+                    ObjectsClassifHisto.objid == PredictionHisto.object_id,
+                    ObjectsClassifHisto.classif_date.between(
+                        Training.training_start, Training.training_end
+                    ),
+                ),
+            )
+            histo_sel = histo_sel.join(
+                pred_histos_vals,
+                and_(
+                    ObjectsClassifHisto.objid == pred_histos_vals.c.objid,
+                    ObjectsClassifHisto.classif_date
+                    == pred_histos_vals.c.histo_classif_date,
+                    ObjectsClassifHisto.classif_id
+                    == pred_histos_vals.c.histo_classif_id,
+                ),
+            )
+            # Insert historized PredictionHisto into Prediction
+            resurrect_qry = Prediction.__table__.insert().from_select(
+                [
+                    PredictionHisto.training_id.name,
+                    PredictionHisto.object_id.name,
+                    PredictionHisto.classif_id.name,
+                    PredictionHisto.score.name,
+                ],
+                histo_sel,
+            )
+            # Need to RETURN something, rowcount is -1 in this case
+            resurrect_qry = resurrect_qry.returning(Prediction.object_id)
+            res = self.session.execute(resurrect_qry)
+            inserted_rows = res.all()
+            if len(inserted_rows) == 0:
+                any_resurrected = True
+
+            # Remove history which is now current
+            histo_pred_del_qry: Delete = PredictionHisto.__table__.delete()
+            histo_pred_del_qry = histo_pred_del_qry.where(
+                tuple_(
+                    PredictionHisto.training_id,
+                    PredictionHisto.object_id,
+                    PredictionHisto.classif_id,
+                    PredictionHisto.score,
+                ).in_(histo_sel)
+            )
+            self.session.execute(histo_pred_del_qry)
+        # If nothing was resurrected from PredictionHisto across all chunks, rebuild
+        if not any_resurrected:
+            self.reconstruct_predictions(histo)
 
     def reconstruct_predictions(self, histo: List[HistoricalLastClassif]):
         # Rebuild one prediction per object using the training that matches the date
@@ -330,7 +351,8 @@ class PredictionBO(object):
         for an_histo in histo:
             if an_histo.histo_classif_qual != PREDICTED_CLASSIF_QUAL:
                 continue
-            assert an_histo.histo_classif_who is not None  # mypy
+            if an_histo.histo_classif_who is None:
+                continue
             # Find matching training
             matching_training = (
                 self.session.query(Training.training_id)
