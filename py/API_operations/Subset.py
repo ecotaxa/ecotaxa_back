@@ -4,8 +4,9 @@
 #
 import shutil
 from pathlib import Path
-from typing import List, Tuple, Dict, Set, Iterable, Sequence
+from typing import List, Tuple, Dict, Set, Iterable, Sequence, cast
 
+from API_models.filters import ProjectFiltersDict
 from API_models.subset import SubsetReq, SubsetRsp, LimitMethods, GroupDefinitions
 from BO.Bundle import InBundle
 from BO.Mappings import ProjectMapping
@@ -392,7 +393,10 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
 
         # Prepare a where clause and parameters from filter
         object_set: DescribedObjectSet = DescribedObjectSet(
-            self.session, self.prj, self._get_owner_id(), self.req.filters
+            self.session,
+            self.prj,
+            self._get_owner_id(),
+            cast(ProjectFiltersDict, self.req.filters),
         )
         select_clause = SelectClause().add_expr("obh.objid")
         from_, where, params = object_set.get_sql(select_clause)

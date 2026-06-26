@@ -3,6 +3,7 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 from enum import Enum
+from typing import List
 
 from API_models.filters import ProjectFiltersDict
 from helpers.pydantic import BaseModel, ConfigDict, Field
@@ -23,7 +24,7 @@ class GroupDefinitions(str, Enum):
 class SubsetReq(BaseModel):
     """Subset request."""
 
-    filters: ProjectFiltersDict = Field(
+    filters: ProjectFiltersDict | List = Field(  # frontend issue
         title="Filters",
         description="The filters to apply to project.",
         default_factory=ProjectFiltersDict,

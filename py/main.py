@@ -1481,6 +1481,8 @@ def project_subset(
     """
     **Subset a project into another one.**
     """
+    if isinstance(params.filters, List):
+        params.filters = {}  # TODO: Fix client-side
     with SubsetServiceOnProject(project_id, params) as sce:
         with RightsThrower():
             ret = sce.run(current_user)
