@@ -18,10 +18,11 @@ from BO.Job import JobBO
 from BO.Project import ProjectBO
 from BO.Rights import RightsBO
 from BO.Taxonomy import TaxonomyBO
+from sqlalchemy import select, exists, delete, update
 from DB.Acquisition import ACQ_PRJ_OFFSET
 from DB.Job import JobIDT, Job
-from DB.Object import OBJ_PRJ_OFFSET
-from DB.Prediction import PredictionHisto
+from DB.Object import OBJ_PRJ_OFFSET, ObjectHeader, PREDICTED_CLASSIF_QUAL
+from DB.Prediction import PredictionHisto, Prediction
 from DB.Project import Project, ProjectIDListT
 from DB.Sample import SAM_PRJ_OFFSET
 from DB.Training import Training, IN_PROGRESS_DATE
@@ -84,7 +85,9 @@ class NightlyJobService(JobServiceBase):
     def do_start(self) -> None:
         logger.info("Job starting")
         self.update_progress(0, "Starting")
-        all_prj_ids = [proj_id for proj_id, in self.ro_session.query(Project.projid)]
+        all_prj_ids = [
+            proj_id for proj_id in self.ro_session.scalars(select(Project.projid))
+        ]
         all_prj_ids.sort()
         # Release transaction, otherwise (if idle_in_transaction_session_timeout is set) the connection could expire
         self.ro_session.commit()
@@ -170,19 +173,19 @@ class NightlyJobService(JobServiceBase):
         logger.info("Starting cleanup of old jobs")
         thirty_days_ago = datetime.datetime.today() - datetime.timedelta(days=30)
         old_jobs_qry_1 = (
-            self.ro_session.query(Job.id)
+            select(Job.id)
             .filter(Job.id > 0)
             .filter(Job.creation_date < thirty_days_ago)
         )
-        old_jobs = [an_id for an_id, in old_jobs_qry_1]
+        old_jobs = self.ro_session.scalars(old_jobs_qry_1).all()
         one_week_ago = datetime.datetime.today() - datetime.timedelta(days=7)
         old_jobs_qry_2 = (
-            self.ro_session.query(Job.id)
+            select(Job.id)
             .filter(Job.id > 0)
             .filter(Job.creation_date < one_week_ago)
             .filter(Job.state == "F")
         )
-        old_jobs_2 = [an_id for an_id, in old_jobs_qry_2]
+        old_jobs_2 = self.ro_session.scalars(old_jobs_qry_2).all()
         to_clean = set(old_jobs).union(set(old_jobs_2))
         logger.info("About to clean %d jobs %s", len(to_clean), to_clean)
         temp_for_job = TempDirForTasks(self.config.jobs_dir())
@@ -210,21 +213,23 @@ class NightlyJobService(JobServiceBase):
         # Find training ids that ended more than 3 months ago
         # We also check that they are actually in PredictionHisto to only log when we delete something
         old_trainings_with_histo_qry = (
-            self.session.query(Training.training_id)
+            select(Training.training_id)
             .join(PredictionHisto, Training.training_id == PredictionHisto.training_id)
             .filter(Training.training_end < three_months_ago)
             .distinct()
         )
-        to_clean_ids = [t_id for t_id, in old_trainings_with_histo_qry]
+        to_clean_ids = self.session.scalars(old_trainings_with_histo_qry).all()
         if to_clean_ids:
             logger.info(
                 "About to clean PredictionHisto for %d old trainings", len(to_clean_ids)
             )
             chunk = []
             for trn_id in to_clean_ids:
-                self.session.query(PredictionHisto).filter(
-                    PredictionHisto.training_id == trn_id
-                ).delete(synchronize_session=False)
+                self.session.execute(
+                    delete(PredictionHisto).filter(
+                        PredictionHisto.training_id == trn_id
+                    )
+                )
                 chunk.append(trn_id)
                 if len(chunk) == self.REPORT_EVERY:
                     logger.info("Done for PredictionHisto %s", chunk)
@@ -237,16 +242,51 @@ class NightlyJobService(JobServiceBase):
     def clean_aborted_trainings(self, start: int) -> None:
         """
         Remove aborted trainings. They have training_end remaining to IN_PROGRESS_DATE.
+        Except if they are in use by some 'predicted' objects.
         """
         if self.job_id:
             self.update_progress(start, "Cleaning aborted trainings")
         logger.info("Starting cleanup of aborted trainings")
         limit_date = datetime.datetime.now() - datetime.timedelta(days=1)
-        aborted_trainings_qry = self.session.query(Training).filter(
+        aborted_trainings_qry = select(Training).filter(
             Training.training_end == IN_PROGRESS_DATE,
             Training.training_start < limit_date,
         )
-        to_clean = aborted_trainings_qry.all()
+        candidates_to_clean = self.session.scalars(aborted_trainings_qry).all()
+        logger.info("Found %d aborted trainings candidates", len(candidates_to_clean))
+
+        to_clean = []
+        to_rescue = []
+
+        for trn in candidates_to_clean:
+            # Check if this training has any prediction currently used as 'active' by an object
+            is_used_qry = (
+                select(Prediction.training_id)
+                .join(
+                    ObjectHeader,
+                    (Prediction.object_id == ObjectHeader.objid)
+                    & (Prediction.classif_id == ObjectHeader.classif_id)
+                    & (Prediction.score == ObjectHeader.classif_score),
+                )
+                .filter(
+                    Prediction.training_id == trn.training_id,
+                    ObjectHeader.classif_qual == PREDICTED_CLASSIF_QUAL,
+                )
+            )
+            is_used = self.session.scalars(is_used_qry).first() is not None
+
+            if is_used:
+                to_rescue.append(trn)
+            else:
+                to_clean.append(trn)
+
+        if to_rescue:
+            logger.info("Rescuing %d trainings because they are in use", len(to_rescue))
+            now = datetime.datetime.now()
+            for trn in to_rescue:
+                trn.training_end = now
+            self.session.commit()
+
         logger.info("About to clean %d aborted trainings", len(to_clean))
         chunk = []
         for trn in to_clean:

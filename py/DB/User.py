@@ -73,7 +73,7 @@ class Person(Model):
     name: Mapped[str] = mapped_column(String(255))
     country: Mapped[str | None] = mapped_column(String(50))
     orcid: Mapped[str | None] = mapped_column(String(20))
-    type: Mapped[str] = mapped_column(String(10))
+    type: Mapped[str] = mapped_column(String(10), nullable=False)
     usercreationdate: Mapped[datetime | None] = mapped_column(TIMESTAMP, default=func.now())
     organization_id: Mapped[int | None] = mapped_column(
         INTEGER, ForeignKey("organizations.id")

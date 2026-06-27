@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy.orm import mapped_column
+from sqlalchemy import text
 
 from .helpers.DDL import ForeignKey, Index
 from .helpers.ORM import Mapped, Model
@@ -30,10 +31,9 @@ class ObjectCNNFeatureVector(Model):
         object: Mapped[ObjectHeader]
 
 
-# Note: below is OK for CI but different in PROD, see TODO
 Index(
     "obj_cnn_features_vector_hv_ivfflat_l2_5k_idx",
-    ObjectCNNFeatureVector.features,
-    postgresql_using="ivfflat",  # TODO: Not in SQLA wrapper, index args: ((features::halfvec(50)) halfvec_l2_ops)
+    text("((features)::halfvec(50)) halfvec_l2_ops"),
+    postgresql_using="ivfflat",
     postgresql_with={"lists": 5000},
 )
