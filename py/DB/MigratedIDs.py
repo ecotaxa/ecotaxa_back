@@ -10,8 +10,8 @@ from .helpers.Postgres import BIGINT, INTEGER
 
 class ObjidOld2New(Model):
     __tablename__ = "objid_old_2_new"
-    old_id = Column(BIGINT, primary_key=True, autoincrement=False)
-    new_id = Column(BIGINT, nullable=False)
+    old_id = Column(BIGINT, primary_key=True, autoincrement=False, nullable=True)
+    new_id = Column(BIGINT)
 
 
 Index(
@@ -30,14 +30,14 @@ Index(
 
 class SampleIdOld2New(Model):
     __tablename__ = "samid_old_2_new"
-    old_id = Column(INTEGER, primary_key=True, autoincrement=False)
-    new_id = Column(BIGINT, nullable=False)
+    old_id = Column(INTEGER, primary_key=True, autoincrement=False, nullable=True)
+    new_id = Column(BIGINT)
 
 
 class AcquisIdOld2New(Model):
     __tablename__ = "acqid_old_2_new"
-    old_id = Column(INTEGER, primary_key=True, autoincrement=False)
-    new_id = Column(BIGINT, nullable=False)
+    old_id = Column(INTEGER, primary_key=True, autoincrement=False, nullable=True)
+    new_id = Column(BIGINT)
 
 
 Index(

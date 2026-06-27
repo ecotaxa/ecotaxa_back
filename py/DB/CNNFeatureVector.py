@@ -5,6 +5,7 @@
 from typing import List
 
 from pgvector.sqlalchemy import Vector
+from sqlalchemy import text
 
 from .Object import ObjectIDT
 from .helpers.Bean import Bean
@@ -27,11 +28,10 @@ class ObjectCNNFeatureVector(Model):
     object: relationship
 
 
-# Note: below is OK for CI but different in PROD, see TODO
 Index(
     "obj_cnn_features_vector_hv_ivfflat_l2_5k_idx",
-    ObjectCNNFeatureVector.features,
-    postgresql_using="ivfflat",  # TODO: Not in SQLA wrapper, index args: ((features::halfvec(50)) halfvec_l2_ops)
+    text("((features)::halfvec(50)) halfvec_l2_ops"),
+    postgresql_using="ivfflat",
     postgresql_with={"lists": 5000},
 )
 

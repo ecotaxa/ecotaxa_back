@@ -1447,6 +1447,8 @@ DROP SEQUENCE seq_samples;
 DROP SEQUENCE seq_acquisitions;
 DROP SEQUENCE seq_objects;
 
+DROP TABLE projid_old_2_new;
+
 -- Alembic sync
 
 UPDATE alembic_version SET version_num='5d49f4994e0c' WHERE alembic_version.version_num = 'acf6f3fcb35c';

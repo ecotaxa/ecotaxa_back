@@ -71,7 +71,7 @@ class Person(Model):
     name: str = Column(String(255), nullable=False)
     country: str = Column(String(50))
     orcid: str = Column(String(20), nullable=True)
-    type = Column(String(10))
+    type = Column(String(10), nullable=False)
     usercreationdate = Column(TIMESTAMP, default=func.now())
     organization_id = Column(INTEGER, ForeignKey("organizations.id"), nullable=True)
     organization: Organization
