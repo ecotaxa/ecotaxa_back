@@ -243,35 +243,9 @@ The resulting .zip export should be placed in the folder given for `SERVERLOADAR
 A question will be asked during import to map the users mentioned in the export archive to the users present in this local version of EcoTaxa. Simply answer “Application Administrator” for each name to complete the import.  
   
 ## Installation for launching predictions
-  
-To be able to run predictions, you need to run the `gpu_jobs_runner.py` script, which requires libraries that are not part of the requirements already installed. The best solution is to create a new virtual environment.    
-  
-## Librairies installation  
-  
-- Virtual environment creation  
-```shell
-cd ~/ecotaxa_back/py
-python3.8 -m venv gpu_venvsource gpu_venv/bin/activate
-```  
-- Installation of the libraries required for `gpu_jobs_runner.py`.  
-```shell
-pip3 install --upgrade pip wheelpip3 install -r gpu_jobs_reqs.txt
-```  
-  
-## Launch a prediction  
-  
-- Running the script  
-```shell  
-cd ~/ecotaxa_back/py
-source gpu_venv/bin/activate
-python3.8 gpu_jobs_runner.py
-```  
-If this returns an error concerning protobuf, then you can `export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python` and run again.  
-  
-- Once the script has run, you can make a prediction using the classification interface  
-  
-<img src="./images/prediction.png" width=500 />  
-  
+
+Please see instructions in companion repository : https://github.com/ecotaxa/ecotaxa_ML_back
+ 
 # Setup with VSCode on a remote machine  
   
 - Installer Visual Studio Code : https://code.visualstudio.com/  
