@@ -39,15 +39,15 @@ class ProjectFiltersDict(TypedDict, total=False):
     month: Optional[str]
     """ Coma-separated list of month numbers, 1=Jan and so on """
     fromdate: Optional[str]
-    """ Format is 'YYYY-MM-DD', include objects collected after this date """
+    """ Format is 'YYYY-MM-DD', include objects collected at or after this date """
     todate: Optional[str]
-    """ Format is 'YYYY-MM-DD', include objects collected before this date """
+    """ Format is 'YYYY-MM-DD', include objects collected at or before this date """
     fromtime: Optional[str]
-    """ Format is 'HH24:MM:SS', include objects collected after this time of day """
+    """ Format is 'HH24:MM:SS', include objects collected at or after this time of day """
     totime: Optional[str]
-    """ Format is 'HH24:MM:SS', include objects collected before this time of day """
+    """ Format is 'HH24:MM:SS', include objects collected at or before this time of day """
     inverttime: Optional[str]
-    """ If '1', include objects outside fromtime an totime range """
+    """ If '1', include objects collected outside the fromtime and totime range, i.e., where time is at or before fromtime or at or after totime """
     validfromdate: Optional[str]
     """ Format is 'YYYY-MM-DD HH24:MI', include objects validated/set to dubious after this date+time """
     validtodate: Optional[str]
@@ -152,27 +152,27 @@ class _ProjectFilters2Model(DescriptiveModel):
     )
     fromdate = Field(
         title="From date",
-        description="Format is 'YYYY-MM-DD', include objects collected after this date.",
+        description="Format is 'YYYY-MM-DD', include objects collected at or after this date.",
         example="2020-10-09",
     )
     todate = Field(
         title="To date",
-        description="Format is 'YYYY-MM-DD', include objects collected before this date.",
+        description="Format is 'YYYY-MM-DD', include objects collected at or before this date.",
         example="2021-10-09",
     )
     fromtime = Field(
         title="From time",
-        description="Format is 'HH24:MM:SS', include objects collected after this time of day.",
+        description="Format is 'HH24:MM:SS', include objects collected at or after this time of day.",
         example="1:17:00",
     )
     totime = Field(
         title="To time",
-        description="Format is 'HH24:MM:SS', include objects collected before this time of day.",
+        description="Format is 'HH24:MM:SS', include objects collected at or before this time of day.",
         example="23:32:00",
     )
     inverttime = Field(
         title="Invert time",
-        description="If '1', include objects outside fromtime and totime range.",
+        description="If '1', include objects collected outside the fromtime and totime range, i.e., where time is at or before fromtime or at or after totime.",
         example="0",
     )
     validfromdate = Field(
