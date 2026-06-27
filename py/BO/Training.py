@@ -325,7 +325,7 @@ class PredictionBO(object):
             resurrect_qry = resurrect_qry.returning(Prediction.object_id)
             res = self.session.execute(resurrect_qry)
             inserted_rows = res.all()
-            if len(inserted_rows) == 0:
+            if len(inserted_rows) > 0:
                 any_resurrected = True
 
             # Remove history which is now current
