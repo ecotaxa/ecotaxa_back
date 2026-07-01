@@ -212,7 +212,7 @@ class _Project2Model(DescriptiveModel):
             "depth_min=depth_min\r\ndepth_max=depth_max\r\narea=area [pixel]\r\nmean=mean [0-255]\r\nfractal=fractal\r\nmajor=major [pixel]\r\nsymetrieh=symetrieh\r\ncirc.=circ\r\nferet = Feret [pixel]"
         ],
     )
-    comments = Field(
+    comments: str = Field(
         title="Comments", description="The project comments.", examples=[""]
     )
     rf_models_used: str = Field(title="Rf models used", description="", examples=[""])

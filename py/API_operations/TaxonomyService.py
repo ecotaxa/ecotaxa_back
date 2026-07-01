@@ -19,7 +19,7 @@ from API_models.taxonomy import (
 from API_operations.helpers.Service import Service
 from BO.Classification import ClassifIDT, ClassifIDListT
 from BO.Collection import CollectionIDT
-from BO.Project import ProjectBOSet
+from BO.Project import ProjectBO
 from BO.ReClassifyLog import ReClassificationBO
 from BO.TaxoRecast import TaxoRecastBO
 from BO.Taxonomy import TaxonomyBO, TaxonBO, TaxonBOSet, WoRMSBO
@@ -77,7 +77,7 @@ class TaxonomyService(Service):
         # Get preset list, to favor in result order
         preset = set()
         if prj_id is not None:
-            the_prj = ProjectBOSet.get_one(self.ro_session, prj_id)
+            the_prj = ProjectBO.get_one(self.ro_session, prj_id)
             if the_prj is not None:
                 include_ids = the_prj.get_preset()
                 preset = set(include_ids)

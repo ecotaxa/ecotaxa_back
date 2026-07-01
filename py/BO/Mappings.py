@@ -249,17 +249,6 @@ class ProjectSetMapping(object):
         # to track emptiness after load
         self.was_empty = False
 
-    def write_to_projects(self, prjs: List[Project]) -> None:
-        """
-        Write the mappings into given Projects, new form.
-        """
-        # not in use for now
-        for prj in prjs:
-            prj.mappingobj = self.object_mappings.as_json()
-            prj.mappingsample = self.sample_mappings.as_json()
-            prj.mappingacq = self.acquisition_mappings.as_json()
-            prj.mappingprocess = self.process_mappings.as_json()
-
     def load_from_projects(self, prjs: List[Project]) -> "ProjectSetMapping":
         """
         Load self from Project fields serialization.
@@ -309,47 +298,6 @@ class ProjectSetMapping(object):
             a_mapping.load_from_dict(in_dict[a_mapping.table_name])
         self.was_empty = self.is_empty()
         return self
-
-    def add_column(
-        self, target_table: str, tsv_table: str, tsv_field: str, sel_type
-    ) -> Tuple[bool, str]:
-        """
-        A new custom column was found, add it into the right bucket.
-        :return: True if the target column exists in target table, i.e. if addition was possible.
-        """
-        for_table: TableMapping = self.by_table_name[target_table]
-        ok_exists = for_table.add_column_for_table(tsv_field, sel_type)
-        real_col = for_table.tsv_cols_to_real[tsv_field]
-        return ok_exists, real_col
-
-    def search_field(self, full_tsv_field: str) -> Optional[Dict]:
-        """
-        Return the storage (i.e. target of mapping) for a custom field in given table.
-        e.g. acq_operator -> {'acquisition', 't02', 't'}
-        """
-        try:
-            prfx, tsv_col = full_tsv_field.split("_", 1)
-        except ValueError:
-            return None  # Not the expected separator
-        table_name = PREFIX_TO_TABLE.get(prfx)
-        if table_name is None:
-            return None  # Not a known prefix
-        mping = self.by_table_name[table_name]
-        real_col = mping.tsv_cols_to_real.get(tsv_col)
-        if real_col is None:
-            return None  # Not a known column for this prefix
-        return {"table": table_name, "field": real_col, "type": real_col[0]}
-
-    def all_field_names(self) -> Set[str]:
-        """
-        Return all mapped field names.
-        """
-        ret = set()
-        for a_mapping in self.all:
-            tbl = a_mapping.table_name
-            prfx = TABLE_TO_PREFIX.get(tbl, tbl)
-            ret.update(a_mapping.tsv_cols_prefixed(prfx))
-        return ret
 
     def is_empty(self):
         for a_mapping in self.all:
@@ -531,24 +479,14 @@ class TableMapping(object):
         if str_mapping.startswith("{"):
             # e.g. {"area": "n01", "bbox-0": "n02", "bbox-1": "n03"}
             self.tsv_cols_to_real = orjson.loads(str_mapping)
-            tsv_cols_to_real = self.tsv_cols_to_real
-            self.real_cols_to_tsv = {
-                v: k for k, v in sorted(tsv_cols_to_real.items(), key=lambda kv: kv[1])
-            }  # Paranoid re-sort
+            # Paranoid re-sort
+            inverted = sorted((v, k) for k, v in self.tsv_cols_to_real.items())
+            self.real_cols_to_tsv = dict(inverted)
             return self
-        tsv_cols_to_real = {}
-        real_cols_to_tsv = {}
-        for a_map in str_mapping.splitlines():
-            if not a_map:
-                # Empty lines are tolerated
-                continue
-            db_col, tsv_col_no_prfx = a_map.split("=", 1)
-            # self.add_association(db_col, tsv_col_no_prfx)
-            # Above is too slow for many (all!) projects, below is an equivalent rewrite
-            real_cols_to_tsv[db_col] = tsv_col_no_prfx
-            tsv_cols_to_real[tsv_col_no_prfx] = db_col
-        self.real_cols_to_tsv = real_cols_to_tsv
-        self.tsv_cols_to_real = tsv_cols_to_real
+        # Get all non-empty lines
+        pairs = [a_map.split("=", 1) for a_map in str_mapping.splitlines() if a_map]
+        self.real_cols_to_tsv = dict(pairs)
+        self.tsv_cols_to_real = {v: k for k, v in self.real_cols_to_tsv.items()}
         return self
 
     def load_from_dict(self, dict_mapping: dict) -> None:

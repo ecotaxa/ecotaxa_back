@@ -164,9 +164,7 @@ class ProjectsService(Service):
                 prj_id,
             )
             highest_right = RightsBO.highest_right_on(current_user, prj_id)
-        ret = ProjectBOSet.get_one(
-            self.session if for_update else self.ro_session, prj_id
-        )
+        ret = ProjectBO.get_one(self.session if for_update else self.ro_session, prj_id)
         assert ret is not None
         ret.highest_right = highest_right
         return ret

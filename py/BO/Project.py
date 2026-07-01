@@ -183,6 +183,16 @@ class ProjectBO(object):
         # Formulas AKA variables, used to compute BODC quantities
         self.bodc_variables: Dict[str, str] = {}
 
+    @staticmethod
+    def get_one(session: Session, prj_id: ProjectIDT) -> Optional[ProjectBO]:
+        """
+        Get an enriched single BO per its id
+        """
+        prj = session.get_one(Project, prj_id)
+        if prj is not None:
+            return ProjectBO(prj).enrich()
+        return None
+
     def get_preset(self) -> ClassifIDListT:
         """
         Return the list of preset classification IDs.
