@@ -32,7 +32,6 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.logger import logger as fastapi_logger
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.templating import Jinja2Templates
-# from fastapi_utils.timing import add_timing_middleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import JSONResponse
@@ -183,11 +182,11 @@ from helpers.fastApiUtils import (
     ValidityThrower,
     adjust_if_ranged,
     regular_mem_cleanup,
+    add_timing_middleware,
 )
 from helpers.login import LoginService
 from helpers.pydantic import sort_and_prune
 
-# from fastapi_utils.timing import add_timing_middleware
 # from sqlalchemy.sql.expression import null
 
 # from fastapi.middleware.gzip import GZipMiddleware
@@ -217,9 +216,6 @@ app = FastAPI(
 init_openid()
 
 app.include_router(openid_router)
-
-# Instrument a bit
-# add_timing_middleware(app, record=logger.info, prefix="app", exclude="untimed")
 
 app.add_middleware(
     SessionMiddleware,
@@ -4309,6 +4305,23 @@ async def get_image(  # async due to StreamingResponse
 #     import time
 #     time.sleep(random()/10)
 #     return Response(sce.run(), media_type="text/plain")
+
+
+# Instrument a bit
+@app.middleware("http")
+async def timing_middleware(request: Request, call_next):
+    start_wall = time.perf_counter()
+    start_cpu = time.process_time()
+    response = await call_next(request)
+    wall_ms = (time.perf_counter() - start_wall) * 1000
+    cpu_ms = (time.process_time() - start_cpu) * 1000
+    endpoint = request.scope.get("endpoint")
+    func_name = (
+        f"{endpoint.__module__}.{endpoint.__name__}" if endpoint else request.url.path
+    )
+    logger.info(f"TIMING: Wall: {wall_ms:7.1f}ms | CPU: {cpu_ms:7.1f}ms | {func_name}")
+    return response
+
 
 app.add_exception_handler(
     status.HTTP_500_INTERNAL_SERVER_ERROR, internal_server_error_handler

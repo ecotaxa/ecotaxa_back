@@ -38,6 +38,37 @@ from helpers.AppConfig import Config
 from .starlette import status, PlainTextResponse
 
 
+def add_timing_middleware(
+    app: FastAPI,
+    record: Optional[Any] = None,
+    prefix: str = "",
+    exclude: Optional[Union[str, List[str]]] = None,
+) -> None:
+    """
+    A simple replacement for fastapi_utils.timing.add_timing_middleware.
+    """
+
+    if record is None:
+        logger = logging.getLogger("timing")
+        record = logger.info
+
+    @app.middleware("http")
+    async def timing_middleware(request: Request, call_next):
+        start_wall = time.perf_counter()
+        start_cpu = time.process_time()
+        response = await call_next(request)
+        wall_ms = (time.perf_counter() - start_wall) * 1000
+        cpu_ms = (time.process_time() - start_cpu) * 1000
+        endpoint = request.scope.get("endpoint")
+        func_name = (
+            f"{endpoint.__module__}.{endpoint.__name__}"
+            if endpoint
+            else request.url.path
+        )
+        record(f"TIMING: Wall: {wall_ms:7.1f}ms | CPU: {cpu_ms:7.1f}ms | {func_name}")
+        return response
+
+
 async def internal_server_error_handler(
     _request: Any, exc: Exception
 ) -> PlainTextResponse:
