@@ -182,7 +182,6 @@ from helpers.fastApiUtils import (
     ValidityThrower,
     adjust_if_ranged,
     regular_mem_cleanup,
-    add_timing_middleware,
 )
 from helpers.login import LoginService
 from helpers.pydantic import sort_and_prune
