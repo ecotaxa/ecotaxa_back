@@ -23,13 +23,17 @@ class Collection(Model):
     """A set of projects see #82, #335, #519"""
 
     __tablename__ = "collection"
-    id: Mapped[int] = mapped_column(INTEGER, Sequence("collection_id_seq"), primary_key=True)
+    id: Mapped[int] = mapped_column(
+        INTEGER, Sequence("collection_id_seq"), primary_key=True
+    )
     """ Internal identifier """
     external_id: Mapped[str] = mapped_column(VARCHAR)
     """ External identifier, e.g. doi:10.xxxx/eml.1.1 """
     external_id_system: Mapped[str] = mapped_column(VARCHAR)
     """ External identifier system, e.g. https://doi.org """
-    provider_user_id: Mapped[int | None] = mapped_column(INTEGER, ForeignKey("users.id"))
+    provider_user_id: Mapped[int | None] = mapped_column(
+        INTEGER, ForeignKey("users.id")
+    )
     title: Mapped[str] = mapped_column(VARCHAR)
     short_title: Mapped[str | None] = mapped_column(VARCHAR(64))
     """ A shorter and constrained title for the collection """
@@ -59,8 +63,12 @@ Index("CollectionShortTitle", Collection.__table__.c.short_title, unique=True)
 class CollectionProject(Model):
     __tablename__ = "collection_project"
     """ n<->n plain relationship b/w collection and projects """
-    collection_id: Mapped[int] = mapped_column(INTEGER, ForeignKey("collection.id"), primary_key=True)
-    project_id: Mapped[int] = mapped_column(INTEGER, ForeignKey("projects.projid"), primary_key=True)
+    collection_id: Mapped[int] = mapped_column(
+        INTEGER, ForeignKey("collection.id"), primary_key=True
+    )
+    project_id: Mapped[int] = mapped_column(
+        INTEGER, ForeignKey("projects.projid"), primary_key=True
+    )
 
     def __str__(self) -> str:
         return "{0},{1}".format(self.collection_id, self.project_id)
@@ -74,8 +82,12 @@ COLLECTION_ROLE_INSTITUTION_CODE_PROVIDER = "P"
 class CollectionUserRole(Model):
     __tablename__ = "collection_user_role"
     """ n<->n valued (with role) relationship b/w collection and users """
-    collection_id: Mapped[int] = mapped_column(INTEGER, ForeignKey("collection.id"), primary_key=True)
-    user_id: Mapped[int] = mapped_column(INTEGER, ForeignKey("users.id"), primary_key=True)
+    collection_id: Mapped[int] = mapped_column(
+        INTEGER, ForeignKey("collection.id"), primary_key=True
+    )
+    user_id: Mapped[int] = mapped_column(
+        INTEGER, ForeignKey("users.id"), primary_key=True
+    )
     role: Mapped[str] = mapped_column(VARCHAR(1), primary_key=True)
     display_order: Mapped[int | None] = mapped_column(INTEGER)
 
@@ -92,7 +104,9 @@ class CollectionUserRole(Model):
 class CollectionOrgaRole(Model):
     __tablename__ = "collection_orga_role"
     """ n<->n valued relationship b/w collection and organisations """
-    collection_id: Mapped[int] = mapped_column(INTEGER, ForeignKey("collection.id"), primary_key=True)
+    collection_id: Mapped[int] = mapped_column(
+        INTEGER, ForeignKey("collection.id"), primary_key=True
+    )
     organization_id: Mapped[int] = mapped_column(
         INTEGER, ForeignKey("organizations.id"), primary_key=True
     )

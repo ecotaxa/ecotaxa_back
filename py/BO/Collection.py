@@ -304,7 +304,7 @@ class CollectionBO(object):
                 for a_user in a_user_list:
                     user_id = CollectionBO.get_user_id(session, a_user)
                     if user_id is None:
-                        continue # mypy
+                        continue  # mypy
                     collurole = CollectionUserRole()
                     collurole.collection_id = coll_id
                     collurole.user_id = user_id

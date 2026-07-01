@@ -5,5 +5,8 @@
 #
 # SQLAlchemy core imports, for re-export. If you don't need the ORM, querying using below primitives is much faster.
 #
+from typing import List
+
+from sqlalchemy.sql import Select
 
 from sqlalchemy.sql import select, Select, delete, Delete, update, Update

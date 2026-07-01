@@ -70,9 +70,7 @@ class Image(Model):
         return self.thumb_img_from_id_if_there(self.imgid, self.thumb_height)
 
     @staticmethod
-    def thumb_img_from_id_if_there(
-        imgid: int, thumb_height: int | None
-    ) -> str | None:
+    def thumb_img_from_id_if_there(imgid: int, thumb_height: int | None) -> str | None:
         # Thumbnails are all .jpg with same naming scheme, if present
         if thumb_height is None:
             return None

@@ -23,6 +23,7 @@ class UTCFormatter(logging.Formatter):
     def converter(timestamp: float | None = None) -> time.struct_time:
         return time.gmtime(timestamp)
 
+
 class PerThreadHandler(Handler):
     """
     A constant Handler to a switching destination.

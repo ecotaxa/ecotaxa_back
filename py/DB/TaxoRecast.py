@@ -36,7 +36,9 @@ class TaxoRecast(Model):
     """
 
     __tablename__ = "taxo_recast"
-    recast_id: Mapped[int] = mapped_column(INTEGER, Identity(always=True), primary_key=True)
+    recast_id: Mapped[int] = mapped_column(
+        INTEGER, Identity(always=True), primary_key=True
+    )
     # The context is: all projects in this specific collection
     collection_id: Mapped[int | None] = mapped_column(
         INTEGER, ForeignKey("collection.id", ondelete="CASCADE")

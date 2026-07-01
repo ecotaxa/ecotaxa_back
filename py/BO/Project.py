@@ -1018,17 +1018,6 @@ class ProjectBOSet(object):
     def as_list(self) -> List[ProjectBO]:
         return self.projects
 
-    @staticmethod
-    def get_one(session: Session, prj_ids: ProjectIDT) -> Optional[ProjectBO]:
-        """
-        Get a single BO per its id
-        """
-        mini_set = ProjectBOSet(session, [prj_ids])
-        if len(mini_set.projects) > 0:
-            return mini_set.projects[0]
-        else:
-            return None
-
 
 class CollectionProjectBOSet(ProjectBOSet):
     """

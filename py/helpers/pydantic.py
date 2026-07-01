@@ -3,6 +3,7 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 import inspect
+
 # noinspection PyUnresolvedReferences,PyPackageRequirements
 from typing import List, Any, Optional, Dict, Type, TYPE_CHECKING
 
@@ -17,6 +18,7 @@ from pydantic import (
     field_validator,
     dataclasses,
 )
+
 # noinspection PyUnresolvedReferences
 from pydantic.fields import FieldInfo
 

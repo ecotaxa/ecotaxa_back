@@ -74,7 +74,9 @@ class Person(Model):
     country: Mapped[str | None] = mapped_column(String(50))
     orcid: Mapped[str | None] = mapped_column(String(20))
     type: Mapped[str] = mapped_column(String(10), nullable=False)
-    usercreationdate: Mapped[datetime | None] = mapped_column(TIMESTAMP, default=func.now())
+    usercreationdate: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP, default=func.now()
+    )
     organization_id: Mapped[int | None] = mapped_column(
         INTEGER, ForeignKey("organizations.id")
     )
@@ -156,7 +158,9 @@ class Role(Model):
     """
 
     __tablename__ = "roles"
-    id: Mapped[int] = mapped_column(Integer(), primary_key=True)  # ,Sequence('seq_roles')
+    id: Mapped[int] = mapped_column(
+        Integer(), primary_key=True
+    )  # ,Sequence('seq_roles')
     name: Mapped[str] = mapped_column(String(80), unique=True)
 
     if TYPE_CHECKING:
@@ -231,9 +235,7 @@ class TempPasswordReset(Model):
         primary_key=True,
     )
     temp_password: Mapped[str] = mapped_column(String(255))
-    creation_date: Mapped[datetime] = mapped_column(
-        TIMESTAMP, default=func.now()
-    )
+    creation_date: Mapped[datetime] = mapped_column(TIMESTAMP, default=func.now())
 
 
 class UserQuality(Model):

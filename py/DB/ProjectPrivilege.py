@@ -24,7 +24,9 @@ class ProjectPrivilege(Model):
 
     __tablename__ = "projectspriv"
     # TODO: Isn't there a natural PK with all columns?
-    id: Mapped[int] = mapped_column(INTEGER, Sequence("seq_projectspriv"), primary_key=True)
+    id: Mapped[int] = mapped_column(
+        INTEGER, Sequence("seq_projectspriv"), primary_key=True
+    )
 
     # links
     projid: Mapped[int] = mapped_column(

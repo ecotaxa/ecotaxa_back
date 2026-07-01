@@ -51,7 +51,9 @@ class Taxonomy(Model):
         CHAR(1), server_default="P"
     )  # P = Phylo , M = Morpho
     # display_name is suffixed in EcoTaxoServer with (Deprecated) when taxostatus is 'D'
-    display_name: Mapped[str | None] = mapped_column(VARCHAR(200))  # Unique, to disambiguate ties in names
+    display_name: Mapped[str | None] = mapped_column(
+        VARCHAR(200)
+    )  # Unique, to disambiguate ties in names
     lastupdate_datetime: Mapped[datetime | None] = mapped_column(TIMESTAMP(precision=0))
     id_instance: Mapped[int | None] = mapped_column(INTEGER)
     taxostatus: Mapped[str] = mapped_column(
@@ -66,7 +68,9 @@ class Taxonomy(Model):
     source_desc: Mapped[str | None] = mapped_column(VARCHAR(1000))
     creator_email: Mapped[str | None] = mapped_column(VARCHAR(255))
     creation_datetime: Mapped[datetime | None] = mapped_column(TIMESTAMP(precision=0))
-    nbrobj: Mapped[int | None] = mapped_column(INTEGER)  # Number of objects with this as classif_id
+    nbrobj: Mapped[int | None] = mapped_column(
+        INTEGER
+    )  # Number of objects with this as classif_id
     nbrobjcum: Mapped[int | None] = mapped_column(
         INTEGER
     )  # Number of objects with this, or any descendant, as classif_id
@@ -90,7 +94,9 @@ class TaxonomyTreeInfo(Model):
 
     __tablename__ = "persistantdatatable"  # The most pleonasmic DB table name _ever_
     id: Mapped[int] = mapped_column(INTEGER, primary_key=True)
-    lastserverversioncheck_datetime: Mapped[datetime | None] = mapped_column(TIMESTAMP(precision=0))
+    lastserverversioncheck_datetime: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP(precision=0)
+    )
 
 
 class TaxonomyChangeLog(Model):

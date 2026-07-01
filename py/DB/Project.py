@@ -39,7 +39,9 @@ class Project(Model):
     """
 
     __tablename__ = "projects"
-    projid: Mapped[int] = mapped_column(INTEGER, Sequence("seq_projects"), primary_key=True)
+    projid: Mapped[int] = mapped_column(
+        INTEGER, Sequence("seq_projects"), primary_key=True
+    )
     title: Mapped[str] = mapped_column(VARCHAR(255))
     instrument_id: Mapped[str] = mapped_column(
         VARCHAR(32), ForeignKey("instrument.instrument_id")
@@ -58,8 +60,12 @@ class Project(Model):
     pctvalidated: Mapped[float | None] = mapped_column(DOUBLE_PRECISION)
     pctclassified: Mapped[float | None] = mapped_column(DOUBLE_PRECISION)
     # Settings
-    classifsettings: Mapped[str | None] = mapped_column(VARCHAR)  # Settings for Automatic classification.
-    initclassiflist: Mapped[str | None] = mapped_column(VARCHAR)  # Initial list of categories
+    classifsettings: Mapped[str | None] = mapped_column(
+        VARCHAR
+    )  # Settings for Automatic classification.
+    initclassiflist: Mapped[str | None] = mapped_column(
+        VARCHAR
+    )  # Initial list of categories
     classiffieldlist: Mapped[str | None] = mapped_column(
         VARCHAR
     )  # Fields available on sort & displayed field of Manual classif screen

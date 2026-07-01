@@ -66,7 +66,9 @@ class Constants(BaseModel):
         title="People and organizations directories",
         description="Available directories to identify people and organizations in collections settings",
         default={st.name: st.value for st in PeopleOrganizationDirectory},
-        examples=[{"https://edmo.seadatanet.org/": "edmo", "https://orcid.org/": "orcid"}],
+        examples=[
+            {"https://edmo.seadatanet.org/": "edmo", "https://orcid.org/": "orcid"}
+        ],
     )
     user_status: Dict[str, int] = Field(
         title="User status",
@@ -159,9 +161,11 @@ class Constants(BaseModel):
         title="Recast operation",
         description="Taxonomy recast operation name",
         default={st.name: st.value for st in RecastOperation},
-        examples=[{
-            "prediction_input": "pre_predict",
-            "dwca_export_occurrence": "dwca_export_occurrence",
-            "dwca_export_emof": "dwca_export_emof",
-        }],
+        examples=[
+            {
+                "prediction_input": "pre_predict",
+                "dwca_export_occurrence": "dwca_export_occurrence",
+                "dwca_export_emof": "dwca_export_emof",
+            }
+        ],
     )

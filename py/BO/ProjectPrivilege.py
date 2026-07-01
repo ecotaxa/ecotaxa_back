@@ -41,12 +41,8 @@ class ProjectPrivilegeBO(object):
         Return SQL chunk for historically first manager for projects in this query.
         """
         # noinspection SqlResolve
-        return (
-            """ SELECT * from ( """
-            + cls.managers_by_project()
-            + """ ) qpp
+        return """ SELECT * from ( """ + cls.managers_by_project() + """ ) qpp
                     WHERE rang = 1 """
-        )
 
     @classmethod
     def generous_merge_into(cls, session: Session, dest_prj_id: int, src_prj_id: int):
@@ -55,8 +51,7 @@ class ProjectPrivilegeBO(object):
         """
         # Each user who is present in both projects, gets the highest privilege from both projects.
         # TODO: Arguable
-        sql = text(
-            """
+        sql = text("""
                UPDATE projectspriv ppdst
                   SET privilege = CASE WHEN 'Manage' IN (ppsrc.privilege, ppdst.privilege)
                                            THEN 'Manage'
@@ -67,19 +62,16 @@ class ProjectPrivilegeBO(object):
                  FROM projectspriv ppsrc
                 WHERE ppsrc.projid = :src_prj
                   AND ppdst.projid = :dst_prj
-                  AND ppsrc.member = ppdst.member"""
-        )
+                  AND ppsrc.member = ppdst.member""")
         session.execute(sql, {"dst_prj": dest_prj_id, "src_prj": src_prj_id})
         # Users who were only in source project get their privileges transferred into destination
         # TODO: Arguable
-        sql = text(
-            """
+        sql = text("""
                 UPDATE projectspriv
                    SET projid = :dst_prj
                  WHERE projid = :src_prj
                    AND member NOT IN (SELECT member
                                         FROM projectspriv
-                                       WHERE projid = :dst_prj)"""
-        )
+                                       WHERE projid = :dst_prj)""")
 
         session.execute(sql, {"dst_prj": dest_prj_id, "src_prj": src_prj_id})

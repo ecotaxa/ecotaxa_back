@@ -39,7 +39,9 @@ class Job(Model):
 
     __tablename__ = "job"
     # Starting 2024 Feb 02, we archive jobs by negating their ids
-    id: Mapped[int] = mapped_column(INTEGER, Sequence("seq_temp_tasks"), primary_key=True)
+    id: Mapped[int] = mapped_column(
+        INTEGER, Sequence("seq_temp_tasks"), primary_key=True
+    )
     """ Unique identifier, from a sequence """
     owner_id: Mapped[int] = mapped_column(INTEGER, ForeignKey("users.id"))
     """ The user who created and thus owns the job """

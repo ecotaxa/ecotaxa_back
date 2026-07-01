@@ -6,7 +6,6 @@ from typing import List
 
 from helpers.pydantic import BaseModel, Field
 
-
 # I guess one day we'll have more parameters/options
 # class MergeReq(BaseModel):
 #     """ Merge request. """
