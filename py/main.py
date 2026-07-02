@@ -551,7 +551,7 @@ def get_user(
         ..., description="Internal, the unique numeric id of this user.", examples=[1]
     ),
     current_user: int = Depends(get_current_user),
-) -> Optional[User]:
+) -> User:
     """
     Returns **information about the user** corresponding to the given id.
     """
@@ -905,7 +905,7 @@ def get_guest(
         ..., description="Internal, the unique numeric id of this guest.", examples=[1]
     ),
     current_user: int = Depends(get_current_user),
-) -> Optional[GuestModel]:
+) -> GuestModel:
     """
     Returns **information about the user** corresponding to the given id.
     """
@@ -3213,7 +3213,7 @@ def reclassif_project_stats(
             }
         }
     },
-    response_model=TaxonModel,
+    response_model=Optional[TaxonModel],
 )
 def query_taxa(
     taxon_id: int = Path(
@@ -3530,7 +3530,7 @@ def update_taxonomy_recast(
     "/taxo_recast",
     operation_id="get_taxonomy_recast",
     tags=["Taxonomy Tree"],
-    response_model=TaxoRecastRsp,
+    response_model=Optional[TaxoRecastRsp],
 )
 def get_taxonomy_recast(
     target_id: int = Query(
