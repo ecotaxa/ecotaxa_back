@@ -363,6 +363,8 @@ class MyORJSONResponse(JSONResponse):
     @classmethod
     def orjson_default(cls, obj: Any) -> Union[str, Dict[str, Any]]:
         # ORJSon calls this method when it cannot serialize an object.
+        if isinstance(obj, dict):  # E.g. ReadOnlyModel
+            return obj.copy()
         # We mimic FastApi behavior of fetching data from the object using the model fields
         fields = cls.type_to_fields.get(obj.__class__)
         if fields is None:

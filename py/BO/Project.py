@@ -18,6 +18,10 @@ from typing import (
     Final,
 )
 
+from sqlalchemy import Select
+from sqlalchemy.orm import Bundle
+
+from API_models.helpers.ReadOnly import ReadOnlyModel
 from BO.Classification import ClassifIDListT
 from BO.Collection import MinimalCollectionBO
 from BO.DataLicense import AccessLevelEnum
@@ -38,6 +42,7 @@ from BO.User import (
     MinimalUserBOListT,
     UserActivityListT,
 )
+from DB.Instrument import Instrument
 from DB.Acquisition import Acquisition
 from DB.Collection import CollectionProject, Collection
 from DB.Object import (
@@ -61,10 +66,10 @@ from DB.ProjectPrivilege import ProjectPrivilege
 from DB.ProjectVariables import KNOWN_PROJECT_VARS
 from DB.ProjectVariables import ProjectVariables
 from DB.Sample import Sample
-from DB.User import Role, User, UserIDListT, UserIDT, UserStatus
+from DB.User import Role, User, UserIDListT, UserIDT, UserStatus, Organization
 from DB.helpers import Session, Result
 from DB.helpers.Bean import Bean
-from DB.helpers.Core import select
+from DB.helpers.Core import select, get_bundle_columns
 from DB.helpers.Direct import text
 from DB.helpers.Hints import RECURS_HINT
 from DB.helpers.ORM import (
@@ -72,8 +77,6 @@ from DB.helpers.ORM import (
     Query,
     any_,
     and_,
-    subqueryload,
-    joinedload,
     minimal_table_of,
     func,
     column,
@@ -987,29 +990,93 @@ class ProjectBOSet(object):
         public: bool = False,
         fields: Optional[str] = FieldListType.default,
     ):
-        # Query the project and ORM-load neighbours as well, as they will be needed in enrich()
-        qry = select(Project)
-        # qry = session.query(Project)
-        qry = qry.options(
-            subqueryload(Project.privs_for_members).joinedload(ProjectPrivilege.user)
-            # Save a bit of time by joining privileges & users in a single query
-            # Con: More data is returned as users in several projects are returned several times
-        )
-        qry = qry.options(joinedload(Project.variables))  # 1 -> 0,1
-        qry = qry.options(joinedload(Project.instrument))  # 1 -> 0,1
-        qry = qry.filter(Project.projid == any_(prj_ids))
+        # Query the project and load neighbors as well, as they will be needed in enrich()
+        with CodeTimer("%s BO projects queries:" % len(prj_ids), logger):
+            projs_stmt: Select = (
+                select(
+                    Bundle(
+                        "prj",
+                        *Project.__table__.columns,
+                    ),
+                    Bundle(
+                        "ins",
+                        Instrument.name.label("instrument_name"),
+                        Instrument.bodc_url.label("bodc_url"),
+                    ),
+                )
+                .join(Project.instrument, isouter=True)
+                .where(Project.projid == any_(prj_ids))
+            )
+            prj_fields = get_bundle_columns(projs_stmt, 0)
+            ins_fields = get_bundle_columns(projs_stmt, 1)
+            projects_rows = session.execute(projs_stmt)
+            projects_dict = {
+                row[0][0]: ReadOnlyModel(
+                    zip(prj_fields, row[0]),
+                    instrument=ReadOnlyModel(zip(ins_fields, row[1])),
+                    variables=None,
+                    privs_for_members=[],
+                )
+                for row in projects_rows
+            }
+
+            vars_stmt: Select = select(
+                ProjectVariables.project_id,
+                Bundle(
+                    "var",
+                    ProjectVariables.subsample_coef,
+                    ProjectVariables.individual_volume,
+                    ProjectVariables.total_water_volume,
+                ),
+            ).where(ProjectVariables.project_id == any_(prj_ids))
+            vars_fields = get_bundle_columns(vars_stmt, 1)
+            vars_rows = session.execute(vars_stmt)
+            for row in vars_rows:
+                p_id = row[0]
+                projects_dict[p_id]["variables"] = ReadOnlyModel(
+                    zip(vars_fields, row[1])
+                )
+
+            members_stmt: Select = (
+                select(
+                    ProjectPrivilege.projid,
+                    Bundle(
+                        "usr",  # in a fact a MinUser is needed
+                        User.id,
+                        User.email,
+                        User.name,
+                        User.status,
+                        Organization.name.label("organisation"),
+                    ),
+                    Bundle(
+                        "prv",
+                        ProjectPrivilege.privilege,
+                        ProjectPrivilege.extra,
+                    ),
+                )
+                .join(ProjectPrivilege.user)
+                .join(User.organization, isouter=True)
+                .where(ProjectPrivilege.projid == any_(prj_ids))
+            )
+            usr_fields = get_bundle_columns(members_stmt, 1)
+            prv_fields = get_bundle_columns(members_stmt, 2)
+            members_rows = session.execute(members_stmt)
+            for row in members_rows:
+                p_id = row[0]
+                user = ReadOnlyModel(zip(usr_fields, row[1]))
+                privilege = ReadOnlyModel(zip(prv_fields, row[2]), user=user)
+                projects_dict[p_id]["privs_for_members"].append(privilege)
+
+        projs = list(projects_dict.values())
         self.projects: List[ProjectBO] = []
-        # De-duplicate
-        projs = []
-        with CodeTimer("%s BO projects query:" % len(prj_ids), logger):
-            for (a_proj,) in session.execute(qry):
-                projs.append(a_proj)
-            # Force the same order as parameter, as we need the 'first' occurrence somewhere
-            projs.sort(key=lambda p: prj_ids.index(p.projid))
+        # Force the same order as parameter, as we need the 'first' occurrence somewhere
+        id_to_position = {id_proj: index for index, id_proj in enumerate(prj_ids)}
+        projs.sort(key=lambda p: id_to_position.get(p["projid"], float("inf")))
+
         # Build BOs and enrich
         with CodeTimer("%s BO projects init:" % len(projs), logger):
             self_projects_append = self.projects.append
-            for a_proj in projs:
+            for a_proj in cast(List[Project], projs):
                 if public:
                     self_projects_append(ProjectBO(a_proj).public_enrich())
                 else:

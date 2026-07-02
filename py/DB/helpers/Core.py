@@ -7,6 +7,13 @@
 #
 from typing import List
 
-from sqlalchemy.sql import Select
-
+# noinspection PyUnresolvedReferences
 from sqlalchemy.sql import select, Select, delete, Delete, update, Update
+
+
+def get_bundle_columns(stmt: Select, index: int) -> List[str]:
+    """
+    Extract column keys from a bundle in a statement, at given index.
+    """
+    bundle = stmt.column_descriptions[index]["expr"]
+    return [col.key for col in bundle.c]
