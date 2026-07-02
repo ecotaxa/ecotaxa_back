@@ -698,8 +698,10 @@ class EnumeratedObjectSet(MappedTable):
         ins_qry = ins_qry.from_select(ins_columns, sel_subqry)
         # TODO: Below not clear nor clean
         ins_qry = ins_qry.on_conflict_do_nothing(constraint="objectsclassifhisto_pkey")
+        ins_qry_cnt = ins_qry.returning(och.objid)
         # logger.info("Histo query: %s", ins_qry.compile())
-        nb_obj_histos = self.session.execute(ins_qry).rowcount  # type: ignore  # case1
+        result = self.session.execute(ins_qry_cnt)
+        nb_obj_histos = len(result.fetchall())
         logger.info(
             " %d out of %d rows copied to log", nb_obj_histos, len(self.object_ids)
         )

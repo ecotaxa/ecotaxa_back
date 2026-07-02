@@ -4316,7 +4316,9 @@ async def timing_middleware(request: Request, call_next):
     cpu_ms = (time.process_time() - start_cpu) * 1000
     endpoint = request.scope.get("endpoint")
     func_name = (
-        f"{endpoint.__module__}.{endpoint.__name__}" if endpoint else request.url.path
+        f"{endpoint.__module__}.{endpoint.__name__}"
+        if endpoint and hasattr(endpoint, "__name__")
+        else request.url.path
     )
     logger.info(f"TIMING: Wall: {wall_ms:7.1f}ms | CPU: {cpu_ms:7.1f}ms | {func_name}")
     return response
