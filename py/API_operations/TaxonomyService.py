@@ -77,7 +77,7 @@ class TaxonomyService(Service):
         # Get preset list, to favor in result order
         preset = set()
         if prj_id is not None:
-            the_prj = ProjectBO.get_one(self.ro_session, prj_id)
+            the_prj = ProjectBO.get(self.ro_session, prj_id)
             if the_prj is not None:
                 include_ids = the_prj.get_preset()
                 preset = set(include_ids)

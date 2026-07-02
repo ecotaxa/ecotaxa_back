@@ -103,9 +103,7 @@ class CollectionsService(Service):
     def query(
         self, current_user_id: UserIDT, coll_id: CollectionIDT, for_update: bool
     ) -> Optional[CollectionBO]:
-        ret = CollectionBO.get_one(
-            self.session if for_update else self.ro_session, coll_id
-        )
+        ret = CollectionBO.get(self.session if for_update else self.ro_session, coll_id)
         if ret is None:
             return ret
         check = self._check_permission(current_user_id, ret.project_ids)
