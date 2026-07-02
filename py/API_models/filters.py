@@ -267,10 +267,11 @@ ProjectFiltersModel = typed_dict_to_model(ProjectFiltersDict, _ProjectFilters2Mo
 class ProjectFilters(ProjectFiltersModel):
     @model_validator(mode="before")
     @classmethod
-    def allow_empty_list(cls, v):
-        # Accept a list which is sometimes sent by frontend when no filter is active
-        if isinstance(v, list) and len(v) == 0:
-            return {}
+    def allow_list_as_dict(cls, v):
+        # Accept a list which is sometimes sent by frontend
+        # either for no filter [] or as data [['samples', '5822000050'], ['taxo', '80151'], ['taxochild', 'N']]
+        if isinstance(v, list):
+            return dict(v)
         return v
 
     def base(self) -> ProjectFiltersDict:

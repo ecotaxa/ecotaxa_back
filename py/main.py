@@ -11,7 +11,7 @@ import time
 from contextlib import asynccontextmanager
 from dataclasses import asdict
 from logging import INFO
-from typing import Union, Tuple, List, Dict, Any
+from typing import Union, Tuple, List, Dict, Any, cast
 
 from fastapi import (
     FastAPI,
@@ -70,7 +70,7 @@ from API_models.exports import (
     BackupExportReq,
 )
 from API_models.filesystem import DirectoryModel
-from API_models.filters import Optional, ProjectFilters
+from API_models.filters import Optional, ProjectFilters, ProjectFiltersDict
 from API_models.helpers.Introspect import plain_columns
 from API_models.imports import ImportReq, SimpleImportRsp, SimpleImportReq, ImportRsp
 from API_models.login import LoginReq
@@ -1477,7 +1477,9 @@ def project_subset(
     **Subset a project into another one.**
     """
     if isinstance(params.filters, List):
-        params.filters = {}  # TODO: Fix client-side
+        params.filters = cast(
+            ProjectFiltersDict, dict(cast(List, params.filters))
+        )  # TODO: Fix client-side, it was pydantic v1 tolerance
     with SubsetServiceOnProject(project_id, params) as sce:
         with RightsThrower():
             ret = sce.run(current_user)
