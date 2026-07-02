@@ -181,7 +181,7 @@ class JobServiceBase(Service, LogEmitter, ABC):
         """
         Get job detailed result.
         """
-        job_bo = JobBO.get(self.session, self.job_id)
+        job_bo = JobBO.get_one(self.session, self.job_id)
         assert job_bo is not None
         return job_bo.get_result()
 

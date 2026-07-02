@@ -191,7 +191,7 @@ class ProjectBO(object):
         """
         Get an enriched single BO per its id
         """
-        prj = session.get_one(Project, prj_id)
+        prj = session.get(Project, prj_id)
         if prj is not None:
             return ProjectBO(prj).enrich()
         return None
