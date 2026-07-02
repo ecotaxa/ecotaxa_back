@@ -70,6 +70,10 @@ def run_gunicorn() -> None:
                 # "accesslog": "-",
                 # "errorlog": "-",
                 "log_level": "error",
+                # To enable, but it gives a weird warning about missing /var/www rights
+                # as we run under this account on prod'.
+                # I guess it's $HOME from /etc/passwd for the guest. Whatever.
+                "control_socket_disable": True,
             }
             self.application = app
             super().__init__()
