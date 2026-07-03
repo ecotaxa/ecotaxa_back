@@ -2,26 +2,28 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import List, Union, Tuple, Optional, Dict
 
+from typing import List, Union, Tuple, Optional, Dict, Type
+from API_models.crud import CreateProjectReq, ProjectReq
 from fastapi import HTTPException
-
-from API_models.crud import CreateProjectReq
 from BO.Classification import ClassifIDListT, ClassifIDT
 from BO.Collection import MinimalCollectionBO
 from BO.ObjectSet import EnumeratedObjectSet
 from BO.Project import (
     ProjectBO,
+    ProjectBOFields,
     ProjectBOSet,
     ProjectTaxoStats,
     ProjectUserStats,
     ProjectColumns,
 )
+from helpers.pydantic import Field, BaseModel
 from BO.ProjectSet import ProjectSetColumnStats, LimitedInCategoriesProjectSet
 from BO.Rights import RightsBO, Action, NOT_FOUND
+from BO.User import UserIDT
 from DB.Project import Project, ANNOTATE_STATUS, ProjectIDT, ProjectIDListT
 from DB.Sample import Sample
-from DB.User import User, UserIDT
+from DB.User import User
 from DB.helpers.ORM import clone_of
 from FS.VaultRemover import VaultRemover
 from helpers.DynamicLogs import get_logger
@@ -30,6 +32,23 @@ from helpers.httpexception import DETAIL_NODELETE_BELONGS_TO_COLLECTION
 from ..helpers.Service import Service
 
 logger = get_logger(__name__)
+
+
+def _get_fields_from_model(model: BaseModel) -> List[Type[Field]]:
+    attrs = {}
+    modelfields = model.__fields_set__
+    for field in modelfields:
+        field_kwargs = {}
+        is_required = hasattr(field, "required") and field.required
+        if field.field_info.description:
+            field_kwargs["description"] = field.field_info.description
+        if field.field_info.extra:
+            field_kwargs.update(field.field_info.extra)
+        if is_required:
+            attrs[field] = (field.type_, Field(..., **field_kwargs))
+        else:
+            attrs[field] = (field.type_, Field(field.default, **field_kwargs))
+        return attrs
 
 
 class ProjectsService(Service):
@@ -76,18 +95,22 @@ class ProjectsService(Service):
         for_managing: bool = False,
         not_granted: bool = False,
         project_ids: Optional[str] = None,
-        fields: Optional[str] = FieldListType.default,
-    ) -> List[ProjectBO]:
+        order_field: Optional[str] = None,
+        fields: Optional[str] = FieldListType.all,
+        window_start: Optional[int] = 0,
+        window_size: Optional[int] = 0,
+    ) -> List[ProjectBOFields]:
         # current_user: Optional[User]
         if project_ids is None:
             project_ids = ""
-
         if current_user_id is None:
             # For public
             matching_ids = ProjectBO.list_public_projects(
                 self.ro_session, "", project_ids
             )
-            projects = ProjectBOSet(self.session, matching_ids, public=True)
+            projects = ProjectBOSet(
+                self.session, matching_ids, public=True, fields=fields
+            )
         else:
             # No rights checking as basically everyone can see all projects
             # current_user = self.ro_session.query(User).get(current_user_id)
@@ -104,6 +127,9 @@ class ProjectsService(Service):
                 "",
                 False,
                 project_ids,
+                order_field,
+                window_start,
+                window_size,
             )
             projects = ProjectBOSet(
                 self.ro_session, matching_ids, public=False, fields=fields
@@ -118,13 +144,17 @@ class ProjectsService(Service):
         title_filter: str = "",
         instrument_filter: str = "",
         filter_subset: bool = False,
+        order_field: Optional[str] = None,
         fields: Optional[str] = FieldListType.default,
-    ) -> List[ProjectBO]:
-        # current_user: Optional[User]
+        window_start: Optional[int] = 0,
+        window_size: Optional[int] = 0,
+    ) -> List[ProjectBOFields]:
         if current_user_id is None:
             # For public
             matching_ids = ProjectBO.list_public_projects(self.ro_session, title_filter)
-            projects = ProjectBOSet(self.session, matching_ids, public=True)
+            projects = ProjectBOSet(
+                self.ro_session, matching_ids, public=True, fields=fields
+            )
         else:
             # No rights checking as basically everyone can see all projects
             # current_user = self.ro_session.query(User).get(current_user_id)
@@ -140,11 +170,29 @@ class ProjectsService(Service):
                 title_filter,
                 instrument_filter,
                 filter_subset,
+                order_field=order_field,
+                window_start=window_start,
+                window_size=window_size,
             )
             projects = ProjectBOSet(
                 self.ro_session, matching_ids, public=False, fields=fields
             )
         return projects.as_list()
+
+    def patch(self, current_user_id: UserIDT, project_id: int, projectreq: ProjectReq):
+        present_project: ProjectBO = self.query(
+            current_user_id, project_id, for_managing=True, for_update=True
+        )
+        if present_project is None:
+            raise HTTPException(status_code=404, detail="Project not found")
+        modelfields = _get_fields_from_model(projectreq)
+        res = present_project.patch(
+            session=self.session, projectreq=projectreq, modelfields=modelfields
+        )
+        if isinstance(res, str):
+            raise HTTPException(
+                status_code=422, detail=res + "\n Collection not updated"
+            )
 
     def query(
         self,

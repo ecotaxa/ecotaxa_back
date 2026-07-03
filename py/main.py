@@ -50,6 +50,7 @@ from API_models.crud import (
     JobModel,
     BulkUpdateReq,
     CreateProjectReq,
+    ProjectReq,
     ProjectTaxoStatsModel,
     ProjectUserStatsModel,
     ProjectSetColumnStatsModel,
@@ -154,7 +155,7 @@ from BO.Collection import (
 from BO.ColumnUpdate import ColUpdateList
 from BO.Job import JobBO
 from BO.Object import ObjectBO
-from BO.Project import ProjectBO, ProjectUserStats, ProjectColumns
+from BO.Project import ProjectBO, ProjectBOFields, ProjectUserStats, ProjectColumns
 from BO.ProjectSet import ProjectSetColumnStats
 from BO.Sample import SampleTaxoStats
 from BO.Taxonomy import TaxonBO
@@ -180,7 +181,7 @@ from helpers.fastApiUtils import (
     regular_mem_cleanup,
 )
 from helpers.login import LoginService
-from helpers.pydantic import sort_and_prune
+from helpers.pydantic import sort_and_prune, BaseModel
 
 # from fastapi.middleware.gzip import GZipMiddleware
 
@@ -1238,6 +1239,7 @@ def erase_collection(
 # ######################## END OF COLLECTION
 
 MyORJSONResponse.register(ProjectBO, ProjectModel)
+MyORJSONResponse.register(ProjectBOFields, ProjectModel)
 MyORJSONResponse.register(User, UserModelWithRights)
 MyORJSONResponse.register(User, MinUserModel)
 MyORJSONResponse.register(TaxonBO, TaxonModel)
@@ -1256,9 +1258,9 @@ project_model_columns = plain_columns(ProjectModel)
     "/projects",
     operation_id="list_projects",
     tags=["projects"],
-    response_model=List[ProjectModel],
+    response_model=List[Union[ProjectModel, BaseModel]],
 )
-async def list_projects(  # MyORJSONResponse -> JSONResponse -> Response -> await
+async def list_projects(
     current_user: Optional[int] = Depends(get_optional_current_user),
     project_ids: Optional[str] = Query(
         default=None,
@@ -1302,7 +1304,7 @@ async def list_projects(  # MyORJSONResponse -> JSONResponse -> Response -> awai
         description="Return only `window_size` lines.",
         example="100",
     ),
-) -> MyORJSONResponse:  # List[ProjectBO]
+) -> List[ProjectBOFields]:
     """
     Returns **projects which the current user has explicit permission to access, with fields options.**
 
@@ -1321,14 +1323,14 @@ async def list_projects(  # MyORJSONResponse -> JSONResponse -> Response -> awai
     ret = sort_and_prune(
         ret, order_field, project_model_columns, window_start, window_size
     )
-    return MyORJSONResponse(ret)
+    return ret
 
 
 @app.get(
     "/projects/search",
     operation_id="search_projects",
     tags=["projects"],
-    response_model=List[ProjectModel],
+    response_model=List[Union[ProjectModel, BaseModel]],
 )
 async def search_projects(  # MyORJSONResponse -> JSONResponse -> Response -> await
     current_user: Optional[int] = Depends(get_optional_current_user),
@@ -1393,7 +1395,7 @@ async def search_projects(  # MyORJSONResponse -> JSONResponse -> Response -> aw
         description="Return only `window_size` lines.",
         example="100",
     ),
-) -> MyORJSONResponse:  # List[ProjectBO]
+) -> List[ProjectBOFields]:
     """
     Returns **projects which the current user has explicit permission to access, with search options.**
 
@@ -1401,6 +1403,9 @@ async def search_projects(  # MyORJSONResponse -> JSONResponse -> Response -> aw
     (unlike in simple query). The same information can be found in 'managers', 'annotators' and 'viewers' lists.
     """
     not_granted = not_granted or also_others
+    import time
+
+    start_time = time.time()
     with ProjectsService() as sce:
         ret = sce.search(
             current_user_id=current_user,
@@ -1409,14 +1414,17 @@ async def search_projects(  # MyORJSONResponse -> JSONResponse -> Response -> aw
             title_filter=title_filter,
             instrument_filter=instrument_filter,
             filter_subset=filter_subset,
+            order_field=order_field,
             fields=fields,
+            window_start=window_start,
+            window_size=window_size,
         )
+    print("esrtime %s " % (time.time() - start_time))
     # The DB query takes a few ms, and enrich not much more, so we can afford to narrow the search on the result
-
     ret = sort_and_prune(
         ret, order_field, project_model_columns, window_start, window_size
     )
-    return MyORJSONResponse(ret)
+    return ret
 
 
 @app.post(
@@ -2018,10 +2026,37 @@ def update_project(
                 managers=project.managers,
                 annotators=project.annotators,
                 viewers=project.viewers,
-                bodc_vars=project.bodc_variables,
                 access=project.access,
                 formulae=project.formulae,
             )
+
+    with DBSyncService(Project, Project.projid, project_id) as ssce:
+        ssce.wait()
+    with DBSyncService(ProjectPrivilege, ProjectPrivilege.projid, project_id) as ssce:
+        ssce.wait()
+
+
+@app.patch(
+    "/projects/{project_id}",
+    operation_id="patch_project",
+    tags=["projects"],
+    responses={200: {"content": {"application/json": {"example": null}}}},
+)
+def patch_project(
+    project: ProjectReq = Body(...),
+    project_id: int = Path(
+        ..., description="Internal, numeric id of the project.", example=1
+    ),
+    current_user: int = Depends(get_current_user),
+) -> None:
+    """
+    **Update the project**, return **NULL upon success.**
+
+    Note that some fields will **NOT** be updated and simply ignored, e.g. *free_cols*.
+    """
+    with ProjectsService() as sce:
+        with RightsThrower(), ValidityThrower():
+            sce.patch(current_user, project_id, project)
 
     with DBSyncService(Project, Project.projid, project_id) as ssce:
         ssce.wait()
