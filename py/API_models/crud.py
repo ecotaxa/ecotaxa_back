@@ -572,9 +572,9 @@ class ProjectReq(BaseModel):
         v = ProjectBO.formulae_validator(v)
         return v
 
-    class Config:
-        schema_extra = {"title": "Update full or partial Project Model"}
-        exclude_unset = True
+    model_config = ConfigDict(
+        json_schema_extra={"title": "Update full or partial Project Model"}
+    )
 
 
 class UpdateProjectReq(ProjectReq):
@@ -616,8 +616,9 @@ class UpdateProjectReq(ProjectReq):
         v = ProjectBO.formulae_validator(v)
         return v
 
-    class Config:
-        schema_extra = {"title": "Update full or partial Project Model"}
+    model_config = ConfigDict(
+        json_schema_extra={"title": "Update full or partial Project Model"}
+    )
 
 
 class CollectionAggregatedRsp(BaseModel):

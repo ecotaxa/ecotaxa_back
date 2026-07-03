@@ -2040,7 +2040,7 @@ def update_project(
 def patch_project(
     project: ProjectReq = Body(...),
     project_id: int = Path(
-        ..., description="Internal, numeric id of the project.", example=1
+        ..., description="Internal, numeric id of the project.", examples=[1]
     ),
     current_user: int = Depends(get_current_user),
 ) -> None:
@@ -3589,13 +3589,13 @@ def search_taxonomy_recast(
         default=None,
         description="Project ids to check, separated by ,. If not given, all"
         " projects readable/administered by the current user are considered.",
-        example="1,2,3",
+        examples=["1,2,3"],
     ),
     operation: RecastOperation = Query(
         ...,
         title="Operation name",
         description="One of RecastOperation enum value",
-        example="project_import",
+        examples=["project_import"],
     ),
     current_user: int = Depends(get_current_user),
 ) -> List[TaxoRecastSearchRsp]:
