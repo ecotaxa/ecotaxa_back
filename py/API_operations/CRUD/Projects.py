@@ -3,7 +3,7 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 
-from typing import List, Union, Tuple, Optional, Dict, Type
+from typing import List, Union, Tuple, Optional, Dict
 from API_models.crud import CreateProjectReq, ProjectReq
 from fastapi import HTTPException
 from BO.Classification import ClassifIDListT, ClassifIDT
@@ -11,13 +11,11 @@ from BO.Collection import MinimalCollectionBO
 from BO.ObjectSet import EnumeratedObjectSet
 from BO.Project import (
     ProjectBO,
-    ProjectBOFields,
     ProjectBOSet,
     ProjectTaxoStats,
     ProjectUserStats,
     ProjectColumns,
 )
-from helpers.pydantic import Field, BaseModel
 from BO.ProjectSet import ProjectSetColumnStats, LimitedInCategoriesProjectSet
 from BO.Rights import RightsBO, Action, NOT_FOUND
 from BO.User import UserIDT
@@ -32,23 +30,6 @@ from helpers.httpexception import DETAIL_NODELETE_BELONGS_TO_COLLECTION
 from ..helpers.Service import Service
 
 logger = get_logger(__name__)
-
-
-def _get_fields_from_model(model: BaseModel) -> List[Type[Field]]:
-    attrs = {}
-    modelfields = model.__fields_set__
-    for field in modelfields:
-        field_kwargs = {}
-        is_required = hasattr(field, "required") and field.required
-        if field.field_info.description:
-            field_kwargs["description"] = field.field_info.description
-        if field.field_info.extra:
-            field_kwargs.update(field.field_info.extra)
-        if is_required:
-            attrs[field] = (field.type_, Field(..., **field_kwargs))
-        else:
-            attrs[field] = (field.type_, Field(field.default, **field_kwargs))
-        return attrs
 
 
 class ProjectsService(Service):
@@ -99,7 +80,7 @@ class ProjectsService(Service):
         fields: Optional[str] = FieldListType.all,
         window_start: Optional[int] = 0,
         window_size: Optional[int] = 0,
-    ) -> List[ProjectBOFields]:
+    ) -> List[ProjectBO]:
         # current_user: Optional[User]
         if project_ids is None:
             project_ids = ""
@@ -148,7 +129,7 @@ class ProjectsService(Service):
         fields: Optional[str] = FieldListType.default,
         window_start: Optional[int] = 0,
         window_size: Optional[int] = 0,
-    ) -> List[ProjectBOFields]:
+    ) -> List[ProjectBO]:
         if current_user_id is None:
             # For public
             matching_ids = ProjectBO.list_public_projects(self.ro_session, title_filter)
@@ -179,20 +160,19 @@ class ProjectsService(Service):
             )
         return projects.as_list()
 
-    def patch(self, current_user_id: UserIDT, project_id: int, projectreq: ProjectReq):
+    def patch(
+        self, current_user_id: UserIDT, project_id: int, projectreq: ProjectReq
+    ) -> None:
         present_project: ProjectBO = self.query(
             current_user_id, project_id, for_managing=True, for_update=True
         )
         if present_project is None:
             raise HTTPException(status_code=404, detail="Project not found")
-        modelfields = _get_fields_from_model(projectreq)
-        res = present_project.patch(
+        # Only touch fields the client actually sent, per PATCH semantics.
+        modelfields = list(projectreq.__fields_set__)
+        present_project.patch(
             session=self.session, projectreq=projectreq, modelfields=modelfields
         )
-        if isinstance(res, str):
-            raise HTTPException(
-                status_code=422, detail=res + "\n Collection not updated"
-            )
 
     def query(
         self,

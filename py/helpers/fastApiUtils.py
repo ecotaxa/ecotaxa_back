@@ -274,6 +274,11 @@ class MyORJSONResponse(JSONResponse):
             if isinstance(obj, decimal.Decimal):
                 return str(obj)
             raise TypeError
+        # If the object carries its own requested field list (e.g. ProjectBO answering
+        # a `fields=` query), narrow the output to it instead of the full model.
+        out_fields = getattr(obj, "_out_fields", None)
+        if out_fields is not None:
+            fields = [fld for fld in fields if fld in out_fields]
         ret = {fld: getattr(obj, fld) for fld in fields}
         return ret
 

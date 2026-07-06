@@ -11,7 +11,14 @@ from BO.Classification import ClassifIDListT
 from BO.Rights import RightsBO
 from BO.helpers.TSVHelpers import none_to_empty
 from DB import Session
-from DB.User import Guest, Organization, OrganizationIDT, Person, User, UserIDT
+from DB.User import (
+    Guest,
+    Organization,
+    OrganizationIDT,
+    Person,
+    User,
+    UserIDT,
+)
 from DB.UserPreferences import UserPreferences
 from DB.helpers.ORM import any_, or_, func, text
 from helpers.DynamicLogs import get_logger

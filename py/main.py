@@ -155,7 +155,7 @@ from BO.Collection import (
 from BO.ColumnUpdate import ColUpdateList
 from BO.Job import JobBO
 from BO.Object import ObjectBO
-from BO.Project import ProjectBO, ProjectBOFields, ProjectUserStats, ProjectColumns
+from BO.Project import ProjectBO, ProjectUserStats, ProjectColumns
 from BO.ProjectSet import ProjectSetColumnStats
 from BO.Sample import SampleTaxoStats
 from BO.Taxonomy import TaxonBO
@@ -1239,7 +1239,6 @@ def erase_collection(
 # ######################## END OF COLLECTION
 
 MyORJSONResponse.register(ProjectBO, ProjectModel)
-MyORJSONResponse.register(ProjectBOFields, ProjectModel)
 MyORJSONResponse.register(User, UserModelWithRights)
 MyORJSONResponse.register(User, MinUserModel)
 MyORJSONResponse.register(TaxonBO, TaxonModel)
@@ -1258,7 +1257,7 @@ project_model_columns = plain_columns(ProjectModel)
     "/projects",
     operation_id="list_projects",
     tags=["projects"],
-    response_model=List[Union[ProjectModel, BaseModel]],
+    response_model=List[ProjectModel],
 )
 async def list_projects(
     current_user: Optional[int] = Depends(get_optional_current_user),
@@ -1304,7 +1303,7 @@ async def list_projects(
         description="Return only `window_size` lines.",
         example="100",
     ),
-) -> List[ProjectBOFields]:
+) -> MyORJSONResponse:  # List[ProjectBO]:
     """
     Returns **projects which the current user has explicit permission to access, with fields options.**
 
@@ -1323,14 +1322,14 @@ async def list_projects(
     ret = sort_and_prune(
         ret, order_field, project_model_columns, window_start, window_size
     )
-    return ret
+    return MyORJSONResponse(ret)
 
 
 @app.get(
     "/projects/search",
     operation_id="search_projects",
     tags=["projects"],
-    response_model=List[Union[ProjectModel, BaseModel]],
+    response_model=List[ProjectModel],
 )
 async def search_projects(  # MyORJSONResponse -> JSONResponse -> Response -> await
     current_user: Optional[int] = Depends(get_optional_current_user),
@@ -1395,7 +1394,7 @@ async def search_projects(  # MyORJSONResponse -> JSONResponse -> Response -> aw
         description="Return only `window_size` lines.",
         example="100",
     ),
-) -> List[ProjectBOFields]:
+) -> MyORJSONResponse:  # List[ProjectBO]:
     """
     Returns **projects which the current user has explicit permission to access, with search options.**
 
@@ -1403,9 +1402,6 @@ async def search_projects(  # MyORJSONResponse -> JSONResponse -> Response -> aw
     (unlike in simple query). The same information can be found in 'managers', 'annotators' and 'viewers' lists.
     """
     not_granted = not_granted or also_others
-    import time
-
-    start_time = time.time()
     with ProjectsService() as sce:
         ret = sce.search(
             current_user_id=current_user,
@@ -1419,12 +1415,11 @@ async def search_projects(  # MyORJSONResponse -> JSONResponse -> Response -> aw
             window_start=window_start,
             window_size=window_size,
         )
-    print("esrtime %s " % (time.time() - start_time))
     # The DB query takes a few ms, and enrich not much more, so we can afford to narrow the search on the result
     ret = sort_and_prune(
         ret, order_field, project_model_columns, window_start, window_size
     )
-    return ret
+    return MyORJSONResponse(ret)
 
 
 @app.post(

@@ -450,6 +450,11 @@ class ProjectModel(_AddedToProject, _ProjectModelFromDB):
     """
     Basic and computed information about the Project."""
 
+    class Config:
+        orm_mode = True
+        exclude_unset = True
+        allow_population_by_field_name = True
+
 
 class ProjectReq(BaseModel):
 
@@ -476,21 +481,26 @@ class ProjectReq(BaseModel):
         default=AccessLevelEnum.PUBLIC,
         example=AccessLevelEnum.PUBLIC,
     )
-    classiffieldlist: str = Field(
+    classiffieldlist: Optional[str] = Field(
+        default=None,
         title="Classification field list",
         description="",
         example="depth_min=depth_min\r\ndepth_max=depth_max\r\narea=area [pixel]\r\nmean=mean [0-255]\r\nfractal=fractal\r\nmajor=major [pixel]\r\nsymetrieh=symetrieh\r\ncirc.=circ\r\nferet = Feret [pixel]",
     )
-    initclassiflist: str = Field(
+    initclassiflist: Optional[str] = Field(
+        default=None,
         title="Initial categories",
         description=" Aggregated categories from the collection projects.",
     )
 
-    comments: str = Field(
-        title="Comments", description="The project comments.", example=""
+    comments: Optional[str] = Field(
+        default=None, title="Comments", description="The project comments.", example=""
     )
-    cnn_network_id: str = Field(
-        title="Cnn network id", description="", example="SCN_zooscan_group1"
+    cnn_network_id: Optional[str] = Field(
+        default=None,
+        title="Cnn network id",
+        description="",
+        example="SCN_zooscan_group1",
     )
     formulae: Optional[str] = Field(
         title="Formulae",
