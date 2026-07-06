@@ -327,7 +327,7 @@ class ProjectBO(object):
             self.privileges_enrich(project.privs_for_members, priv_fields)
         instr_fields = list(wanted & set(FieldsList.instrument()))
         if instr_fields:
-            self.instrument_enrich(project.instrument, instr_fields)
+            self.instrument_enrich(project, instr_fields)
         map_fields = list(wanted & set(FieldsList.mapping()))
         if map_fields:
             self.mapping_enrich(project, map_fields)
@@ -376,11 +376,11 @@ class ProjectBO(object):
         for privfield in fields:
             setattr(self, privfield, by_right_fct[privfield])
 
-    def instrument_enrich(self, instrument: Instrument, fields: List[str]) -> None:
+    def instrument_enrich(self, project, fields: List[str]) -> None:
         if "instrument" in fields:
-            self.instrument = instrument.instrument_id
+            self.instrument = project.instrument.instrument_id
         if "instrument_url" in fields:
-            self.instrument_url = instrument.bodc_url
+            self.instrument_url = project.instrument.bodc_url
 
     def mapping_enrich(self, project: Project, fields: List[str]) -> None:
         mappings = ProjectMapping().load_from_project(project)
