@@ -776,7 +776,7 @@ class ProjectBO(object):
         pqry = pqry.join(Sample).join(Acquisition).join(ObjectHeader)
         pqry = pqry.join(User, User.id == ObjectHeader.classif_who)
         pqry = pqry.filter(ObjectHeader.classif_who == User.id)
-        pqry = pqry.group_by(prjs_vals.c.projid, User.id)
+        pqry = pqry.group_by(prjs_vals.c.projid, Project.projid, User.id)
         pqry = pqry.order_by(prjs_vals.c.projid, User.name)
         pqry = pqry.where(
             ObjectHeader.objid.op("<@")(func.obj_in_prj(prjs_vals.c.projid))

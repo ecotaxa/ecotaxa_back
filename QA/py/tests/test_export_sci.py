@@ -1,8 +1,11 @@
+import json
+from io import BytesIO
 from typing import Dict, List
+from zipfile import ZipFile
 from starlette import status
 from DB.TaxoRecast import RecastOperation
 from tests.credentials import CREATOR_AUTH, ADMIN_AUTH
-from tests.export_shared import download_and_check
+from tests.export_shared import download_and_check, JOB_DOWNLOAD_URL
 from tests.formulae import uvp_formulae
 from tests.jobs import get_job_and_wait_until_ok
 from tests.test_classification import OBJECT_SET_CLASSIFY_URL
@@ -22,13 +25,11 @@ TAXORECAST_URL = "/taxo_recast"
 
 
 def set_formulae_in_project(fastapi, prj_id: int, prj_formulae: Dict):
-    from tests.test_project_vars import BODC_VARS_KEY
-
     read_url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
     rsp = fastapi.get(read_url, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
     prj_json = rsp.json()
-    prj_json[BODC_VARS_KEY] = prj_formulae
+    prj_json["formulae"] = json.dumps(prj_formulae)
     upd_url = PROJECT_UPDATE_URL.format(project_id=prj_id)
     rsp = fastapi.put(upd_url, headers=ADMIN_AUTH, json=prj_json)
     assert rsp.status_code == status.HTTP_200_OK
@@ -232,6 +233,65 @@ def test_export_conc_biovol(fastapi):
     job_id = get_job_and_wait_until_ok(fastapi, rsp)
     download_and_check(fastapi, job_id, "biovolumes_by_subsample_only_v", only_hdr=True)
     # log = get_log_file(fastapi, job_id)
+
+
+def test_export_summary_list_of_quantities(fastapi):
+    """A single request can ask for several quantities at once, e.g.
+    abundance + concentration. One TSV per quantity is produced, zipped together."""
+    prj_id = do_test_import(fastapi, "SCISUM project list quantities")
+    do_import_a_bit_more_skipping(fastapi, "SCISUM project list quantities")
+    set_formulae_in_project(fastapi, prj_id, uvp_formulae)
+    add_concentration_data(fastapi, prj_id)
+
+    # Validate everything, otherwise empty report
+    obj_ids = _prj_query(fastapi, CREATOR_AUTH, prj_id)
+    url = OBJECT_SET_CLASSIFY_URL
+    classifications = [-1 for _obj in obj_ids]  # Keep current
+    rsp = fastapi.post(
+        url,
+        headers=ADMIN_AUTH,
+        json={
+            "target_ids": obj_ids,
+            "classifications": classifications,
+            "wanted_qualification": "V",
+        },
+    )
+    assert rsp.status_code == status.HTTP_200_OK
+
+    # Ask for abundance AND concentration in a single request
+    req_and_filters = {
+        "filters": {},
+        "request": {
+            "project_id": prj_id,
+            "quantity": ["abundance", "concentration"],
+        },
+    }
+    rsp = fastapi.post(
+        OBJECT_SET_SUMMARY_EXPORT_URL, headers=ADMIN_AUTH, json=req_and_filters
+    )
+    assert rsp.status_code == status.HTTP_200_OK
+    job_id = get_job_and_wait_until_ok(fastapi, rsp)
+
+    dl_url = JOB_DOWNLOAD_URL.format(job_id=job_id)
+    rsp = fastapi.get(dl_url, headers=ADMIN_AUTH)
+    assert rsp.status_code == status.HTTP_200_OK
+
+    # One zip, with one TSV per requested quantity
+    zip_file = ZipFile(BytesIO(rsp.content))
+    names = {n for n in zip_file.namelist() if not n.endswith(".log")}
+    assert names == {"ecotaxa_ABO.tsv", "ecotaxa_CNC.tsv"}
+
+    with zip_file.open("ecotaxa_ABO.tsv") as f:
+        abo_lines = f.read().decode("utf-8-sig").splitlines()
+    with zip_file.open("ecotaxa_CNC.tsv") as f:
+        cnc_lines = f.read().decode("utf-8-sig").splitlines()
+
+    # Each TSV keeps its own specific last column, on top of the common id ones
+    assert abo_lines[0].split("\t")[-1] == "count"
+    assert cnc_lines[0].split("\t")[-1] == "concentration"
+    # Both quantities are zero-filled over the same (sample, status, taxon) triplets
+    assert len(abo_lines) > 1
+    assert len(abo_lines) == len(cnc_lines)
 
 
 def test_export_abundances_filtered_by_taxo(fastapi):
