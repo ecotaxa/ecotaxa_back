@@ -458,16 +458,22 @@ class ProjectModel(_AddedToProject, _ProjectModelFromDB):
 
 class ProjectReq(BaseModel):
 
-    title: str = Field(
-        title="Title", description="The project title.", example="MyProject"
+    title: Optional[str] = Field(
+        default=None,
+        title="Title",
+        description="The project title.",
+        example="MyProject",
     )
     instrument: Optional[str] = Field(
         title="Instrument",
         description="This project's instrument code.",
         example="Zooscan",
     )
-    status: str = Field(
-        title="Status", description="The project status.", example="Annotate"
+    status: Optional[str] = Field(
+        default=None,
+        title="Status",
+        description="The project status.",
+        example="Annotate",
     )
     access: AccessLevelEnum = Field(
         title="Access level",
