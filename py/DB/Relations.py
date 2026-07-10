@@ -72,12 +72,6 @@ if True:
     CollectionOrgaRole.organization = relationship(
         Organization, uselist=False, lazy="joined"
     )  # type: ignore # case2
-    # Ancilliary to project
-    ProjectVariables.project = relationship(
-        Project, viewonly=True
-    )  # type: ignore # case2
-    Project.variables = relationship(ProjectVariables, uselist=False)
-
     # Project
     Project.all_samples = relationship(Sample, viewonly=True)
     Sample.project = relationship(Project)  # type: ignore # case2

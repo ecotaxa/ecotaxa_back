@@ -50,6 +50,8 @@ from API_models.crud import (
     JobModel,
     BulkUpdateReq,
     CreateProjectReq,
+    ProjectReq,
+    UpdateProjectReq,
     ProjectTaxoStatsModel,
     ProjectUserStatsModel,
     ProjectSetColumnStatsModel,
@@ -180,7 +182,7 @@ from helpers.fastApiUtils import (
     regular_mem_cleanup,
 )
 from helpers.login import LoginService
-from helpers.pydantic import sort_and_prune
+from helpers.pydantic import sort_and_prune, BaseModel
 
 # from fastapi.middleware.gzip import GZipMiddleware
 
@@ -1258,7 +1260,7 @@ project_model_columns = plain_columns(ProjectModel)
     tags=["projects"],
     response_model=List[ProjectModel],
 )
-async def list_projects(  # MyORJSONResponse -> JSONResponse -> Response -> await
+async def list_projects(
     current_user: Optional[int] = Depends(get_optional_current_user),
     project_ids: Optional[str] = Query(
         default=None,
@@ -1302,7 +1304,7 @@ async def list_projects(  # MyORJSONResponse -> JSONResponse -> Response -> awai
         description="Return only `window_size` lines.",
         example="100",
     ),
-) -> MyORJSONResponse:  # List[ProjectBO]
+) -> MyORJSONResponse:  # List[ProjectBO]:
     """
     Returns **projects which the current user has explicit permission to access, with fields options.**
 
@@ -1393,7 +1395,7 @@ async def search_projects(  # MyORJSONResponse -> JSONResponse -> Response -> aw
         description="Return only `window_size` lines.",
         example="100",
     ),
-) -> MyORJSONResponse:  # List[ProjectBO]
+) -> MyORJSONResponse:  # List[ProjectBO]:
     """
     Returns **projects which the current user has explicit permission to access, with search options.**
 
@@ -1409,10 +1411,12 @@ async def search_projects(  # MyORJSONResponse -> JSONResponse -> Response -> aw
             title_filter=title_filter,
             instrument_filter=instrument_filter,
             filter_subset=filter_subset,
+            order_field=order_field,
             fields=fields,
+            window_start=window_start,
+            window_size=window_size,
         )
     # The DB query takes a few ms, and enrich not much more, so we can afford to narrow the search on the result
-
     ret = sort_and_prune(
         ret, order_field, project_model_columns, window_start, window_size
     )
@@ -1986,7 +1990,36 @@ def erase_project(
     responses={200: {"content": {"application/json": {"example": null}}}},
 )
 def update_project(
-    project: ProjectModel,
+    project: UpdateProjectReq,
+    project_id: int = Path(
+        ..., description="Internal, numeric id of the project.", example=1
+    ),
+    current_user: int = Depends(get_current_user),
+) -> None:
+    """
+    **Update the project**, return **NULL upon success.**
+
+    Note that some fields will **NOT** be updated and simply ignored, e.g. *free_cols*.
+    """
+    assert project.title is not None, AssertionError("A valid Title is needed.")
+    with ProjectsService() as sce:
+        with ValidityThrower(), RightsThrower():
+            sce.update(current_user, project_id, project)
+
+    with DBSyncService(Project, Project.projid, project_id) as ssce:
+        ssce.wait()
+    with DBSyncService(ProjectPrivilege, ProjectPrivilege.projid, project_id) as ssce:
+        ssce.wait()
+
+
+@app.patch(
+    "/projects/{project_id}",
+    operation_id="patch_project",
+    tags=["projects"],
+    responses={200: {"content": {"application/json": {"example": null}}}},
+)
+def patch_project(
+    project: ProjectReq = Body(...),
     project_id: int = Path(
         ..., description="Internal, numeric id of the project.", example=1
     ),
@@ -1998,30 +2031,8 @@ def update_project(
     Note that some fields will **NOT** be updated and simply ignored, e.g. *free_cols*.
     """
     with ProjectsService() as sce:
-        with RightsThrower():
-            present_project: ProjectBO = sce.query(
-                current_user, project_id, for_managing=True, for_update=True
-            )
-
-        with ValidityThrower():
-            present_project.update(
-                session=sce.session,
-                instrument=project.instrument,
-                title=project.title,
-                status=project.status,
-                init_classif_list=project.init_classif_list,
-                classiffieldlist=project.classiffieldlist,
-                popoverfieldlist=project.popoverfieldlist,
-                cnn_network_id=project.cnn_network_id,
-                comments=project.comments,
-                contact=project.contact,
-                managers=project.managers,
-                annotators=project.annotators,
-                viewers=project.viewers,
-                bodc_vars=project.bodc_variables,
-                access=project.access,
-                formulae=project.formulae,
-            )
+        with ValidityThrower(), RightsThrower():
+            sce.patch(current_user, project_id, project)
 
     with DBSyncService(Project, Project.projid, project_id) as ssce:
         ssce.wait()

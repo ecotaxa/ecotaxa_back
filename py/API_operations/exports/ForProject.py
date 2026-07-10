@@ -57,6 +57,14 @@ from ..helpers.JobService import JobServiceBase, ArgsDict  # fmt:skip
 
 logger = get_logger(__name__)
 
+# Some callers (e.g. the deprecated /export endpoint) may express a sci-summary
+# quantity via SummaryExportQuantitiesOptionsEnum rather than ExportTypeEnum.
+SUMMARY_QUANTITY_TO_EXPORT_TYPE: Dict[SummaryExportQuantitiesOptionsEnum, ExportTypeEnum] = {
+    SummaryExportQuantitiesOptionsEnum.abundance: ExportTypeEnum.abundances,
+    SummaryExportQuantitiesOptionsEnum.concentration: ExportTypeEnum.concentrations,
+    SummaryExportQuantitiesOptionsEnum.biovolume: ExportTypeEnum.biovols,
+}
+
 
 class ProjectExport(JobServiceBase):
     """ """
@@ -149,7 +157,6 @@ class ProjectExport(JobServiceBase):
             "Input Param = %s project_ids = %s" % (self.req.__dict__, project_ids)
         )
         req = self.req
-
         # Bulk of the job
         if req.exp_type in (
             ExportTypeEnum.general_tsv,
@@ -161,14 +168,44 @@ class ProjectExport(JobServiceBase):
             )
             if req.with_images:
                 self.add_images(nb_images, 10, progress_before_copy)
-        elif req.exp_type == ExportTypeEnum.summary:
+        elif (
+            req.exp_type == ExportTypeEnum.summary and self.JOB_TYPE != "SummaryExport"
+        ):
+            # Deprecated raw /export endpoint: keep producing the historical summary,
+            # for the moment, regardless of any quantity it may carry.
             nb_rows = self.create_summary(project_ids)
-        elif req.exp_type in (
+        elif req.exp_type == ExportTypeEnum.summary or req.exp_type in (
             ExportTypeEnum.abundances,
             ExportTypeEnum.concentrations,
             ExportTypeEnum.biovols,
         ):
-            nb_rows = self.create_sci_summary(project_ids)
+            if req.exp_type == ExportTypeEnum.summary:
+                if isinstance(req.quantity, SummaryExportQuantitiesOptionsEnum):
+                    raw_exptypes: List[
+                        Union[ExportTypeEnum, SummaryExportQuantitiesOptionsEnum]
+                    ] = [req.quantity]
+                else:
+                    raw_exptypes = req.quantity
+                exptypes: List[ExportTypeEnum] = [
+                    SUMMARY_QUANTITY_TO_EXPORT_TYPE[a_type]
+                    if isinstance(a_type, SummaryExportQuantitiesOptionsEnum)
+                    else a_type
+                    for a_type in raw_exptypes
+                ]
+            else:
+                exptypes = [req.exp_type]
+            do_exp = 0
+            for _i, exptype in enumerate(exptypes):
+                if exptype in (
+                    ExportTypeEnum.abundances,
+                    ExportTypeEnum.concentrations,
+                    ExportTypeEnum.biovols,
+                ):
+                    do_exp += 1
+            if len(exptypes) > 0 and do_exp == len(exptypes):
+                nb_rows = self.create_sci_summary(project_ids, exptypes)
+            else:
+                raise Exception("Unsupported export type : %s" % req.exp_type)
         else:
             raise Exception("Unsupported export type : %s" % req.exp_type)
         # Zip present log file as well
@@ -1016,33 +1053,21 @@ class ProjectExport(JobServiceBase):
             ret = ["sam.orig_id", "acq.orig_id"]
         return ret + ["obh.classif_qual"]
 
-    def create_sci_summary(self, project_ids: ProjectIDListT) -> int:
+    def _new_sci_summary_query(
+        self,
+        project_ids: ProjectIDListT,
+        user_id: int,
+        formulae: Dict[str, str],
+        id_cols: List[str],
+    ) -> ObjectSetQueryPlus:
         """
-        Assuming that the historical summary is a data one, compute 'scientific' summaries.
+        Build a fresh, isolated query for a single sci-summary type.
         """
-        req = self.req
-        user_id = self._get_owner_id()
-        exp_type = req.exp_type
-        out_file = self._get_summary_file()
-
-        # Ensure we work on validated objects only.
-        # Not anymore, should user need to narrow the export the filters are available.
-        # self.filters["statusfilter"] = "V"
-        # Prepare a where clause and parameters from filter
         object_set: DescribedObjectBOSet = DescribedObjectBOSet(
             self.ro_session, project_ids, user_id, self.filters
         )
-        # The specialized SQL builder operates from the object set
         aug_qry = ObjectSetQueryPlus(object_set)
         aug_qry.remap_categories(self.pre_mapping)
-        # Formulae default from the project but are overriden by the query
-        formulae: Dict[str, str] = {}
-        for project_id in project_ids:
-            variables = self.ro_session.query(ProjectVariables).get(project_id)
-            assert variables is not None
-            if variables is not None:
-                formulae.update(variables.to_dict())
-        formulae.update(req.formulae)
         aug_qry.set_formulae(formulae)
         # Set common aliases, not all of them is always used
         aug_qry.set_aliases(
@@ -1053,40 +1078,97 @@ class ProjectExport(JobServiceBase):
                 "obh.classif_qual": "status",
             }
         )
-        id_cols = self._id_columns_from_req()
         aug_qry.add_selects(id_cols)
         aug_qry.add_selects(["txo.display_name"])
+        return aug_qry
 
+    def create_sci_summary(
+        self, project_ids: ProjectIDListT, exp_types: List[ExportTypeEnum]
+    ) -> int:
+        """
+        Assuming that the historical summary is a data one, compute 'scientific' summaries.
+        One TSV is produced per requested type. If several types are requested, their
+        TSVs are zipped together; a single type is emitted as a plain TSV.
+        """
+        req = self.req
+        user_id = self._get_owner_id()
+        # Ensure we work on validated objects only.
+        # Not anymore, should user need to narrow the export the filters are available.
+        # self.filters["statusfilter"] = "V"
+        # Formulae default from the project but are overriden by the query
+        formulae: Dict[str, str] = {}
+        for project_id in project_ids:
+            prjformulae = (
+                self.ro_session.query(Project.formulae)
+                .filter(Project.projid == project_id)
+                .scalar()
+            )
+            if prjformulae:
+                try:
+                    fm = json.loads(prjformulae)
+                    formulae.update(fm)
+                except:
+                    pass
+        try:
+            formulae.update(req.formulae)
+        except:
+            pass
+        assert isinstance(formulae, dict) and len(formulae.keys()), "No valid formulae"
         if req.sum_subtotal == SummaryExportGroupingEnum.by_project:
             assert False, "No collections yet to get multiple projects from"
 
-        # Per-type adjustment
-        zero_col = ""
-        if exp_type == ExportTypeEnum.abundances:
-            zero_col = self.create_sci_abundances_summary(aug_qry)
-        elif exp_type == ExportTypeEnum.concentrations:
-            zero_col = self.create_sci_concentrations_summary(aug_qry)
-        elif exp_type == ExportTypeEnum.biovols:
-            zero_col = self.create_sci_biovolumes_summary(aug_qry)
+        id_cols = self._id_columns_from_req()
+        nb_types = len(exp_types)
+        produced_files: List[Tuple[ExportTypeEnum, Path]] = []
+        total_lines = 0
+        for i, exp_type in enumerate(exp_types):
+            # A fresh query per type, so selected columns don't leak between types
+            aug_qry = self._new_sci_summary_query(
+                project_ids, user_id, formulae, id_cols
+            )
+            if exp_type == ExportTypeEnum.abundances:
+                zero_col = self.create_sci_abundances_summary(aug_qry)
+            elif exp_type == ExportTypeEnum.concentrations:
+                zero_col = self.create_sci_concentrations_summary(aug_qry)
+            elif exp_type == ExportTypeEnum.biovols:
+                zero_col = self.create_sci_biovolumes_summary(aug_qry)
+            else:
+                raise Exception("Unsupported export type : %s" % exp_type)
+            # Group according to request
+            aug_qry.set_grouping(self._grouping_from_req(True))
 
-        # Group according to request
-        aug_qry.set_grouping(self._grouping_from_req(True))
+            msg = "Computing zero lines to add for %s" % exp_type.value
+            logger.info(msg)
+            self.update_progress(10 + int(70 / nb_types * i), msg)
+            row_src = self.add_zeroes_in_sci_summary(aug_qry, id_cols, zero_col)
 
-        msg = "Computing zero lines to add"
-        logger.info(msg)
-        self.update_progress(30, msg)
-        row_src = self.add_zeroes_in_sci_summary(aug_qry, id_cols, zero_col)
+            out_file = self.out_path / ("sci_summary_%s.tsv" % exp_type.value)
+            logger.info("Writing to file %s", out_file)
+            nb_lines = aug_qry.write_row_source_to_csv(row_src, out_file)
+            total_lines += nb_lines
+            produced_files.append((exp_type, out_file))
 
-        msg = "Writing to file %s" % out_file
-        logger.info(msg)
-        self.update_progress(50, msg)
-        nb_lines = aug_qry.write_row_source_to_csv(row_src, out_file)
+            logger.info("Extracted %d rows for %s", nb_lines, exp_type.value)
 
-        msg = "Extracted %d rows" % nb_lines
-        logger.info(msg)
-        self.update_progress(90, msg)
+        self.update_progress(90, "Packaging result")
+        if nb_types == 1:
+            _exp_type, produced_path = produced_files[0]
+            self._set_out_file_name("tsv")
+            produced_path.rename(self.out_path / self.out_file_name)
+        else:
+            self._set_out_file_name("zip")
+            zip_path = self.out_path / self.out_file_name
+            with zipfile.ZipFile(
+                zip_path, "w", allowZip64=True, compression=zipfile.ZIP_DEFLATED
+            ) as zfile:
+                for a_exp_type, produced_path in produced_files:
+                    zfile.write(
+                        produced_path, arcname="ecotaxa_%s.tsv" % a_exp_type.value
+                    )
+                    produced_path.unlink()
 
-        return 0
+        self.update_progress(100, "Extracted %d rows" % total_lines)
+        return total_lines
 
     def query_taxo_recast(
         self,
@@ -1171,20 +1253,31 @@ class SummaryProjectExport(SpecializedProjectExport):
 
     @staticmethod
     def new_to_old(req: SummaryExportReq) -> ExportReq:
-        new_type_to_old = {
-            SummaryExportQuantitiesOptionsEnum.abundance: ExportTypeEnum.abundances,
-            SummaryExportQuantitiesOptionsEnum.biovolume: ExportTypeEnum.biovols,
-            SummaryExportQuantitiesOptionsEnum.concentration: ExportTypeEnum.concentrations,
-        }
         new_level_to_old = {
             SummaryExportSumOptionsEnum.none: SummaryExportGroupingEnum.just_by_taxon,
             SummaryExportSumOptionsEnum.sample: SummaryExportGroupingEnum.by_sample,
             SummaryExportSumOptionsEnum.acquisition: SummaryExportGroupingEnum.by_subsample,
         }
+        raw_quantity: List[Union[ExportTypeEnum, SummaryExportQuantitiesOptionsEnum]]
+        if isinstance(
+            req.quantity, (SummaryExportQuantitiesOptionsEnum, ExportTypeEnum)
+        ):
+            raw_quantity = [req.quantity]
+        elif isinstance(req.quantity, list):
+            raw_quantity = list(req.quantity)
+        else:
+            raw_quantity = [ExportTypeEnum.abundances]
+        quantity: List[Union[ExportTypeEnum, SummaryExportQuantitiesOptionsEnum]] = [
+            SUMMARY_QUANTITY_TO_EXPORT_TYPE[a_type]
+            if isinstance(a_type, SummaryExportQuantitiesOptionsEnum)
+            else a_type
+            for a_type in raw_quantity
+        ]
         return ExportReq(
             collection_id=req.collection_id,
             project_id=req.project_id,
-            exp_type=new_type_to_old[req.quantity],
+            exp_type=ExportTypeEnum.summary,
+            quantity=quantity,
             sum_subtotal=new_level_to_old[req.summarise_by],
             formulae=req.formulae,
             out_to_ftp=req.out_to_ftp,

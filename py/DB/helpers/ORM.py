@@ -41,6 +41,7 @@ from sqlalchemy.orm import (
     joinedload,
     subqueryload,
     selectinload,
+    load_only,
 )
 
 # noinspection PyUnresolvedReferences

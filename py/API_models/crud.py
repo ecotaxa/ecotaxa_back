@@ -11,7 +11,7 @@ from BO.Collection import CollectionIDT
 from BO.ColumnUpdate import ColUpdate
 from BO.DataLicense import LicenseEnum, AccessLevelEnum
 from BO.Job import DBJobStateEnum
-from BO.Project import ProjectUserStats, ProjectColumns
+from BO.Project import ProjectUserStats, ProjectColumns, ProjectBO
 from BO.ProjectSet import ProjectSetColumnStats
 from BO.Sample import SampleTaxoStats
 from DB.Acquisition import Acquisition
@@ -23,7 +23,7 @@ from DB.Project import Project, ProjectIDT, ProjectIDListT
 from DB.Sample import Sample, SampleIDT
 from DB.User import User, Guest, Organization, OrganizationIDT
 from DB.User import UserIDT
-from helpers.pydantic import BaseModel, Field, DescriptiveModel
+from helpers.pydantic import BaseModel, Field, DescriptiveModel, validator
 from .helpers.DBtoModel import combine_models
 from .helpers.DataclassToModel import dataclass_to_model_with_suffix
 
@@ -199,6 +199,10 @@ class _Project2Model(DescriptiveModel):
         title="Classification field list",
         description="",
         example="depth_min=depth_min\r\ndepth_max=depth_max\r\narea=area [pixel]\r\nmean=mean [0-255]\r\nfractal=fractal\r\nmajor=major [pixel]\r\nsymetrieh=symetrieh\r\ncirc.=circ\r\nferet = Feret [pixel]",
+    )
+    initclassiflist: str = Field(
+        title="Initial categories",
+        description=" Aggregated categories from the collection projects.",
     )
     popoverfieldlist: str = Field(
         title="Pop over field list",
@@ -398,16 +402,6 @@ class _AddedToProject(BaseModel):
         default={},
         example={"nb_images": "t01"},
     )
-    bodc_variables: Dict[str, Optional[str]] = Field(
-        title="Expressions for computing standard BODC quantities.",
-        description="BODC quantities from columns. Only the 3 keys listed in example are valid.",
-        default={},
-        example={
-            "subsample_coef": "1/ssm.sub_part",
-            "total_water_volume": "sam.tot_vol/1000",
-            "individual_volume": "4.0/3.0*math.pi*(math.sqrt(obj.area/math.pi)*ssm.pixel_size)**3",
-        },
-    )
     init_classif_list: List[int] = Field(
         title="Init classification list",
         description="Favorite taxa used in classification.",
@@ -440,7 +434,7 @@ class _AddedToProject(BaseModel):
     instrument_url: Optional[str] = Field(
         title="Instrument URL",
         description="This project's instrument BODC definition.",
-        example="http://vocab.nerc.ac.uk/collection/L22/current/TOOL1581/",
+        example="https://vocab.nerc.ac.uk/collection/L22/current/TOOL1581/",
     )
 
     highest_right: str = Field(
@@ -454,8 +448,135 @@ class _AddedToProject(BaseModel):
 
 class ProjectModel(_AddedToProject, _ProjectModelFromDB):
     """
-    Basic and computed information about the Project.
-    """
+    Basic and computed information about the Project."""
+
+    class Config:
+        orm_mode = True
+        exclude_unset = True
+        allow_population_by_field_name = True
+
+
+class ProjectReq(BaseModel):
+
+    title: Optional[str] = Field(
+        default=None,
+        title="Title",
+        description="The project title.",
+        example="MyProject",
+    )
+    instrument: Optional[str] = Field(
+        title="Instrument",
+        description="This project's instrument code.",
+        example="Zooscan",
+    )
+    status: Optional[str] = Field(
+        default=None,
+        title="Status",
+        description="The project status.",
+        example="Annotate",
+    )
+    access: AccessLevelEnum = Field(
+        title="Access level",
+        description="""When "1" (PUBLIC), the project is visible by all users."""
+        + ", ".join(
+            [
+                access.name + ': "' + str(access.value) + '"'
+                for access in AccessLevelEnum
+            ]
+        ),
+        default=AccessLevelEnum.PUBLIC,
+        example=AccessLevelEnum.PUBLIC,
+    )
+    classiffieldlist: Optional[str] = Field(
+        default=None,
+        title="Classification field list",
+        description="",
+        example="depth_min=depth_min\r\ndepth_max=depth_max\r\narea=area [pixel]\r\nmean=mean [0-255]\r\nfractal=fractal\r\nmajor=major [pixel]\r\nsymetrieh=symetrieh\r\ncirc.=circ\r\nferet = Feret [pixel]",
+    )
+    initclassiflist: Optional[str] = Field(
+        default=None,
+        title="Initial categories",
+        description=" Aggregated categories from the collection projects.",
+    )
+
+    comments: Optional[str] = Field(
+        default=None, title="Comments", description="The project comments.", example=""
+    )
+    cnn_network_id: Optional[str] = Field(
+        default=None,
+        title="Cnn network id",
+        description="",
+        example="SCN_zooscan_group1",
+    )
+    formulae: Optional[str] = Field(
+        title="Formulae",
+        description="Concentration formulae.",
+        default=FORMULAE,
+        example="",
+    )
+    managers: List[MinUserModel] = Field(
+        title="Managers", description="Managers of this project.", default=[]
+    )
+    annotators: List[MinUserModel] = Field(
+        title="Annotators",
+        description="Annotators of this project, if not manager.",
+        default=[],
+    )
+    viewers: List[MinUserModel] = Field(
+        title="Viewers",
+        description="Viewers of this project, if not manager nor annotator.",
+        default=[],
+    )
+    contact: Optional[MinUserModel] = Field(
+        title="Contact",
+        description="The contact person is a manager who serves as the contact person for other users and EcoTaxa's managers.",
+    )
+
+    @validator("formulae")
+    def formulae_validator(cls, v):
+        v = ProjectBO.formulae_validator(v)
+        return v
+
+    class Config:
+        schema_extra = {"title": "Update full or partial Project Model"}
+        exclude_unset = True
+
+
+class UpdateProjectReq(ProjectReq):
+    init_classif_list: List[int] = Field(
+        title="Init classification list",
+        description="Favorite taxa used in classification.",
+        default=[],
+        example=[5, 11493, 11498, 11509],
+    )
+    popoverfieldlist: Optional[str] = Field(
+        default=None,
+        title="Pop over field list",
+        example="depth_min=depth_min\r\ndepth_max=depth_max\r\narea=area [pixel]\r\nmean=mean [0-255]\r\nfractal=fractal\r\nmajor=major [pixel]\r\nsymetrieh=symetrieh\r\ncirc.=circ\r\nferet = Feret [pixel]",
+    )
+
+    @validator("title")
+    def title_validator(cls, v):
+        assert v is not None, AssertionError("A valid Instrument is needed.")
+        return v
+
+    @validator("instrument")
+    def instrument_validator(cls, v):
+        assert v is not None, AssertionError("A valid Instrument is needed.")
+        return v
+
+    @validator("contact")
+    def contact_validator(cls, v):
+        assert v is not None, AssertionError("A valid Contact is needed.")
+        return v
+
+    @validator("formulae")
+    def update_formulae_validator(cls, v):
+        v = ProjectBO.formulae_validator(v)
+        return v
+
+    class Config:
+        schema_extra = {"title": "Update full or partial Project Model"}
 
 
 class CollectionAggregatedRsp(BaseModel):
@@ -895,6 +1016,7 @@ class CollectionReq(BaseModel):
 
     class Config:
         schema_extra = {"title": "Update full or partial Collection Model"}
+        exclude_unset = True
 
 
 class _Job2Model(DescriptiveModel):

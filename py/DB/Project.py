@@ -9,6 +9,7 @@ from typing import List, TYPE_CHECKING, Iterable
 from BO.DataLicense import AccessLevelEnum
 from DB.helpers.ORM import Model
 from .Instrument import Instrument
+from .ProjectVariables import KNOWN_PROJECT_VARS
 from .helpers.DDL import Column, Sequence, ForeignKey
 from .helpers.ORM import relationship
 from .helpers.Postgres import VARCHAR, INTEGER, DOUBLE_PRECISION
@@ -27,6 +28,8 @@ ProjectIDListT = List[int]
 if TYPE_CHECKING:
     from .Sample import Sample
     from .ProjectPrivilege import ProjectPrivilege
+
+KNOWN_PROJECT_VARS = {"subsample_coef", "total_water_volume", "individual_volume"}
 
 
 class Project(Model):
@@ -83,8 +86,6 @@ class Project(Model):
     ecopart_project: relationship
     # The related instrument full definition
     instrument: relationship
-    # The variables which can be applied in this project
-    variables: relationship
 
     def __str__(self):
         return "{0} ({1})".format(self.title, self.projid)

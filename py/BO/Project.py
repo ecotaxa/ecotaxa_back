@@ -3,6 +3,7 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 import typing
+import json
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
@@ -16,6 +17,7 @@ from typing import (
     Tuple,
     cast,
     Final,
+    TYPE_CHECKING,
 )
 
 from BO.Classification import ClassifIDListT
@@ -33,11 +35,14 @@ from BO.ProjectVars import ProjectVar
 from BO.SpaceTime import USED_FIELDS_FOR_SUNPOS, compute_sun_position
 from BO.User import (
     MinimalUserBO,
+    ContactUserBO,
     ContactUserListT,
     UserActivity,
     MinimalUserBOListT,
     UserActivityListT,
 )
+
+from DB.User import UserIDT, UserIDListT
 from DB.Acquisition import Acquisition
 from DB.Collection import CollectionProject, Collection
 from DB.Object import (
@@ -56,12 +61,12 @@ from DB.Project import (
     ANNOTATE_STATUS,
     ANNOTATE_NO_PREDICTION,
     EXPLORE_ONLY,
+    KNOWN_PROJECT_VARS,
 )
 from DB.ProjectPrivilege import ProjectPrivilege
-from DB.ProjectVariables import KNOWN_PROJECT_VARS
-from DB.ProjectVariables import ProjectVariables
+from DB.Instrument import Instrument
 from DB.Sample import Sample
-from DB.User import Role, User, UserIDListT, UserIDT, UserStatus
+from DB.User import Role, User, UserStatus
 from DB.helpers import Session, Result
 from DB.helpers.Bean import Bean
 from DB.helpers.Core import select
@@ -72,7 +77,8 @@ from DB.helpers.ORM import (
     Query,
     any_,
     and_,
-    subqueryload,
+    selectinload,
+    load_only,
     joinedload,
     minimal_table_of,
     func,
@@ -83,6 +89,12 @@ from DB.helpers.ORM import (
 from helpers.DynamicLogs import get_logger
 from helpers.FieldListType import FieldListType
 from helpers.Timer import CodeTimer
+from helpers.pydantic import Field, BaseModel
+from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
+
+if TYPE_CHECKING:
+    # Avoid a circular import: API_models.crud itself imports from BO.Project.
+    from API_models.crud import ProjectReq
 
 logger = get_logger(__name__)
 
@@ -138,15 +150,136 @@ class ProjectColumns:
     values: List[str]
 
 
+class FieldsList(object):
+    @staticmethod
+    def required() -> List[str]:
+        return ["projid", "title", "access", "status"]
+
+    @staticmethod
+    def privileges() -> List[str]:
+        return ["viewers", "annotators", "managers", "contact"]
+
+    @staticmethod
+    def mapping() -> List[str]:
+        return [
+            "obj_free_cols",
+            "sample_free_cols",
+            "acquisition_free_cols",
+            "process_free_cols",
+        ]
+
+    @staticmethod
+    def instrument() -> List[str]:
+        return ["instrument", "instrument_url"]
+
+    @staticmethod
+    def classif() -> List[str]:
+        return ["init_classif_list"]
+
+    @staticmethod
+    def counts() -> List[str]:
+        return ["objcount", "pctvalidated", "pctclassified"]
+
+    @staticmethod
+    def project() -> List[str]:
+        return [
+            "status",
+            "cnn_network_id",
+            "formulae",
+            "rf_models_used",
+            "classifsettings",
+            "initclassiflist",
+            "classiffieldlist",
+            "popoverfieldlist",
+            "comments",
+        ]
+
+    @staticmethod
+    def info() -> List[str]:
+        return [
+            "instrument",
+            "instrument_url",
+            "comments",
+        ]
+
+    @staticmethod
+    def fileloaded() -> List[str]:
+        return ["fileloaded"]
+
+    @staticmethod
+    def summary() -> List[str]:
+        summary: List[str] = FieldsList.required() + FieldsList.info()
+        return summary
+
+    @staticmethod
+    def default() -> List[str]:
+        default: List[str] = (
+            FieldsList.required()
+            + FieldsList.summary()
+            + FieldsList.counts()
+            + FieldsList.privileges()
+        )
+        return default
+
+    @staticmethod
+    def all() -> List[str]:
+        all: List[str] = (
+            FieldsList.required()
+            + FieldsList.privileges()
+            + FieldsList.instrument()
+            + FieldsList.project()
+            + FieldsList.counts()
+            + FieldsList.mapping()
+        )
+        return all
+
+    @staticmethod
+    def order_field() -> List[str]:
+        orderfield: List[str] = (
+            FieldsList.required()
+            + FieldsList.counts()
+            + FieldsList.classif()
+            + FieldsList.instrument()
+            + [
+                "comments",
+                "rf_models_used",
+                "cnn_network_id",
+                "formulae",
+                "highest_right",
+            ]
+        )
+        return orderfield
+
+    @staticmethod
+    def attributes() -> Dict[str, List[str]]:
+        projectvars = [v for v in list(vars(Project)) if v[0:1] != "_"]
+        # minimal fields
+        projectbovars = [v for v in list(ProjectBO.__slots__) if v[0:1] != "_"]
+        return dict({"project": projectvars, "projectbo": projectbovars})
+
+
+key_rights: Dict[str, str] = {
+    "managers": ProjectPrivilegeBO.MANAGE,
+    "annotators": ProjectPrivilegeBO.ANNOTATE,
+    "viewers": ProjectPrivilegeBO.VIEW,
+}
+
+
 # noinspection SqlDialectInspection
 class ProjectBO(object):
     """
     A Project business object. So far (but less and less...) mainly a container
     for static API_operations involving it.
+
+    Only the requested `fields` are enriched (computed) onto the instance; any
+    other (plain DB) field is served on demand by __getattr__ from the wrapped
+    project. `_out_fields` records the requested list so the serializer can emit
+    only those keys (see MyORJSONResponse.orjson_default).
     """
 
     __slots__ = [
         "_project",
+        "_out_fields",
         "instrument",
         "instrument_url",
         "highest_right",
@@ -155,18 +288,26 @@ class ProjectBO(object):
         "acquisition_free_cols",
         "process_free_cols",
         "init_classif_list",
-        "bodc_variables",
         "contact",
         "viewers",
         "annotators",
         "managers",
     ]
 
-    def __init__(self, project: Project):
+    def __init__(self, project: Project, fields: Optional[List[str]] = None):
         self._project = project
-        # Added/copied values
-        self.instrument = project.instrument_id
-        self.instrument_url = None
+        # Requested field list, used to narrow serialization. None means "all".
+        self._out_fields: Optional[List[str]] = fields
+        # Safe defaults for the _derived_ (non-DB-column) attributes, so that
+        # serialization never fails whatever the requested fields. Plain DB columns
+        # are NOT copied here: they are served on demand by __getattr__.
+        self.instrument: Optional[str] = None
+        self.instrument_url: Optional[str] = None
+        # Involved members
+        self.contact: Optional[ContactUserBO] = None
+        self.viewers: ContactUserListT = []
+        self.annotators: ContactUserListT = []
+        self.managers: ContactUserListT = []
         self.highest_right = (
             ""  # This field depends on the user asking for the information
         )
@@ -175,13 +316,114 @@ class ProjectBO(object):
         self.acquisition_free_cols: Dict[str, str] = {}
         self.process_free_cols: Dict[str, str] = {}
         self.init_classif_list: List[int] = []
+        if fields is not None:
+            self.base_enrich(fields, project)
+
+    def base_enrich(self, listfields: List[str], project: Project) -> "ProjectBO":
+        """
+        Compute only the requested _derived_ fields (privileges, instrument,
+        mappings, initial classification). Plain DB columns need no enrichment:
+        they are read from the wrapped project through __getattr__.
+        """
+        wanted = set(listfields)
+        priv_fields = list(wanted & set(FieldsList.privileges()))
+        if priv_fields:
+            self.privileges_enrich(project.privs_for_members, priv_fields)
+        instr_fields = list(wanted & set(FieldsList.instrument()))
+        if instr_fields:
+            self.instrument_enrich(project, instr_fields)
+        map_fields = list(wanted & set(FieldsList.mapping()))
+        if map_fields:
+            self.mapping_enrich(project, map_fields)
+        classif_fields = list(wanted & set(FieldsList.classif()))
+        if classif_fields:
+            self.classif_enrich(project, classif_fields)
+        return self
+
+    def privileges_enrich(
+        self, privs_for_members: Iterable[ProjectPrivilege], fields: List[str]
+    ) -> None:
         # Involved members
-        self.contact: Optional[User] = None
-        self.viewers: List[User] = []
-        self.annotators: List[User] = []
-        self.managers: List[User] = []
-        # Formulas AKA variables, used to compute BODC quantities
-        self.bodc_variables: Dict[str, str] = {}
+        colprivs = {v: k for k, v in key_rights.items()}
+        # Dispatch members by right
+        by_right_fct: Dict[str, Any] = {
+            "managers": [],
+            "annotators": [],
+            "viewers": [],
+            "contact": None,
+        }
+        a_priv: ProjectPrivilege
+        # noinspection PyTypeChecker
+        for a_priv in privs_for_members:
+            assert a_priv.privilege is not None
+            if a_priv.user is None:  # TODO: There is a line with NULL somewhere in DB
+                continue
+            privname = colprivs[a_priv.privilege]
+            is_contact = "C" == a_priv.extra
+            # A user can be e.g. both a manager _and_ the contact: these are not exclusive.
+            if privname not in fields and not (is_contact and "contact" in fields):
+                continue
+            if a_priv.user.status != UserStatus.active.value:
+                continue
+            org = a_priv.user.organization
+            priv_user = ContactUserBO(
+                id=a_priv.user.id,
+                name=a_priv.user.name,
+                email=a_priv.user.email,
+                orcid=a_priv.user.orcid,
+                organisation=org.name,
+            )
+            if privname in fields:
+                by_right_fct[privname].append(priv_user)
+            if is_contact and "contact" in fields:
+                by_right_fct["contact"] = priv_user
+        for privfield in fields:
+            setattr(self, privfield, by_right_fct[privfield])
+
+    def instrument_enrich(self, project, fields: List[str]) -> None:
+        if "instrument" in fields:
+            self.instrument = project.instrument.instrument_id
+        if "instrument_url" in fields:
+            self.instrument_url = project.instrument.bodc_url
+
+    def mapping_enrich(self, project: Project, fields: List[str]) -> None:
+        mappings = ProjectMapping().load_from_project(project)
+        if "obj_free_cols" in fields:
+            self.obj_free_cols = mappings.object_mappings.tsv_cols_to_real
+        if "sample_free_cols" in fields:
+            self.sample_free_cols = mappings.sample_mappings.tsv_cols_to_real
+        if "acquisition_free_cols" in fields:
+            self.acquisition_free_cols = mappings.acquisition_mappings.tsv_cols_to_real
+        if "process_free_cols" in fields:
+            self.process_free_cols = mappings.process_mappings.tsv_cols_to_real
+
+    def classif_enrich(self, project: Project, fields: List[str]) -> None:
+        if "init_classif_list" in fields:
+            db_list = project.initclassiflist
+            db_list = db_list if db_list else ""
+            self.init_classif_list = [int(x) for x in db_list.split(",") if x.isdigit()]
+
+    @staticmethod
+    def build_attr(
+        fields: List[Union[str, FieldListType]],
+        attributes: List[str],
+    ) -> List[str]:
+        keepattr = FieldsList.required()
+        # only visible attributes  ( exclude fields like fileloaded ...)
+        attributes = list(set(attributes) & set(FieldsList.all()))
+        if FieldListType.all in fields:
+            keepattr.extend(FieldsList.all())
+        else:
+            for field in fields:
+                if field == FieldListType.default:
+                    keepattr.extend(FieldsList.default())
+                elif field == FieldListType.summary:
+                    keepattr.extend(FieldsList.summary())
+                elif field in attributes:
+                    keepattr.append(field)
+                else:
+                    logger.warning("Field %s not in ProjectBO attributes", field)
+        return list(set(keepattr))
 
     def get_preset(self) -> ClassifIDListT:
         """
@@ -193,6 +435,23 @@ class ProjectBO(object):
         if not init_list:
             return []
         return [int(cl_id) for cl_id in init_list.split(",")]
+
+    def public_enrich(self, listfields: List[str]) -> "ProjectBO":
+        """
+        Enrichment with fields we can expose to public unauthenticated calls.
+        """
+        if "instrument_url" in listfields:
+            self.instrument_url = self._project.instrument.bodc_url
+        return self
+
+    def __getattr__(self, item):
+        """Fallback for 'not found' field after the C getattr() call.
+        If we did not enrich a Project field somehow then return it"""
+        return getattr(self._project, item)
+
+    def __delattr__(self, item):
+        """Fallback for 'not found' field after the C delattr() call."""
+        return delattr(self._project, item)
 
     def enrich(self) -> "ProjectBO":
         """
@@ -208,36 +467,36 @@ class ProjectBO(object):
         db_list = self._project.initclassiflist
         db_list = db_list if db_list else ""
         self.init_classif_list = [int(x) for x in db_list.split(",") if x.isdigit()]
+
         # Dispatch members by right
         by_right_fct = {
-            ProjectPrivilegeBO.MANAGE: self.managers.append,
-            ProjectPrivilegeBO.ANNOTATE: self.annotators.append,
-            ProjectPrivilegeBO.VIEW: self.viewers.append,
+            ProjectPrivilegeBO.MANAGE: self.managers,
+            ProjectPrivilegeBO.ANNOTATE: self.annotators,
+            ProjectPrivilegeBO.VIEW: self.viewers,
         }
         a_priv: ProjectPrivilege
         # noinspection PyTypeChecker
         for (
             a_priv
         ) in self._project.privs_for_members:  # Use ORM to navigate in relationship
-            priv_user = a_priv.user
+            # priv_user= a_priv.user
+            org = a_priv.user.organization
+            priv_user = ContactUserBO(
+                id=a_priv.user.id,
+                name=a_priv.user.name,
+                email=a_priv.user.email,
+                orcid=a_priv.user.orcid,
+                organisation=org.name,
+            )
+
             if priv_user is None:  # TODO: There is a line with NULL somewhere in DB
                 continue
-            if priv_user.status != UserStatus.active.value:
+            if a_priv.user.status != UserStatus.active.value:
                 continue
             assert a_priv.privilege is not None
-            by_right_fct[a_priv.privilege](priv_user)
+            by_right_fct[a_priv.privilege].append(priv_user)
             if "C" == a_priv.extra:
                 self.contact = priv_user
-        self.instrument_url = self._project.instrument.bodc_url
-        # Variables
-        if self._project.variables is not None:
-            self.bodc_variables.update(self._project.variables.to_dict())
-        return self
-
-    def public_enrich(self) -> "ProjectBO":
-        """
-        Enrichment with fields we can expose to public unauthenticated calls.
-        """
         self.instrument_url = self._project.instrument.bodc_url
         return self
 
@@ -256,7 +515,6 @@ class ProjectBO(object):
         managers: List[Any],
         annotators: List[Any],
         viewers: List[Any],
-        bodc_vars: Dict,
         access: Optional[str],
         formulae: Optional[str],
     ):
@@ -265,19 +523,6 @@ class ProjectBO(object):
         # strip title
         title = title.strip()
         assert instrument is not None, "A valid Instrument is needed."
-        # Validate variables
-        errors: List[str] = []
-        for a_var, its_def in bodc_vars.items():
-            if its_def is None or its_def.strip() == "":
-                continue
-            assert (
-                a_var in KNOWN_PROJECT_VARS
-            ), "Invalid project variable key: {}".format(a_var)
-            try:
-                _ = ProjectVar.from_project(a_var, its_def)
-            except TypeError as e:
-                errors.append("Error {} in formula '{}': ".format(str(e), its_def))
-        assert len(errors) == 0, "There are formula errors: " + str(errors)
         # Field reflexes
         if cnn_network_id != self._project.cnn_network_id:
             # Delete CNN features, which depend on the CNN network
@@ -292,6 +537,7 @@ class ProjectBO(object):
         self._project.cnn_network_id = cnn_network_id
         self._project.comments = comments
         self._project.access = access
+
         self._project.formulae = formulae
         # Inverse for extracted values
         self._project.initclassiflist = ",".join(
@@ -329,19 +575,81 @@ class ProjectBO(object):
         assert (
             contact_used
         ), "Could not set Contact, the designated user is not in Managers list."
-        # Variables update, in full
-        bodc_vars_model = self._project.variables
-        if bodc_vars_model is None:
-            # Create record if needed
-            bodc_vars_model = ProjectVariables()
-            self._project.variables = bodc_vars_model
-        bodc_vars_model.load_from_dict(bodc_vars)
         session.commit()
 
-    def __getattr__(self, item):
-        """Fallback for 'not found' field after the C getattr() call.
-        If we did not enrich a Project field somehow then return it"""
-        return getattr(self._project, item)
+    def patch(
+        self,
+        session: Session,
+        projectreq: "ProjectReq",
+        modelfields: List[str],
+    ) -> None:
+        """
+        Apply a partial update: only `modelfields` (the fields the client actually
+        sent) are read off `projectreq` and applied to the wrapped project.
+        """
+        projid = self._project.projid
+        for modelfield in modelfields:
+            if modelfield == "instrument":
+                assert (
+                    projectreq.instrument is not None
+                ), "A valid Instrument is needed."
+                self._project.instrument_id = projectreq.instrument.strip()
+            elif modelfield == "title":
+                assert (
+                    projectreq.title is not None and projectreq.title.strip() != ""
+                ), "A valid Title is needed."
+                self._project.title = projectreq.title.strip()
+            elif modelfield == "cnn_network_id":
+                if projectreq.cnn_network_id != self._project.cnn_network_id:
+                    # Delete CNN features, which depend on the CNN network
+                    DeepFeatures.delete_all(session, projid)
+                self._project.cnn_network_id = projectreq.cnn_network_id
+            elif modelfield in FieldsList.project():
+                setattr(self._project, modelfield, getattr(projectreq, modelfield))
+            elif modelfield in FieldsList.privileges():
+                # The contact can be relevant even when patching managers/annotators/
+                # viewers (to tag their privilege row), so read it once upfront.
+                contact = projectreq.contact
+                if modelfield == "contact":
+                    if contact is None:
+                        logger.warning("contact is None. A valid Contact is needed.")
+                    else:
+                        usercontact = (
+                            session.query(ProjectPrivilege)
+                            .filter(
+                                ProjectPrivilege.projid == projid,
+                                ProjectPrivilege.member == contact.id,
+                            )
+                            .scalar()
+                        )
+                        if (
+                            usercontact is not None
+                            and usercontact.privilege == ProjectPrivilegeBO.MANAGE
+                        ):
+                            session.query(ProjectPrivilege).filter(
+                                ProjectPrivilege.projid == projid,
+                                ProjectPrivilege.member == contact.id,
+                            ).update({"extra": "C"})
+                else:
+                    # Remove all to avoid tricky diffs by privilege
+                    session.query(ProjectPrivilege).filter(
+                        ProjectPrivilege.projid == projid,
+                        ProjectPrivilege.privilege == key_rights[modelfield],
+                    ).delete()
+                    for a_user in getattr(projectreq, modelfield):
+                        projectpriv = ProjectPrivilege()
+                        projectpriv.projid = projid
+                        projectpriv.member = a_user.id
+                        projectpriv.privilege = key_rights[modelfield]
+                        if contact is not None and contact.id == a_user.id:
+                            if modelfield == "managers":
+                                projectpriv.extra = "C"
+                            else:
+                                logger.warning(
+                                    "Contact is not a manager. Contact not updated."
+                                )
+                        session.add(projectpriv)
+        session.commit()
 
     def get_all_num_columns_values(self, session: Session):
         """
@@ -403,7 +711,8 @@ class ProjectBO(object):
 
     @staticmethod
     def update_stats(session: Session, projid: int):
-        sql = text("""
+        sql = text(
+            """
         UPDATE projects
            SET objcount=tsp.nbr_sum,
                pctclassified=100.0*nbrclassified/tsp.nbr_sum,
@@ -415,7 +724,8 @@ class ProjectBO(object):
                WHERE projid = :prjid
               GROUP BY projid) tsp ON prj.projid = tsp.projid
         WHERE projects.projid = :prjid
-          AND prj.projid = :prjid""")
+          AND prj.projid = :prjid"""
+        )
         session.execute(sql, {"prjid": projid})
 
     @staticmethod
@@ -461,7 +771,7 @@ class ProjectBO(object):
             [(pid,) for pid in prj_ids]
         )
         pqry = session.query(
-            prjs_vals.c.projid,
+            Project.projid,
             User.id,
             User.name,
             func.count(ObjectHeader.objid),
@@ -473,7 +783,7 @@ class ProjectBO(object):
         pqry = pqry.join(Sample).join(Acquisition).join(ObjectHeader)
         pqry = pqry.join(User, User.id == ObjectHeader.classif_who)
         pqry = pqry.filter(ObjectHeader.classif_who == User.id)
-        pqry = pqry.group_by(prjs_vals.c.projid, User.id)
+        pqry = pqry.group_by(prjs_vals.c.projid, Project.projid, User.id)
         pqry = pqry.order_by(prjs_vals.c.projid, User.name)
         pqry = pqry.where(
             ObjectHeader.objid.op("<@")(func.obj_in_prj(prjs_vals.c.projid))
@@ -562,6 +872,9 @@ class ProjectBO(object):
         instrument_filter: str = "",
         filter_subset: bool = False,
         project_ids: str = "",
+        order_field: Optional[str] = None,
+        window_start: Optional[int] = 0,
+        window_size: Optional[int] = 0,
     ) -> List[ProjectIDT]:
         """
         :param session:
@@ -618,8 +931,7 @@ class ProjectBO(object):
             sql += " WHERE 1 = 1 "
 
         if title_filter != "":
-            sql += """
-                    AND ( prj.title ILIKE '%%'|| :title ||'%%'
+            sql += """      AND ( prj.title ILIKE '%%'|| :title ||'%%'
                           OR TO_CHAR(prj.projid,'999999') LIKE '%%'|| :title ) """
             sql_params["title"] = title_filter
 
@@ -636,6 +948,18 @@ class ProjectBO(object):
                 {"pids": tuple([int(p.strip()) for p in project_ids.split(",")])}
             )
             sql += """ AND prj.projid IN :pids """
+        if order_field in FieldsList.order_field():
+            if order_field == "instrument":
+                order_field = "instrument_id"
+            sql += """ ORDER BY %s """ % order_field
+
+        if window_start != 0:
+            sql += """ offset  :window_start """
+            sql_params["window_start"] = window_start
+        if window_size != 0:
+            sql += """limit :window_size """
+            sql_params["window_size"] = window_size
+
         with CodeTimer("Projects.projects_for_user query (ids):", logger):
             res: Result = session.execute(text(sql), sql_params)
             # single-element tuple :( DBAPI
@@ -891,7 +1215,8 @@ class ProjectBO(object):
                            JOIN samples sam ON sam.sampleid = acq.acq_sample_id AND sam.projid = :prjid
                           WHERE obh.objid <@ obj_in_prj(:prjid)
                             AND COALESCE(obh.classif_id, -1) = ANY(:ids)
-                       GROUP BY obh.classif_id""" % ObjectHeader.__tablename__
+                       GROUP BY obh.classif_id"""
+                % ObjectHeader.__tablename__
             )
             session.execute(
                 text(pts_ins), {"prjid": prj_id, "ids": list(ids_not_in_db)}
@@ -960,6 +1285,31 @@ class ProjectBO(object):
         session.commit()
         return ret
 
+    @staticmethod
+    def formulae_validator(formulae: str):
+        errors = []
+        if formulae is not None:
+            _val = json.loads(formulae)
+            for a_var, its_def in _val.items():
+                if its_def is None:
+                    continue
+                assert isinstance(
+                    its_def, str
+                ), "Invalid project variable value for '{}': expected a string, got {}".format(
+                    a_var, type(its_def).__name__
+                )
+                if its_def.strip() == "":
+                    continue
+                assert (
+                    a_var in KNOWN_PROJECT_VARS
+                ), "Invalid project variable key: {}".format(a_var)
+                try:
+                    _ = ProjectVar.from_project(a_var, its_def)
+                except TypeError as e:
+                    errors.append("Error {} in formula '{}': ".format(str(e), its_def))
+        assert len(errors) == 0, json.dumps(errors)
+        return formulae
+
 
 class ProjectBOSet(object):
     """
@@ -971,35 +1321,66 @@ class ProjectBOSet(object):
         session: Session,
         prj_ids: ProjectIDListT,
         public: bool = False,
-        fields: Optional[str] = FieldListType.default,
+        fields: Optional[str] = FieldListType.all,
     ):
+        listfields: List[Union[str, FieldListType]] = [FieldListType.all]
+        if fields is not None:
+            listfields = fields.split(",")
         # Query the project and ORM-load neighbours as well, as they will be needed in enrich()
-        qry = select(Project)
-        # qry = session.query(Project)
-        qry = qry.options(
-            subqueryload(Project.privs_for_members).joinedload(ProjectPrivilege.user)
+        attributes = FieldsList.attributes()
+        allattributes: List[str] = []
+        for key, value in attributes.items():
+            allattributes.extend(value)
+        wanted_fields = ProjectBO.build_attr(listfields, allattributes)
+        if public:
+            # Anonymous access only ever gets instrument-related computed fields
+            wanted_fields = list(set(wanted_fields) & set(FieldsList.instrument()))
+        needs_privileges = bool(set(wanted_fields) & set(FieldsList.privileges()))
+        needs_instrument = bool(set(wanted_fields) & set(FieldsList.instrument()))
+        # keep only project DB object
+        projectfields = list(set(wanted_fields) & set(attributes["project"]))
+        if "instrument" in projectfields:
+            projectfields.remove("instrument")
+            projectfields.extend(["instrument_id"])
+        selectfields: List[str] = [getattr(Project, fld) for fld in projectfields]
+        options = []
+        if selectfields:
+            options.append(load_only(*selectfields))
+        if needs_privileges:
             # Save a bit of time by joining privileges & users in a single query
             # Con: More data is returned as users in several projects are returned several times
-        )
-        qry = qry.options(joinedload(Project.variables))  # 1 -> 0,1
-        qry = qry.options(joinedload(Project.instrument))  # 1 -> 0,1
+            options.append(
+                selectinload(Project.privs_for_members)
+                .load_only(
+                    ProjectPrivilege.privilege,
+                    ProjectPrivilege.extra,
+                )
+                .joinedload(ProjectPrivilege.user)
+                .load_only(
+                    User.id,
+                    User.name,
+                    User.email,
+                    User.status,
+                    User.orcid,
+                    User.organization_id,
+                )
+            )
+        if needs_instrument:
+            options.append(joinedload(Project.instrument))
+        qry = select(Project).options(*options)
         qry = qry.filter(Project.projid == any_(prj_ids))
         self.projects: List[ProjectBO] = []
-        # De-duplicate
+        # De duplicate
         projs = []
         with CodeTimer("%s BO projects query:" % len(prj_ids), logger):
             for (a_proj,) in session.execute(qry):
                 projs.append(a_proj)
             # Force the same order as parameter, as we need the 'first' occurrence somewhere
-            projs.sort(key=lambda p: prj_ids.index(p.projid))
+            id_to_position = {id_proj: index for index, id_proj in enumerate(prj_ids)}
+            projs.sort(key=lambda p: id_to_position.get(p.projid, float("inf")))
         # Build BOs and enrich
         with CodeTimer("%s BO projects init:" % len(projs), logger):
-            self_projects_append = self.projects.append
-            for a_proj in projs:
-                if public:
-                    self_projects_append(ProjectBO(a_proj).public_enrich())
-                else:
-                    self_projects_append(ProjectBO(a_proj).enrich())
+            self.projects = [ProjectBO(proj, wanted_fields) for proj in projs]
 
     def as_list(self) -> List[ProjectBO]:
         return self.projects
@@ -1101,20 +1482,26 @@ class CollectionProjectBOSet(ProjectBOSet):
         """
         Read common privileges for these projects.
         """
-        keys = {
-            ProjectPrivilegeBO.VIEW: "viewers",
-            ProjectPrivilegeBO.ANNOTATE: "annotators",
-            ProjectPrivilegeBO.MANAGE: "managers",
-        }
+        keys = {v: k for k, v in key_rights.items()}
         projects = self.projects
-        privileges: Dict[str, ContactUserListT] = {}
-        # set common privileges for users in all projects
+        privileges: Dict[str, List[ContactUserBO]] = {}
+        # Set common privileges for users in all projects.
+        # Intersect/dedup by user id rather than by whole-object equality:
+        # ContactUserBO is a plain mutable dataclass, so hashing/comparing it
+        # by value is fragile (and requires it to stay hashable just for this).
         for key, value in keys.items():
-            privileges[value] = list(
-                set.intersection(
-                    *[set(getattr(project, value)) for project in projects]
-                )
+            per_project_lists = [getattr(project, value) for project in projects]
+            common_ids = set.intersection(
+                *[{u.id for u in a_list} for a_list in per_project_lists]
             )
+            seen_ids: set = set()
+            deduped = []
+            for a_list in per_project_lists:
+                for u in a_list:
+                    if u.id in common_ids and u.id not in seen_ids:
+                        seen_ids.add(u.id)
+                        deduped.append(u)
+            privileges[value] = deduped
         # aggregate and remove anomalies from projects
         for u in privileges[keys[ProjectPrivilegeBO.VIEW]]:
             for k in [
