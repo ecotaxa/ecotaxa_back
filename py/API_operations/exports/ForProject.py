@@ -59,7 +59,7 @@ logger = get_logger(__name__)
 
 # Some callers (e.g. the deprecated /export endpoint) may express a sci-summary
 # quantity via SummaryExportQuantitiesOptionsEnum rather than ExportTypeEnum.
-SUMMARY_QUANTITY_TO_EXPORT_TYPE = {
+SUMMARY_QUANTITY_TO_EXPORT_TYPE: Dict[SummaryExportQuantitiesOptionsEnum, ExportTypeEnum] = {
     SummaryExportQuantitiesOptionsEnum.abundance: ExportTypeEnum.abundances,
     SummaryExportQuantitiesOptionsEnum.concentration: ExportTypeEnum.concentrations,
     SummaryExportQuantitiesOptionsEnum.biovolume: ExportTypeEnum.biovols,
@@ -168,7 +168,9 @@ class ProjectExport(JobServiceBase):
             )
             if req.with_images:
                 self.add_images(nb_images, 10, progress_before_copy)
-        elif req.exp_type == ExportTypeEnum.summary and self.JOB_TYPE != "SummaryExport":
+        elif (
+            req.exp_type == ExportTypeEnum.summary and self.JOB_TYPE != "SummaryExport"
+        ):
             # Deprecated raw /export endpoint: keep producing the historical summary,
             # for the moment, regardless of any quantity it may carry.
             nb_rows = self.create_summary(project_ids)
@@ -178,15 +180,17 @@ class ProjectExport(JobServiceBase):
             ExportTypeEnum.biovols,
         ):
             if req.exp_type == ExportTypeEnum.summary:
-                if isinstance(
-                    req.quantity, (SummaryExportQuantitiesOptionsEnum, ExportTypeEnum)
-                ):
-                    exptypes = [req.quantity]
+                if isinstance(req.quantity, SummaryExportQuantitiesOptionsEnum):
+                    raw_exptypes: List[
+                        Union[ExportTypeEnum, SummaryExportQuantitiesOptionsEnum]
+                    ] = [req.quantity]
                 else:
-                    exptypes = req.quantity
-                exptypes = [
-                    SUMMARY_QUANTITY_TO_EXPORT_TYPE.get(a_type, a_type)
-                    for a_type in exptypes
+                    raw_exptypes = req.quantity
+                exptypes: List[ExportTypeEnum] = [
+                    SUMMARY_QUANTITY_TO_EXPORT_TYPE[a_type]
+                    if isinstance(a_type, SummaryExportQuantitiesOptionsEnum)
+                    else a_type
+                    for a_type in raw_exptypes
                 ]
             else:
                 exptypes = [req.exp_type]
@@ -1100,8 +1104,16 @@ class ProjectExport(JobServiceBase):
                 .scalar()
             )
             if prjformulae:
-                formulae.update(json.loads(prjformulae))
-        formulae.update(req.formulae)
+                try:
+                    fm = json.loads(prjformulae)
+                    formulae.update(fm)
+                except:
+                    pass
+        try:
+            formulae.update(req.formulae)
+        except:
+            pass
+        assert isinstance(formulae, dict) and len(formulae.keys()), "No valid formulae"
         if req.sum_subtotal == SummaryExportGroupingEnum.by_project:
             assert False, "No collections yet to get multiple projects from"
 
@@ -1246,16 +1258,20 @@ class SummaryProjectExport(SpecializedProjectExport):
             SummaryExportSumOptionsEnum.sample: SummaryExportGroupingEnum.by_sample,
             SummaryExportSumOptionsEnum.acquisition: SummaryExportGroupingEnum.by_subsample,
         }
+        raw_quantity: List[Union[ExportTypeEnum, SummaryExportQuantitiesOptionsEnum]]
         if isinstance(
             req.quantity, (SummaryExportQuantitiesOptionsEnum, ExportTypeEnum)
         ):
-            quantity = [req.quantity]
+            raw_quantity = [req.quantity]
         elif isinstance(req.quantity, list):
-            quantity = list(req.quantity)
+            raw_quantity = list(req.quantity)
         else:
-            quantity = [ExportTypeEnum.abundances]
-        quantity = [
-            SUMMARY_QUANTITY_TO_EXPORT_TYPE.get(a_type, a_type) for a_type in quantity
+            raw_quantity = [ExportTypeEnum.abundances]
+        quantity: List[Union[ExportTypeEnum, SummaryExportQuantitiesOptionsEnum]] = [
+            SUMMARY_QUANTITY_TO_EXPORT_TYPE[a_type]
+            if isinstance(a_type, SummaryExportQuantitiesOptionsEnum)
+            else a_type
+            for a_type in raw_quantity
         ]
         return ExportReq(
             collection_id=req.collection_id,

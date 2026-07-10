@@ -3,6 +3,7 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 import typing
+import json
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
@@ -30,6 +31,7 @@ from BO.Mappings import (
 )
 from BO.Prediction import DeepFeatures
 from BO.ProjectPrivilege import ProjectPrivilegeBO
+from BO.ProjectVars import ProjectVar
 from BO.SpaceTime import USED_FIELDS_FOR_SUNPOS, compute_sun_position
 from BO.User import (
     MinimalUserBO,
@@ -59,6 +61,7 @@ from DB.Project import (
     ANNOTATE_STATUS,
     ANNOTATE_NO_PREDICTION,
     EXPLORE_ONLY,
+    KNOWN_PROJECT_VARS,
 )
 from DB.ProjectPrivilege import ProjectPrivilege
 from DB.Instrument import Instrument
@@ -87,6 +90,7 @@ from helpers.DynamicLogs import get_logger
 from helpers.FieldListType import FieldListType
 from helpers.Timer import CodeTimer
 from helpers.pydantic import Field, BaseModel
+from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 if TYPE_CHECKING:
     # Avoid a circular import: API_models.crud itself imports from BO.Project.
@@ -533,6 +537,7 @@ class ProjectBO(object):
         self._project.cnn_network_id = cnn_network_id
         self._project.comments = comments
         self._project.access = access
+
         self._project.formulae = formulae
         # Inverse for extracted values
         self._project.initclassiflist = ",".join(
@@ -583,7 +588,6 @@ class ProjectBO(object):
         sent) are read off `projectreq` and applied to the wrapped project.
         """
         projid = self._project.projid
-
         for modelfield in modelfields:
             if modelfield == "instrument":
                 assert (
@@ -591,6 +595,9 @@ class ProjectBO(object):
                 ), "A valid Instrument is needed."
                 self._project.instrument_id = projectreq.instrument.strip()
             elif modelfield == "title":
+                assert (
+                    projectreq.title is not None and projectreq.title.strip() != ""
+                ), "A valid Title is needed."
                 self._project.title = projectreq.title.strip()
             elif modelfield == "cnn_network_id":
                 if projectreq.cnn_network_id != self._project.cnn_network_id:
@@ -1278,6 +1285,31 @@ class ProjectBO(object):
         session.commit()
         return ret
 
+    @staticmethod
+    def formulae_validator(formulae: str):
+        errors = []
+        if formulae is not None:
+            _val = json.loads(formulae)
+            for a_var, its_def in _val.items():
+                if its_def is None:
+                    continue
+                assert isinstance(
+                    its_def, str
+                ), "Invalid project variable value for '{}': expected a string, got {}".format(
+                    a_var, type(its_def).__name__
+                )
+                if its_def.strip() == "":
+                    continue
+                assert (
+                    a_var in KNOWN_PROJECT_VARS
+                ), "Invalid project variable key: {}".format(a_var)
+                try:
+                    _ = ProjectVar.from_project(a_var, its_def)
+                except TypeError as e:
+                    errors.append("Error {} in formula '{}': ".format(str(e), its_def))
+        assert len(errors) == 0, json.dumps(errors)
+        return formulae
+
 
 class ProjectBOSet(object):
     """
@@ -1452,14 +1484,24 @@ class CollectionProjectBOSet(ProjectBOSet):
         """
         keys = {v: k for k, v in key_rights.items()}
         projects = self.projects
-        privileges: Dict[str, ContactUserListT] = {}
-        # set common privileges for users in all projects
+        privileges: Dict[str, List[ContactUserBO]] = {}
+        # Set common privileges for users in all projects.
+        # Intersect/dedup by user id rather than by whole-object equality:
+        # ContactUserBO is a plain mutable dataclass, so hashing/comparing it
+        # by value is fragile (and requires it to stay hashable just for this).
         for key, value in keys.items():
-            privileges[value] = list(
-                set.intersection(
-                    *[set(getattr(project, value)) for project in projects]
-                )
+            per_project_lists = [getattr(project, value) for project in projects]
+            common_ids = set.intersection(
+                *[{u.id for u in a_list} for a_list in per_project_lists]
             )
+            seen_ids: set = set()
+            deduped = []
+            for a_list in per_project_lists:
+                for u in a_list:
+                    if u.id in common_ids and u.id not in seen_ids:
+                        seen_ids.add(u.id)
+                        deduped.append(u)
+            privileges[value] = deduped
         # aggregate and remove anomalies from projects
         for u in privileges[keys[ProjectPrivilegeBO.VIEW]]:
             for k in [

@@ -51,6 +51,7 @@ from API_models.crud import (
     BulkUpdateReq,
     CreateProjectReq,
     ProjectReq,
+    UpdateProjectReq,
     ProjectTaxoStatsModel,
     ProjectUserStatsModel,
     ProjectSetColumnStatsModel,
@@ -1989,7 +1990,7 @@ def erase_project(
     responses={200: {"content": {"application/json": {"example": null}}}},
 )
 def update_project(
-    project: ProjectModel,
+    project: UpdateProjectReq,
     project_id: int = Path(
         ..., description="Internal, numeric id of the project.", example=1
     ),
@@ -2000,30 +2001,10 @@ def update_project(
 
     Note that some fields will **NOT** be updated and simply ignored, e.g. *free_cols*.
     """
+    assert project.title is not None, AssertionError("A valid Title is needed.")
     with ProjectsService() as sce:
-        with RightsThrower():
-            present_project: ProjectBO = sce.query(
-                current_user, project_id, for_managing=True, for_update=True
-            )
-
-        with ValidityThrower():
-            present_project.update(
-                session=sce.session,
-                instrument=project.instrument,
-                title=project.title,
-                status=project.status,
-                init_classif_list=project.init_classif_list,
-                classiffieldlist=project.classiffieldlist,
-                popoverfieldlist=project.popoverfieldlist,
-                cnn_network_id=project.cnn_network_id,
-                comments=project.comments,
-                contact=project.contact,
-                managers=project.managers,
-                annotators=project.annotators,
-                viewers=project.viewers,
-                access=project.access,
-                formulae=project.formulae,
-            )
+        with ValidityThrower(), RightsThrower():
+            sce.update(current_user, project_id, project)
 
     with DBSyncService(Project, Project.projid, project_id) as ssce:
         ssce.wait()
@@ -2050,7 +2031,7 @@ def patch_project(
     Note that some fields will **NOT** be updated and simply ignored, e.g. *free_cols*.
     """
     with ProjectsService() as sce:
-        with RightsThrower(), ValidityThrower():
+        with ValidityThrower(), RightsThrower():
             sce.patch(current_user, project_id, project)
 
     with DBSyncService(Project, Project.projid, project_id) as ssce:

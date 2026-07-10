@@ -2,6 +2,7 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+import json
 from copy import deepcopy
 
 from starlette import status
@@ -44,7 +45,7 @@ def test_parse_expr():
     ]
 
 
-BODC_VARS_KEY = "bodc_variables"
+FORMULAE_KEY = "formulae"
 
 
 def test_project_vars(fastapi):
@@ -54,23 +55,24 @@ def test_project_vars(fastapi):
     url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     read_json = rsp.json()
-    assert BODC_VARS_KEY in read_json
+    assert FORMULAE_KEY in read_json
     upd_json = deepcopy(read_json)
 
     # Bad update with non-dict
-    upd_json[BODC_VARS_KEY] = "toto"
+    upd_json[FORMULAE_KEY] = "toto"
     url = PROJECT_UPDATE_URL.format(project_id=prj_id)
-    rsp = fastapi.put(url, headers=ADMIN_AUTH, json=upd_json)
+    rsp = fastapi.patch(url, headers=ADMIN_AUTH, json=upd_json)
     assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY, rsp.reason + str(
         rsp.content
     )
     # Good format update with nothing
     vars = {}
-    upd_json[BODC_VARS_KEY] = vars
+    upd_json[FORMULAE_KEY] = json.dumps(vars)
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=upd_json)
     assert rsp.status_code == status.HTTP_200_OK, rsp.reason + str(rsp.text)
     # Good format update with bad keys
     vars["e"] = 1
+    upd_json[FORMULAE_KEY] = json.dumps(vars)
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=upd_json)
     assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY, rsp.reason + str(
         rsp.text
@@ -78,16 +80,19 @@ def test_project_vars(fastapi):
     # Good format update with good key
     del vars["e"]
     vars["subsample_coef"] = "1/sub_part"
+    upd_json[FORMULAE_KEY] = json.dumps(vars)
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=upd_json)
     assert rsp.status_code == status.HTTP_200_OK, rsp.reason + str(rsp.text)
     # Good format update with good key but no val
     vars["subsample_coef"] = "  "
     vars["individual_volume"] = " "
     vars["total_water_volume"] = None
-    rsp = fastapi.put(url, headers=ADMIN_AUTH, json=upd_json)
+    upd_json[FORMULAE_KEY] = json.dumps(vars)
+    rsp = fastapi.patch(url, headers=ADMIN_AUTH, json=upd_json)
     assert rsp.status_code == status.HTTP_200_OK, rsp.reason + str(rsp.text)
     # Syntax error in formula
     vars["subsample_coef"] = "1/toto tutu"
+    upd_json[FORMULAE_KEY] = json.dumps(vars)
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=upd_json)
     assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY, rsp.reason + str(
         rsp.text

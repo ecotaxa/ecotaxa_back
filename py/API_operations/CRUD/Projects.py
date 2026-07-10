@@ -4,7 +4,7 @@
 #
 
 from typing import List, Union, Tuple, Optional, Dict
-from API_models.crud import CreateProjectReq, ProjectReq
+from API_models.crud import CreateProjectReq, ProjectReq, UpdateProjectReq
 from fastapi import HTTPException
 from BO.Classification import ClassifIDListT, ClassifIDT
 from BO.Collection import MinimalCollectionBO
@@ -27,6 +27,7 @@ from FS.VaultRemover import VaultRemover
 from helpers.DynamicLogs import get_logger
 from helpers.FieldListType import FieldListType
 from helpers.httpexception import DETAIL_NODELETE_BELONGS_TO_COLLECTION
+from sqlalchemy.sql import Update
 from ..helpers.Service import Service
 
 logger = get_logger(__name__)
@@ -159,6 +160,31 @@ class ProjectsService(Service):
                 self.ro_session, matching_ids, public=False, fields=fields
             )
         return projects.as_list()
+
+    def update(
+        self, current_user_id: UserIDT, project_id: int, project: UpdateProjectReq
+    ):
+        present_project: ProjectBO = self.query(
+            current_user_id, project_id, for_managing=True, for_update=True
+        )
+        assert project.title is not None, "A valid Title is required."
+        present_project.update(
+            session=self.session,
+            instrument=project.instrument,
+            title=project.title,
+            status=project.status,
+            init_classif_list=project.init_classif_list,
+            classiffieldlist=project.classiffieldlist,
+            popoverfieldlist=project.popoverfieldlist,
+            cnn_network_id=project.cnn_network_id,
+            comments=project.comments,
+            contact=project.contact,
+            managers=project.managers,
+            annotators=project.annotators,
+            viewers=project.viewers,
+            access=project.access,
+            formulae=project.formulae,
+        )
 
     def patch(
         self, current_user_id: UserIDT, project_id: int, projectreq: ProjectReq

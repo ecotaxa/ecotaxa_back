@@ -21,11 +21,9 @@ def test_patch_project_empty_body(fastapi):
     prj_id = create_project(ADMIN_USER_ID, "Patch Test Project Empty")
     get_url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
     before = fastapi.get(get_url, headers=ADMIN_AUTH).json()
-
     url = PATCH_URL.format(project_id=prj_id)
     rsp = fastapi.patch(url, headers=ADMIN_AUTH, json={})
     assert rsp.status_code == status.HTTP_200_OK, rsp.text
-
     after = fastapi.get(get_url, headers=ADMIN_AUTH).json()
     assert before == after
 

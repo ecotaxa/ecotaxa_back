@@ -11,7 +11,7 @@ from BO.Collection import CollectionIDT
 from BO.ColumnUpdate import ColUpdate
 from BO.DataLicense import LicenseEnum, AccessLevelEnum
 from BO.Job import DBJobStateEnum
-from BO.Project import ProjectUserStats, ProjectColumns
+from BO.Project import ProjectUserStats, ProjectColumns, ProjectBO
 from BO.ProjectSet import ProjectSetColumnStats
 from BO.Sample import SampleTaxoStats
 from DB.Acquisition import Acquisition
@@ -23,7 +23,7 @@ from DB.Project import Project, ProjectIDT, ProjectIDListT
 from DB.Sample import Sample, SampleIDT
 from DB.User import User, Guest, Organization, OrganizationIDT
 from DB.User import UserIDT
-from helpers.pydantic import BaseModel, Field, DescriptiveModel
+from helpers.pydantic import BaseModel, Field, DescriptiveModel, validator
 from .helpers.DBtoModel import combine_models
 from .helpers.DataclassToModel import dataclass_to_model_with_suffix
 
@@ -434,7 +434,7 @@ class _AddedToProject(BaseModel):
     instrument_url: Optional[str] = Field(
         title="Instrument URL",
         description="This project's instrument BODC definition.",
-        example="http://vocab.nerc.ac.uk/collection/L22/current/TOOL1581/",
+        example="https://vocab.nerc.ac.uk/collection/L22/current/TOOL1581/",
     )
 
     highest_right: str = Field(
@@ -532,9 +532,51 @@ class ProjectReq(BaseModel):
         description="The contact person is a manager who serves as the contact person for other users and EcoTaxa's managers.",
     )
 
+    @validator("formulae")
+    def formulae_validator(cls, v):
+        v = ProjectBO.formulae_validator(v)
+        return v
+
     class Config:
         schema_extra = {"title": "Update full or partial Project Model"}
         exclude_unset = True
+
+
+class UpdateProjectReq(ProjectReq):
+    init_classif_list: List[int] = Field(
+        title="Init classification list",
+        description="Favorite taxa used in classification.",
+        default=[],
+        example=[5, 11493, 11498, 11509],
+    )
+    popoverfieldlist: Optional[str] = Field(
+        default=None,
+        title="Pop over field list",
+        example="depth_min=depth_min\r\ndepth_max=depth_max\r\narea=area [pixel]\r\nmean=mean [0-255]\r\nfractal=fractal\r\nmajor=major [pixel]\r\nsymetrieh=symetrieh\r\ncirc.=circ\r\nferet = Feret [pixel]",
+    )
+
+    @validator("title")
+    def title_validator(cls, v):
+        assert v is not None, AssertionError("A valid Instrument is needed.")
+        return v
+
+    @validator("instrument")
+    def instrument_validator(cls, v):
+        assert v is not None, AssertionError("A valid Instrument is needed.")
+        return v
+
+    @validator("contact")
+    def contact_validator(cls, v):
+        assert v is not None, AssertionError("A valid Contact is needed.")
+        return v
+
+    @validator("formulae")
+    def update_formulae_validator(cls, v):
+        v = ProjectBO.formulae_validator(v)
+        return v
+
+    class Config:
+        schema_extra = {"title": "Update full or partial Project Model"}
 
 
 class CollectionAggregatedRsp(BaseModel):

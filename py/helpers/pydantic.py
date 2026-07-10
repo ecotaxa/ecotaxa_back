@@ -15,6 +15,7 @@ from pydantic import (
     create_model,
     root_validator,
     dataclasses,
+    validator,
 )
 
 
@@ -45,8 +46,8 @@ def sort_and_prune(
             reverse = True
         if order_field in model_cols:
             default_if_none = model_cols[order_field]
-            sort_lambda = (
-                lambda elem: getattr(elem, order_field)
+            sort_lambda = lambda elem: (
+                getattr(elem, order_field)
                 if getattr(elem, order_field)
                 else default_if_none
             )
