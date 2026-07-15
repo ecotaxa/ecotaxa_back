@@ -1575,7 +1575,11 @@ class DescribedObjectBOSet(BaseDescribedObjectSet):
         }
 
     def _get_initial_from_clause(self) -> FromClause:
-        return FromClause(f"(select :projid as projid) prjs")
+        # One row per project id, so joins below (sam.projid = prjs.projid) and
+        # partitioning expressions match objects from *any* of the listed projects.
+        # NB: project ids are ints (see ProjectIDListT), safe to inline directly.
+        values = ",".join("(%d)" % a_project_id for a_project_id in self.project_ids)
+        return FromClause(f"(VALUES {values}) AS prjs(projid)")
 
     def _get_bound_expression(self) -> str:
         return "<@ obj_in_prj(prjs.projid)"  # Hide partitioning from optimizer

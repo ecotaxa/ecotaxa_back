@@ -6,7 +6,8 @@
 #
 import ast
 import re
-from typing import Optional, List, Final
+
+from typing import Dict, Optional, List, Final, Tuple
 
 from DB.ProjectVariables import KNOWN_PROJECT_VARS
 from .Vocabulary import Vocabulary, Units
@@ -24,6 +25,23 @@ TYPES_PER_VAR = {
 }
 # ...but below should prevent any de-sync
 assert KNOWN_PROJECT_VARS == set(TYPES_PER_VAR.keys())
+
+# Formula variable(s) required for each sci quantity, keyed by its short code
+# (ExportTypeEnum/SciExportTypeEnum .value: 'ABO'/'CNC'/'BIV'), named after TYPES_PER_VAR
+# above. Count ('ABO') never needs any; concentration needs subsample_coef +
+# total_water_volume; biovolume needs all of them (individual_volume/subsample_coef/
+# total_water_volume).
+REQUIRED_VARS_PER_QUANTITY: Dict[str, Tuple[str, ...]] = {
+    "ABO": (),
+    "CNC": ("subsample_coef", "total_water_volume"),
+    "BIV": tuple(TYPES_PER_VAR.keys()),
+}
+# Human-readable quantity names, for error messages.
+QUANTITY_NAMES: Dict[str, str] = {
+    "ABO": "count",
+    "CNC": "concentration",
+    "BIV": "biovolume",
+}
 
 from .Vocabulary import Term
 

@@ -38,6 +38,7 @@ from BO.ObjectSetQueryPlus import (
     ObjectSetQueryPlus,
 )
 from BO.Project import ProjectBO, ProjectTaxoStats, ProjectIDListT
+from BO.ProjectVars import REQUIRED_VARS_PER_QUANTITY, QUANTITY_NAMES
 from BO.ProjectSet import PermissionConsistentProjectSet
 from BO.Sample import SampleBO, SampleAggregForTaxon
 from BO.TaxoRecast import TaxoRecastBO
@@ -159,10 +160,14 @@ class DarwinCoreExport(JobServiceBase):
         # Output params
         self.with_absent: bool = with_absent
         self.with_computations: List[SciExportTypeEnum] = with_computations
-        if len(formulae) == 0 and len(with_computations) > 0:
-            assert False, "Need formulae for " + str(with_computations)
-        # TODO: We have all this at project level now, but how to mix with API?
+        # Request-level override, applied on top of each project's own formulae.
         self.formulae: Dict[str, str] = formulae
+        # Each project keeps its own definitions: with several projects in the
+        # collection, they are not merged/shared across each other.
+        self.formulae_by_project: Dict[int, Dict[str, str]] = {
+            a_project.projid: self._project_formulae(a_project, formulae)
+            for a_project in self.collection.projects
+        }
         # TODO: Some sanity check on XML
         self.extra_xml: List[str] = extra_xml
         self.current_user_id = current_user_id
@@ -189,6 +194,55 @@ class DarwinCoreExport(JobServiceBase):
 
     DWC_ZIP_NAME = "dwca.zip"
     PRODUCED_FILE_NAME = DWC_ZIP_NAME
+
+    @staticmethod
+    def _project_formulae(project: Project, override: Dict[str, str]) -> Dict[str, str]:
+        """
+        This project's own computation formulae, overridden by any formula given
+        in the request. Can come back empty, e.g. for an abundance-only export,
+        which needs none -- see _check_darwincore_formulae for the actual
+        per-quantity requirement check.
+        """
+        formulae: Dict[str, str] = {}
+        if project.formulae:
+            try:
+                formulae.update(json.loads(project.formulae))
+            except Exception:
+                pass
+        formulae.update(override)
+        return formulae
+
+    def _check_darwincore_formulae(self) -> None:
+        """
+        Validate, upfront, that each project's formulae cover what each requested
+        quantity needs (see BO.ProjectVars.REQUIRED_VARS_PER_QUANTITY), so the job
+        fails fast with a clear message instead of a deep, cryptic formula-evaluation
+        error part-way through the export.
+        """
+        # Note: with_computations items can be plain strings ('CNC') rather than
+        # SciExportTypeEnum members once round-tripped through job (de)serialization
+        # (no deser_args override here, unlike ForProject.py). SciExportTypeEnum
+        # being a (str, Enum), both forms are usable directly as dict keys/values.
+        problems = []
+        for a_project in self.collection.projects:
+            formulae = self.formulae_by_project[a_project.projid]
+            for a_quantity in self.with_computations:
+                missing = [
+                    a_var
+                    for a_var in REQUIRED_VARS_PER_QUANTITY[a_quantity]
+                    if a_var not in formulae
+                ]
+                if missing:
+                    problems.append(
+                        "project %s: cannot compute '%s', missing formula(e) for: %s"
+                        % (
+                            a_project.projid,
+                            QUANTITY_NAMES[a_quantity],
+                            ", ".join(missing),
+                        )
+                    )
+        if problems:
+            raise Exception("Incomplete formulae:\n" + "\n".join(problems))
 
     def run(self) -> ExportRsp:
         """
@@ -232,6 +286,7 @@ class DarwinCoreExport(JobServiceBase):
         # Security check
         # Do the job
         logger.info("------------ starting --------------")
+        self._check_darwincore_formulae()
         # Update DB statistics to ensure correctness of geo in produced output
         self.update_db_stats()
         # 2 taxonomic mappings/spaces need to be used
@@ -1244,7 +1299,7 @@ class DarwinCoreExport(JobServiceBase):
             sample=sample,
             recast_occurrences=self.computations_emof,
             with_computations=self.with_computations,
-            formulae=self.formulae,
+            formulae=self.formulae_by_project[sample.projid],
             predicted=predicted,
             warnings=self.warnings,
         )

@@ -533,6 +533,45 @@ def create_test_collection(fastapi, suffix, who=ADMIN_AUTH):
     return coll_id, coll_title, prj_id
 
 
+def test_emodnet_export_incomplete_formulae(fastapi):
+    """Concentration/biovolume must fail the job fast, with a clear message, when a
+    project's formulae (its own + any request-level override) don't cover what the
+    requested quantities need. Uses a fresh collection, with no request-level
+    'formulae' override and no formula configured on either underlying project, so
+    both are reported missing subsample_coef/total_water_volume/individual_volume."""
+    coll_id, _coll_title, _prj_id = create_test_collection(
+        fastapi, "incomplete-formulae", ADMIN_AUTH
+    )
+    coll = fastapi.get(
+        COLLECTION_QUERY_URL.format(collection_id=coll_id), headers=ADMIN_AUTH
+    ).json()
+    project_ids = coll["project_ids"]
+    assert len(project_ids) == 2
+
+    req = _req_tmpl.copy()
+    req.update(
+        {
+            "collection_id": coll_id,
+            "with_computations": ["CNC", "BIV"],
+            "formulae": {},
+        }
+    )
+    job_id = export_collection(fastapi, req, ADMIN_AUTH)
+    url = JOB_QUERY_URL.format(job_id=job_id)
+    rsp = fastapi.get(url, headers=ADMIN_AUTH)
+    job_dict = rsp.json()
+    assert job_dict["state"] == "E", job_dict
+    msg = job_dict["progress_msg"]
+    assert "Incomplete formulae" in msg
+    for a_prj_id in project_ids:
+        assert "project %d" % a_prj_id in msg
+    assert "concentration" in msg
+    assert "biovolume" in msg
+    assert "subsample_coef" in msg
+    assert "total_water_volume" in msg
+    assert "individual_volume" in msg
+
+
 def test_emodnet_invalid_req(fastapi):
 
     recast = {
