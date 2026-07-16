@@ -1,73 +1,73 @@
-sampleid	status	taxonid	concentration
-m106_mn01_n1_sml	P	Cyclopoida	0
-m106_mn01_n1_sml	P	Micrococcineae	0
-m106_mn01_n1_sml	P	Oncaeidae	0.02
-m106_mn01_n1_sml	P	Pilimelia	0
-m106_mn01_n1_sml	P	detritus	0
-m106_mn01_n1_sml	P	egg<other	0
-m106_mn01_n1_sml	P	other<Biota	0.02
-m106_mn01_n1_sml	P	small<egg	0
-m106_mn01_n1_sml	P	t001	0
-m106_mn01_n1_sml	V	Cyclopoida	0.02
-m106_mn01_n1_sml	V	Micrococcineae	0
-m106_mn01_n1_sml	V	Oncaeidae	0.02
-m106_mn01_n1_sml	V	Pilimelia	0
-m106_mn01_n1_sml	V	detritus	0
-m106_mn01_n1_sml	V	egg<other	0
-m106_mn01_n1_sml	V	other<Biota	0
-m106_mn01_n1_sml	V	small<egg	0
-m106_mn01_n1_sml	V	t001	0.02
-m106_mn01_n2_sml	P	Cyclopoida	0
-m106_mn01_n2_sml	P	Micrococcineae	0
-m106_mn01_n2_sml	P	Oncaeidae	0
-m106_mn01_n2_sml	P	Pilimelia	0
-m106_mn01_n2_sml	P	detritus	0.02
-m106_mn01_n2_sml	P	egg<other	0.02
-m106_mn01_n2_sml	P	other<Biota	0
-m106_mn01_n2_sml	P	small<egg	0
-m106_mn01_n2_sml	P	t001	0
-m106_mn01_n2_sml	V	Cyclopoida	0
-m106_mn01_n2_sml	V	Micrococcineae	0
-m106_mn01_n2_sml	V	Oncaeidae	0
-m106_mn01_n2_sml	V	Pilimelia	0
-m106_mn01_n2_sml	V	detritus	0.02
-m106_mn01_n2_sml	V	egg<other	0
-m106_mn01_n2_sml	V	other<Biota	0
-m106_mn01_n2_sml	V	small<egg	0
-m106_mn01_n2_sml	V	t001	0
-m106_mn01_n3_sml	P	Cyclopoida	0
-m106_mn01_n3_sml	P	Micrococcineae	0
-m106_mn01_n3_sml	P	Oncaeidae	0
-m106_mn01_n3_sml	P	Pilimelia	0
-m106_mn01_n3_sml	P	detritus	0.02
-m106_mn01_n3_sml	P	egg<other	0
-m106_mn01_n3_sml	P	other<Biota	0
-m106_mn01_n3_sml	P	small<egg	0
-m106_mn01_n3_sml	P	t001	0
-m106_mn01_n3_sml	V	Cyclopoida	0
-m106_mn01_n3_sml	V	Micrococcineae	0
-m106_mn01_n3_sml	V	Oncaeidae	0
-m106_mn01_n3_sml	V	Pilimelia	0
-m106_mn01_n3_sml	V	detritus	0.02
-m106_mn01_n3_sml	V	egg<other	0
-m106_mn01_n3_sml	V	other<Biota	0
-m106_mn01_n3_sml	V	small<egg	0.02
-m106_mn01_n3_sml	V	t001	0
-m106_mn01_n4_sml	P	Cyclopoida	0
-m106_mn01_n4_sml	P	Micrococcineae	0.01
-m106_mn01_n4_sml	P	Oncaeidae	0
-m106_mn01_n4_sml	P	Pilimelia	nan
-m106_mn01_n4_sml	P	detritus	0
-m106_mn01_n4_sml	P	egg<other	0
-m106_mn01_n4_sml	P	other<Biota	0
-m106_mn01_n4_sml	P	small<egg	0
-m106_mn01_n4_sml	P	t001	0
-m106_mn01_n4_sml	V	Cyclopoida	0
-m106_mn01_n4_sml	V	Micrococcineae	0.02
-m106_mn01_n4_sml	V	Oncaeidae	0
-m106_mn01_n4_sml	V	Pilimelia	nan
-m106_mn01_n4_sml	V	detritus	0
-m106_mn01_n4_sml	V	egg<other	0
-m106_mn01_n4_sml	V	other<Biota	0
-m106_mn01_n4_sml	V	small<egg	0
-m106_mn01_n4_sml	V	t001	0
+sampleid	status	taxonid	annotation_category	concentration
+m106_mn01_n1_sml	P	Cyclopoida	Biota>Animalia>Arthropoda>Crustacea>Multicrustacea>Copepoda>Neocopepoda>Podoplea>Cyclopoida	0
+m106_mn01_n1_sml	P	Micrococcineae	Biota>Bacteria>Micrococcineae	0
+m106_mn01_n1_sml	P	Oncaeidae	Biota>Animalia>Arthropoda>Crustacea>Multicrustacea>Copepoda>Neocopepoda>Podoplea>Cyclopoida>Ergasilida>Oncaeidae	0.02
+m106_mn01_n1_sml	P	Pilimelia	Biota>Bacteria>Micromonosporaceae>Pilimelia	0
+m106_mn01_n1_sml	P	detritus	not-living>detritus	0
+m106_mn01_n1_sml	P	egg<other	Biota>other>egg	0
+m106_mn01_n1_sml	P	other<Biota	Biota>other	0.02
+m106_mn01_n1_sml	P	small<egg	Biota>Animalia>Chordata>Vertebrata>Gnathostomata>Osteichthyes>Actinopterygii>egg>small	0
+m106_mn01_n1_sml	P	t001	temporary>t001	0
+m106_mn01_n1_sml	V	Cyclopoida	Biota>Animalia>Arthropoda>Crustacea>Multicrustacea>Copepoda>Neocopepoda>Podoplea>Cyclopoida	0.02
+m106_mn01_n1_sml	V	Micrococcineae	Biota>Bacteria>Micrococcineae	0
+m106_mn01_n1_sml	V	Oncaeidae	Biota>Animalia>Arthropoda>Crustacea>Multicrustacea>Copepoda>Neocopepoda>Podoplea>Cyclopoida>Ergasilida>Oncaeidae	0.02
+m106_mn01_n1_sml	V	Pilimelia	Biota>Bacteria>Micromonosporaceae>Pilimelia	0
+m106_mn01_n1_sml	V	detritus	not-living>detritus	0
+m106_mn01_n1_sml	V	egg<other	Biota>other>egg	0
+m106_mn01_n1_sml	V	other<Biota	Biota>other	0
+m106_mn01_n1_sml	V	small<egg	Biota>Animalia>Chordata>Vertebrata>Gnathostomata>Osteichthyes>Actinopterygii>egg>small	0
+m106_mn01_n1_sml	V	t001	temporary>t001	0.02
+m106_mn01_n2_sml	P	Cyclopoida	Biota>Animalia>Arthropoda>Crustacea>Multicrustacea>Copepoda>Neocopepoda>Podoplea>Cyclopoida	0
+m106_mn01_n2_sml	P	Micrococcineae	Biota>Bacteria>Micrococcineae	0
+m106_mn01_n2_sml	P	Oncaeidae	Biota>Animalia>Arthropoda>Crustacea>Multicrustacea>Copepoda>Neocopepoda>Podoplea>Cyclopoida>Ergasilida>Oncaeidae	0
+m106_mn01_n2_sml	P	Pilimelia	Biota>Bacteria>Micromonosporaceae>Pilimelia	0
+m106_mn01_n2_sml	P	detritus	not-living>detritus	0.02
+m106_mn01_n2_sml	P	egg<other	Biota>other>egg	0.02
+m106_mn01_n2_sml	P	other<Biota	Biota>other	0
+m106_mn01_n2_sml	P	small<egg	Biota>Animalia>Chordata>Vertebrata>Gnathostomata>Osteichthyes>Actinopterygii>egg>small	0
+m106_mn01_n2_sml	P	t001	temporary>t001	0
+m106_mn01_n2_sml	V	Cyclopoida	Biota>Animalia>Arthropoda>Crustacea>Multicrustacea>Copepoda>Neocopepoda>Podoplea>Cyclopoida	0
+m106_mn01_n2_sml	V	Micrococcineae	Biota>Bacteria>Micrococcineae	0
+m106_mn01_n2_sml	V	Oncaeidae	Biota>Animalia>Arthropoda>Crustacea>Multicrustacea>Copepoda>Neocopepoda>Podoplea>Cyclopoida>Ergasilida>Oncaeidae	0
+m106_mn01_n2_sml	V	Pilimelia	Biota>Bacteria>Micromonosporaceae>Pilimelia	0
+m106_mn01_n2_sml	V	detritus	not-living>detritus	0.02
+m106_mn01_n2_sml	V	egg<other	Biota>other>egg	0
+m106_mn01_n2_sml	V	other<Biota	Biota>other	0
+m106_mn01_n2_sml	V	small<egg	Biota>Animalia>Chordata>Vertebrata>Gnathostomata>Osteichthyes>Actinopterygii>egg>small	0
+m106_mn01_n2_sml	V	t001	temporary>t001	0
+m106_mn01_n3_sml	P	Cyclopoida	Biota>Animalia>Arthropoda>Crustacea>Multicrustacea>Copepoda>Neocopepoda>Podoplea>Cyclopoida	0
+m106_mn01_n3_sml	P	Micrococcineae	Biota>Bacteria>Micrococcineae	0
+m106_mn01_n3_sml	P	Oncaeidae	Biota>Animalia>Arthropoda>Crustacea>Multicrustacea>Copepoda>Neocopepoda>Podoplea>Cyclopoida>Ergasilida>Oncaeidae	0
+m106_mn01_n3_sml	P	Pilimelia	Biota>Bacteria>Micromonosporaceae>Pilimelia	0
+m106_mn01_n3_sml	P	detritus	not-living>detritus	0.02
+m106_mn01_n3_sml	P	egg<other	Biota>other>egg	0
+m106_mn01_n3_sml	P	other<Biota	Biota>other	0
+m106_mn01_n3_sml	P	small<egg	Biota>Animalia>Chordata>Vertebrata>Gnathostomata>Osteichthyes>Actinopterygii>egg>small	0
+m106_mn01_n3_sml	P	t001	temporary>t001	0
+m106_mn01_n3_sml	V	Cyclopoida	Biota>Animalia>Arthropoda>Crustacea>Multicrustacea>Copepoda>Neocopepoda>Podoplea>Cyclopoida	0
+m106_mn01_n3_sml	V	Micrococcineae	Biota>Bacteria>Micrococcineae	0
+m106_mn01_n3_sml	V	Oncaeidae	Biota>Animalia>Arthropoda>Crustacea>Multicrustacea>Copepoda>Neocopepoda>Podoplea>Cyclopoida>Ergasilida>Oncaeidae	0
+m106_mn01_n3_sml	V	Pilimelia	Biota>Bacteria>Micromonosporaceae>Pilimelia	0
+m106_mn01_n3_sml	V	detritus	not-living>detritus	0.02
+m106_mn01_n3_sml	V	egg<other	Biota>other>egg	0
+m106_mn01_n3_sml	V	other<Biota	Biota>other	0
+m106_mn01_n3_sml	V	small<egg	Biota>Animalia>Chordata>Vertebrata>Gnathostomata>Osteichthyes>Actinopterygii>egg>small	0.02
+m106_mn01_n3_sml	V	t001	temporary>t001	0
+m106_mn01_n4_sml	P	Cyclopoida	Biota>Animalia>Arthropoda>Crustacea>Multicrustacea>Copepoda>Neocopepoda>Podoplea>Cyclopoida	0
+m106_mn01_n4_sml	P	Micrococcineae	Biota>Bacteria>Micrococcineae	0.01
+m106_mn01_n4_sml	P	Oncaeidae	Biota>Animalia>Arthropoda>Crustacea>Multicrustacea>Copepoda>Neocopepoda>Podoplea>Cyclopoida>Ergasilida>Oncaeidae	0
+m106_mn01_n4_sml	P	Pilimelia	Biota>Bacteria>Micromonosporaceae>Pilimelia	nan
+m106_mn01_n4_sml	P	detritus	not-living>detritus	0
+m106_mn01_n4_sml	P	egg<other	Biota>other>egg	0
+m106_mn01_n4_sml	P	other<Biota	Biota>other	0
+m106_mn01_n4_sml	P	small<egg	Biota>Animalia>Chordata>Vertebrata>Gnathostomata>Osteichthyes>Actinopterygii>egg>small	0
+m106_mn01_n4_sml	P	t001	temporary>t001	0
+m106_mn01_n4_sml	V	Cyclopoida	Biota>Animalia>Arthropoda>Crustacea>Multicrustacea>Copepoda>Neocopepoda>Podoplea>Cyclopoida	0
+m106_mn01_n4_sml	V	Micrococcineae	Biota>Bacteria>Micrococcineae	0.02
+m106_mn01_n4_sml	V	Oncaeidae	Biota>Animalia>Arthropoda>Crustacea>Multicrustacea>Copepoda>Neocopepoda>Podoplea>Cyclopoida>Ergasilida>Oncaeidae	0
+m106_mn01_n4_sml	V	Pilimelia	Biota>Bacteria>Micromonosporaceae>Pilimelia	nan
+m106_mn01_n4_sml	V	detritus	not-living>detritus	0
+m106_mn01_n4_sml	V	egg<other	Biota>other>egg	0
+m106_mn01_n4_sml	V	other<Biota	Biota>other	0
+m106_mn01_n4_sml	V	small<egg	Biota>Animalia>Chordata>Vertebrata>Gnathostomata>Osteichthyes>Actinopterygii>egg>small	0
+m106_mn01_n4_sml	V	t001	temporary>t001	0

@@ -31,7 +31,7 @@ from API_models.filters import ProjectFiltersDict
 from BO.Classification import ClassifIDT
 from BO.Collection import CollectionIDT
 from BO.Mappings import ProjectSetMapping, PREFIX_TO_TABLE
-from BO.ObjectSet import DescribedObjectSet, DescribedObjectBOSet
+from BO.ObjectSet import DescribedObjectBOSet
 from BO.ObjectSetQueryPlus import ResultGrouping, IterableRowsT, ObjectSetQueryPlus
 from BO.ProjectVars import REQUIRED_VARS_PER_QUANTITY, QUANTITY_NAMES
 from BO.Rights import RightsBO, Action
@@ -76,6 +76,12 @@ class ProjectExport(JobServiceBase):
     ROWS_REPORT_EVERY = 10000
     IMAGES_REPORT_EVERY = 1000
 
+    # '>'-separated parent categories, e.g. "Copepoda>Oncaeidae". Correlated on txo.id
+    # (not obh.classif_id): txo.id is already part of the GROUP BY (BY_TAXO level) for
+    # the 'count' quantity, which has a real SQL GROUP BY -- obh.classif_id is not, and
+    # Postgres would reject a column reference that's neither grouped nor aggregated.
+    ANNOTATION_CATEGORY_HIERARCHY_SQL = TaxonomyBO.parents_sql("txo.id")
+
     # Aliases shared by all queries built for the sci-summary export (create_sci_summary),
     # so key columns line up whichever quantity (abundance/concentration/biovolume) is computed.
     SCI_SUMMARY_ID_ALIASES: Dict[str, str] = {
@@ -83,6 +89,7 @@ class ProjectExport(JobServiceBase):
         "acq.orig_id": "acquisid",
         "txo.display_name": "taxonid",
         "obh.classif_qual": "status",
+        ANNOTATION_CATEGORY_HIERARCHY_SQL: "annotation_category",
     }
 
     def __init__(self, req: ExportReq, filters: ProjectFiltersDict):
@@ -976,24 +983,77 @@ class ProjectExport(JobServiceBase):
 
         return "biovolume"
 
+    def _zero_fill_reference_data(
+        self, object_set: DescribedObjectBOSet
+    ) -> Tuple[Set[Tuple], Dict[str, str]]:
+        """
+        Data needed to add zero-value rows to a sci-summary export: every sampling
+        unit (sample, or sample+acquisition) and the taxon -> hierarchy mapping.
+        Both depend only on the project and its filters, not on the requested
+        quantity, so the caller computes this once per project and reuses it for
+        every quantity requested for that project.
+        """
+        # Get all sampling_units (from the samples or subsamples AKA acquisition table)
+        sampling_units_qry = (
+            ObjectSetQueryPlus(object_set.without_filtering_taxo())
+            .add_selects(self._id_columns_from_req())
+            .set_aliases(self.SCI_SUMMARY_ID_ALIASES)
+            .set_grouping(ResultGrouping.without_taxo(self._grouping_from_req(True)))
+        )
+        out_id_cols = [
+            self.SCI_SUMMARY_ID_ALIASES[a_col]
+            for a_col in self._id_columns_from_req()
+        ]
+        all_sampling_units: Set[Tuple] = set()
+        # Tuples here have either one, two or three values
+        for a_row in sampling_units_qry.get_result(self.ro_session):
+            all_sampling_units.add(tuple([a_row[id_col] for id_col in out_id_cols]))
+        # Get possible taxa names, along with their hierarchy (for zero-filled rows)
+        txo_qry = (
+            ObjectSetQueryPlus(object_set)
+            .remap_categories(self.pre_mapping)
+            .add_selects(["txo.display_name", self.ANNOTATION_CATEGORY_HIERARCHY_SQL])
+            .set_aliases(
+                {
+                    "txo.display_name": "txo",
+                    self.ANNOTATION_CATEGORY_HIERARCHY_SQL: "annotation_category",
+                }
+            )
+            .set_grouping(ResultGrouping.BY_TAXO)
+        )
+        taxa_hierarchy: Dict[str, str] = {
+            a_row["txo"]: a_row["annotation_category"]
+            for a_row in txo_qry.get_row_source(self.ro_session)
+        }
+        return all_sampling_units, taxa_hierarchy
+
     def add_zeroes_in_sci_summary(
-        self, aug_qry: ObjectSetQueryPlus, id_cols: List[str], zero_col: str
+        self,
+        aug_qry: ObjectSetQueryPlus,
+        id_cols: List[str],
+        zero_col: str,
+        zero_fill_data: Optional[Tuple[Set[Tuple], Dict[str, str]]],
     ):
         """
         Return relevant zero lines, for given non-zero input ones.
         param: id_cols: The identifying columns in the query.
         param: zero_col: The column to fill with 0 in the output.
+        param: zero_fill_data: precomputed (all_sampling_units, taxa_hierarchy),
+            shared across every quantity of the current project, or None if the
+            request's grouping doesn't need zero-filling at all.
         """
-        if self.req.sum_subtotal in (
-            SummaryExportGroupingEnum.by_sample,
-            SummaryExportGroupingEnum.by_subsample,
-        ):
+        if zero_fill_data is not None:
+            all_sampling_units, taxa_hierarchy = zero_fill_data
             # Produce the zero-less report
             without_zeroes = aug_qry.get_result(self.ro_session, logger.warning)
             # Columns are aliased so the output columns are named differently
             out_id_cols = [aug_qry.defs_to_alias[a_col] for a_col in id_cols]
             not_presents = self.not_presents_in_sci_summary(
-                without_zeroes, out_id_cols, zero_col, aug_qry.obj_set
+                without_zeroes,
+                out_id_cols,
+                zero_col,
+                all_sampling_units,
+                taxa_hierarchy,
             )
             without_zeroes.extend(not_presents)
             without_zeroes.sort(
@@ -1012,35 +1072,15 @@ class ProjectExport(JobServiceBase):
         without_zeroes: List[Dict[str, Any]],
         id_cols: List[str],
         zero_col: str,
-        object_set: Union[DescribedObjectSet, DescribedObjectBOSet],
+        all_sampling_units: Set[Tuple],
+        taxa_hierarchy: Dict[str, str],
     ):
         """
         Produce lines with 0 count/concentration/biovolume for relevant (sample, status, category) triplets
         or (sample, acquisition, status, category) tuples.
         Specs: https://github.com/ecotaxa/ecotaxa/issues/615#issuecomment-1158781701
         """
-        # Get all sampling_units (from the samples or subsamples AKA acquisition table)
-        sampling_units_qry = (
-            ObjectSetQueryPlus(object_set.without_filtering_taxo())
-            .add_selects(self._id_columns_from_req())
-            .set_aliases(self.SCI_SUMMARY_ID_ALIASES)
-            .set_grouping(ResultGrouping.without_taxo(self._grouping_from_req(True)))
-        )
-        all_sampling_units: Set[Tuple] = set()
-        # Tuples here have either one, two or three values
-        for a_row in sampling_units_qry.get_result(self.ro_session):
-            all_sampling_units.add(tuple([a_row[id_col] for id_col in id_cols]))
-        # Get possible taxa names
-        txo_qry = (
-            ObjectSetQueryPlus(object_set)
-            .remap_categories(self.pre_mapping)
-            .add_selects(["txo.display_name"])
-            .set_aliases({"txo.display_name": "txo"})
-            .set_grouping(ResultGrouping.BY_TAXO)
-        )
-        taxa: Set[str] = set(
-            [a_row["txo"] for a_row in txo_qry.get_row_source(self.ro_session)]
-        )
+        taxa = taxa_hierarchy.keys()
         # Prepare the cross fill, all with tuples which are hash-able
         presents: Set[Tuple[Tuple, str]] = set()
         # Build (sampling unit, taxon) pairs from zero-less report
@@ -1059,7 +1099,13 @@ class ProjectExport(JobServiceBase):
                         id_col: id_col_val
                         for id_col, id_col_val in zip(id_cols, sampling_unit_id)
                     }
-                    a_not_present.update({"taxonid": taxonid, zero_col: 0})
+                    a_not_present.update(
+                        {
+                            "taxonid": taxonid,
+                            "annotation_category": taxa_hierarchy[taxonid],
+                            zero_col: 0,
+                        }
+                    )
                     not_presents.append(a_not_present)
         return not_presents
 
@@ -1076,24 +1122,21 @@ class ProjectExport(JobServiceBase):
 
     def _new_sci_summary_query(
         self,
-        project_ids: ProjectIDListT,
-        user_id: int,
+        object_set: DescribedObjectBOSet,
         formulae: Dict[str, str],
         id_cols: List[str],
     ) -> ObjectSetQueryPlus:
         """
-        Build a fresh, isolated query for a single sci-summary type.
+        Build a fresh, isolated query for a single sci-summary type, out of a
+        (project, filters) description shared by every quantity of that project.
         """
-        object_set: DescribedObjectBOSet = DescribedObjectBOSet(
-            self.ro_session, project_ids, user_id, self.filters
-        )
         aug_qry = ObjectSetQueryPlus(object_set)
         aug_qry.remap_categories(self.pre_mapping)
         aug_qry.set_formulae(formulae)
         # Set common aliases, not all of them is always used
         aug_qry.set_aliases(self.SCI_SUMMARY_ID_ALIASES)
         aug_qry.add_selects(id_cols)
-        aug_qry.add_selects(["txo.display_name"])
+        aug_qry.add_selects(["txo.display_name", self.ANNOTATION_CATEGORY_HIERARCHY_SQL])
         return aug_qry
 
     def _project_formulae(self, project_id: ProjectIDT) -> Dict[str, str]:
@@ -1179,9 +1222,11 @@ class ProjectExport(JobServiceBase):
 
         id_cols = self._id_columns_from_req()
         # The columns identifying a row, common to every requested quantity.
-        key_cols = (["project_id"] if self._multi_project else []) + [
-            self.SCI_SUMMARY_ID_ALIASES[a_col] for a_col in id_cols
-        ] + ["taxonid"]
+        key_cols = (
+            (["project_id"] if self._multi_project else [])
+            + [self.SCI_SUMMARY_ID_ALIASES[a_col] for a_col in id_cols]
+            + ["taxonid", "annotation_category"]
+        )
 
         formulae_by_project = {
             project_id: self._project_formulae(project_id) for project_id in project_ids
@@ -1195,12 +1240,22 @@ class ProjectExport(JobServiceBase):
         quantity_cols: List[str] = []
         for project_id in project_ids:
             formulae = formulae_by_project[project_id]
+            object_set = DescribedObjectBOSet(
+                self.ro_session, [project_id], user_id, self.filters
+            )
+            # Sampling units and taxon->hierarchy mapping depend only on the project
+            # and its filters, not on the requested quantity, so compute them once
+            # here and reuse for every quantity below, instead of once per quantity.
+            zero_fill_data = None
+            if req.sum_subtotal in (
+                SummaryExportGroupingEnum.by_sample,
+                SummaryExportGroupingEnum.by_subsample,
+            ):
+                zero_fill_data = self._zero_fill_reference_data(object_set)
             for exp_type in exp_types:
-                # A fresh query per (project, type), so a project's own formulae/data
-                # never leak into another project's, nor one type's into another's.
-                aug_qry = self._new_sci_summary_query(
-                    [project_id], user_id, formulae, id_cols
-                )
+                # A fresh query per (project, type), so a project's own formulae
+                # never leaks into another project's, nor one type's into another's.
+                aug_qry = self._new_sci_summary_query(object_set, formulae, id_cols)
                 if exp_type == ExportTypeEnum.abundances:
                     zero_col = self.create_sci_abundances_summary(aug_qry)
                 elif exp_type == ExportTypeEnum.concentrations:
@@ -1221,7 +1276,9 @@ class ProjectExport(JobServiceBase):
                 logger.info(msg)
                 step += 1
                 self.update_progress(10 + int(70 / nb_steps * step), msg)
-                row_src = self.add_zeroes_in_sci_summary(aug_qry, id_cols, zero_col)
+                row_src = self.add_zeroes_in_sci_summary(
+                    aug_qry, id_cols, zero_col, zero_fill_data
+                )
 
                 nb_lines = 0
                 for a_row in row_src:
