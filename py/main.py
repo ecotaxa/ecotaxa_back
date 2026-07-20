@@ -51,7 +51,6 @@ from API_models.crud import (
     BulkUpdateReq,
     CreateProjectReq,
     ProjectReq,
-    UpdateProjectReq,
     ProjectTaxoStatsModel,
     ProjectUserStatsModel,
     ProjectSetColumnStatsModel,
@@ -1990,7 +1989,7 @@ def erase_project(
     responses={200: {"content": {"application/json": {"example": null}}}},
 )
 def update_project(
-    project: UpdateProjectReq,
+    project: ProjectModel = Body(...),
     project_id: int = Path(
         ..., description="Internal, numeric id of the project.", example=1
     ),

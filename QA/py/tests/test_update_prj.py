@@ -212,10 +212,7 @@ def test_update_prj(fastapi):
     url = PROJECT_UPDATE_URL.format(project_id=prj_id)
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=no_contact_upd)
     assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
-    assert (
-        rsp.text
-        == '{"detail":[{"loc":["body","contact"],"msg":"A valid Contact is needed.","type":"assertion_error"}]}'
-    )
+    assert rsp.text == '{"detail":"A valid Contact is needed."}'
 
     # Set a contact with wrong id
     wrong_contact_upd = deepcopy(read_json)

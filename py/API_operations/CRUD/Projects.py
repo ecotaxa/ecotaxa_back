@@ -4,7 +4,7 @@
 #
 
 from typing import List, Union, Tuple, Optional, Dict
-from API_models.crud import CreateProjectReq, ProjectReq, UpdateProjectReq
+from API_models.crud import CreateProjectReq, ProjectReq, ProjectModel
 from fastapi import HTTPException
 from BO.Classification import ClassifIDListT, ClassifIDT
 from BO.Collection import MinimalCollectionBO
@@ -27,7 +27,6 @@ from FS.VaultRemover import VaultRemover
 from helpers.DynamicLogs import get_logger
 from helpers.FieldListType import FieldListType
 from helpers.httpexception import DETAIL_NODELETE_BELONGS_TO_COLLECTION
-from sqlalchemy.sql import Update
 from ..helpers.Service import Service
 
 logger = get_logger(__name__)
@@ -161,13 +160,13 @@ class ProjectsService(Service):
             )
         return projects.as_list()
 
-    def update(
-        self, current_user_id: UserIDT, project_id: int, project: UpdateProjectReq
-    ):
+    def update(self, current_user_id: UserIDT, project_id: int, project: ProjectModel):
         present_project: ProjectBO = self.query(
             current_user_id, project_id, for_managing=True, for_update=True
         )
         assert project.title is not None, "A valid Title is required."
+        if project.formulae is not None:
+            project.formulae = ProjectBO.formulae_validator(project.formulae)
         present_project.update(
             session=self.session,
             instrument=project.instrument,

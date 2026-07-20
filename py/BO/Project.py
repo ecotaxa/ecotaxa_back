@@ -230,6 +230,7 @@ class FieldsList(object):
             + FieldsList.project()
             + FieldsList.counts()
             + FieldsList.mapping()
+            + FieldsList.classif()
         )
         return all
 
@@ -537,7 +538,6 @@ class ProjectBO(object):
         self._project.cnn_network_id = cnn_network_id
         self._project.comments = comments
         self._project.access = access
-
         self._project.formulae = formulae
         # Inverse for extracted values
         self._project.initclassiflist = ",".join(
