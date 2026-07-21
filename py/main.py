@@ -1316,12 +1316,14 @@ async def list_projects(
             not_granted=not_granted,
             for_managing=for_managing,
             project_ids=project_ids,
+            order_field=order_field,
             fields=fields,
+            window_start=window_start or 0,
+            window_size=window_size or 0,
         )
-    # The DB query takes a few ms, and enrich not much more, so we can afford to narrow the search on the result
-    ret = sort_and_prune(
-        ret, order_field, project_model_columns, window_start, window_size
-    )
+    # Pagination and sorting on genuine columns already happened in SQL above.
+    # This only covers derived/computed order fields that SQL can't sort on.
+    ret = sort_and_prune(ret, order_field, project_model_columns)
     return MyORJSONResponse(ret)
 
 
@@ -1415,10 +1417,9 @@ async def search_projects(  # MyORJSONResponse -> JSONResponse -> Response -> aw
             window_start=window_start,
             window_size=window_size,
         )
-    # The DB query takes a few ms, and enrich not much more, so we can afford to narrow the search on the result
-    ret = sort_and_prune(
-        ret, order_field, project_model_columns, window_start, window_size
-    )
+    # Pagination and sorting on genuine columns already happened in SQL above.
+    # This only covers derived/computed order fields that SQL can't sort on.
+    ret = sort_and_prune(ret, order_field, project_model_columns)
     return MyORJSONResponse(ret)
 
 

@@ -87,7 +87,12 @@ class ProjectsService(Service):
         if current_user_id is None:
             # For public
             matching_ids = ProjectBO.list_public_projects(
-                self.ro_session, "", project_ids
+                self.ro_session,
+                "",
+                project_ids,
+                order_field=order_field,
+                window_start=window_start,
+                window_size=window_size,
             )
             projects = ProjectBOSet(
                 self.session, matching_ids, public=True, fields=fields
@@ -132,7 +137,13 @@ class ProjectsService(Service):
     ) -> List[ProjectBO]:
         if current_user_id is None:
             # For public
-            matching_ids = ProjectBO.list_public_projects(self.ro_session, title_filter)
+            matching_ids = ProjectBO.list_public_projects(
+                self.ro_session,
+                title_filter,
+                order_field=order_field,
+                window_start=window_start,
+                window_size=window_size,
+            )
             projects = ProjectBOSet(
                 self.ro_session, matching_ids, public=True, fields=fields
             )

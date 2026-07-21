@@ -891,16 +891,10 @@ class ProjectBO(object):
         """
         sql_params: Dict[str, Any] = {"user_id": user.id}
 
-        # Default query: all projects, eventually with first manager information
+        # Default query: all projects
         # noinspection SqlResolve
-        sql = (
-            """SELECT prj.projid
-                       FROM projects prj
-                       LEFT JOIN ( """
-            + ProjectPrivilegeBO.first_manager_by_project()
-            + """ ) fpm
-                      ON fpm.projid = prj.projid """
-        )
+        sql = """SELECT prj.projid
+                       FROM projects prj """
         if not_granted:
             if not user.has_role(Role.APP_ADMINISTRATOR):
                 # Add the projects for which no entry is found in ProjectPrivilege
@@ -951,7 +945,11 @@ class ProjectBO(object):
         if order_field in FieldsList.order_field():
             if order_field == "instrument":
                 order_field = "instrument_id"
-            sql += """ ORDER BY %s """ % order_field
+            # Only sort in SQL on genuine columns, so a derived/computed field
+            # (e.g. highest_right) safely falls back to Python-side sorting
+            # instead of erroring out with "column does not exist".
+            if order_field in Project.__table__.columns:
+                sql += """ ORDER BY %s """ % order_field
 
         if window_start != 0:
             sql += """ offset  :window_start """
@@ -968,7 +966,12 @@ class ProjectBO(object):
 
     @staticmethod
     def list_public_projects(
-        session: Session, title_filter: str = "", project_ids: str = ""
+        session: Session,
+        title_filter: str = "",
+        project_ids: str = "",
+        order_field: Optional[str] = None,
+        window_start: Optional[int] = 0,
+        window_size: Optional[int] = 0,
     ) -> List[ProjectIDT]:
         """
         :param session:
@@ -983,6 +986,17 @@ class ProjectBO(object):
         if project_ids != "":
             pids = [p.strip() for p in project_ids.split(",")]
             qry = qry.filter(Project.projid.in_(pids))
+        if order_field:
+            # Only sort in SQL on genuine columns, so an unsupported/derived
+            # field (e.g. a computed one) safely falls back to Python-side
+            # sorting instead of erroring out.
+            sort_col = "instrument_id" if order_field == "instrument" else order_field
+            if sort_col in Project.__table__.columns:
+                qry = qry.order_by(getattr(Project, sort_col))
+        if window_start:
+            qry = qry.offset(window_start)
+        if window_size:
+            qry = qry.limit(window_size)
         ret = [an_id for an_id, in qry]
         return ret
 
