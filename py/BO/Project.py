@@ -298,6 +298,8 @@ class ProjectBO(object):
     def __init__(self, project: Project, fields: Optional[List[str]] = None):
         self._project = project
         # Requested field list, used to narrow serialization. None means "all".
+        if fields is None:
+            fields = [FieldListType.all]
         self._out_fields: Optional[List[str]] = fields
         # Safe defaults for the _derived_ (non-DB-column) attributes, so that
         # serialization never fails whatever the requested fields. Plain DB columns
@@ -1401,6 +1403,8 @@ class ProjectBOSet(object):
         self.projects: List[ProjectBO] = []
         # De duplicate
         projs = []
+        if not public and FieldListType.all in listfields:
+            wanted_fields.append("highest_right")
         with CodeTimer("%s BO projects query:" % len(prj_ids), logger):
             for (a_proj,) in session.execute(qry):
                 projs.append(a_proj)
