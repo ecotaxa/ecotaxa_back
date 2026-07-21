@@ -1303,7 +1303,22 @@ class ProjectBO(object):
     def formulae_validator(formulae: str):
         errors = []
         if formulae is not None:
-            _val = json.loads(formulae)
+            try:
+                _val = json.loads(formulae)
+            except json.JSONDecodeError as e:
+                raise AssertionError(
+                    "Invalid formulae: not a valid JSON string ({})".format(str(e))
+                )
+            assert isinstance(
+                _val, dict
+            ), "Invalid formulae: expected a JSON object, got {}".format(
+                type(_val).__name__
+            )
+            if _val and all(
+                its_def is None or (isinstance(its_def, str) and its_def.strip() == "")
+                for its_def in _val.values()
+            ):
+                return None
             for a_var, its_def in _val.items():
                 if its_def is None:
                     continue
