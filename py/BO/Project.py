@@ -1302,10 +1302,11 @@ class ProjectBO(object):
         return ret
 
     @staticmethod
-    def formulae_validator(formulae: str):
-        return formulae
+    def formulae_validator(formulae: Optional[str]):
         errors = []
-        if formulae is not None:
+        if formulae is None or formulae.strip() == "None":
+            return None
+        else:
             try:
                 _val = json.loads(formulae)
             except json.JSONDecodeError as e:
