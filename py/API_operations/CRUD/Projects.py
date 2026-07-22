@@ -131,7 +131,7 @@ class ProjectsService(Service):
         instrument_filter: str = "",
         filter_subset: bool = False,
         order_field: Optional[str] = None,
-        fields: Optional[str] = FieldListType.default,
+        fields: Optional[str] = FieldListType.all,
         window_start: Optional[int] = 0,
         window_size: Optional[int] = 0,
     ) -> List[ProjectBO]:

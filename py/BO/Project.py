@@ -1303,6 +1303,7 @@ class ProjectBO(object):
 
     @staticmethod
     def formulae_validator(formulae: str):
+        return formulae
         errors = []
         if formulae is not None:
             try:

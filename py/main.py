@@ -1286,7 +1286,7 @@ async def list_projects(
         example="instrument",
     ),
     fields: Optional[str] = Query(
-        default="*default",
+        default="*all",
         title="Fields",
         description="Return the default fields (typically used in conjunction with an additional field list). For users list display purpose.",
         example="*default,fieldlist",
@@ -1379,7 +1379,7 @@ async def search_projects(  # MyORJSONResponse -> JSONResponse -> Response -> aw
         example="instrument",
     ),
     fields: Optional[str] = Query(
-        default="*default",
+        default="*all",
         title="Fields",
         description="Return the default fields (typically used in conjunction with an additional field list). For users list display purpose.",
         example="*default,fieldlist",
