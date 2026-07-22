@@ -1975,7 +1975,7 @@
               "title":"Fields",
               "type":"string",
               "description":"Return the default fields (typically used in conjunction with an additional field list). For users list display purpose.",
-              "default":"*default"
+              "default":"*all"
             },
             "example":"*default,fieldlist",
             "name":"fields",
@@ -2144,7 +2144,7 @@
               "title":"Fields",
               "type":"string",
               "description":"Return the default fields (typically used in conjunction with an additional field list). For users list display purpose.",
-              "default":"*default"
+              "default":"*all"
             },
             "example":"*default,fieldlist",
             "name":"fields",
