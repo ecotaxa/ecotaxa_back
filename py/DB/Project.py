@@ -12,7 +12,7 @@ from .Instrument import Instrument
 from .ProjectVariables import KNOWN_PROJECT_VARS
 from .helpers.DDL import Column, Sequence, ForeignKey
 from .helpers.ORM import relationship
-from .helpers.Postgres import VARCHAR, INTEGER, DOUBLE_PRECISION
+from .helpers.Postgres import VARCHAR, INTEGER, DOUBLE_PRECISION, JSONB
 
 """
     Possible values for status field.
@@ -72,7 +72,9 @@ class Project(Model):
     rf_models_used = Column(VARCHAR)
     cnn_network_id = Column(VARCHAR(50))
     # project specific formulae used to calculate concentration and biovolume ( used in project summary export, and collection DarwinCore export)
-    formulae = Column(VARCHAR)
+    formulae = Column(JSONB)
+    # Temporary: legacy string formulae, kept as a backup after the jsonb migration.
+    formulae_old = Column(VARCHAR)
     # Associated taxonomy statistics. Commented out to avoid that the ORM loads the whole list, which can be big.
     # taxo_stats = relationship("ProjectTaxoStat")
 

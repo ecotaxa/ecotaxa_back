@@ -1,4 +1,5 @@
 import datetime
+import json
 import logging
 
 # noinspection PyPackageRequirements
@@ -52,7 +53,6 @@ _req_tmpl = {
     "include_predicted": True,
     "with_absent": False,
     "with_computations": [],
-    "formulae": uvp_formulae,
     "extra_xml": [
         """<creator><organizationName>My extra creator org (EXTR)</organizationName><address/></creator>"""
     ],
@@ -85,7 +85,7 @@ def exportable_collection(fastapi, admin_or_creator):
         return
 
     coll_id, coll_title, prj_id = create_test_collection(
-        fastapi, "exp", admin_or_creator
+        fastapi, "exp", admin_or_creator, with_formulae=True
     )
 
     # before exporting at least a worms taxonomy renames is made
@@ -253,6 +253,17 @@ def make_project_exportable(prj_id, fastapi, who):
     prj_json["license"] = "CC BY 4.0"
     # And give a contact who is now mandatory
     prj_json["contact"] = prj_json["managers"][0]
+    rsp = fastapi.put(url, headers=who, json=prj_json)
+    assert rsp.status_code == status.HTTP_200_OK
+
+
+def set_project_formulae(fastapi, prj_id, formulae, who=ADMIN_AUTH):
+    # Computation formulae now live on the project itself (no more request-level override)
+    url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
+    rsp = fastapi.get(url, headers=who)
+    prj_json = rsp.json()
+    url = PROJECT_UPDATE_URL.format(project_id=prj_id)
+    prj_json["formulae"] = json.dumps(formulae)
     rsp = fastapi.put(url, headers=who, json=prj_json)
     assert rsp.status_code == status.HTTP_200_OK
 
@@ -480,7 +491,7 @@ def test_permalink_query(fastapi, exportable_collection, admin_or_creator):
     assert coll_desc["title"] == coll_title
 
 
-def create_test_collection(fastapi, suffix, who=ADMIN_AUTH):
+def create_test_collection(fastapi, suffix, who=ADMIN_AUTH, with_formulae=False):
     # In these TSVs, we have: object_major, object_minor, object_area, process_pixel
     # Admin imports the project
     from tests.test_import import (
@@ -503,12 +514,20 @@ def create_test_collection(fastapi, suffix, who=ADMIN_AUTH):
     # Add a sample with corrupted or absent needed free columns, for provoking calculation warnings
     do_import(fastapi, prj_id, BAD_FREE_DIR, ADMIN_AUTH)
 
+    if with_formulae:
+        # Set early: some tests deliberately check for other missing data (license,
+        # contact...) before make_project_exportable() runs, so formulae readiness
+        # must not be tangled with that later step.
+        set_project_formulae(fastapi, prj_id, uvp_formulae, ADMIN_AUTH)
+
     regrant_if_needed(fastapi, prj_id, who)
 
     # Add another project with same data, only a "temporary" object there.
     prj_title2 = "EMODNET project2 " + suffix
     prj_id2 = do_test_import(fastapi, prj_title2, str(JUST_PREDICTED_DIR), "UVP6")
     make_project_exportable(prj_id2, fastapi, ADMIN_AUTH)
+    if with_formulae:
+        set_project_formulae(fastapi, prj_id2, uvp_formulae, ADMIN_AUTH)
     add_concentration_data(fastapi, prj_id2)
 
     regrant_if_needed(fastapi, prj_id2, who)
@@ -533,14 +552,13 @@ def create_test_collection(fastapi, suffix, who=ADMIN_AUTH):
     return coll_id, coll_title, prj_id
 
 
-def test_emodnet_export_incomplete_formulae(fastapi):
+def test_emodnet_export_no_formulae(fastapi):
     """Concentration/biovolume must fail the job fast, with a clear message, when a
-    project's formulae (its own + any request-level override) don't cover what the
-    requested quantities need. Uses a fresh collection, with no request-level
-    'formulae' override and no formula configured on either underlying project, so
-    both are reported missing subsample_coef/total_water_volume/individual_volume."""
+    project has no formulae configured at all. Uses a fresh collection, with no
+    formula configured on either underlying project, so both are reported as
+    having no formulae."""
     coll_id, _coll_title, _prj_id = create_test_collection(
-        fastapi, "incomplete-formulae", ADMIN_AUTH
+        fastapi, "no-formulae", ADMIN_AUTH, with_formulae=False
     )
     coll = fastapi.get(
         COLLECTION_QUERY_URL.format(collection_id=coll_id), headers=ADMIN_AUTH
@@ -553,7 +571,43 @@ def test_emodnet_export_incomplete_formulae(fastapi):
         {
             "collection_id": coll_id,
             "with_computations": ["CNC", "BIV"],
-            "formulae": {},
+        }
+    )
+    job_id = export_collection(fastapi, req, ADMIN_AUTH)
+    url = JOB_QUERY_URL.format(job_id=job_id)
+    rsp = fastapi.get(url, headers=ADMIN_AUTH)
+    job_dict = rsp.json()
+    assert job_dict["state"] == "E", job_dict
+    msg = job_dict["progress_msg"]
+    assert "Incomplete formulae" in msg
+    for a_prj_id in project_ids:
+        assert "project %d: no formulae configured" % a_prj_id in msg
+
+
+def test_emodnet_export_incomplete_formulae(fastapi):
+    """Concentration/biovolume must fail the job fast, with a clear message, when a
+    project's own formulae don't cover what the requested quantities need. Uses a
+    fresh collection, with a partial formula (missing keys) set on both underlying
+    projects, so both are reported missing subsample_coef/total_water_volume/
+    individual_volume."""
+    coll_id, _coll_title, _prj_id = create_test_collection(
+        fastapi, "incomplete-formulae", ADMIN_AUTH, with_formulae=False
+    )
+    coll = fastapi.get(
+        COLLECTION_QUERY_URL.format(collection_id=coll_id), headers=ADMIN_AUTH
+    ).json()
+    project_ids = coll["project_ids"]
+    assert len(project_ids) == 2
+    for a_prj_id in project_ids:
+        set_project_formulae(
+            fastapi, a_prj_id, {"subsample_coef": "1/ssm.sub_part"}, ADMIN_AUTH
+        )
+
+    req = _req_tmpl.copy()
+    req.update(
+        {
+            "collection_id": coll_id,
+            "with_computations": ["CNC", "BIV"],
         }
     )
     job_id = export_collection(fastapi, req, ADMIN_AUTH)
@@ -567,7 +621,6 @@ def test_emodnet_export_incomplete_formulae(fastapi):
         assert "project %d" % a_prj_id in msg
     assert "concentration" in msg
     assert "biovolume" in msg
-    assert "subsample_coef" in msg
     assert "total_water_volume" in msg
     assert "individual_volume" in msg
 

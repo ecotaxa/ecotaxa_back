@@ -2,7 +2,7 @@
   "openapi":"3.0.2",
   "info":{
     "title":"EcoTaxa",
-    "version":"0.0.46"
+    "version":"0.0.47"
   },
   "servers":[
     {
@@ -8464,20 +8464,6 @@
               "ABO"
             ]
           },
-          "formulae":{
-            "title":"Computation formulas",
-            "type":"object",
-            "additionalProperties":{
-              "type":"string"
-            },
-            "description":"Transitory: How to get values from DB free columns. Python syntax, prefixes are 'sam', 'ssm' and 'obj'. Variables used in computations are 'total_water_volume', 'subsample_coef' and 'individual_volume'",
-            "default":{},
-            "example":{
-              "subsample_coef":"1/ssm.sub_part",
-              "total_water_volume":"sam.tot_vol/1000",
-              "individual_volume":"4.0/3.0*math.pi*(math.sqrt(obj.area/math.pi)*ssm.pixel_size)**3"
-            }
-          },
           "extra_xml":{
             "title":"Extra XML",
             "type":"array",
@@ -10686,6 +10672,7 @@
             "title":"Formulae",
             "type":"string",
             "description":"Concentration formulae.",
+            "default":"subsample_coef: 1/ssm.sub_part\ntotal_water_volume: sam.tot_vol/1000\nindividual_volume: 4.0/3.0*math.pi*(math.sqrt(obj.area/math.pi)*ssm.pixel_size)**3",
             "example":""
           },
           "obj_free_cols":{

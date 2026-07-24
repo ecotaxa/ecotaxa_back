@@ -5,6 +5,7 @@
 #
 # A service dedicated to checking that a change was successfully propagated to a secondary user or DB
 #
+import json
 import time
 
 from API_operations.helpers.Service import Service
@@ -35,7 +36,16 @@ class DBSyncService(Service):
 
     def _get_result(self, session: Session):
         res = session.execute(self.qry)
-        ret = [tuple(a_row) for a_row in res]
+        ret = [
+            tuple(
+                # jsonb columns come back as dict/list, unhashable as-is
+                json.dumps(a_val, sort_keys=True)
+                if isinstance(a_val, (dict, list))
+                else a_val
+                for a_val in a_row
+            )
+            for a_row in res
+        ]
         return set(ret)
 
     def wait(self) -> None:

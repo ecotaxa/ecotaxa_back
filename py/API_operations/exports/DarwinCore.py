@@ -131,7 +131,6 @@ class DarwinCoreExport(JobServiceBase):
                 "include_predicted": self.include_predicted,
                 "with_absent": self.with_absent,
                 "with_computations": self.with_computations,
-                "formulae": self.formulae,
                 "extra_xml": self.extra_xml,
                 "current_user_id": self.current_user_id,
             }
@@ -145,7 +144,6 @@ class DarwinCoreExport(JobServiceBase):
         include_predicted: bool,
         with_absent: bool,
         with_computations: List[SciExportTypeEnum],
-        formulae: Dict[str, str],
         extra_xml: List[str],
         current_user_id: UserIDT,
     ):
@@ -160,12 +158,10 @@ class DarwinCoreExport(JobServiceBase):
         # Output params
         self.with_absent: bool = with_absent
         self.with_computations: List[SciExportTypeEnum] = with_computations
-        # Request-level override, applied on top of each project's own formulae.
-        self.formulae: Dict[str, str] = formulae
         # Each project keeps its own definitions: with several projects in the
         # collection, they are not merged/shared across each other.
         self.formulae_by_project: Dict[int, Dict[str, str]] = {
-            a_project.projid: self._project_formulae(a_project, formulae)
+            a_project.projid: self._project_formulae(a_project)
             for a_project in self.collection.projects
         }
         # TODO: Some sanity check on XML
@@ -196,21 +192,13 @@ class DarwinCoreExport(JobServiceBase):
     PRODUCED_FILE_NAME = DWC_ZIP_NAME
 
     @staticmethod
-    def _project_formulae(project: Project, override: Dict[str, str]) -> Dict[str, str]:
+    def _project_formulae(project: Project) -> Dict[str, str]:
         """
-        This project's own computation formulae, overridden by any formula given
-        in the request. Can come back empty, e.g. for an abundance-only export,
-        which needs none -- see _check_darwincore_formulae for the actual
-        per-quantity requirement check.
+        This project's own computation formulae. Can come back empty, e.g. for an
+        abundance-only export, which needs none -- see _check_darwincore_formulae
+        for the actual per-quantity requirement check.
         """
-        formulae: Dict[str, str] = {}
-        if project.formulae:
-            try:
-                formulae.update(json.loads(project.formulae))
-            except Exception:
-                pass
-        formulae.update(override)
-        return formulae
+        return dict(cast(Dict[str, str], project.formulae)) if project.formulae else {}
 
     def _check_darwincore_formulae(self) -> None:
         """
@@ -226,6 +214,11 @@ class DarwinCoreExport(JobServiceBase):
         problems = []
         for a_project in self.collection.projects:
             formulae = self.formulae_by_project[a_project.projid]
+            if self.with_computations and not formulae:
+                problems.append(
+                    "project %s: no formulae configured" % a_project.projid
+                )
+                continue
             for a_quantity in self.with_computations:
                 missing = [
                     a_var

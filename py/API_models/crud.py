@@ -450,6 +450,16 @@ class ProjectModel(_AddedToProject, _ProjectModelFromDB):
     """
     Basic and computed information about the Project."""
 
+    # Override: the DB column is jsonb (dict), but the API keeps serving/accepting
+    # formulae as a JSON string, so pin the type back (combine_models would
+    # otherwise infer dict from the jsonb column).
+    formulae: Optional[str] = Field(
+        title="Formulae",
+        description="Concentration formulae.",
+        default=FORMULAE,
+        example="",
+    )
+
     class Config:
         orm_mode = True
         exclude_unset = True

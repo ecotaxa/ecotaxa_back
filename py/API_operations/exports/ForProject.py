@@ -1156,10 +1156,7 @@ class ProjectExport(JobServiceBase):
             .scalar()
         )
         if prjformulae:
-            try:
-                formulae.update(json.loads(prjformulae))
-            except Exception:
-                pass
+            formulae.update(prjformulae)
         try:
             formulae.update(req.formulae)
         except Exception:

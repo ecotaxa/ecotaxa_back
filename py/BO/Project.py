@@ -4,6 +4,7 @@
 #
 import typing
 import json
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
@@ -105,6 +106,33 @@ RestrictedStatus: Final = {
     ANNOTATE_NO_PREDICTION: 2,
     EXPLORE_ONLY: 1,
 }
+
+FORMULAE_KEYS = tuple(KNOWN_PROJECT_VARS)
+
+
+def _formulae_str_to_dict(formulae: Union[dict, str, None]) -> Optional[dict]:
+    """Normalize target_proj.formulae (dict, legacy string, or None) into a dict.
+
+    The back-end can return formulae as a dict already, as the string "None",
+    or as one string where each valid key (FORMULAE_KEYS) is directly
+    followed by ':' and its value, with no reliable separator between
+    entries (blank, \r, \r\n or nothing at all).
+    """
+    if isinstance(formulae, dict):
+        return formulae
+    if formulae is None or formulae.strip() == "" or formulae.strip().lower() == "none":
+        return None
+    keys_pattern = "|".join(FORMULAE_KEYS)
+    normalized = re.sub(r"\s*(" + keys_pattern + r"):", r";\1:", formulae.strip())
+    result = {}
+    for chunk in normalized.split(";"):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        key, _, value = chunk.partition(":")
+        value = value.strip()
+        result[key] = None if value.lower() == "none" else value
+    return result if result else None
 
 
 class MappingColumnEnum(str, Enum):
@@ -254,6 +282,7 @@ class FieldsList(object):
     @staticmethod
     def attributes() -> Dict[str, List[str]]:
         projectvars = [v for v in list(vars(Project)) if v[0:1] != "_"]
+        projectvars.remove("formulae_old")
         # minimal fields
         projectbovars = [v for v in list(ProjectBO.__slots__) if v[0:1] != "_"]
         return dict({"project": projectvars, "projectbo": projectbovars})
@@ -447,6 +476,12 @@ class ProjectBO(object):
             self.instrument_url = self._project.instrument.bodc_url
         return self
 
+    @property
+    def formulae(self) -> Optional[str]:
+        """Serve the jsonb-stored formulae as a JSON string, for API back-compat."""
+        stored = self._project.formulae
+        return json.dumps(stored) if stored is not None else None
+
     def __getattr__(self, item):
         """Fallback for 'not found' field after the C getattr() call.
         If we did not enrich a Project field somehow then return it"""
@@ -540,7 +575,7 @@ class ProjectBO(object):
         self._project.cnn_network_id = cnn_network_id
         self._project.comments = comments
         self._project.access = access
-        self._project.formulae = formulae
+        self._project.formulae = json.loads(formulae) if formulae is not None else None
         # Inverse for extracted values
         self._project.initclassiflist = ",".join(
             [str(cl_id) for cl_id in init_classif_list]
@@ -606,6 +641,11 @@ class ProjectBO(object):
                     # Delete CNN features, which depend on the CNN network
                     DeepFeatures.delete_all(session, projid)
                 self._project.cnn_network_id = projectreq.cnn_network_id
+            elif modelfield == "formulae":
+                formulae = projectreq.formulae
+                self._project.formulae = (
+                    json.loads(formulae) if formulae is not None else None
+                )
             elif modelfield in FieldsList.project():
                 setattr(self._project, modelfield, getattr(projectreq, modelfield))
             elif modelfield in FieldsList.privileges():

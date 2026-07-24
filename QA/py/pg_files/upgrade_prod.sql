@@ -3182,6 +3182,70 @@ UPDATE alembic_version SET version_num='5d49f4994e0c' WHERE alembic_version.vers
 
 COMMIT;
 
+BEGIN;
+
+-- Running upgrade c593af18f13a -> e68bf28d2613
+
+ALTER TABLE projects RENAME formulae TO formulae_old;
+
+ALTER TABLE projects ADD COLUMN formulae JSONB;
+
+-- SQL port of BO.Project._formulae_str_to_dict(), to backfill "formulae" from the
+-- legacy "formulae_old" string (dict-like keys, no reliable separator between
+-- entries: blank, \r, \r\n or nothing at all -- and "none", any case, meaning null).
+DO $$
+    DECLARE
+        keys_pattern CONSTANT text := 'subsample_coef|total_water_volume|individual_volume';
+        ws CONSTANT text := E' \t\n\r\x0B\x0C';
+        r RECORD;
+        raw text;
+        normalized text;
+        chunk text;
+        a_key text;
+        a_val text;
+        sep_pos int;
+        result jsonb;
+    BEGIN
+        FOR r IN SELECT projid, formulae_old FROM projects WHERE formulae_old IS NOT NULL
+            LOOP
+                raw := btrim(r.formulae_old, ws);
+                IF raw = '' OR lower(raw) = 'none' THEN
+                    CONTINUE; -- formulae stays NULL, already the column default
+                END IF;
+                normalized := regexp_replace(raw, '\s*(' || keys_pattern || '):', ';\1:', 'g');
+                result := '{}'::jsonb;
+                FOR chunk IN SELECT unnest(string_to_array(normalized, ';'))
+                    LOOP
+                        chunk := btrim(chunk, ws);
+                        IF chunk = '' THEN
+                            CONTINUE;
+                        END IF;
+                        sep_pos := position(':' IN chunk);
+                        IF sep_pos = 0 THEN
+                            a_key := chunk;
+                            a_val := '';
+                        ELSE
+                            a_key := substring(chunk FROM 1 FOR sep_pos - 1);
+                            a_val := btrim(substring(chunk FROM sep_pos + 1), ws);
+                        END IF;
+                        IF lower(a_val) = 'none' THEN
+                            result := result || jsonb_build_object(a_key, NULL);
+                        ELSE
+                            result := result || jsonb_build_object(a_key, a_val);
+                        END IF;
+                    END LOOP;
+                IF result = '{}'::jsonb THEN
+                    result := NULL;
+                END IF;
+                UPDATE projects SET formulae = result WHERE projid = r.projid;
+            END LOOP;
+    END
+$$;
+
+UPDATE alembic_version SET version_num='e68bf28d2613' WHERE alembic_version.version_num = '5d49f4994e0c';
+
+COMMIT;
+
 ------- Leave on tail
 
 ALTER TABLE alembic_version REPLICA IDENTITY FULL;

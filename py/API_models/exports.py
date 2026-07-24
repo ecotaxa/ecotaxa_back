@@ -353,18 +353,6 @@ class DarwinCoreExportReq(BaseModel):
         example=["ABO"],
         default=[],
     )
-    formulae: Dict[str, str] = Field(
-        title="Computation formulas",
-        description="Transitory: How to get values from DB free columns. "
-        "Python syntax, prefixes are 'sam', 'ssm' and 'obj'. "
-        "Variables used in computations are 'total_water_volume', 'subsample_coef' and 'individual_volume'",
-        example={
-            "subsample_coef": "1/ssm.sub_part",
-            "total_water_volume": "sam.tot_vol/1000",
-            "individual_volume": "4.0/3.0*math.pi*(math.sqrt(obj.area/math.pi)*ssm.pixel_size)**3",
-        },
-        default={},
-    )
     extra_xml: List[str] = Field(
         title="Extra XML",
         description="XML blocks which will be output, reformatted, inside the <dataset> tag of produced EML. "

@@ -194,7 +194,7 @@ api_logger = get_api_logger()
 
 app = FastAPI(
     title="EcoTaxa",
-    version="0.0.46",
+    version="0.0.47",
     # openapi URL as seen from navigator, this is included when /docs is required
     # which serves swagger-ui JS app. Stay in /api sub-path.
     openapi_url="/api/openapi.json",
@@ -1201,7 +1201,6 @@ def darwin_core_format_export(
         request.include_predicted,
         request.with_absent,
         request.with_computations,
-        request.formulae,
         request.extra_xml,
         current_user,
     ) as sce:
