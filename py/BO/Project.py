@@ -122,6 +122,12 @@ def _formulae_str_to_dict(formulae: Union[dict, str, None]) -> Optional[dict]:
         return formulae
     if formulae is None or formulae.strip() == "" or formulae.strip().lower() == "none":
         return None
+    try:
+        parsed = json.loads(formulae)
+        if isinstance(parsed, dict):
+            return parsed if parsed else None
+    except (json.JSONDecodeError, TypeError):
+        pass
     keys_pattern = "|".join(FORMULAE_KEYS)
     normalized = re.sub(r"\s*(" + keys_pattern + r"):", r";\1:", formulae.strip())
     result = {}
