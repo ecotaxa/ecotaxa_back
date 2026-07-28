@@ -109,6 +109,32 @@ RestrictedStatus: Final = {
 
 FORMULAE_KEYS = tuple(KNOWN_PROJECT_VARS)
 
+# Historical default formulae, not real user customizations, blanked out on read.
+DEFAULT_FORMULAE: Final = {
+    "total_water_volume/1000",
+    "1/subsampling_coefficient",
+    "4/3 * math.pi * (math.sqrt(area/math.pi)*pixel_size)**3",
+    "4/3 * math.pi * (major_axis * pixel_size) * (minor_axis * pixel_size)**2",
+    "4/3 * pi * (major_axis * pixel_size) * (minor_axis * pixel_size)^2",
+}
+
+
+def _strip_default_formulae(values: Dict[str, Any]) -> Optional[dict]:
+    """Drop keys whose value is empty, "none" (any case) or None, blanking
+    known default formulae first so they get dropped the same way."""
+    cleaned = {}
+    for key, value in values.items():
+        if value is None:
+            continue
+        if isinstance(value, str):
+            value = value.strip()
+            if value in DEFAULT_FORMULAE:
+                value = ""
+            if value == "" or value.lower() == "none":
+                continue
+        cleaned[key] = value
+    return cleaned if cleaned else None
+
 
 def _formulae_str_to_dict(formulae: Union[dict, str, None]) -> Optional[dict]:
     """Normalize target_proj.formulae (dict, legacy string, or None) into a dict.
@@ -119,13 +145,13 @@ def _formulae_str_to_dict(formulae: Union[dict, str, None]) -> Optional[dict]:
     entries (blank, \r, \r\n or nothing at all).
     """
     if isinstance(formulae, dict):
-        return formulae
+        return _strip_default_formulae(formulae)
     if formulae is None or formulae.strip() == "" or formulae.strip().lower() == "none":
         return None
     try:
         parsed = json.loads(formulae)
         if isinstance(parsed, dict):
-            return parsed if parsed else None
+            return _strip_default_formulae(parsed)
     except (json.JSONDecodeError, TypeError):
         pass
     keys_pattern = "|".join(FORMULAE_KEYS)
@@ -138,7 +164,7 @@ def _formulae_str_to_dict(formulae: Union[dict, str, None]) -> Optional[dict]:
         key, _, value = chunk.partition(":")
         value = value.strip()
         result[key] = None if value.lower() == "none" else value
-    return result if result else None
+    return _strip_default_formulae(result)
 
 
 class MappingColumnEnum(str, Enum):

@@ -3197,6 +3197,15 @@ DO $$
     DECLARE
         keys_pattern CONSTANT text := 'subsample_coef|total_water_volume|individual_volume';
         ws CONSTANT text := E' \t\n\r\x0B\x0C';
+        -- SQL port of BO.Project.DEFAULT_FORMULAE: historical default formulae,
+        -- not real user customizations, blanked out on read.
+        default_formulae CONSTANT text[] := ARRAY[
+            'total_water_volume/1000',
+            '1/subsampling_coefficient',
+            '4/3 * math.pi * (math.sqrt(area/math.pi)*pixel_size)**3',
+            '4/3 * math.pi * (major_axis * pixel_size) * (minor_axis * pixel_size)**2',
+            '4/3 * pi * (major_axis * pixel_size) * (minor_axis * pixel_size)^2'
+        ];
         r RECORD;
         raw text;
         normalized text;
@@ -3228,11 +3237,13 @@ DO $$
                             a_key := substring(chunk FROM 1 FOR sep_pos - 1);
                             a_val := btrim(substring(chunk FROM sep_pos + 1), ws);
                         END IF;
-                        IF lower(a_val) = 'none' THEN
-                            result := result || jsonb_build_object(a_key, NULL);
-                        ELSE
-                            result := result || jsonb_build_object(a_key, a_val);
+                        IF a_val = ANY(default_formulae) THEN
+                            a_val := '';
                         END IF;
+                        IF a_val = '' OR lower(a_val) = 'none' THEN
+                            CONTINUE; -- drop the key: empty, default or "none" value
+                        END IF;
+                        result := result || jsonb_build_object(a_key, a_val);
                     END LOOP;
                 IF result = '{}'::jsonb THEN
                     result := NULL;
