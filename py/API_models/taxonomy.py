@@ -51,6 +51,50 @@ class TaxoRecastRsp(BaseModel):
         extra = Extra.forbid
 
 
+class TaxoRecastSearchRsp(BaseModel):
+    """
+    A taxo_recast record, enriched with the project title.
+    """
+
+    recast_id: int = Field(
+        title="Recast Id", description="The taxo_recast record id.", example=42
+    )
+    collection_id: Optional[int] = Field(
+        title="Collection Id",
+        description="Set if the recast applies to a whole collection.",
+        default=None,
+        example=None,
+    )
+    project_id: Optional[int] = Field(
+        title="Project Id",
+        description="Set if the recast applies to a single project.",
+        default=None,
+        example=3,
+    )
+    project_title: Optional[str] = Field(
+        title="Project title",
+        description="The title of the project designated by project_id.",
+        default=None,
+        example="My Project",
+    )
+    operation: str = Field(
+        title="Recast operation",
+        description="Recast operation name.",
+        example=RecastOperation.project_import,
+    )
+    transforms: Dict[str, Optional[int]] = Field(
+        title="Categories mapping",
+        description="Mapping from seen taxon (key) to output replacement one (value).",
+        example={"456": 956, "2456": 213, "9134": None},
+    )
+    documentation: Optional[Dict[str, str]] = Field(
+        title="Mapping documentation",
+        description="To keep memory of the reasons for the above mapping.",
+        default=None,
+        example={"456": "Up to species"},
+    )
+
+
 class TaxaSearchRsp(BaseModel):
     id: int = Field(title="Id", description="The taxon/category IDs.", example=14334)
     status: str = Field(

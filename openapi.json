@@ -2,7 +2,7 @@
   "openapi":"3.0.2",
   "info":{
     "title":"EcoTaxa",
-    "version":"0.0.47"
+    "version":"0.0.48"
   },
   "servers":[
     {
@@ -6154,6 +6154,77 @@
         ]
       }
     },
+    "/taxo_recast/search":{
+      "get":{
+        "tags":[
+          "Taxonomy Tree"
+        ],
+        "summary":"Search Taxonomy Recast",
+        "description":"**Among given project_ids, return the existing taxonomy recast records for the\ngiven operation**, each enriched with its project title. Note: only\nadministered/readable projects are considered. If project_ids is not given, all\nprojects readable/administered by the current user are considered.",
+        "operationId":"search_taxonomy_recast",
+        "parameters":[
+          {
+            "description":"Project ids to check, separated by ,. If not given, all projects readable/administered by the current user are considered.",
+            "required":false,
+            "schema":{
+              "title":"Project Ids",
+              "type":"string",
+              "description":"Project ids to check, separated by ,. If not given, all projects readable/administered by the current user are considered."
+            },
+            "example":"1,2,3",
+            "name":"project_ids",
+            "in":"query"
+          },
+          {
+            "description":"One of RecastOperation enum value",
+            "required":true,
+            "schema":{
+              "title":"Operation name",
+              "allOf":[
+                {
+                  "$ref":"#/components/schemas/RecastOperation"
+                }
+              ],
+              "description":"One of RecastOperation enum value"
+            },
+            "example":"project_import",
+            "name":"operation",
+            "in":"query"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "title":"Response Search Taxonomy Recast Taxo Recast Search Get",
+                  "type":"array",
+                  "items":{
+                    "$ref":"#/components/schemas/TaxoRecastSearchRsp"
+                  }
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
     "/taxo_worms":{
       "get":{
         "tags":[
@@ -11598,6 +11669,70 @@
         },
         "additionalProperties":false,
         "description":"In various contexts, a taxo recast (from taxon -> to taxon) setting."
+      },
+      "TaxoRecastSearchRsp":{
+        "title":"TaxoRecastSearchRsp",
+        "required":[
+          "recast_id",
+          "operation",
+          "transforms"
+        ],
+        "type":"object",
+        "properties":{
+          "recast_id":{
+            "title":"Recast Id",
+            "type":"integer",
+            "description":"The taxo_recast record id.",
+            "example":42
+          },
+          "collection_id":{
+            "title":"Collection Id",
+            "type":"integer",
+            "description":"Set if the recast applies to a whole collection."
+          },
+          "project_id":{
+            "title":"Project Id",
+            "type":"integer",
+            "description":"Set if the recast applies to a single project.",
+            "example":3
+          },
+          "project_title":{
+            "title":"Project title",
+            "type":"string",
+            "description":"The title of the project designated by project_id.",
+            "example":"My Project"
+          },
+          "operation":{
+            "title":"Recast operation",
+            "type":"string",
+            "description":"Recast operation name.",
+            "example":"project_import"
+          },
+          "transforms":{
+            "title":"Categories mapping",
+            "type":"object",
+            "additionalProperties":{
+              "type":"integer"
+            },
+            "description":"Mapping from seen taxon (key) to output replacement one (value).",
+            "example":{
+              "456":956,
+              "2456":213
+            }
+          },
+          "documentation":{
+            "title":"Mapping documentation",
+            "type":"object",
+            "additionalProperties":{
+              "type":"string"
+            },
+            "description":"To keep memory of the reasons for the above mapping.",
+            "example":{
+              "456":"Up to species"
+            }
+          }
+        },
+        "description":"A taxo_recast record, enriched with the project title."
       },
       "TaxonCentral":{
         "title":"TaxonCentral",

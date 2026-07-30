@@ -15,12 +15,14 @@ from API_models.taxonomy import (
     TaxaSearchRsp,
     TaxonomyRecastReq,
     TaxoRecastRsp,
+    TaxoRecastSearchRsp,
 )
 from API_operations.helpers.Service import Service
 from BO.Classification import ClassifIDT, ClassifIDListT
 from BO.Collection import CollectionIDT
-from BO.Project import ProjectBOSet
+from BO.Project import ProjectBO, ProjectBOSet
 from BO.ReClassifyLog import ReClassificationBO
+from BO.Rights import RightsBO
 from BO.TaxoRecast import TaxoRecastBO
 from BO.Taxonomy import TaxonomyBO, TaxonBO, TaxonBOSet, WoRMSBO
 from BO.User import UserBO
@@ -28,7 +30,7 @@ from BO.WoRMSification import WoRMSifier
 from DB.Project import ProjectTaxoStat, Project, ProjectIDT
 from DB.TaxoRecast import TaxoRecast, RecastOperation
 from DB.Taxonomy import Taxonomy
-from DB.User import UserIDT
+from DB.User import User, UserIDT
 from helpers.DynamicLogs import get_logger
 
 logger = get_logger(__name__)
@@ -239,6 +241,45 @@ class TaxonomyService(Service):
         )
 
         return ret
+
+    def search_taxonomy_recast(
+        self,
+        current_user_id: UserIDT,
+        project_ids: Optional[List[ProjectIDT]],
+        operation: RecastOperation,
+    ) -> List[TaxoRecastSearchRsp]:
+        """Among project_ids, return the existing taxonomy recast records, with project
+        title, for the given operation. If project_ids is not given, consider all the
+        projects readable/administered by the current user."""
+        assert operation in RecastOperation.__members__, HTTP_422_UNPROCESSABLE_ENTITY
+        if project_ids is None:
+            current_user: User = RightsBO.get_user_throw(
+                self.ro_session, current_user_id
+            )
+            project_ids = ProjectBO.projects_for_user(self.ro_session, current_user)
+        rows = TaxoRecastBO.search_recast(
+            self.ro_session, current_user_id, project_ids, operation
+        )
+        return [
+            TaxoRecastSearchRsp(
+                recast_id=recast.recast_id,
+                collection_id=recast.collection_id,
+                project_id=recast.project_id,
+                project_title=title,
+                operation=recast.operation,
+                transforms=self._as_dict(recast.transforms),
+                documentation=self._as_dict(recast.documentation),
+            )
+            for recast, title in rows
+        ]
+
+    @staticmethod
+    def _as_dict(jsonb_value: Union[str, dict, None]) -> Optional[dict]:
+        """The JSONB columns of taxo_recast can hold either a native object or,
+        for historical reasons, a JSON-encoded string. Normalize to a dict."""
+        if isinstance(jsonb_value, str):
+            return json.loads(jsonb_value)
+        return jsonb_value
 
     def most_used_non_advised(
         self, _current_user_id: Optional[UserIDT], taxon_ids: ClassifIDListT

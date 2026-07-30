@@ -101,7 +101,11 @@ from API_models.taxonomy import (
     TaxonCentral,
     AddWormsTaxonModel,
 )
-from API_models.taxonomy import TaxoRecastRsp, TaxonomyRecastReq
+from API_models.taxonomy import (
+    TaxoRecastRsp,
+    TaxoRecastSearchRsp,
+    TaxonomyRecastReq,
+)
 from API_operations.BigFiles import create_big_files_router
 from API_operations.CRUD.Collections import CollectionsService
 from API_operations.CRUD.Constants import ConstantsService
@@ -194,7 +198,7 @@ api_logger = get_api_logger()
 
 app = FastAPI(
     title="EcoTaxa",
-    version="0.0.47",
+    version="0.0.48",
     # openapi URL as seen from navigator, this is included when /docs is required
     # which serves swagger-ui JS app. Stay in /api sub-path.
     openapi_url="/api/openapi.json",
@@ -3539,6 +3543,44 @@ def get_taxonomy_recast(
                 target_id=target_id,
                 operation=operation,
                 is_collection=is_collection,
+            )
+    return ret
+
+
+@app.get(
+    "/taxo_recast/search",
+    operation_id="search_taxonomy_recast",
+    tags=["Taxonomy Tree"],
+    response_model=List[TaxoRecastSearchRsp],
+)
+def search_taxonomy_recast(
+    project_ids: Optional[str] = Query(
+        default=None,
+        description="Project ids to check, separated by ,. If not given, all"
+        " projects readable/administered by the current user are considered.",
+        example="1,2,3",
+    ),
+    operation: RecastOperation = Query(
+        ...,
+        title="Operation name",
+        description="One of RecastOperation enum value",
+        example="project_import",
+    ),
+    current_user: int = Depends(get_current_user),
+) -> List[TaxoRecastSearchRsp]:
+    """
+    **Among given project_ids, return the existing taxonomy recast records for the
+    given operation**, each enriched with its project title. Note: only
+    administered/readable projects are considered. If project_ids is not given, all
+    projects readable/administered by the current user are considered.
+    """
+    ids = _split_num_list(project_ids) if project_ids else None
+    with TaxonomyService() as sce:
+        with RightsThrower():
+            ret = sce.search_taxonomy_recast(
+                current_user_id=current_user,
+                project_ids=ids,
+                operation=operation,
             )
     return ret
 

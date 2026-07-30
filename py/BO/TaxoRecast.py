@@ -5,7 +5,8 @@
 #
 # Global preferences for a user
 #
-from typing import Union, Optional
+
+from typing import List, Tuple, Union, Optional
 
 from sqlalchemy.orm import Session
 
@@ -14,7 +15,7 @@ from BO.ProjectSet import PermissionConsistentProjectSet
 from BO.Rights import NOT_FOUND, Action
 from BO.Taxonomy import TaxonBO, WoRMSBO
 from DB.Collection import CollectionProject
-from DB.Project import ProjectIDT
+from DB.Project import Project, ProjectIDT
 from DB.TaxoRecast import TaxoRecast, RecastOperation
 from DB.User import UserIDT
 from helpers.DynamicLogs import get_logger
@@ -68,6 +69,29 @@ class TaxoRecastBO(object):
         logger.info("Execute query_recast SQL : %s", str(qry))
         logger.info("Params :target_id  %s " + str(target_id), operation.value)
         return qry
+
+    @staticmethod
+    def search_recast(
+        session: Session,
+        current_user_id: UserIDT,
+        project_ids: List[ProjectIDT],
+        operation: RecastOperation,
+    ) -> List[Tuple[TaxoRecast, str]]:
+        """Among project_ids, return the existing recast records for operation, each
+        paired with its project title.
+        Single bulk query, instead of one get_taxonomy_recast() call per project."""
+        if len(project_ids) == 0:
+            return []
+        PermissionConsistentProjectSet(session, project_ids).can_be_administered_by(
+            current_user_id, update_preference=False, action=Action.READ
+        )
+        qry = (
+            session.query(TaxoRecast, Project.title)
+            .join(Project, Project.projid == TaxoRecast.project_id)
+            .filter(TaxoRecast.operation == operation.value)
+            .filter(TaxoRecast.project_id.in_(project_ids))
+        )
+        return qry.all()
 
     @staticmethod
     def valid_remap(val) -> Optional[str]:
