@@ -276,7 +276,7 @@ class TaxonomyService(Service):
         ]
 
     @staticmethod
-    def _as_dict(jsonb_value: Union[str, dict, None]) -> Optional[dict]:
+    def _as_dict(jsonb_value: Any) -> Optional[dict]:
         """The JSONB columns of taxo_recast can hold either a native object or,
         for historical reasons, a JSON-encoded string. Normalize to a dict."""
         if isinstance(jsonb_value, str):
