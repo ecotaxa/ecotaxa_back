@@ -73,18 +73,17 @@ class TaxoRecastBO(object):
     @staticmethod
     def search_recast(
         session: Session,
-        current_user_id: UserIDT,
         project_ids: List[ProjectIDT],
         operation: RecastOperation,
     ) -> List[Tuple[TaxoRecast, str]]:
         """Among project_ids, return the existing recast records for operation, each
         paired with its project title.
-        Single bulk query, instead of one get_taxonomy_recast() call per project."""
+        Single bulk query, instead of one get_taxonomy_recast() call per project.
+        project_ids is expected to already be restricted, in bulk, to what the
+        current user can access (see ProjectBO.projects_for_user) - no permission
+        check is redone here, to avoid one query per project."""
         if len(project_ids) == 0:
             return []
-        PermissionConsistentProjectSet(session, project_ids).can_be_administered_by(
-            current_user_id, update_preference=False, action=Action.READ
-        )
         qry = (
             session.query(TaxoRecast, Project.title)
             .join(Project, Project.projid == TaxoRecast.project_id)

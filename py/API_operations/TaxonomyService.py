@@ -250,15 +250,17 @@ class TaxonomyService(Service):
     ) -> List[TaxoRecastSearchRsp]:
         """Among project_ids, return the existing taxonomy recast records, with project
         title, for the given operation. If project_ids is not given, consider all the
-        projects readable/administered by the current user."""
+        projects readable/administered by the current user.
+        Permission check is done once, in bulk, by ProjectBO.projects_for_user (single
+        SQL query), instead of one permission check per project."""
         assert operation in RecastOperation.__members__, HTTP_422_UNPROCESSABLE_ENTITY
-        if project_ids is None:
-            current_user: User = RightsBO.get_user_throw(
-                self.ro_session, current_user_id
-            )
-            project_ids = ProjectBO.projects_for_user(self.ro_session, current_user)
+        current_user: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
+        id_filter = ",".join(str(prj_id) for prj_id in project_ids) if project_ids else ""
+        allowed_project_ids = ProjectBO.projects_for_user(
+            self.ro_session, current_user, project_ids=id_filter
+        )
         rows = TaxoRecastBO.search_recast(
-            self.ro_session, current_user_id, project_ids, operation
+            self.ro_session, allowed_project_ids, operation
         )
         return [
             TaxoRecastSearchRsp(
