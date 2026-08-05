@@ -95,7 +95,7 @@ class TaxoRecastBO(object):
     @staticmethod
     def valid_remap(val) -> Optional[str]:
         v = {k: str(vv) for k, vv in val.items() if str(vv) != k}
-        vals_but_0 = set(v.values()).difference({0})
+        vals_but_0 = set(v.values()).difference({"0"})
         if not set(v.keys()).isdisjoint(vals_but_0):
             vals = list(set(v.keys()).intersection(vals_but_0))
             return (
