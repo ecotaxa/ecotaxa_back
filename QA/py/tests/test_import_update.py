@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import shutil
 import time
 from types import SimpleNamespace
 
@@ -12,8 +13,9 @@ from tests.api_wrappers import (
     api_file_import,
     api_get_log_file,
 )
+from tests.consts import SHARED_DIR
 from tests.credentials import ADMIN_USER_ID, ADMIN_AUTH
-from tests.jobs import check_job_ok, api_reply_to_waiting_job
+from tests.jobs import check_job_ok, check_job_errors, api_reply_to_waiting_job
 from tests.test_import import (
     create_project,
     UPDATE_DIR,
@@ -25,6 +27,15 @@ from tests.test_import import (
     do_import,
     IMPORT_TOT_VOL_UPDATE,
     IMPORT_TOT_VOL_BAD_UPDATE,
+)
+
+# A TSV-only source (no enclosing directory): imports as a "lone file"
+LONE_OK_TSV = (
+    SHARED_DIR / "import_update" / "m106_mn01_n1_sml" / "ecotaxa_m106_mn01_n1_sml.tsv"
+)
+# Same, but referencing images which won't sit next to it -> validation fails
+LONE_KO_TSV = (
+    SHARED_DIR / "import_test" / "m106_mn01_n1_sml" / "ecotaxa_m106_mn01_n1_sml.tsv"
 )
 
 
@@ -210,3 +221,48 @@ def do_import_update(fastapi, prj_id, caplog, mode, source, expected_errors=Fals
     if not expected_errors:
         assert all(":ERROR" not in line for line in log)
     return log
+
+
+def test_import_lone_tsv_ok(fastapi, caplog):
+    """A single TSV file (not a directory) can be imported: it is moved into a
+    dedicated temporary directory for the run, which is dropped once the job is OK.
+    """
+    prj_id = create_project(ADMIN_USER_ID, "Test import lone TSV OK")
+    # Need existing objects to update
+    import_plain(fastapi, prj_id)
+
+    # A throwaway copy, sitting alone (no enclosing directory) in the common folder
+    lone_name = "ecotaxa_lone_ok_%d.tsv" % prj_id
+    lone_abs = SHARED_DIR / lone_name
+    shutil.copyfile(LONE_OK_TSV, lone_abs)
+    try:
+        log = do_import_update(fastapi, prj_id, caplog, "Yes", lone_name)
+        # The lone file was relocated then removed along with its temp directory
+        assert not lone_abs.exists()
+        assert any("Lone file import" in line for line in log)
+    finally:
+        if lone_abs.exists():
+            lone_abs.unlink()
+
+
+def test_import_lone_tsv_ko_restores_file(fastapi):
+    """When the job fails, the lone input file is put back where it was."""
+    prj_id = create_project(ADMIN_USER_ID, "Test import lone TSV KO")
+
+    lone_name = "ecotaxa_lone_ko_%d.tsv" % prj_id
+    lone_abs = SHARED_DIR / lone_name
+    shutil.copyfile(LONE_KO_TSV, lone_abs)
+    original_bytes = lone_abs.read_bytes()
+    try:
+        # Plain mode: the TSV references images which are not next to it -> errors
+        params = dict(source_path=lone_name)
+        rsp = api_file_import(fastapi, prj_id, params, ADMIN_AUTH)
+        job = api_wait_for_stable_job(fastapi, rsp.json()["job_id"])
+        errors = check_job_errors(job)
+        assert any("Missing Image" in an_err for an_err in errors)
+        # The file has been moved back to its initial location, untouched
+        assert lone_abs.exists()
+        assert lone_abs.read_bytes() == original_bytes
+    finally:
+        if lone_abs.exists():
+            lone_abs.unlink()
