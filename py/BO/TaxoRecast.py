@@ -90,7 +90,7 @@ class TaxoRecastBO(object):
             .filter(TaxoRecast.operation == operation.value)
             .filter(TaxoRecast.project_id.in_(project_ids))
         )
-        return qry.all()
+        return qry.tuples().all()
 
     @staticmethod
     def valid_remap(val) -> Optional[str]:

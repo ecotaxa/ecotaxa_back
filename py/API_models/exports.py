@@ -103,9 +103,6 @@ class ExportReq(ProjectIdReq):
     Export request.
     """
 
-    project_id: int = Field(
-        title="Project Id", description="The project to export.", examples=[1]
-    )
     exp_type: ExportTypeEnum = Field(
         title="Export type",
         description="The export type.",
@@ -178,7 +175,7 @@ class ExportReq(ProjectIdReq):
     quantity: List[Union[ExportTypeEnum, SummaryExportQuantitiesOptionsEnum]] = Field(
         title="Quantity",
         description="The quantity to compute. Abundance is always possible.",
-        example=[SummaryExportQuantitiesOptionsEnum.abundance],
+        examples=[[SummaryExportQuantitiesOptionsEnum.abundance]],
         default=[SummaryExportQuantitiesOptionsEnum.abundance],
     )
     sum_subtotal: SummaryExportGroupingEnum = Field(
@@ -188,14 +185,6 @@ class ExportReq(ProjectIdReq):
         "Per A(cquisition) or S(ample) or <Empty>(just taxa).",
         examples=["A"],
         default=SummaryExportGroupingEnum.just_by_taxon,
-    )
-    pre_mapping: Dict[int, Optional[int]] = Field(
-        title="Categories mapping",
-        description="For 'ABO', 'CNC' and 'BIV' types types, mapping "
-        "from present taxon (key) to output replacement one (value)."
-        " Use a null replacement to _discard_ the present taxon.",
-        examples=[{456: 956, 2456: 213}],
-        default={},
     )
     formulae: Dict[str, str] = Field(
         title="Computation formulas",
@@ -227,9 +216,6 @@ class GeneralExportReq(ProjectIdReq):
     General purpose export request, produce a zip in a job with many options.
     """
 
-    project_id: int = Field(
-        title="Project Id", description="The project to export.", examples=[1]
-    )
     split_by: ExportSplitOptionsEnum = Field(
         title="Split by",
         description="If not none, separate (in ZIP sub-directories) output per given field.",
@@ -260,13 +246,6 @@ class GeneralExportReq(ProjectIdReq):
         default=False,
         examples=[False],
     )
-    # taxo_mapping: Dict[int, Optional[int]] = Field(
-    #     title="Categories mapping",
-    #     description="Mapping from present taxon (key) to output replacement one (value)."
-    #     " Use a null replacement to _discard_ the present taxon.",
-    #     examples=[{456: 956, 2456: 213, 734: None},
-    #     default={},
-    # )
     out_to_ftp: bool = Field(
         title="Out to ftp",
         description="Copy result file to FTP area (if configured). Original file is still available.",
@@ -284,9 +263,6 @@ class SummaryExportReq(ProjectIdReq):
     Summary export request.
     """
 
-    project_id: int = Field(
-        title="Project Id", description="The project to export.", examples=[1]
-    )
     quantity: Union[
         Union[ExportTypeEnum, SummaryExportQuantitiesOptionsEnum],
         List[Union[ExportTypeEnum, SummaryExportQuantitiesOptionsEnum]],
@@ -301,14 +277,6 @@ class SummaryExportReq(ProjectIdReq):
         description="Computations aggregation level.",
         examples=[SummaryExportSumOptionsEnum.acquisition],
         default=SummaryExportSumOptionsEnum.sample,
-    )
-    taxo_mapping: Dict[int, Optional[int]] = Field(
-        title="Categories mapping",
-        description="Mapping "
-        "from present taxon (key) to output replacement one (value)."
-        " Use a 0 replacement to _discard_ the present taxon.",
-        examples=[{456: 956, 2456: 213, 7153: 0}],
-        default={},
     )
     formulae: Dict[str, str] = Field(
         title="Computation formulas",
@@ -332,14 +300,6 @@ class SummaryExportReq(ProjectIdReq):
         examples=[False],
     )
 
-    @field_validator("taxo_mapping")
-    @classmethod
-    def ensure_sane_remap(cls, v):
-        assert set(v.keys()).isdisjoint(
-            set(v.values())
-        ), "inconsistent pre_mapping, can't do remap chains or loops"
-        return v
-
     model_config = ConfigDict(
         json_schema_extra={"title": "Summary Export request Model"}
     )
@@ -350,9 +310,6 @@ class BackupExportReq(ProjectIdReq):
     Backup export request.
     """
 
-    project_id: int = Field(
-        title="Project Id", description="The project to export.", examples=[1]
-    )
     out_to_ftp: bool = Field(
         title="Out to ftp",
         description="Copy result file to FTP area. Original file is still available.",
@@ -405,29 +362,6 @@ class DarwinCoreExportReq(BaseModel):
         examples=[["ABO"]],
         default=[],
     )
-    # TODO: Is same as TaxonomyRecast below, should get type TaxoRemappingT (or define it here)
-    computations_pre_mapping: Dict[int, int] = Field(
-        title="Computation mapping",
-        description="Mapping from present taxon (key) to output replacement one (value), during computations."
-        " Use a 0 replacement to _discard_ the objects with present taxon."
-        " Note: These are EcoTaxa categories, WoRMS mapping happens after, whatever.",
-        examples=[{456: 956, 2456: 213, 93672: 0}],
-        default={},
-    )
-    formulae: Dict[str, str] = Field(
-        title="Computation formulas",
-        description="Transitory: How to get values from DB free columns. "
-        "Python syntax, prefixes are 'sam', 'ssm' and 'obj'. "
-        "Variables used in computations are 'total_water_volume', 'subsample_coef' and 'individual_volume'",
-        examples=[
-            {
-                "subsample_coef": "1/ssm.sub_part",
-                "total_water_volume": "sam.tot_vol/1000",
-                "individual_volume": "4.0/3.0*math.pi*(math.sqrt(obj.area/math.pi)*ssm.pixel_size)**3",
-            }
-        ],
-        default={},
-    )
     extra_xml: List[str] = Field(
         title="Extra XML",
         description="XML blocks which will be output, reformatted, inside the <dataset> tag of produced EML. "
@@ -475,31 +409,3 @@ class ExportRsp(BaseModel):
         examples=[12376],
         default=0,
     )
-
-
-class TaxonomyRecast(BaseModel):
-    """
-    In various contexts, a taxo recast (from taxon -> to taxon) setting.
-    """
-
-    from_to: Dict[int, Optional[int]] = Field(
-        title="Categories mapping",
-        description="Mapping from seen taxon (key) to output replacement one (value)."
-        " Use a null replacement to _discard_ the present taxon. Note: keys are strings.",
-        examples=[{"456": 956, "2456": 213, "9134": None}],
-    )
-
-    doc: Optional[Dict[int, str]] = Field(
-        title="Mapping documentation",
-        description="To keep memory of the reasons for the above mapping. Note: keys are strings.",
-        examples=[
-            {
-                "456": "Up to species",
-                "2456": "Up to nearest non-morpho",
-                "9134": "Detritus",
-            }
-        ],
-        default=None,
-    )
-
-    model_config = ConfigDict(extra="forbid")

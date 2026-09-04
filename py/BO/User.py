@@ -342,7 +342,7 @@ class ContactUserBO:
     id: UserIDT
     email: str
     name: str
-    orcid: str
+    orcid: Optional[str]
     organisation: str
 
 

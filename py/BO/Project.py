@@ -46,7 +46,6 @@ from BO.User import (
     MinimalUserBOListT,
     UserActivityListT,
 )
-from DB.Instrument import Instrument
 
 from DB.User import UserIDT, UserIDListT
 from DB.Acquisition import Acquisition
@@ -96,7 +95,7 @@ from helpers.DynamicLogs import get_logger
 from helpers.FieldListType import FieldListType
 from helpers.Timer import CodeTimer
 from helpers.pydantic import Field, BaseModel
-from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
+from starlette.status import HTTP_422_UNPROCESSABLE_CONTENT
 
 if TYPE_CHECKING:
     # Avoid a circular import: API_models.crud itself imports from BO.Project.
@@ -494,16 +493,6 @@ class ProjectBO(object):
                     logger.warning("Field %s not in ProjectBO attributes", field)
         return list(set(keepattr))
 
-    @staticmethod
-    def get_one(session: Session, prj_id: ProjectIDT) -> Optional[ProjectBO]:
-        """
-        Get an enriched single BO per its id
-        """
-        prj = session.get(Project, prj_id)
-        if prj is not None:
-            return ProjectBO(prj).enrich()
-        return None
-
     def get_preset(self) -> ClassifIDListT:
         """
         Return the list of preset classification IDs.
@@ -607,7 +596,7 @@ class ProjectBO(object):
         proj_id = self._project.projid
         # strip title
         title = title.strip()
-        assert instrument is not None, "A valid Instrument is needed."
+        assert instrument is not None, "Project update: A valid Instrument is needed."
         # Field reflexes
         if cnn_network_id != self._project.cnn_network_id:
             # Delete CNN features, which depend on the CNN network
@@ -621,7 +610,7 @@ class ProjectBO(object):
         self._project.popoverfieldlist = popoverfieldlist
         self._project.cnn_network_id = cnn_network_id
         self._project.comments = comments
-        self._project.access = access
+        self._project.access = access if access is not None else AccessLevelEnum.OPEN
         self._project.formulae = json.loads(formulae) if formulae is not None else None
         # Inverse for extracted values
         self._project.initclassiflist = ",".join(
@@ -676,7 +665,7 @@ class ProjectBO(object):
             if modelfield == "instrument":
                 assert (
                     projectreq.instrument is not None
-                ), "A valid Instrument is needed."
+                ), "Project patch: A valid Instrument is needed."
                 self._project.instrument_id = projectreq.instrument.strip()
             elif modelfield == "title":
                 assert (
@@ -1047,6 +1036,7 @@ class ProjectBO(object):
         if window_size != 0:
             sql += """limit :window_size """
             sql_params["window_size"] = window_size
+
         with CodeTimer("Projects.projects_for_user query (ids):", logger):
             res: Result = session.execute(text(sql), sql_params)
             # single-element tuple :( DBAPI
@@ -1461,7 +1451,7 @@ class ProjectBOSet(object):
         if "instrument" in projectfields:
             projectfields.remove("instrument")
             projectfields.extend(["instrument_id"])
-        selectfields: List[str] = [getattr(Project, fld) for fld in projectfields]
+        selectfields = [getattr(Project, fld) for fld in projectfields]
         options = []
         if selectfields:
             options.append(load_only(*selectfields))
@@ -1505,6 +1495,17 @@ class ProjectBOSet(object):
 
     def as_list(self) -> List[ProjectBO]:
         return self.projects
+
+    @staticmethod
+    def get_one(session: Session, prj_ids: ProjectIDT) -> Optional[ProjectBO]:
+        """
+        Get a single BO per its id
+        """
+        mini_set = ProjectBOSet(session, [prj_ids])
+        if len(mini_set.projects) > 0:
+            return mini_set.projects[0]
+        else:
+            return None
 
 
 class CollectionProjectBOSet(ProjectBOSet):
@@ -1557,7 +1558,7 @@ class CollectionProjectBOSet(ProjectBOSet):
         stats = ProjectBO.read_user_stats(session, project_ids)
         ids: UserIDListT = []
         for stat in stats:
-            ids = ids + [annotator.id for annotator in stat.annotators]
+            ids += [annotator.id for annotator in stat.annotators]
         qry = session.query(User).filter(User.id == any_(ids))
         if status is not None:
             qry = qry.filter(User.status == status)

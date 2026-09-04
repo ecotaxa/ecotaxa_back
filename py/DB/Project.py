@@ -83,7 +83,7 @@ class Project(Model):
     # project specific formulae used to calculate concentration and biovolume ( used in project summary export, and collection DarwinCore export)
     formulae: Mapped[str | None] = mapped_column(JSONB)
     # Temporary: legacy string formulae, kept as a backup after the jsonb migration.
-    formulae_old = Column(VARCHAR)
+    formulae_old: Mapped[str | None] = mapped_column(VARCHAR)
     # Associated taxonomy statistics. Commented out to avoid that the ORM loads the whole list, which can be big.
     # taxo_stats = relationship("ProjectTaxoStat")
 

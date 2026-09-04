@@ -191,8 +191,6 @@ from helpers.fastApiUtils import (
 from helpers.login import LoginService
 from helpers.pydantic import sort_and_prune, BaseModel
 
-# from sqlalchemy.sql.expression import null
-
 # from fastapi.middleware.gzip import GZipMiddleware
 
 logger = get_logger(__name__)
@@ -2037,7 +2035,7 @@ def update_project(
     "/projects/{project_id}",
     operation_id="patch_project",
     tags=["projects"],
-    responses={200: {"content": {"application/json": {"example": null}}}},
+    responses={200: {"content": {"application/json": {"example": None}}}},
 )
 def patch_project(
     project: ProjectReq = Body(...),

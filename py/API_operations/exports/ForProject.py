@@ -264,9 +264,6 @@ class ProjectExport(JobServiceBase):
         out_file_name = None
         if req.out_to_ftp:
             progress_before_copy = 95
-        # Fetch the source project
-        src_project = self.ro_session.get(Project, req.project_id)
-        assert src_project is not None
         # Force some implied (in UI) options.
         if req.only_annotations:
             req.exp_type = ExportTypeEnum.general_tsv  # No need for a subdir in ZIP
@@ -1011,8 +1008,7 @@ class ProjectExport(JobServiceBase):
             .set_grouping(ResultGrouping.without_taxo(self._grouping_from_req(True)))
         )
         out_id_cols = [
-            self.SCI_SUMMARY_ID_ALIASES[a_col]
-            for a_col in self._id_columns_from_req()
+            self.SCI_SUMMARY_ID_ALIASES[a_col] for a_col in self._id_columns_from_req()
         ]
         all_sampling_units: Set[Tuple] = set()
         # Tuples here have either one, two or three values
@@ -1146,7 +1142,9 @@ class ProjectExport(JobServiceBase):
         # Set common aliases, not all of them is always used
         aug_qry.set_aliases(self.SCI_SUMMARY_ID_ALIASES)
         aug_qry.add_selects(id_cols)
-        aug_qry.add_selects(["txo.display_name", self.ANNOTATION_CATEGORY_HIERARCHY_SQL])
+        aug_qry.add_selects(
+            ["txo.display_name", self.ANNOTATION_CATEGORY_HIERARCHY_SQL]
+        )
         return aug_qry
 
     def _project_formulae(self, project_id: ProjectIDT) -> Dict[str, str]:
@@ -1224,36 +1222,6 @@ class ProjectExport(JobServiceBase):
         # Ensure we work on validated objects only.
         # Not anymore, should user need to narrow the export the filters are available.
         # self.filters["statusfilter"] = "V"
-///
-        # Prepare a where clause and parameters from filter
-        object_set: DescribedObjectBOSet = DescribedObjectBOSet(
-            self.ro_session, project_ids, user_id, self.filters
-        )
-        # The specialized SQL builder operates from the object set
-        aug_qry = ObjectSetQueryPlus(object_set)
-        aug_qry.remap_categories(self.pre_mapping)
-        # Formulae default from the project but are overriden by the query
-        formulae: Dict[str, str] = {}
-        for project_id in project_ids:
-            variables = self.ro_session.query(ProjectVariables).get(project_id)
-            assert variables is not None
-            if variables is not None:
-                formulae.update(variables.to_dict())
-        formulae.update(req.formulae)
-        aug_qry.set_formulae(formulae)
-        # Set common aliases, not all of them is always used
-        aug_qry.set_aliases(
-            {
-                "sam.orig_id": "sampleid",
-                "acq.orig_id": "acquisid",
-                "txo.display_name": "taxonid",
-                "obh.classif_qual": "status",
-            }
-        )
-        id_cols = self._id_columns_from_req()
-        aug_qry.add_selects(id_cols)
-        aug_qry.add_selects(["txo.display_name"])
-/////
         if req.sum_subtotal == SummaryExportGroupingEnum.by_project:
             assert False, "No collections yet to get multiple projects from"
 

@@ -79,7 +79,7 @@ class TaxonomyService(Service):
         # Get preset list, to favor in result order
         preset = set()
         if prj_id is not None:
-            the_prj = ProjectBO.get_one(self.ro_session, prj_id)
+            the_prj = ProjectBOSet.get_one(self.ro_session, prj_id)
             if the_prj is not None:
                 include_ids = the_prj.get_preset()
                 preset = set(include_ids)
@@ -253,7 +253,7 @@ class TaxonomyService(Service):
         projects readable/administered by the current user.
         Permission check is done once, in bulk, by ProjectBO.projects_for_user (single
         SQL query), instead of one permission check per project."""
-        assert operation in RecastOperation.__members__, HTTP_422_UNPROCESSABLE_ENTITY
+        assert operation in RecastOperation.__members__, HTTP_422_UNPROCESSABLE_CONTENT
         current_user: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
         id_filter = (
             ",".join(str(prj_id) for prj_id in project_ids) if project_ids else ""

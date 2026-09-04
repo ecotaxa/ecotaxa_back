@@ -11,7 +11,7 @@ from BO.Collection import CollectionIDT
 from BO.ColumnUpdate import ColUpdate
 from BO.DataLicense import AccessLevelEnum, LicenseEnum
 from BO.Job import DBJobStateEnum
-from BO.Project import ProjectColumns, ProjectUserStats
+from BO.Project import ProjectBO, ProjectColumns, ProjectUserStats
 from BO.ProjectSet import ProjectSetColumnStats
 from BO.Sample import SampleTaxoStats
 from DB.Acquisition import Acquisition
@@ -22,7 +22,13 @@ from DB.Process import Process
 from DB.Project import Project, ProjectIDListT, ProjectIDT
 from DB.Sample import Sample, SampleIDT
 from DB.User import Guest, Organization, OrganizationIDT, User, UserIDT
-from helpers.pydantic import BaseModel, ConfigDict, DescriptiveModel, Field
+from helpers.pydantic import (
+    BaseModel,
+    ConfigDict,
+    DescriptiveModel,
+    Field,
+    field_validator,
+)
 from .helpers.DBtoModel import combine_models
 from .helpers.DataclassToModel import dataclass_to_model_with_suffix
 
@@ -413,18 +419,6 @@ class _AddedToProject(BaseModel):
         default={},
         examples=[{"nb_images": "t01"}],
     )
-    bodc_variables: Dict[str, Optional[str]] = Field(
-        title="Expressions for computing standard BODC quantities.",
-        description="BODC quantities from columns. Only the 3 keys listed in example are valid.",
-        default={},
-        examples=[
-            {
-                "subsample_coef": "1/ssm.sub_part",
-                "total_water_volume": "sam.tot_vol/1000",
-                "individual_volume": "4.0/3.0*math.pi*(math.sqrt(obj.area/math.pi)*ssm.pixel_size)**3",
-            }
-        ],
-    )
     init_classif_list: List[int] = Field(
         title="Init classification list",
         description="Favorite taxa used in classification.",
@@ -483,13 +477,10 @@ class ProjectModel(_AddedToProject, _ProjectModelFromDB):
         title="Formulae",
         description="Concentration formulae.",
         default=FORMULAE,
-        example="",
+        examples=[""],
     )
 
-    class Config:
-        orm_mode = True
-        exclude_unset = True
-        allow_population_by_field_name = True
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 
 class ProjectReq(BaseModel):
@@ -498,18 +489,19 @@ class ProjectReq(BaseModel):
         default=None,
         title="Title",
         description="The project title.",
-        example="MyProject",
+        examples=["MyProject"],
     )
     instrument: Optional[str] = Field(
+        default=None,
         title="Instrument",
         description="This project's instrument code.",
-        example="Zooscan",
+        examples=["Zooscan"],
     )
     status: Optional[str] = Field(
         default=None,
         title="Status",
         description="The project status.",
-        example="Annotate",
+        examples=["Annotate"],
     )
     access: AccessLevelEnum = Field(
         title="Access level",
@@ -521,13 +513,15 @@ class ProjectReq(BaseModel):
             ]
         ),
         default=AccessLevelEnum.PUBLIC,
-        example=AccessLevelEnum.PUBLIC,
+        examples=[AccessLevelEnum.PUBLIC],
     )
     classiffieldlist: Optional[str] = Field(
         default=None,
         title="Classification field list",
         description="",
-        example="depth_min=depth_min\r\ndepth_max=depth_max\r\narea=area [pixel]\r\nmean=mean [0-255]\r\nfractal=fractal\r\nmajor=major [pixel]\r\nsymetrieh=symetrieh\r\ncirc.=circ\r\nferet = Feret [pixel]",
+        examples=[
+            "depth_min=depth_min\r\ndepth_max=depth_max\r\narea=area [pixel]\r\nmean=mean [0-255]\r\nfractal=fractal\r\nmajor=major [pixel]\r\nsymetrieh=symetrieh\r\ncirc.=circ\r\nferet = Feret [pixel]"
+        ],
     )
     initclassiflist: Optional[str] = Field(
         default=None,
@@ -536,19 +530,22 @@ class ProjectReq(BaseModel):
     )
 
     comments: Optional[str] = Field(
-        default=None, title="Comments", description="The project comments.", example=""
+        default=None,
+        title="Comments",
+        description="The project comments.",
+        examples=[""],
     )
     cnn_network_id: Optional[str] = Field(
         default=None,
         title="Cnn network id",
         description="",
-        example="SCN_zooscan_group1",
+        examples=["SCN_zooscan_group1"],
     )
     formulae: Optional[str] = Field(
         title="Formulae",
         description="Concentration formulae.",
         default=FORMULAE,
-        example="",
+        examples=[""],
     )
     managers: List[MinUserModel] = Field(
         title="Managers", description="Managers of this project.", default=[]
@@ -564,11 +561,13 @@ class ProjectReq(BaseModel):
         default=[],
     )
     contact: Optional[MinUserModel] = Field(
+        default=None,
         title="Contact",
         description="The contact person is a manager who serves as the contact person for other users and EcoTaxa's managers.",
     )
 
-    @validator("formulae")
+    @field_validator("formulae")
+    @classmethod
     def formulae_validator(cls, v):
         v = ProjectBO.formulae_validator(v)
         return v
@@ -583,30 +582,36 @@ class UpdateProjectReq(ProjectReq):
         title="Init classification list",
         description="Favorite taxa used in classification.",
         default=[],
-        example=[5, 11493, 11498, 11509],
+        examples=[[5, 11493, 11498, 11509]],
     )
     popoverfieldlist: Optional[str] = Field(
         default=None,
         title="Pop over field list",
-        example="depth_min=depth_min\r\ndepth_max=depth_max\r\narea=area [pixel]\r\nmean=mean [0-255]\r\nfractal=fractal\r\nmajor=major [pixel]\r\nsymetrieh=symetrieh\r\ncirc.=circ\r\nferet = Feret [pixel]",
+        examples=[
+            "depth_min=depth_min\r\ndepth_max=depth_max\r\narea=area [pixel]\r\nmean=mean [0-255]\r\nfractal=fractal\r\nmajor=major [pixel]\r\nsymetrieh=symetrieh\r\ncirc.=circ\r\nferet = Feret [pixel]"
+        ],
     )
 
-    @validator("title")
+    @field_validator("title")
+    @classmethod
     def title_validator(cls, v):
-        assert v is not None, AssertionError("A valid Instrument is needed.")
+        assert v is not None, AssertionError("A valid Title is needed.")
         return v
 
-    @validator("instrument")
+    @field_validator("instrument")
+    @classmethod
     def instrument_validator(cls, v):
         assert v is not None, AssertionError("A valid Instrument is needed.")
         return v
 
-    @validator("contact")
+    @field_validator("contact")
+    @classmethod
     def contact_validator(cls, v):
         assert v is not None, AssertionError("A valid Contact is needed.")
         return v
 
-    @validator("formulae")
+    @field_validator("formulae")
+    @classmethod
     def update_formulae_validator(cls, v):
         v = ProjectBO.formulae_validator(v)
         return v
