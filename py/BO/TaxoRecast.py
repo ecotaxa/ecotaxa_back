@@ -5,7 +5,8 @@
 #
 # Global preferences for a user
 #
-from typing import Union, Optional, List, cast
+
+from typing import List, Tuple, Union, Optional, List, cast
 
 from sqlalchemy.orm import Session
 
@@ -14,7 +15,7 @@ from BO.ProjectSet import PermissionConsistentProjectSet
 from BO.Rights import NOT_FOUND, Action
 from BO.Taxonomy import TaxonBO, WoRMSBO
 from DB.Collection import CollectionProject
-from DB.Project import ProjectIDT
+from DB.Project import Project, ProjectIDT
 from DB.TaxoRecast import TaxoRecast, RecastOperation
 from DB.User import UserIDT
 from helpers.DynamicLogs import get_logger
@@ -70,9 +71,31 @@ class TaxoRecastBO(object):
         return qry
 
     @staticmethod
+    def search_recast(
+        session: Session,
+        project_ids: List[ProjectIDT],
+        operation: RecastOperation,
+    ) -> List[Tuple[TaxoRecast, str]]:
+        """Among project_ids, return the existing recast records for operation, each
+        paired with its project title.
+        Single bulk query, instead of one get_taxonomy_recast() call per project.
+        project_ids is expected to already be restricted, in bulk, to what the
+        current user can access (see ProjectBO.projects_for_user) - no permission
+        check is redone here, to avoid one query per project."""
+        if len(project_ids) == 0:
+            return []
+        qry = (
+            session.query(TaxoRecast, Project.title)
+            .join(Project, Project.projid == TaxoRecast.project_id)
+            .filter(TaxoRecast.operation == operation.value)
+            .filter(TaxoRecast.project_id.in_(project_ids))
+        )
+        return qry.all()
+
+    @staticmethod
     def valid_remap(val) -> Optional[str]:
         v = {k: str(vv) for k, vv in val.items() if str(vv) != k}
-        vals_but_0 = set(v.values()).difference({0})
+        vals_but_0 = set(v.values()).difference({"0"})
         if not set(v.keys()).isdisjoint(vals_but_0):
             vals = list(set(v.keys()).intersection(vals_but_0))
             return (

@@ -27,6 +27,7 @@ from helpers.httpexception import (
 )
 
 logger = get_logger(__name__)
+BUFFER_SIZE = 1024 * 1024
 
 
 class DiskUsage(NamedTuple):
@@ -72,12 +73,12 @@ class UserFilesDirectory(object):
             base_path /= path[: -len(name)]
             self.ensure_exists(base_path)
         source_path = base_path.absolute().joinpath(name.lstrip(os.path.sep))
-        # Copy data from the stream into dest_path
+        # Copy data from the stream into source_path
         with open(source_path, "wb") as file:
-            buff = await stream.read(65536)
+            buff = await stream.read(BUFFER_SIZE)
             while len(buff) != 0:
                 file.write(buff)  # type: ignore # Mypy is unaware of async read result
-                buff = await stream.read(65536)
+                buff = await stream.read(BUFFER_SIZE)
         file_ext, compressed_path, mime_type = self._get_file_info(
             name.lstrip(os.path.sep), base_path.absolute()
         )

@@ -1,4 +1,5 @@
 import logging
+import json
 from copy import deepcopy
 from urllib.parse import quote
 
@@ -22,8 +23,6 @@ PROJECT_SETTINGS_UPDATE_URL = (
 
 
 def test_update_prj(fastapi):
-    from tests.test_project_vars import BODC_VARS_KEY
-
     prj_id, _ = do_import_uvp6(fastapi, "Test Project Updates")
     # Do like in legacy app, i.e. fetch/modify/resend
     url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
@@ -42,10 +41,10 @@ def test_update_prj(fastapi):
             "volimage": "t02",
         },
         "annotators": [],
-        BODC_VARS_KEY: {},
         "highest_right": "Manage",
         "classiffieldlist": None,
         "classifsettings": None,
+        "initclassiflist": None,
         "cnn_network_id": None,
         "comments": None,
         "contact": {
@@ -280,7 +279,7 @@ def test_update_prj_pred_settings(fastapi):
 
 
 def test_update_prj_bodc_vars(fastapi):
-    from tests.test_project_vars import BODC_VARS_KEY
+    from tests.test_project_vars import FORMULAE_KEY
 
     prj_id, _ = do_import_uvp6(fastapi, "Test Project Variables Updates")
 
@@ -291,15 +290,15 @@ def test_update_prj_bodc_vars(fastapi):
     # Fetch
     rsp = fastapi.get(qry_url, headers=ADMIN_AUTH)
     settings_json = rsp.json()
-    assert settings_json[BODC_VARS_KEY] == {}
+    assert settings_json[FORMULAE_KEY] is None
 
     # Modify with invalid key
-    settings_json[BODC_VARS_KEY] = {"a": "toto"}
+    settings_json[FORMULAE_KEY] = {"a": "toto"}
     rsp = fastapi.put(upd_url, headers=ADMIN_AUTH, json=settings_json)
     assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT, rsp.text
 
     vars = {"subsample_coef": "1", "total_water_volume": "2", "individual_volume": "3"}
-    settings_json[BODC_VARS_KEY] = vars
+    settings_json[FORMULAE_KEY] = json.dumps(vars)
     # Now it should be OK
     rsp = fastapi.put(upd_url, headers=ADMIN_AUTH, json=settings_json)
     assert rsp.status_code == status.HTTP_200_OK, rsp.text
@@ -307,4 +306,4 @@ def test_update_prj_bodc_vars(fastapi):
     # Check by re-reading
     rsp = fastapi.get(qry_url, headers=ADMIN_AUTH)
     read_json = rsp.json()
-    assert read_json[BODC_VARS_KEY] == vars
+    assert json.loads(read_json[FORMULAE_KEY]) == vars

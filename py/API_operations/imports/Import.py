@@ -3,6 +3,7 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 import re
+import shutil
 from pathlib import Path
 from typing import Dict, List, Tuple, Any, Optional, cast
 
@@ -42,6 +43,10 @@ class FileImport(ImportServiceBase):
     STATE_KEYS = ["found_users", "taxo_found", "col_mapping", "nb_rows", "source_path"]
     STATE_KEYS_REPLY = ["found_users", "taxo_found"]
 
+    # Job state key holding the original location of a lone input file which was
+    # moved aside into a temporary directory for the duration of the import.
+    RELOCATED_FILE_KEY = "relocated_single_file"
+
     req: ImportReq  # Not used, just for typings
 
     def __init__(self, prj_id: int, req: ImportReq):
@@ -72,17 +77,22 @@ class FileImport(ImportServiceBase):
         Background part of the job.
         """
         with LogsSwitcher(self):
-            job = self._get_job()
-            if job.progress_msg in (
-                None,
-                JobBO.PENDING_MESSAGE,
-                JobBO.RESTARTING_MESSAGE,
-            ):
-                self.do_validate()
-            elif job.progress_msg == JobBO.REPLIED_MESSAGE:
-                self.do_complete_and_continue()
-            else:
-                raise Exception("Not know progress:'%s'" % job.progress_msg)
+            try:
+                job = self._get_job()
+                if job.progress_msg in (
+                    None,
+                    JobBO.PENDING_MESSAGE,
+                    JobBO.RESTARTING_MESSAGE,
+                ):
+                    self.do_validate()
+                elif job.progress_msg == JobBO.REPLIED_MESSAGE:
+                    self.do_complete_and_continue()
+                else:
+                    raise Exception("Not know progress:'%s'" % job.progress_msg)
+            except Exception:
+                # The job failed: put back a lone input file that was moved aside.
+                self._restore_relocated_file()
+                raise
 
     def do_complete_and_continue(self) -> None:
         """
@@ -117,12 +127,16 @@ class FileImport(ImportServiceBase):
         # Unzip or point to source directory
         job_user_id: UserIDT = self._get_owner_id()
         source_dir_or_zip = self.unzip_if_needed(job_user_id)
+        # The import machinery only processes directories: when a lone file is
+        # imported, move it into a dedicated temporary directory and use that.
+        source_dir_or_zip = self._relocate_if_lone_file(source_dir_or_zip)
         # Validate files
         logger.info("Analyze TSV Files")
         how, diag, nb_rows = self._collect_existing_and_validate(
             source_dir_or_zip, loaded_files, job_user_id
         )
         if len(diag.errors) > 0:
+            self._restore_relocated_file()
             self.set_job_result(errors=diag.errors, infos={"infos": diag.messages})
             return
         # Resolve identifiers
@@ -284,6 +298,61 @@ class FileImport(ImportServiceBase):
             int(20 * current / total), "Validating files %d/%d" % (current, total)
         )
 
+    def _lone_file_temp_dir(self) -> Path:
+        """Temporary directory used to host a single imported file."""
+        return self.temp_for_jobs.base_dir_for(self.job_id) / "lone_file_import"
+
+    def _relocate_if_lone_file(self, source_dir_or_zip: str) -> str:
+        """
+        `InBundle` (and thus the whole import) only works on a directory.
+        When the import source is a single file, move it into a dedicated
+        temporary directory and return that directory instead.
+        The original path is stored in the job state so the file can be put
+        back if the job eventually fails, @see _restore_relocated_file.
+        """
+        source = Path(source_dir_or_zip)
+        if source.is_dir() or not source.exists():
+            return source_dir_or_zip
+        temp_dir = self._lone_file_temp_dir()
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        dest = temp_dir / source.name
+        logger.info("Lone file import: moving '%s' into '%s'", source, temp_dir)
+        shutil.move(str(source), str(dest))
+        self._save_vars_to_state([self.RELOCATED_FILE_KEY], str(source))
+        return str(temp_dir)
+
+    def _restore_relocated_file(self) -> None:
+        """
+        Failure cleanup: move the lone input file back to its original location
+        and remove the temporary directory.
+        """
+        orig = self.saved_state.get(self.RELOCATED_FILE_KEY)
+        if not orig:
+            return
+        orig_path = Path(orig)
+        temp_dir = self._lone_file_temp_dir()
+        moved = temp_dir / orig_path.name
+        try:
+            if moved.exists() and not orig_path.exists():
+                orig_path.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(moved), str(orig_path))
+                logger.info("Lone file import failed: '%s' put back", orig_path)
+        except Exception as e:
+            # Never let cleanup mask the error which triggered it.
+            logger.error("Could not restore lone import file '%s': %s", orig_path, e)
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def _discard_relocated_file(self) -> None:
+        """
+        Success cleanup: just remove the temporary directory which held the
+        lone input file.
+        """
+        if not self.saved_state.get(self.RELOCATED_FILE_KEY):
+            return
+        shutil.rmtree(self._lone_file_temp_dir(), ignore_errors=True)
+        logger.info("Lone file import done: temporary directory removed")
+
     def do_real(self) -> None:
         """
         Do the real job, i.e. write everywhere (DB/filesystem)
@@ -354,4 +423,6 @@ class FileImport(ImportServiceBase):
         logger.info(msg)
         # delete if imported from myfiles
         self.remove_source_path()
+        # A lone input file was moved into a temp dir for the import: drop it.
+        self._discard_relocated_file()
         self.set_job_result(errors=[], infos={"rowcount": row_count})

@@ -64,6 +64,23 @@ def on_tus_upload_complete(
 
         user_dir = UserFilesDirectory(current_user_id)
         dest_dir = user_dir._root_path
+
+        # metadata may carry the client-side destination sub-path, e.g.
+        # "some/sub/dir/<filename>" (see js-dirtozip.js sendZipFile). It
+        # mirrors what UserFilesDirectory.add_file() does for the non-TUS
+        # upload path: strip the trailing filename to get the target dir.
+        client_path = metadata.get("path")
+        if client_path:
+            client_dir = os.path.dirname(client_path)
+            client_dir = client_dir.lstrip(os.path.sep)
+            parts = [p for p in Path(client_dir).parts if p not in (".", "")]
+            if ".." in parts:
+                logger.warning(
+                    "TUS upload rejected path traversal attempt: %s", client_path
+                )
+            elif parts:
+                dest_dir = dest_dir.joinpath(*parts)
+
         user_dir.ensure_exists(dest_dir)
 
         dest_path = dest_dir / original_name

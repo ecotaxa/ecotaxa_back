@@ -15,10 +15,11 @@ if TYPE_CHECKING:
     from .User import User
     from .ProjectVariables import ProjectVariables
     from .Instrument import Instrument
-    from .ProjectPrivilege import ProjectPrivilege
+    from .ProjectVariables import KNOWN_PROJECT_VARS
+from .ProjectPrivilege import ProjectPrivilege
 
 from .helpers.DDL import Sequence, ForeignKey
-from .helpers.Postgres import VARCHAR, INTEGER, DOUBLE_PRECISION
+from .helpers.Postgres import VARCHAR, INTEGER, DOUBLE_PRECISION, JSONB
 
 """
     Possible values for status field.
@@ -31,6 +32,8 @@ EXPLORE_ONLY = "ExploreOnly"
 # Typings, to be clear that these are not e.g. object IDs
 ProjectIDT = int
 ProjectIDListT = List[int]
+
+KNOWN_PROJECT_VARS = {"subsample_coef", "total_water_volume", "individual_volume"}
 
 
 class Project(Model):
@@ -78,7 +81,9 @@ class Project(Model):
     rf_models_used: Mapped[str | None] = mapped_column(VARCHAR)
     cnn_network_id: Mapped[str | None] = mapped_column(VARCHAR(50))
     # project specific formulae used to calculate concentration and biovolume ( used in project summary export, and collection DarwinCore export)
-    formulae: Mapped[str | None] = mapped_column(VARCHAR)
+    formulae: Mapped[str | None] = mapped_column(JSONB)
+    # Temporary: legacy string formulae, kept as a backup after the jsonb migration.
+    formulae_old = Column(VARCHAR)
     # Associated taxonomy statistics. Commented out to avoid that the ORM loads the whole list, which can be big.
     # taxo_stats = relationship("ProjectTaxoStat")
 

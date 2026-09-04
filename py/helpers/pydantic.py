@@ -17,6 +17,7 @@ from pydantic import (
     model_validator,
     field_validator,
     dataclasses,
+    validator,
 )
 
 # noinspection PyUnresolvedReferences
@@ -42,9 +43,15 @@ def sort_and_prune(
     a_list: List[Any],
     order_field: Optional[str],
     model_cols: Dict[str, Any],
-    window_start: Optional[int],
-    window_size: Optional[int],
 ) -> List[Any]:
+    """
+    Sort a_list by order_field. Pagination (window_start/window_size) is applied
+    in SQL upstream, on the ID query, before results are built - not here, so
+    that we never fetch and enrich more rows than will actually be returned.
+    This only needs to sort in Python for order_field values that aren't plain
+    DB columns (SQL already sorted a_list for the ones that are, so re-sorting
+    here is a harmless no-op for those).
+    """
     if order_field is not None:
         reverse = False
         if order_field[0] == "-":
@@ -58,8 +65,4 @@ def sort_and_prune(
                 else default_if_none
             )
             a_list.sort(key=sort_lambda, reverse=reverse)
-    if window_start is not None:
-        a_list = a_list[window_start:]
-    if window_size is not None:
-        a_list = a_list[:window_size]
     return a_list

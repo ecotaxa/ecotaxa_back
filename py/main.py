@@ -53,6 +53,7 @@ from API_models.crud import (
     JobModel,
     BulkUpdateReq,
     CreateProjectReq,
+    ProjectReq,
     ProjectTaxoStatsModel,
     ProjectUserStatsModel,
     ProjectSetColumnStatsModel,
@@ -104,7 +105,11 @@ from API_models.taxonomy import (
     TaxonCentral,
     AddWormsTaxonModel,
 )
-from API_models.taxonomy import TaxoRecastRsp, TaxonomyRecastReq
+from API_models.taxonomy import (
+    TaxoRecastRsp,
+    TaxoRecastSearchRsp,
+    TaxonomyRecastReq,
+)
 from API_operations.BigFiles import create_big_files_router
 from API_operations.CRUD.Collections import CollectionsService
 from API_operations.CRUD.Constants import ConstantsService
@@ -184,7 +189,7 @@ from helpers.fastApiUtils import (
     regular_mem_cleanup,
 )
 from helpers.login import LoginService
-from helpers.pydantic import sort_and_prune
+from helpers.pydantic import sort_and_prune, BaseModel
 
 # from sqlalchemy.sql.expression import null
 
@@ -1212,7 +1217,6 @@ def darwin_core_format_export(
         request.include_predicted,
         request.with_absent,
         request.with_computations,
-        request.formulae,
         request.extra_xml,
         current_user,
     ) as sce:
@@ -1271,7 +1275,7 @@ project_model_columns = plain_columns(ProjectModel)
     response_model=List[ProjectModel],
     response_class=MyORJSONResponse,
 )
-async def list_projects(  # MyORJSONResponse -> JSONResponse -> Response -> await
+async def list_projects(
     current_user: Optional[int] = Depends(get_optional_current_user),
     project_ids: Optional[str] = Query(
         default=None,
@@ -1298,7 +1302,7 @@ async def list_projects(  # MyORJSONResponse -> JSONResponse -> Response -> awai
         examples=["instrument"],
     ),
     fields: Optional[str] = Query(
-        default="*default",
+        default="*all",
         title="Fields",
         description="Return the default fields (typically used in conjunction with an additional field list). For users list display purpose.",
         examples=["*default,fieldlist"],
@@ -1315,7 +1319,7 @@ async def list_projects(  # MyORJSONResponse -> JSONResponse -> Response -> awai
         description="Return only `window_size` lines.",
         examples=["100"],
     ),
-) -> MyORJSONResponse:  # List[ProjectBO]
+) -> MyORJSONResponse:  # List[ProjectBO]:
     """
     Returns **projects which the current user has explicit permission to access, with fields options.**
 
@@ -1328,12 +1332,14 @@ async def list_projects(  # MyORJSONResponse -> JSONResponse -> Response -> awai
             not_granted=not_granted,
             for_managing=for_managing,
             project_ids=project_ids,
+            order_field=order_field,
             fields=fields,
+            window_start=window_start or 0,
+            window_size=window_size or 0,
         )
-    # The DB query takes a few ms, and enrich not much more, so we can afford to narrow the search on the result
-    ret = sort_and_prune(
-        ret, order_field, project_model_columns, window_start, window_size
-    )
+    # Pagination and sorting on genuine columns already happened in SQL above.
+    # This only covers derived/computed order fields that SQL can't sort on.
+    ret = sort_and_prune(ret, order_field, project_model_columns)
     return MyORJSONResponse(ret)
 
 
@@ -1390,7 +1396,7 @@ async def search_projects(  # MyORJSONResponse -> JSONResponse -> Response -> aw
         examples=["instrument"],
     ),
     fields: Optional[str] = Query(
-        default="*default",
+        default="*all",
         title="Fields",
         description="Return the default fields (typically used in conjunction with an additional field list). For users list display purpose.",
         examples=["*default,fieldlist"],
@@ -1407,7 +1413,7 @@ async def search_projects(  # MyORJSONResponse -> JSONResponse -> Response -> aw
         description="Return only `window_size` lines.",
         examples=["100"],
     ),
-) -> MyORJSONResponse:  # List[ProjectBO]
+) -> MyORJSONResponse:  # List[ProjectBO]:
     """
     Returns **projects which the current user has explicit permission to access, with search options.**
 
@@ -1423,13 +1429,14 @@ async def search_projects(  # MyORJSONResponse -> JSONResponse -> Response -> aw
             title_filter=title_filter,
             instrument_filter=instrument_filter,
             filter_subset=filter_subset,
+            order_field=order_field,
             fields=fields,
+            window_start=window_start,
+            window_size=window_size,
         )
-    # The DB query takes a few ms, and enrich not much more, so we can afford to narrow the search on the result
-
-    ret = sort_and_prune(
-        ret, order_field, project_model_columns, window_start, window_size
-    )
+    # Pagination and sorting on genuine columns already happened in SQL above.
+    # This only covers derived/computed order fields that SQL can't sort on.
+    ret = sort_and_prune(ret, order_field, project_model_columns)
     return MyORJSONResponse(ret)
 
 
@@ -2004,7 +2011,7 @@ def erase_project(
     responses={200: {"content": {"application/json": {"example": None}}}},
 )
 def update_project(
-    project: ProjectModel,
+    project: ProjectModel = Body(...),
     project_id: int = Path(
         ..., description="Internal, numeric id of the project.", examples=[1]
     ),
@@ -2015,31 +2022,38 @@ def update_project(
 
     Note that some fields will **NOT** be updated and simply ignored, e.g. *free_cols*.
     """
+    assert project.title is not None, AssertionError("A valid Title is needed.")
     with ProjectsService() as sce:
-        with RightsThrower():
-            present_project: ProjectBO = sce.query(
-                current_user, project_id, for_managing=True, for_update=True
-            )
+        with ValidityThrower(), RightsThrower():
+            sce.update(current_user, project_id, project)
 
-        with ValidityThrower():
-            present_project.update(
-                session=sce.session,
-                instrument=project.instrument,
-                title=project.title,
-                status=project.status,
-                init_classif_list=project.init_classif_list,
-                classiffieldlist=project.classiffieldlist,
-                popoverfieldlist=project.popoverfieldlist,
-                cnn_network_id=project.cnn_network_id,
-                comments=project.comments,
-                contact=project.contact,
-                managers=project.managers,
-                annotators=project.annotators,
-                viewers=project.viewers,
-                bodc_vars=project.bodc_variables,
-                access=project.access,
-                formulae=project.formulae,
-            )
+    with DBSyncService(Project, Project.projid, project_id) as ssce:
+        ssce.wait()
+    with DBSyncService(ProjectPrivilege, ProjectPrivilege.projid, project_id) as ssce:
+        ssce.wait()
+
+
+@app.patch(
+    "/projects/{project_id}",
+    operation_id="patch_project",
+    tags=["projects"],
+    responses={200: {"content": {"application/json": {"example": null}}}},
+)
+def patch_project(
+    project: ProjectReq = Body(...),
+    project_id: int = Path(
+        ..., description="Internal, numeric id of the project.", example=1
+    ),
+    current_user: int = Depends(get_current_user),
+) -> None:
+    """
+    **Update the project**, return **NULL upon success.**
+
+    Note that some fields will **NOT** be updated and simply ignored, e.g. *free_cols*.
+    """
+    with ProjectsService() as sce:
+        with ValidityThrower(), RightsThrower():
+            sce.patch(current_user, project_id, project)
 
     with DBSyncService(Project, Project.projid, project_id) as ssce:
         ssce.wait()
@@ -3562,6 +3576,44 @@ def get_taxonomy_recast(
                 target_id=target_id,
                 operation=operation,
                 is_collection=is_collection,
+            )
+    return ret
+
+
+@app.get(
+    "/taxo_recast/search",
+    operation_id="search_taxonomy_recast",
+    tags=["Taxonomy Tree"],
+    response_model=List[TaxoRecastSearchRsp],
+)
+def search_taxonomy_recast(
+    project_ids: Optional[str] = Query(
+        default=None,
+        description="Project ids to check, separated by ,. If not given, all"
+        " projects readable/administered by the current user are considered.",
+        example="1,2,3",
+    ),
+    operation: RecastOperation = Query(
+        ...,
+        title="Operation name",
+        description="One of RecastOperation enum value",
+        example="project_import",
+    ),
+    current_user: int = Depends(get_current_user),
+) -> List[TaxoRecastSearchRsp]:
+    """
+    **Among given project_ids, return the existing taxonomy recast records for the
+    given operation**, each enriched with its project title. Note: only
+    administered/readable projects are considered. If project_ids is not given, all
+    projects readable/administered by the current user are considered.
+    """
+    ids = _split_num_list(project_ids) if project_ids else None
+    with TaxonomyService() as sce:
+        with RightsThrower():
+            ret = sce.search_taxonomy_recast(
+                current_user_id=current_user,
+                project_ids=ids,
+                operation=operation,
             )
     return ret
 

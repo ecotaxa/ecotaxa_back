@@ -2,11 +2,10 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+
 from typing import List, Union, Tuple, Optional, Dict
-
+from API_models.crud import CreateProjectReq, ProjectReq, ProjectModel
 from fastapi import HTTPException
-
-from API_models.crud import CreateProjectReq
 from BO.Classification import ClassifIDListT, ClassifIDT
 from BO.Collection import MinimalCollectionBO
 from BO.ObjectSet import EnumeratedObjectSet
@@ -19,9 +18,10 @@ from BO.Project import (
 )
 from BO.ProjectSet import ProjectSetColumnStats, LimitedInCategoriesProjectSet
 from BO.Rights import RightsBO, Action, NOT_FOUND
+from BO.User import UserIDT
 from DB.Project import Project, ANNOTATE_STATUS, ProjectIDT, ProjectIDListT
 from DB.Sample import Sample
-from DB.User import User, UserIDT
+from DB.User import User
 from DB.helpers.ORM import clone_of
 from FS.VaultRemover import VaultRemover
 from helpers.DynamicLogs import get_logger
@@ -76,18 +76,27 @@ class ProjectsService(Service):
         for_managing: bool = False,
         not_granted: bool = False,
         project_ids: Optional[str] = None,
-        fields: Optional[str] = FieldListType.default,
+        order_field: Optional[str] = None,
+        fields: Optional[str] = FieldListType.all,
+        window_start: Optional[int] = 0,
+        window_size: Optional[int] = 0,
     ) -> List[ProjectBO]:
         # current_user: Optional[User]
         if project_ids is None:
             project_ids = ""
-
         if current_user_id is None:
             # For public
             matching_ids = ProjectBO.list_public_projects(
-                self.ro_session, "", project_ids
+                self.ro_session,
+                "",
+                project_ids,
+                order_field=order_field,
+                window_start=window_start,
+                window_size=window_size,
             )
-            projects = ProjectBOSet(self.session, matching_ids, public=True)
+            projects = ProjectBOSet(
+                self.session, matching_ids, public=True, fields=fields
+            )
         else:
             # No rights checking as basically everyone can see all projects
             # current_user = self.ro_session.query(User).get(current_user_id)
@@ -104,6 +113,9 @@ class ProjectsService(Service):
                 "",
                 False,
                 project_ids,
+                order_field,
+                window_start,
+                window_size,
             )
             projects = ProjectBOSet(
                 self.ro_session, matching_ids, public=False, fields=fields
@@ -118,13 +130,23 @@ class ProjectsService(Service):
         title_filter: str = "",
         instrument_filter: str = "",
         filter_subset: bool = False,
-        fields: Optional[str] = FieldListType.default,
+        order_field: Optional[str] = None,
+        fields: Optional[str] = FieldListType.all,
+        window_start: Optional[int] = 0,
+        window_size: Optional[int] = 0,
     ) -> List[ProjectBO]:
-        # current_user: Optional[User]
         if current_user_id is None:
             # For public
-            matching_ids = ProjectBO.list_public_projects(self.ro_session, title_filter)
-            projects = ProjectBOSet(self.session, matching_ids, public=True)
+            matching_ids = ProjectBO.list_public_projects(
+                self.ro_session,
+                title_filter,
+                order_field=order_field,
+                window_start=window_start,
+                window_size=window_size,
+            )
+            projects = ProjectBOSet(
+                self.ro_session, matching_ids, public=True, fields=fields
+            )
         else:
             # No rights checking as basically everyone can see all projects
             # current_user = self.ro_session.get(User,current_user_id)
@@ -140,11 +162,53 @@ class ProjectsService(Service):
                 title_filter,
                 instrument_filter,
                 filter_subset,
+                order_field=order_field,
+                window_start=window_start,
+                window_size=window_size,
             )
             projects = ProjectBOSet(
                 self.ro_session, matching_ids, public=False, fields=fields
             )
         return projects.as_list()
+
+    def update(self, current_user_id: UserIDT, project_id: int, project: ProjectModel):
+        present_project: ProjectBO = self.query(
+            current_user_id, project_id, for_managing=True, for_update=True
+        )
+        assert project.title is not None, "A valid Title is required."
+        if project.formulae is not None:
+            project.formulae = ProjectBO.formulae_validator(project.formulae)
+        present_project.update(
+            session=self.session,
+            instrument=project.instrument,
+            title=project.title,
+            status=project.status,
+            init_classif_list=project.init_classif_list,
+            classiffieldlist=project.classiffieldlist,
+            popoverfieldlist=project.popoverfieldlist,
+            cnn_network_id=project.cnn_network_id,
+            comments=project.comments,
+            contact=project.contact,
+            managers=project.managers,
+            annotators=project.annotators,
+            viewers=project.viewers,
+            access=project.access,
+            formulae=project.formulae,
+        )
+
+    def patch(
+        self, current_user_id: UserIDT, project_id: int, projectreq: ProjectReq
+    ) -> None:
+        present_project: ProjectBO = self.query(
+            current_user_id, project_id, for_managing=True, for_update=True
+        )
+        if present_project is None:
+            raise HTTPException(status_code=404, detail="Project not found")
+        # Only touch fields the client actually sent, per PATCH semantics.
+        modelfields = list(projectreq.__fields_set__)
+        present_project.patch(
+            session=self.session, projectreq=projectreq, modelfields=modelfields
+        )
 
     def query(
         self,

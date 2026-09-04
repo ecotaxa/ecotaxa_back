@@ -2,7 +2,7 @@
   "openapi":"3.0.2",
   "info":{
     "title":"EcoTaxa",
-    "version":"0.0.45"
+    "version":"0.0.48"
   },
   "servers":[
     {
@@ -1957,12 +1957,12 @@
             "in":"query"
           },
           {
-            "description":"One of ['projid', 'title', 'access', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'rf_models_used', 'cnn_network_id', 'formulae', 'instrument', 'instrument_url', 'highest_right']",
+            "description":"One of ['projid', 'title', 'access', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'initclassiflist', 'classiffieldlist', 'popoverfieldlist', 'comments', 'rf_models_used', 'cnn_network_id', 'formulae', 'instrument', 'instrument_url', 'highest_right']",
             "required":false,
             "schema":{
               "title":"Order field",
               "type":"string",
-              "description":"One of ['projid', 'title', 'access', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'rf_models_used', 'cnn_network_id', 'formulae', 'instrument', 'instrument_url', 'highest_right']"
+              "description":"One of ['projid', 'title', 'access', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'initclassiflist', 'classiffieldlist', 'popoverfieldlist', 'comments', 'rf_models_used', 'cnn_network_id', 'formulae', 'instrument', 'instrument_url', 'highest_right']"
             },
             "example":"instrument",
             "name":"order_field",
@@ -1975,7 +1975,7 @@
               "title":"Fields",
               "type":"string",
               "description":"Return the default fields (typically used in conjunction with an additional field list). For users list display purpose.",
-              "default":"*default"
+              "default":"*all"
             },
             "example":"*default,fieldlist",
             "name":"fields",
@@ -2126,12 +2126,12 @@
             "in":"query"
           },
           {
-            "description":"One of ['projid', 'title', 'access', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'rf_models_used', 'cnn_network_id', 'formulae', 'instrument', 'instrument_url', 'highest_right']",
+            "description":"One of ['projid', 'title', 'access', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'initclassiflist', 'classiffieldlist', 'popoverfieldlist', 'comments', 'rf_models_used', 'cnn_network_id', 'formulae', 'instrument', 'instrument_url', 'highest_right']",
             "required":false,
             "schema":{
               "title":"Order field",
               "type":"string",
-              "description":"One of ['projid', 'title', 'access', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'classiffieldlist', 'popoverfieldlist', 'comments', 'rf_models_used', 'cnn_network_id', 'formulae', 'instrument', 'instrument_url', 'highest_right']"
+              "description":"One of ['projid', 'title', 'access', 'status', 'objcount', 'pctvalidated', 'pctclassified', 'classifsettings', 'initclassiflist', 'classiffieldlist', 'popoverfieldlist', 'comments', 'rf_models_used', 'cnn_network_id', 'formulae', 'instrument', 'instrument_url', 'highest_right']"
             },
             "example":"instrument",
             "name":"order_field",
@@ -2144,7 +2144,7 @@
               "title":"Fields",
               "type":"string",
               "description":"Return the default fields (typically used in conjunction with an additional field list). For users list display purpose.",
-              "default":"*default"
+              "default":"*all"
             },
             "example":"*default,fieldlist",
             "name":"fields",
@@ -2485,6 +2485,64 @@
                   10,
                   10
                 ]
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      },
+      "patch":{
+        "tags":[
+          "projects"
+        ],
+        "summary":"Patch Project",
+        "description":"**Update the project**, return **NULL upon success.**\n\nNote that some fields will **NOT** be updated and simply ignored, e.g. *free_cols*.",
+        "operationId":"patch_project",
+        "parameters":[
+          {
+            "description":"Internal, numeric id of the project.",
+            "required":true,
+            "schema":{
+              "title":"Project Id",
+              "type":"integer",
+              "description":"Internal, numeric id of the project."
+            },
+            "example":1,
+            "name":"project_id",
+            "in":"path"
+          }
+        ],
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "$ref":"#/components/schemas/ProjectReq"
+              }
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{},
+                "example":{}
               }
             }
           },
@@ -6096,6 +6154,77 @@
         ]
       }
     },
+    "/taxo_recast/search":{
+      "get":{
+        "tags":[
+          "Taxonomy Tree"
+        ],
+        "summary":"Search Taxonomy Recast",
+        "description":"**Among given project_ids, return the existing taxonomy recast records for the\ngiven operation**, each enriched with its project title. Note: only\nadministered/readable projects are considered. If project_ids is not given, all\nprojects readable/administered by the current user are considered.",
+        "operationId":"search_taxonomy_recast",
+        "parameters":[
+          {
+            "description":"Project ids to check, separated by ,. If not given, all projects readable/administered by the current user are considered.",
+            "required":false,
+            "schema":{
+              "title":"Project Ids",
+              "type":"string",
+              "description":"Project ids to check, separated by ,. If not given, all projects readable/administered by the current user are considered."
+            },
+            "example":"1,2,3",
+            "name":"project_ids",
+            "in":"query"
+          },
+          {
+            "description":"One of RecastOperation enum value",
+            "required":true,
+            "schema":{
+              "title":"Operation name",
+              "allOf":[
+                {
+                  "$ref":"#/components/schemas/RecastOperation"
+                }
+              ],
+              "description":"One of RecastOperation enum value"
+            },
+            "example":"project_import",
+            "name":"operation",
+            "in":"query"
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "title":"Response Search Taxonomy Recast Taxo Recast Search Get",
+                  "type":"array",
+                  "items":{
+                    "$ref":"#/components/schemas/TaxoRecastSearchRsp"
+                  }
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ]
+      }
+    },
     "/taxo_worms":{
       "get":{
         "tags":[
@@ -8406,20 +8535,6 @@
               "ABO"
             ]
           },
-          "formulae":{
-            "title":"Computation formulas",
-            "type":"object",
-            "additionalProperties":{
-              "type":"string"
-            },
-            "description":"Transitory: How to get values from DB free columns. Python syntax, prefixes are 'sam', 'ssm' and 'obj'. Variables used in computations are 'total_water_volume', 'subsample_coef' and 'individual_volume'",
-            "default":{},
-            "example":{
-              "subsample_coef":"1/ssm.sub_part",
-              "total_water_volume":"sam.tot_vol/1000",
-              "individual_volume":"4.0/3.0*math.pi*(math.sqrt(obj.area/math.pi)*ssm.pixel_size)**3"
-            }
-          },
           "extra_xml":{
             "title":"Extra XML",
             "type":"array",
@@ -8614,6 +8729,27 @@
             "description":"For 'DOI' type, export only first (displayed) image.",
             "default":false,
             "example":false
+          },
+          "quantity":{
+            "title":"Quantity",
+            "type":"array",
+            "items":{
+              "anyOf":[
+                {
+                  "$ref":"#/components/schemas/ExportTypeEnum"
+                },
+                {
+                  "$ref":"#/components/schemas/SummaryExportQuantitiesOptionsEnum"
+                }
+              ]
+            },
+            "description":"The quantity to compute. Abundance is always possible.",
+            "default":[
+              "abundance"
+            ],
+            "example":[
+              "abundance"
+            ]
           },
           "sum_subtotal":{
             "title":"Sum subtotal",
@@ -10572,6 +10708,11 @@
             "type":"string",
             "example":"baseproject=1602\ncritvar=%area,angle,area,area_exc,bx,by,cdexc,centroids,circ.,circex,convarea,convperim,cv,elongation,esd,fcons,feret,feretareaexc,fractal,height,histcum1,histcum2,histcum3,intden,kurt,lat_end,lon_end,major,max,mean,meanpos,median,min,minor,mode,nb1,nb2,perim.,perimareaexc,perimferet,perimmajor,range,skelarea,skew,slope,sr,stddev,symetrieh,symetriehc,symetriev,symetrievc,thickr,width,x,xm,xstart,y,ym,ystart\nposttaxomapping=\nseltaxo=45074,84963,61990,13333,82399,61973,62005,25930,25932,61996,78426,81941,11514,85076,85061,30815,85185,92230,85079,84993,25824,85115,85004,26525,25944,11509,26524,92112,84976,25942,84980,85078,78418,84977,85060,61993,61991,85069,81871,74144,11758,72431,13381,11518,5,18758,85117,92042,84968,84997,87826,92236,92237,92039,84989,85193,83281,78412,92239,71617,81977,45071,12865,85044,81940,85067,12908,85116,56693,85008,92139,92068\nusemodel_foldername=testln1"
           },
+          "initclassiflist":{
+            "title":"Initial categories",
+            "type":"string",
+            "description":" Aggregated categories from the collection projects."
+          },
           "classiffieldlist":{
             "title":"Classification field list",
             "type":"string",
@@ -10602,6 +10743,7 @@
             "title":"Formulae",
             "type":"string",
             "description":"Concentration formulae.",
+            "default":"subsample_coef: 1/ssm.sub_part\ntotal_water_volume: sam.tot_vol/1000\nindividual_volume: 4.0/3.0*math.pi*(math.sqrt(obj.area/math.pi)*ssm.pixel_size)**3",
             "example":""
           },
           "obj_free_cols":{
@@ -10651,20 +10793,6 @@
             "default":{},
             "example":{
               "nb_images":"t01"
-            }
-          },
-          "bodc_variables":{
-            "title":"Expressions for computing standard BODC quantities.",
-            "type":"object",
-            "additionalProperties":{
-              "type":"string"
-            },
-            "description":"BODC quantities from columns. Only the 3 keys listed in example are valid.",
-            "default":{},
-            "example":{
-              "subsample_coef":"1/ssm.sub_part",
-              "total_water_volume":"sam.tot_vol/1000",
-              "individual_volume":"4.0/3.0*math.pi*(math.sqrt(obj.area/math.pi)*ssm.pixel_size)**3"
             }
           },
           "init_classif_list":{
@@ -10728,7 +10856,7 @@
             "title":"Instrument URL",
             "type":"string",
             "description":"This project's instrument BODC definition.",
-            "example":"http://vocab.nerc.ac.uk/collection/L22/current/TOOL1581/"
+            "example":"https://vocab.nerc.ac.uk/collection/L22/current/TOOL1581/"
           },
           "highest_right":{
             "title":"Highest right",
@@ -10739,6 +10867,105 @@
           }
         },
         "description":"Basic and computed information about the Project."
+      },
+      "ProjectReq":{
+        "title":"Update full or partial Project Model",
+        "type":"object",
+        "properties":{
+          "title":{
+            "title":"Title",
+            "type":"string",
+            "description":"The project title.",
+            "example":"MyProject"
+          },
+          "instrument":{
+            "title":"Instrument",
+            "type":"string",
+            "description":"This project's instrument code.",
+            "example":"Zooscan"
+          },
+          "status":{
+            "title":"Status",
+            "type":"string",
+            "description":"The project status.",
+            "example":"Annotate"
+          },
+          "access":{
+            "title":"Access level",
+            "allOf":[
+              {
+                "$ref":"#/components/schemas/AccessLevelEnum"
+              }
+            ],
+            "description":"When \"1\" (PUBLIC), the project is visible by all users.PUBLIC: \"1\", OPEN: \"2\", PRIVATE: \"0\"",
+            "default":"1",
+            "example":"1"
+          },
+          "classiffieldlist":{
+            "title":"Classification field list",
+            "type":"string",
+            "example":"depth_min=depth_min\r\ndepth_max=depth_max\r\narea=area [pixel]\r\nmean=mean [0-255]\r\nfractal=fractal\r\nmajor=major [pixel]\r\nsymetrieh=symetrieh\r\ncirc.=circ\r\nferet = Feret [pixel]"
+          },
+          "initclassiflist":{
+            "title":"Initial categories",
+            "type":"string",
+            "description":" Aggregated categories from the collection projects."
+          },
+          "comments":{
+            "title":"Comments",
+            "type":"string",
+            "description":"The project comments.",
+            "example":""
+          },
+          "cnn_network_id":{
+            "title":"Cnn network id",
+            "type":"string",
+            "example":"SCN_zooscan_group1"
+          },
+          "formulae":{
+            "title":"Formulae",
+            "type":"string",
+            "description":"Concentration formulae.",
+            "default":"subsample_coef: 1/ssm.sub_part\ntotal_water_volume: sam.tot_vol/1000\nindividual_volume: 4.0/3.0*math.pi*(math.sqrt(obj.area/math.pi)*ssm.pixel_size)**3",
+            "example":""
+          },
+          "managers":{
+            "title":"Managers",
+            "type":"array",
+            "items":{
+              "$ref":"#/components/schemas/MinUserModel"
+            },
+            "description":"Managers of this project.",
+            "default":[]
+          },
+          "annotators":{
+            "title":"Annotators",
+            "type":"array",
+            "items":{
+              "$ref":"#/components/schemas/MinUserModel"
+            },
+            "description":"Annotators of this project, if not manager.",
+            "default":[]
+          },
+          "viewers":{
+            "title":"Viewers",
+            "type":"array",
+            "items":{
+              "$ref":"#/components/schemas/MinUserModel"
+            },
+            "description":"Viewers of this project, if not manager nor annotator.",
+            "default":[]
+          },
+          "contact":{
+            "title":"Contact",
+            "allOf":[
+              {
+                "$ref":"#/components/schemas/MinUserModel"
+              }
+            ],
+            "description":"The contact person is a manager who serves as the contact person for other users and EcoTaxa's managers."
+          }
+        }
       },
       "ProjectSetColumnStatsModel":{
         "title":"ProjectSetColumnStatsModel",
@@ -11289,9 +11516,25 @@
           },
           "quantity":{
             "title":"Quantity",
-            "allOf":[
+            "anyOf":[
+              {
+                "$ref":"#/components/schemas/ExportTypeEnum"
+              },
               {
                 "$ref":"#/components/schemas/SummaryExportQuantitiesOptionsEnum"
+              },
+              {
+                "type":"array",
+                "items":{
+                  "anyOf":[
+                    {
+                      "$ref":"#/components/schemas/ExportTypeEnum"
+                    },
+                    {
+                      "$ref":"#/components/schemas/SummaryExportQuantitiesOptionsEnum"
+                    }
+                  ]
+                }
               }
             ],
             "description":"The quantity to compute. Abundance is always possible.",
@@ -11426,6 +11669,70 @@
         },
         "additionalProperties":false,
         "description":"In various contexts, a taxo recast (from taxon -> to taxon) setting."
+      },
+      "TaxoRecastSearchRsp":{
+        "title":"TaxoRecastSearchRsp",
+        "required":[
+          "recast_id",
+          "operation",
+          "transforms"
+        ],
+        "type":"object",
+        "properties":{
+          "recast_id":{
+            "title":"Recast Id",
+            "type":"integer",
+            "description":"The taxo_recast record id.",
+            "example":42
+          },
+          "collection_id":{
+            "title":"Collection Id",
+            "type":"integer",
+            "description":"Set if the recast applies to a whole collection."
+          },
+          "project_id":{
+            "title":"Project Id",
+            "type":"integer",
+            "description":"Set if the recast applies to a single project.",
+            "example":3
+          },
+          "project_title":{
+            "title":"Project title",
+            "type":"string",
+            "description":"The title of the project designated by project_id.",
+            "example":"My Project"
+          },
+          "operation":{
+            "title":"Recast operation",
+            "type":"string",
+            "description":"Recast operation name.",
+            "example":"project_import"
+          },
+          "transforms":{
+            "title":"Categories mapping",
+            "type":"object",
+            "additionalProperties":{
+              "type":"integer"
+            },
+            "description":"Mapping from seen taxon (key) to output replacement one (value).",
+            "example":{
+              "456":956,
+              "2456":213
+            }
+          },
+          "documentation":{
+            "title":"Mapping documentation",
+            "type":"object",
+            "additionalProperties":{
+              "type":"string"
+            },
+            "description":"To keep memory of the reasons for the above mapping.",
+            "example":{
+              "456":"Up to species"
+            }
+          }
+        },
+        "description":"A taxo_recast record, enriched with the project title."
       },
       "TaxonCentral":{
         "title":"TaxonCentral",

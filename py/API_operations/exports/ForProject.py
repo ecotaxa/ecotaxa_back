@@ -33,8 +33,9 @@ from API_models.filters import ProjectFiltersDict
 from BO.Classification import ClassifIDT
 from BO.Collection import CollectionIDT
 from BO.Mappings import ProjectSetMapping, PREFIX_TO_TABLE
-from BO.ObjectSet import DescribedObjectSet, DescribedObjectBOSet
+from BO.ObjectSet import DescribedObjectBOSet
 from BO.ObjectSetQueryPlus import ResultGrouping, IterableRowsT, ObjectSetQueryPlus
+from BO.ProjectVars import REQUIRED_VARS_PER_QUANTITY, QUANTITY_NAMES
 from BO.Rights import RightsBO, Action
 from BO.Taxonomy import TaxonomyBO
 from BO.Vocabulary import Vocabulary, Units
@@ -61,6 +62,16 @@ from ..helpers.JobService import JobServiceBase, ArgsDict  # fmt:skip
 
 logger = get_logger(__name__)
 
+# Some callers (e.g. the deprecated /export endpoint) may express a sci-summary
+# quantity via SummaryExportQuantitiesOptionsEnum rather than ExportTypeEnum.
+SUMMARY_QUANTITY_TO_EXPORT_TYPE: Dict[
+    SummaryExportQuantitiesOptionsEnum, ExportTypeEnum
+] = {
+    SummaryExportQuantitiesOptionsEnum.abundance: ExportTypeEnum.abundances,
+    SummaryExportQuantitiesOptionsEnum.concentration: ExportTypeEnum.concentrations,
+    SummaryExportQuantitiesOptionsEnum.biovolume: ExportTypeEnum.biovols,
+}
+
 
 class ProjectExport(JobServiceBase):
     """ """
@@ -68,6 +79,22 @@ class ProjectExport(JobServiceBase):
     JOB_TYPE = "GenExport"
     ROWS_REPORT_EVERY = 10000
     IMAGES_REPORT_EVERY = 1000
+
+    # '>'-separated parent categories, e.g. "Copepoda>Oncaeidae". Correlated on txo.id
+    # (not obh.classif_id): txo.id is already part of the GROUP BY (BY_TAXO level) for
+    # the 'count' quantity, which has a real SQL GROUP BY -- obh.classif_id is not, and
+    # Postgres would reject a column reference that's neither grouped nor aggregated.
+    ANNOTATION_CATEGORY_HIERARCHY_SQL = TaxonomyBO.parents_sql("txo.id")
+
+    # Aliases shared by all queries built for the sci-summary export (create_sci_summary),
+    # so key columns line up whichever quantity (abundance/concentration/biovolume) is computed.
+    SCI_SUMMARY_ID_ALIASES: Dict[str, str] = {
+        "sam.orig_id": "sampleid",
+        "acq.orig_id": "acquisid",
+        "txo.display_name": "taxonid",
+        "obh.classif_qual": "status",
+        ANNOTATION_CATEGORY_HIERARCHY_SQL: "annotation_category",
+    }
 
     def __init__(self, req: ExportReq, filters: ProjectFiltersDict):
         super().__init__()
@@ -77,25 +104,33 @@ class ProjectExport(JobServiceBase):
         self.out_path: Path = Path("")
         self.backup_with_just_image_refs = False
         self.pre_mapping: Dict[ClassifIDT, Optional[ClassifIDT]] = {}
+        # Set at the beginning of create_sci_summary, tells whether several
+        # projects are exported at once, in which case a 'project_id' column
+        # is added to the output.
+        self._multi_project: bool = False
         # get pre_mapping
         if self.JOB_TYPE == "SummaryExport" or self.JOB_TYPE == "GeneralExport":
             if self.req.collection_id is not None:
-                is_collection = True
-                target_id = int(self.req.collection_id)
-                operation = RecastOperation.collection_export
-            else:
-                is_collection = False
-                target_id = int(self.req.project_id)
-                operation = RecastOperation.project_export
-            pre_mapping: Optional[Dict[int, Optional[ClassifIDT]]] = (
-                self.query_taxo_recast(
-                    target_id=target_id,
-                    operation=operation,
-                    is_collection=is_collection,
+                pre_mapping: Optional[Dict[int, Optional[ClassifIDT]]] = (
+                    self.query_taxo_recast(
+                        target_id=int(self.req.collection_id),
+                        operation=RecastOperation.collection_export,
+                        is_collection=True,
+                    )
                 )
-            )
-            if pre_mapping is not None:
-                self.pre_mapping = pre_mapping
+                if pre_mapping is not None:
+                    self.pre_mapping = pre_mapping
+            else:
+                # project_id can hold several, comma-separated, project ids. Recast is
+                # per-project, so merge the mappings of all the involved projects.
+                for a_project_id in str(self.req.project_id).split(","):
+                    pre_mapping = self.query_taxo_recast(
+                        target_id=int(a_project_id),
+                        operation=RecastOperation.project_export,
+                        is_collection=False,
+                    )
+                    if pre_mapping is not None:
+                        self.pre_mapping.update(pre_mapping)
 
     def run(self, current_user_id: int) -> ExportRsp:
         """
@@ -153,7 +188,6 @@ class ProjectExport(JobServiceBase):
             "Input Param = %s project_ids = %s" % (self.req.__dict__, project_ids)
         )
         req = self.req
-
         # Bulk of the job
         if req.exp_type in (
             ExportTypeEnum.general_tsv,
@@ -165,14 +199,46 @@ class ProjectExport(JobServiceBase):
             )
             if req.with_images:
                 self.add_images(nb_images, 10, progress_before_copy)
-        elif req.exp_type == ExportTypeEnum.summary:
+        elif (
+            req.exp_type == ExportTypeEnum.summary and self.JOB_TYPE != "SummaryExport"
+        ):
+            # Deprecated raw /export endpoint: keep producing the historical summary,
+            # for the moment, regardless of any quantity it may carry.
             nb_rows = self.create_summary(project_ids)
-        elif req.exp_type in (
+        elif req.exp_type == ExportTypeEnum.summary or req.exp_type in (
             ExportTypeEnum.abundances,
             ExportTypeEnum.concentrations,
             ExportTypeEnum.biovols,
         ):
-            nb_rows = self.create_sci_summary(project_ids)
+            if req.exp_type == ExportTypeEnum.summary:
+                if isinstance(req.quantity, SummaryExportQuantitiesOptionsEnum):
+                    raw_exptypes: List[
+                        Union[ExportTypeEnum, SummaryExportQuantitiesOptionsEnum]
+                    ] = [req.quantity]
+                else:
+                    raw_exptypes = req.quantity
+                exptypes: List[ExportTypeEnum] = [
+                    (
+                        SUMMARY_QUANTITY_TO_EXPORT_TYPE[a_type]
+                        if isinstance(a_type, SummaryExportQuantitiesOptionsEnum)
+                        else a_type
+                    )
+                    for a_type in raw_exptypes
+                ]
+            else:
+                exptypes = [req.exp_type]
+            do_exp = 0
+            for _i, exptype in enumerate(exptypes):
+                if exptype in (
+                    ExportTypeEnum.abundances,
+                    ExportTypeEnum.concentrations,
+                    ExportTypeEnum.biovols,
+                ):
+                    do_exp += 1
+            if len(exptypes) > 0 and do_exp == len(exptypes):
+                nb_rows = self.create_sci_summary(project_ids, exptypes)
+            else:
+                raise Exception("Unsupported export type : %s" % req.exp_type)
         else:
             raise Exception("Unsupported export type : %s" % req.exp_type)
         # Zip present log file as well
@@ -806,6 +872,11 @@ class ProjectExport(JobServiceBase):
             prefix, exp_type, objid, now_txt, file_ext
         )
 
+    def _set_sci_summary_out_file_name(self) -> None:
+        now_txt = DateTime.now_time().strftime("%Y%m%d_%H%M")
+        projids = str(self.req.project_id).replace(",", "-")
+        self.out_file_name = "export_summary_%s_%s.tsv" % (projids, now_txt)
+
     def _get_out_file(self):
         out_file = self.temp_for_jobs.base_dir_for(self.job_id) / self.out_file_name
         return out_file
@@ -922,24 +993,77 @@ class ProjectExport(JobServiceBase):
 
         return "biovolume"
 
+    def _zero_fill_reference_data(
+        self, object_set: DescribedObjectBOSet
+    ) -> Tuple[Set[Tuple], Dict[str, str]]:
+        """
+        Data needed to add zero-value rows to a sci-summary export: every sampling
+        unit (sample, or sample+acquisition) and the taxon -> hierarchy mapping.
+        Both depend only on the project and its filters, not on the requested
+        quantity, so the caller computes this once per project and reuses it for
+        every quantity requested for that project.
+        """
+        # Get all sampling_units (from the samples or subsamples AKA acquisition table)
+        sampling_units_qry = (
+            ObjectSetQueryPlus(object_set.without_filtering_taxo())
+            .add_selects(self._id_columns_from_req())
+            .set_aliases(self.SCI_SUMMARY_ID_ALIASES)
+            .set_grouping(ResultGrouping.without_taxo(self._grouping_from_req(True)))
+        )
+        out_id_cols = [
+            self.SCI_SUMMARY_ID_ALIASES[a_col]
+            for a_col in self._id_columns_from_req()
+        ]
+        all_sampling_units: Set[Tuple] = set()
+        # Tuples here have either one, two or three values
+        for a_row in sampling_units_qry.get_result(self.ro_session):
+            all_sampling_units.add(tuple([a_row[id_col] for id_col in out_id_cols]))
+        # Get possible taxa names, along with their hierarchy (for zero-filled rows)
+        txo_qry = (
+            ObjectSetQueryPlus(object_set)
+            .remap_categories(self.pre_mapping)
+            .add_selects(["txo.display_name", self.ANNOTATION_CATEGORY_HIERARCHY_SQL])
+            .set_aliases(
+                {
+                    "txo.display_name": "txo",
+                    self.ANNOTATION_CATEGORY_HIERARCHY_SQL: "annotation_category",
+                }
+            )
+            .set_grouping(ResultGrouping.BY_TAXO)
+        )
+        taxa_hierarchy: Dict[str, str] = {
+            a_row["txo"]: a_row["annotation_category"]
+            for a_row in txo_qry.get_row_source(self.ro_session)
+        }
+        return all_sampling_units, taxa_hierarchy
+
     def add_zeroes_in_sci_summary(
-        self, aug_qry: ObjectSetQueryPlus, id_cols: List[str], zero_col: str
+        self,
+        aug_qry: ObjectSetQueryPlus,
+        id_cols: List[str],
+        zero_col: str,
+        zero_fill_data: Optional[Tuple[Set[Tuple], Dict[str, str]]],
     ):
         """
         Return relevant zero lines, for given non-zero input ones.
         param: id_cols: The identifying columns in the query.
         param: zero_col: The column to fill with 0 in the output.
+        param: zero_fill_data: precomputed (all_sampling_units, taxa_hierarchy),
+            shared across every quantity of the current project, or None if the
+            request's grouping doesn't need zero-filling at all.
         """
-        if self.req.sum_subtotal in (
-            SummaryExportGroupingEnum.by_sample,
-            SummaryExportGroupingEnum.by_subsample,
-        ):
+        if zero_fill_data is not None:
+            all_sampling_units, taxa_hierarchy = zero_fill_data
             # Produce the zero-less report
             without_zeroes = aug_qry.get_result(self.ro_session, logger.warning)
             # Columns are aliased so the output columns are named differently
             out_id_cols = [aug_qry.defs_to_alias[a_col] for a_col in id_cols]
             not_presents = self.not_presents_in_sci_summary(
-                without_zeroes, out_id_cols, zero_col, aug_qry.obj_set
+                without_zeroes,
+                out_id_cols,
+                zero_col,
+                all_sampling_units,
+                taxa_hierarchy,
             )
             without_zeroes.extend(not_presents)
             without_zeroes.sort(
@@ -958,41 +1082,15 @@ class ProjectExport(JobServiceBase):
         without_zeroes: List[Dict[str, Any]],
         id_cols: List[str],
         zero_col: str,
-        object_set: Union[DescribedObjectSet, DescribedObjectBOSet],
+        all_sampling_units: Set[Tuple],
+        taxa_hierarchy: Dict[str, str],
     ):
         """
         Produce lines with 0 count/concentration/biovolume for relevant (sample, status, category) triplets
         or (sample, acquisition, status, category) tuples.
         Specs: https://github.com/ecotaxa/ecotaxa/issues/615#issuecomment-1158781701
         """
-        # Get all sampling_units (from the samples or subsamples AKA acquisition table)
-        sampling_units_qry = (
-            ObjectSetQueryPlus(object_set.without_filtering_taxo())
-            .add_selects(self._id_columns_from_req())
-            .set_aliases(
-                {
-                    "sam.orig_id": "sampleid",
-                    "acq.orig_id": "acquisid",
-                    "obh.classif_qual": "status",
-                }
-            )
-            .set_grouping(ResultGrouping.without_taxo(self._grouping_from_req(True)))
-        )
-        all_sampling_units: Set[Tuple] = set()
-        # Tuples here have either one, two or three values
-        for a_row in sampling_units_qry.get_result(self.ro_session):
-            all_sampling_units.add(tuple([a_row[id_col] for id_col in id_cols]))
-        # Get possible taxa names
-        txo_qry = (
-            ObjectSetQueryPlus(object_set)
-            .remap_categories(self.pre_mapping)
-            .add_selects(["txo.display_name"])
-            .set_aliases({"txo.display_name": "txo"})
-            .set_grouping(ResultGrouping.BY_TAXO)
-        )
-        taxa: Set[str] = set(
-            [a_row["txo"] for a_row in txo_qry.get_row_source(self.ro_session)]
-        )
+        taxa = taxa_hierarchy.keys()
         # Prepare the cross fill, all with tuples which are hash-able
         presents: Set[Tuple[Tuple, str]] = set()
         # Build (sampling unit, taxon) pairs from zero-less report
@@ -1011,7 +1109,13 @@ class ProjectExport(JobServiceBase):
                         id_col: id_col_val
                         for id_col, id_col_val in zip(id_cols, sampling_unit_id)
                     }
-                    a_not_present.update({"taxonid": taxonid, zero_col: 0})
+                    a_not_present.update(
+                        {
+                            "taxonid": taxonid,
+                            "annotation_category": taxa_hierarchy[taxonid],
+                            zero_col: 0,
+                        }
+                    )
                     not_presents.append(a_not_present)
         return not_presents
 
@@ -1026,18 +1130,101 @@ class ProjectExport(JobServiceBase):
             ret = ["sam.orig_id", "acq.orig_id"]
         return ret + ["obh.classif_qual"]
 
-    def create_sci_summary(self, project_ids: ProjectIDListT) -> int:
+    def _new_sci_summary_query(
+        self,
+        object_set: DescribedObjectBOSet,
+        formulae: Dict[str, str],
+        id_cols: List[str],
+    ) -> ObjectSetQueryPlus:
+        """
+        Build a fresh, isolated query for a single sci-summary type, out of a
+        (project, filters) description shared by every quantity of that project.
+        """
+        aug_qry = ObjectSetQueryPlus(object_set)
+        aug_qry.remap_categories(self.pre_mapping)
+        aug_qry.set_formulae(formulae)
+        # Set common aliases, not all of them is always used
+        aug_qry.set_aliases(self.SCI_SUMMARY_ID_ALIASES)
+        aug_qry.add_selects(id_cols)
+        aug_qry.add_selects(["txo.display_name", self.ANNOTATION_CATEGORY_HIERARCHY_SQL])
+        return aug_qry
+
+    def _project_formulae(self, project_id: ProjectIDT) -> Dict[str, str]:
+        """
+        This project's own computation formulae (how to get abundance/concentration/
+        biovolume variables from its free columns), overridden by any formula given
+        in the request. Each project keeps its own definitions: with several projects
+        involved, they are not merged/shared across each other. Can come back empty,
+        e.g. for an abundance-only export, which needs none -- see
+        _check_sci_summary_formulae for the actual per-quantity requirement check.
+        """
+        req = self.req
+        formulae: Dict[str, str] = {}
+        prjformulae = (
+            self.ro_session.query(Project.formulae)
+            .filter(Project.projid == project_id)
+            .scalar()
+        )
+        if prjformulae:
+            formulae.update(prjformulae)
+        try:
+            formulae.update(req.formulae)
+        except Exception:
+            pass
+        return formulae
+
+    def _check_sci_summary_formulae(
+        self,
+        project_ids: ProjectIDListT,
+        exp_types: List[ExportTypeEnum],
+        formulae_by_project: Dict[ProjectIDT, Dict[str, str]],
+    ) -> None:
+        """
+        Validate, upfront, that each project's formulae cover what each requested
+        quantity needs (see BO.ProjectVars.REQUIRED_VARS_PER_QUANTITY), so the job
+        fails fast with a clear message instead of a deep, cryptic formula-evaluation
+        error part-way through the export.
+        """
+        problems = []
+        for project_id in project_ids:
+            formulae = formulae_by_project[project_id]
+            for exp_type in exp_types:
+                missing = [
+                    a_var
+                    for a_var in REQUIRED_VARS_PER_QUANTITY[exp_type.value]
+                    if a_var not in formulae
+                ]
+                if missing:
+                    problems.append(
+                        "project %s: cannot compute '%s', missing formula(e) for: %s"
+                        % (
+                            project_id,
+                            QUANTITY_NAMES[exp_type.value],
+                            ", ".join(missing),
+                        )
+                    )
+        if problems:
+            raise Exception("Incomplete formulae:\n" + "\n".join(problems))
+
+    def create_sci_summary(
+        self, project_ids: ProjectIDListT, exp_types: List[ExportTypeEnum]
+    ) -> int:
         """
         Assuming that the historical summary is a data one, compute 'scientific' summaries.
+        A single TSV is produced, with one column per requested quantity ('count' AKA
+        abundance, concentration, biovolume), in the order they were requested, on top of
+        the common id columns (project_id if several projects, sample_id, acq_id, status, taxon).
+        With several projects, one query is run per (project, quantity) pair -- each using
+        that project's own formulae -- and results are merged together, as if several
+        single-project exports were concatenated.
         """
         req = self.req
         user_id = self._get_owner_id()
-        exp_type = req.exp_type
-        out_file = self._get_summary_file()
-
+        self._multi_project = len(project_ids) > 1
         # Ensure we work on validated objects only.
         # Not anymore, should user need to narrow the export the filters are available.
         # self.filters["statusfilter"] = "V"
+///
         # Prepare a where clause and parameters from filter
         object_set: DescribedObjectBOSet = DescribedObjectBOSet(
             self.ro_session, project_ids, user_id, self.filters
@@ -1048,7 +1235,7 @@ class ProjectExport(JobServiceBase):
         # Formulae default from the project but are overriden by the query
         formulae: Dict[str, str] = {}
         for project_id in project_ids:
-            variables = self.ro_session.get(ProjectVariables, project_id)
+            variables = self.ro_session.query(ProjectVariables).get(project_id)
             assert variables is not None
             if variables is not None:
                 formulae.update(variables.to_dict())
@@ -1066,37 +1253,114 @@ class ProjectExport(JobServiceBase):
         id_cols = self._id_columns_from_req()
         aug_qry.add_selects(id_cols)
         aug_qry.add_selects(["txo.display_name"])
-
+/////
         if req.sum_subtotal == SummaryExportGroupingEnum.by_project:
             assert False, "No collections yet to get multiple projects from"
 
-        # Per-type adjustment
-        zero_col = ""
-        if exp_type == ExportTypeEnum.abundances:
-            zero_col = self.create_sci_abundances_summary(aug_qry)
-        elif exp_type == ExportTypeEnum.concentrations:
-            zero_col = self.create_sci_concentrations_summary(aug_qry)
-        elif exp_type == ExportTypeEnum.biovols:
-            zero_col = self.create_sci_biovolumes_summary(aug_qry)
+        id_cols = self._id_columns_from_req()
+        # The columns identifying a row, common to every requested quantity.
+        key_cols = (
+            (["project_id"] if self._multi_project else [])
+            + [self.SCI_SUMMARY_ID_ALIASES[a_col] for a_col in id_cols]
+            + ["taxonid", "annotation_category"]
+        )
 
-        # Group according to request
-        aug_qry.set_grouping(self._grouping_from_req(True))
+        formulae_by_project = {
+            project_id: self._project_formulae(project_id) for project_id in project_ids
+        }
+        self._check_sci_summary_formulae(project_ids, exp_types, formulae_by_project)
 
-        msg = "Computing zero lines to add"
-        logger.info(msg)
-        self.update_progress(30, msg)
-        row_src = self.add_zeroes_in_sci_summary(aug_qry, id_cols, zero_col)
+        nb_steps = len(project_ids) * len(exp_types)
+        step = 0
+        # key (project_id? + id_cols + taxon values) -> output row, filled quantity by quantity
+        merged_rows: "Dict[Tuple, Dict[str, Any]]" = {}
+        quantity_cols: List[str] = []
+        for project_id in project_ids:
+            formulae = formulae_by_project[project_id]
+            object_set = DescribedObjectBOSet(
+                self.ro_session, [project_id], user_id, self.filters
+            )
+            # Sampling units and taxon->hierarchy mapping depend only on the project
+            # and its filters, not on the requested quantity, so compute them once
+            # here and reuse for every quantity below, instead of once per quantity.
+            zero_fill_data = None
+            if req.sum_subtotal in (
+                SummaryExportGroupingEnum.by_sample,
+                SummaryExportGroupingEnum.by_subsample,
+            ):
+                zero_fill_data = self._zero_fill_reference_data(object_set)
+            for exp_type in exp_types:
+                # A fresh query per (project, type), so a project's own formulae
+                # never leaks into another project's, nor one type's into another's.
+                aug_qry = self._new_sci_summary_query(object_set, formulae, id_cols)
+                if exp_type == ExportTypeEnum.abundances:
+                    zero_col = self.create_sci_abundances_summary(aug_qry)
+                elif exp_type == ExportTypeEnum.concentrations:
+                    zero_col = self.create_sci_concentrations_summary(aug_qry)
+                elif exp_type == ExportTypeEnum.biovols:
+                    zero_col = self.create_sci_biovolumes_summary(aug_qry)
+                else:
+                    raise Exception("Unsupported export type : %s" % exp_type)
+                if zero_col not in quantity_cols:
+                    quantity_cols.append(zero_col)
+                # Group according to request
+                aug_qry.set_grouping(self._grouping_from_req(True))
 
-        msg = "Writing to file %s" % out_file
-        logger.info(msg)
-        self.update_progress(50, msg)
-        nb_lines = aug_qry.write_row_source_to_csv(row_src, out_file)
+                msg = "Computing zero lines to add for %s, project %s" % (
+                    exp_type.value,
+                    project_id,
+                )
+                logger.info(msg)
+                step += 1
+                self.update_progress(10 + int(70 / nb_steps * step), msg)
+                row_src = self.add_zeroes_in_sci_summary(
+                    aug_qry, id_cols, zero_col, zero_fill_data
+                )
 
-        msg = "Extracted %d rows" % nb_lines
-        logger.info(msg)
-        self.update_progress(90, msg)
+                nb_lines = 0
+                for a_row in row_src:
+                    if self._multi_project:
+                        a_row["project_id"] = project_id
+                    key = tuple(a_row[a_col] for a_col in key_cols)
+                    merged_row = merged_rows.get(key)
+                    if merged_row is None:
+                        merged_row = {a_col: a_row[a_col] for a_col in key_cols}
+                        merged_rows[key] = merged_row
+                    merged_row[zero_col] = a_row[zero_col]
+                    nb_lines += 1
 
-        return 0
+                logger.info(
+                    "Extracted %d rows for %s, project %s",
+                    nb_lines,
+                    exp_type.value,
+                    project_id,
+                )
+
+        self.update_progress(90, "Packaging result")
+        self._set_sci_summary_out_file_name()
+        out_file = self.out_path / self.out_file_name
+        logger.info("Writing to file %s", out_file)
+        out_cols = key_cols + quantity_cols
+        with open(out_file, "w") as csv_fd:
+            wtr = csv.DictWriter(
+                csv_fd,
+                out_cols,
+                delimiter="\t",
+                quotechar='"',
+                lineterminator="\n",
+                restval=0,
+            )
+            wtr.writeheader()
+            # None-safe sort key, as e.g. status can be NULL for unclassified objects
+            for key in sorted(
+                merged_rows.keys(),
+                key=lambda a_key: tuple((v is None, v) for v in a_key),
+            ):
+                wtr.writerow(merged_rows[key])
+
+        total_lines = len(merged_rows)
+        self.update_progress(100, "Extracted %d rows" % total_lines)
+        return total_lines
 
     def query_taxo_recast(
         self,
@@ -1181,20 +1445,33 @@ class SummaryProjectExport(SpecializedProjectExport):
 
     @staticmethod
     def new_to_old(req: SummaryExportReq) -> ExportReq:
-        new_type_to_old = {
-            SummaryExportQuantitiesOptionsEnum.abundance: ExportTypeEnum.abundances,
-            SummaryExportQuantitiesOptionsEnum.biovolume: ExportTypeEnum.biovols,
-            SummaryExportQuantitiesOptionsEnum.concentration: ExportTypeEnum.concentrations,
-        }
         new_level_to_old = {
             SummaryExportSumOptionsEnum.none: SummaryExportGroupingEnum.just_by_taxon,
             SummaryExportSumOptionsEnum.sample: SummaryExportGroupingEnum.by_sample,
             SummaryExportSumOptionsEnum.acquisition: SummaryExportGroupingEnum.by_subsample,
         }
+        raw_quantity: List[Union[ExportTypeEnum, SummaryExportQuantitiesOptionsEnum]]
+        if isinstance(
+            req.quantity, (SummaryExportQuantitiesOptionsEnum, ExportTypeEnum)
+        ):
+            raw_quantity = [req.quantity]
+        elif isinstance(req.quantity, list):
+            raw_quantity = list(req.quantity)
+        else:
+            raw_quantity = [ExportTypeEnum.abundances]
+        quantity: List[Union[ExportTypeEnum, SummaryExportQuantitiesOptionsEnum]] = [
+            (
+                SUMMARY_QUANTITY_TO_EXPORT_TYPE[a_type]
+                if isinstance(a_type, SummaryExportQuantitiesOptionsEnum)
+                else a_type
+            )
+            for a_type in raw_quantity
+        ]
         return ExportReq(
             collection_id=req.collection_id,
             project_id=req.project_id,
-            exp_type=new_type_to_old[req.quantity],
+            exp_type=ExportTypeEnum.summary,
+            quantity=quantity,
             sum_subtotal=new_level_to_old[req.summarise_by],
             formulae=req.formulae,
             out_to_ftp=req.out_to_ftp,

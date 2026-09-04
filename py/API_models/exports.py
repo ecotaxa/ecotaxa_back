@@ -175,6 +175,12 @@ class ExportReq(ProjectIdReq):
         default=False,
     )
     # TODO: Move A(acquisition) to U(subsample) but it needs propagation to client side.
+    quantity: List[Union[ExportTypeEnum, SummaryExportQuantitiesOptionsEnum]] = Field(
+        title="Quantity",
+        description="The quantity to compute. Abundance is always possible.",
+        example=[SummaryExportQuantitiesOptionsEnum.abundance],
+        default=[SummaryExportQuantitiesOptionsEnum.abundance],
+    )
     sum_subtotal: SummaryExportGroupingEnum = Field(
         title="Sum subtotal",
         description="For 'SUM', 'ABO', 'CNC' and 'BIV' types, if "
@@ -281,7 +287,10 @@ class SummaryExportReq(ProjectIdReq):
     project_id: int = Field(
         title="Project Id", description="The project to export.", examples=[1]
     )
-    quantity: SummaryExportQuantitiesOptionsEnum = Field(
+    quantity: Union[
+        Union[ExportTypeEnum, SummaryExportQuantitiesOptionsEnum],
+        List[Union[ExportTypeEnum, SummaryExportQuantitiesOptionsEnum]],
+    ] = Field(
         title="Quantity",
         description="The quantity to compute. Abundance is always possible.",
         examples=[SummaryExportQuantitiesOptionsEnum.abundance],

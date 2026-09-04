@@ -68,11 +68,6 @@ CollectionOrgaRole.collection = relationship(Collection, uselist=False)
 CollectionOrgaRole.organization = relationship(
     Organization, uselist=False, lazy="joined"
 )
-
-# Ancillary to project
-ProjectVariables.project = relationship(Project, viewonly=True)
-Project.variables = relationship(ProjectVariables, uselist=False)
-
 # Project
 Project.all_samples = relationship(Sample, viewonly=True)
 Sample.project = relationship(Project)

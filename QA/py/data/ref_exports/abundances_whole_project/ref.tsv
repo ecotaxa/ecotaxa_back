@@ -1,8 +1,8 @@
-status	taxonid	count
-V	Cyclopoida	1
-V	Oncaeidae	2
-V	detritus	4
-V	egg<other	1
-V	other<Biota	1
-V	small<egg	1
-V	t001	1
+status	taxonid	annotation_category	count
+V	Cyclopoida	Biota>Animalia>Arthropoda>Crustacea>Multicrustacea>Copepoda>Neocopepoda>Podoplea>Cyclopoida	1
+V	Oncaeidae	Biota>Animalia>Arthropoda>Crustacea>Multicrustacea>Copepoda>Neocopepoda>Podoplea>Cyclopoida>Ergasilida>Oncaeidae	2
+V	detritus	not-living>detritus	4
+V	egg<other	Biota>other>egg	1
+V	other<Biota	Biota>other	1
+V	small<egg	Biota>Animalia>Chordata>Vertebrata>Gnathostomata>Osteichthyes>Actinopterygii>egg>small	1
+V	t001	temporary>t001	1
