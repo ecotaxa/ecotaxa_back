@@ -362,7 +362,7 @@ class _DBHistoricalLastClassifDescription(DescriptiveModel):
     )
 
 
-HistoricalLastClassificationModel = dataclass_to_model_with_suffix(
+HistoricalLastClassificationModel = dataclass_to_model(
     HistoricalLastClassif, _DBHistoricalLastClassifDescription
 )
 

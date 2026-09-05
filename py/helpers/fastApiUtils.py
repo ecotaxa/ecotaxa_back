@@ -88,9 +88,11 @@ def adapt_openapi_31_to_30(d: dict):
             d["items"] = d["prefixItems"][0]
         del d["prefixItems"]
 
-    # 3. Remove 'propertyNames' (Unsupported keyword in OpenAPI 3.0)
+    # 3. Remove uUnsupported keywords in OpenAPI 3.0
     if "propertyNames" in d:
         del d["propertyNames"]
+    if "exclude_unset" in d:
+        del d["exclude_unset"]
 
     # 4. Translate 'contentMediaType' file uploads into OpenAPI 3.0 'binary' format strings
     if "contentMediaType" in d:
@@ -164,7 +166,6 @@ def dump_openapi(app: FastAPI, main_path: str):  # pragma: no cover
         allow_nan=False,
         indent=2,
         separators=(",", ":"),
-        sort_keys=True,
         # sort_keys=True, # Uncomment for easier comparison b/w versions
     )
     # Copy here for Git commit but also into another dev tree
