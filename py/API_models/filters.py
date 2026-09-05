@@ -253,15 +253,17 @@ class _ProjectFilters2Model(DescriptiveModel):
         default=None,
     )
 
-    model_config = ConfigDict(  # type: ignore # TODO: Why mypy complains?
+
+ProjectFiltersModel = typed_dict_to_model(
+    ProjectFiltersDict,
+    _ProjectFilters2Model,
+    ConfigDict(
         json_schema_extra={
             "title": "Project filters Model",
             "description": "How to reduce project data.",
         }
-    )
-
-
-ProjectFiltersModel = typed_dict_to_model(ProjectFiltersDict, _ProjectFilters2Model)
+    ),
+)
 
 
 class ProjectFilters(ProjectFiltersModel):

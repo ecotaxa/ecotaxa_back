@@ -6,7 +6,7 @@
 # Global preferences for a user
 #
 
-from typing import List, Tuple, Union, Optional, List, cast
+from typing import Tuple, Union, Optional, List, cast
 
 from sqlalchemy.orm import Session
 

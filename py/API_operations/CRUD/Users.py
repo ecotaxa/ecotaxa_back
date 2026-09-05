@@ -26,7 +26,6 @@ from BO.User import (
 from DB.Project import ProjectIDT
 from DB.User import (
     Guest,
-    Organization,
     Person,
     Role,
     TempPasswordReset,
@@ -283,7 +282,7 @@ class UserService(Service):
                 detail=detail,
             )
         else:
-            assert new_user.password is not None, "Mdify new user needs a password"
+            assert new_user.password is not None, "Modify new user needs a password"
             self._verify_and_update_password_throw(new_user.password, usr)
         # update a profile with information requested by the main user admin - status to 0
         cols_to_upd = self.COMMON_UPDATABLE_COLS
@@ -571,14 +570,6 @@ class UserService(Service):
             RightsBO.set_allowed_actions(user_to_update, actions, all_roles)
         self.session.commit()
         return None
-
-    def search_organizations(self, name: str) -> List[str]:
-        """
-        Return the org names with given pattern.
-        """
-        qry = self.ro_session.query(Organization.name)
-        qry = qry.filter(Organization.name.ilike(name))
-        return [r for r, in qry if r is not None]
 
     def _has_ident_user_throw(
         self, user_data: dict, valid: bool, _id: int = -1

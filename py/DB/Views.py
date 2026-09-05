@@ -7,7 +7,7 @@
 #
 from typing import List
 
-from sqlalchemy import Table, text
+from sqlalchemy import text
 
 OBJECTS_DEF = """
 SELECT prj.projid,
@@ -45,18 +45,12 @@ SELECT prj.projid,
 
 
 def views_deletion_queries(metadata) -> List:
-    objects = Table("objects", metadata)
-
-    # drop_view = DropView(objects, if_exists=True)
     drop_view = text("drop view if exists objects")
 
     return [drop_view]
 
 
 def views_creation_queries(metadata) -> List:
-    objects = Table("objects", metadata)
-
-    # create_view = CreateView(objects, OBJECTS_DEF)
     create_view = text("create view objects as " + OBJECTS_DEF)
 
     return [create_view]

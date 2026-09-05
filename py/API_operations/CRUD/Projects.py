@@ -4,8 +4,10 @@
 #
 
 from typing import List, Union, Tuple, Optional, Dict
-from API_models.crud import CreateProjectReq, ProjectReq, ProjectModel
+
 from fastapi import HTTPException
+
+from API_models.crud import CreateProjectReq, ProjectReq, ProjectModel
 from BO.Classification import ClassifIDListT, ClassifIDT
 from BO.Collection import MinimalCollectionBO
 from BO.ObjectSet import EnumeratedObjectSet

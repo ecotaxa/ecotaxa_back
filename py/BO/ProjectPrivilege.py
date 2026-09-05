@@ -4,9 +4,9 @@
 #
 from typing import Final
 
+from DB.User import UserStatus
 from DB.helpers.Direct import text
 from DB.helpers.ORM import Session
-from DB.User import UserStatus
 
 
 class ProjectPrivilegeBO(object):

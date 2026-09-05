@@ -2,9 +2,9 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-import typing
 import json
 import re
+import typing
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
@@ -21,10 +21,6 @@ from typing import (
     TYPE_CHECKING,
 )
 
-from sqlalchemy import Select
-from sqlalchemy.orm import Bundle
-
-from API_models.helpers.ReadOnly import ReadOnlyModel
 from BO.Classification import ClassifIDListT
 from BO.Collection import MinimalCollectionBO
 from BO.DataLicense import AccessLevelEnum
@@ -46,8 +42,6 @@ from BO.User import (
     MinimalUserBOListT,
     UserActivityListT,
 )
-
-from DB.User import UserIDT, UserIDListT
 from DB.Acquisition import Acquisition
 from DB.Collection import CollectionProject, Collection
 from DB.Object import (
@@ -66,15 +60,15 @@ from DB.Project import (
     ANNOTATE_STATUS,
     ANNOTATE_NO_PREDICTION,
     EXPLORE_ONLY,
-    KNOWN_PROJECT_VARS,
 )
 from DB.ProjectPrivilege import ProjectPrivilege
-from DB.Instrument import Instrument
+from DB.ProjectVariables import KNOWN_PROJECT_VARS
 from DB.Sample import Sample
-from DB.User import Role, User, UserStatus, Organization
+from DB.User import Role, User, UserStatus
+from DB.User import UserIDT, UserIDListT
 from DB.helpers import Session, Result
 from DB.helpers.Bean import Bean
-from DB.helpers.Core import select, get_bundle_columns
+from DB.helpers.Core import select
 from DB.helpers.Direct import text
 from DB.helpers.Hints import RECURS_HINT
 from DB.helpers.ORM import (
@@ -94,8 +88,6 @@ from DB.helpers.ORM import (
 from helpers.DynamicLogs import get_logger
 from helpers.FieldListType import FieldListType
 from helpers.Timer import CodeTimer
-from helpers.pydantic import Field, BaseModel
-from starlette.status import HTTP_422_UNPROCESSABLE_CONTENT
 
 if TYPE_CHECKING:
     # Avoid a circular import: API_models.crud itself imports from BO.Project.

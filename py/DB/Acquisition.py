@@ -13,8 +13,6 @@ from .helpers.Direct import text
 from .helpers.ORM import Model, Session, Mapped
 from .helpers.Postgres import VARCHAR, BIGINT
 
-# noinspection PyProtectedMember
-
 ACQUISITION_FREE_COLUMNS = 31
 
 if TYPE_CHECKING:

@@ -30,7 +30,7 @@ from typing import (
 )
 
 # A Postgresl insert generator, needed for the key conflict clause
-from sqlalchemy import bindparam, Subquery, RowMapping, update, TableClause
+from sqlalchemy import bindparam, Subquery, RowMapping, update, delete, TableClause
 
 from API_models.filters import ProjectFiltersDict
 from BO.Classification import (
@@ -539,7 +539,7 @@ class EnumeratedObjectSet(MappedTable):
         """
         # Start with physical images, which are not deleted via a CASCADE on DB side
         # This is maybe due to relationship cycle b/w ObjectHeader and Images @See comment in Image class
-        del_qry: Delete = Image.__table__.delete()
+        del_qry: Delete = delete(Image)
         del_qry = del_qry.where(Image.objid == any_(a_chunk))
         img_del_qry = del_qry.returning(
             Image.imgid, Image.orig_file_name, Image.thumb_height

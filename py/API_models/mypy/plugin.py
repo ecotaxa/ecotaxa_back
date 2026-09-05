@@ -30,7 +30,7 @@ ColTypesT = Dict[str, Type]
 
 
 def _get_2_call_args(ctx: DynamicClassDefContext) -> Tuple[TypeInfo, TypeInfo]:
-    arg1, arg2 = ctx.call.args
+    arg1, arg2 = ctx.call.args[:2]
     if not isinstance(arg1, NameExpr) or not isinstance(arg2, NameExpr):
         ctx.api.msg.fail(
             "EcoTaxa plugin: Class args "

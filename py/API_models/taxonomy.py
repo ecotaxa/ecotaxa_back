@@ -4,7 +4,7 @@
 #
 #  Models used in Taxonomy API operations.
 #
-from typing import List, Optional, Any, Dict
+from typing import List, Optional, Dict
 
 from fastapi import HTTPException
 from pydantic import field_validator, ConfigDict
@@ -230,6 +230,7 @@ class TaxonomyTreeStatus(BaseModel):
         title="Last refresh",
         description="Taxonomy tree last refresh/sync from taxonomy server. "
         "Date, with format YYYY-MM-DDThh:mm:ss.",
+        examples=["2021-10-07T01:26:47"],
         default=None,
     )
 
@@ -279,22 +280,22 @@ class TaxonomyRecastReq(BaseModel):
 
 
 class _Taxo2Model(DescriptiveModel):
-    creation_datetime = Field(
+    creation_datetime: str = Field(
         title="Creation datetime",
         description="Taxon creation date. Date, with format YYYY-MM-DD hh:mm:ss.",
         examples=["2021-08-20 09:09:39"],
     )
-    creator_email = Field(
+    creator_email: str = Field(
         title="Creator email",
         description="Email of the creator of the taxon.",
         examples=["creator.user@emaim.com"],
     )
-    display_name = Field(
+    display_name: str = Field(
         title="Display name",
         description="The display name of the taxon. It is suffixed in EcoTaxoServer with (Deprecated) when taxostatus is 'D'",
         examples=["Echinodermata X"],
     )
-    id = Field(
+    id: int = Field(
         title="Id", description="The unique numeric id of the taxon.", examples=[12876]
     )
     aphia_id: Optional[int] = Field(
@@ -309,54 +310,54 @@ class _Taxo2Model(DescriptiveModel):
         examples=["Subphylum"],
         default=None,
     )
-    id_instance = Field(
+    id_instance: int = Field(
         title="Id instance", description="The instance Id.", examples=[1]
     )
-    lastupdate_datetime: Any = Field(
+    lastupdate_datetime: str = Field(
         title="Last update datetime",
         description="Taxon last update. Date, with format YYYY-MM-DD hh:mm:ss.",
         examples=["2021-08-20 09:09:40"],
     )
-    name = Field(
+    name: str = Field(
         title="Name", description="The name of the taxon.", examples=["Echinodermata X"]
     )
-    parent_id = Field(
+    parent_id: int = Field(
         title="Parent id",
         description="The unique numeric id of the taxon parent.",
         examples=[11509],
     )
-    rename_to = Field(
+    rename_to: str = Field(
         title="Rename to",
         description="The advised replacement Name if the taxon is deprecated.",
         examples=["null"],
     )
-    source_desc = Field(
+    source_desc: str = Field(
         title="Source desc", description="The source description.", examples=["null"]
     )
-    source_url = Field(
+    source_url: str = Field(
         title="Source url",
         description="The source url.",
         examples=["https://www.google.fr/"],
     )
-    taxostatus = Field(
+    taxostatus: str = Field(
         title="Taxo status",
         description="The taxon status, N for Not approved, A for Approved or D for Deprecated.",
         examples=["A"],
     )
-    taxotype = Field(
+    taxotype: str = Field(
         title="Taxo type",
         description="The taxon type, 'M' for Morpho or 'P' for Phylo.",
         examples=["P"],
     )
-    nbrobj = Field(
+    nbrobj: int = Field(
         title="Number of objects",
         description="Number of objects in this category exactly.",
-        examples=["5800"],
+        examples=[5800],
     )
-    nbrobjcum = Field(
+    nbrobjcum: int = Field(
         title="Number of descendant objects",
         description="Number of objects in this category and descendant ones.",
-        examples=["54800"],
+        examples=[54800],
     )
 
 

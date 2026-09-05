@@ -6,7 +6,6 @@
 #
 import ast
 import re
-
 from typing import Dict, Optional, List, Final, Tuple
 
 from DB.ProjectVariables import KNOWN_PROJECT_VARS

@@ -175,7 +175,7 @@ _UserModelFromDB = combine_models(User, _FullUserModel)
 
 # TODO JCE - description example
 class _Project2Model(DescriptiveModel):
-    projid: int = Field(
+    projid: ProjectIDT = Field(
         title="Project Id", description="The project Id.", examples=[4824]
     )
     title: str = Field(

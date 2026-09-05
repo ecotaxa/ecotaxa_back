@@ -13,7 +13,6 @@ from .helpers.Postgres import VARCHAR, INTEGER
 if TYPE_CHECKING:
     from .Project import Project
     from .User import User
-# from .Project import Project
 
 
 class ProjectPrivilege(Model):

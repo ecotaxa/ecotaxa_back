@@ -39,8 +39,8 @@ from BO.ObjectSetQueryPlus import (
     ObjectSetQueryPlus,
 )
 from BO.Project import ProjectBO, ProjectTaxoStats, ProjectIDListT
-from BO.ProjectVars import REQUIRED_VARS_PER_QUANTITY, QUANTITY_NAMES
 from BO.ProjectSet import PermissionConsistentProjectSet
+from BO.ProjectVars import REQUIRED_VARS_PER_QUANTITY, QUANTITY_NAMES
 from BO.Sample import SampleBO, SampleAggregForTaxon
 from BO.TaxoRecast import TaxoRecastBO
 from BO.Taxonomy import TaxonBOSet, WoRMSBO
@@ -216,9 +216,7 @@ class DarwinCoreExport(JobServiceBase):
         for a_project in self.collection.projects:
             formulae = self.formulae_by_project[a_project.projid]
             if self.with_computations and not formulae:
-                problems.append(
-                    "project %s: no formulae configured" % a_project.projid
-                )
+                problems.append("project %s: no formulae configured" % a_project.projid)
                 continue
             for a_quantity in self.with_computations:
                 missing = [

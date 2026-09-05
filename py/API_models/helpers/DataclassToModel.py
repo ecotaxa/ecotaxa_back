@@ -102,7 +102,7 @@ def dataclass_to_model(
             field_info = descrips[a_field.name]
             field_info = FieldInfo.merge_field_infos(field_info, default=default)
         else:
-            # No description, a title derived from field name will appear, e.g. "last_annot" -> "title":"Last Annot"
+            # No description, a title derived from the field name will appear, e.g. "last_annot" -> "title":"Last Annot"
             field_info = FieldInfo(default=default)
         model_fields[a_field.name] = Annotated[fld_type, field_info]
     model_name = data_class.__name__ + ("Model" if add_suffix else "")

@@ -112,7 +112,6 @@ class Connection(object):
             echo=False,
             echo_pool=False,
             # echo=True, echo_pool="debug",
-            # executemany_mode="batch",
             poolclass=TimeEvictedQueuePool,
             pool_use_lifo=True,
             # We have our own age-based eviction strategy, the pool below will contain invalidated connections

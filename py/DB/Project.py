@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from .User import User
     from .ProjectVariables import ProjectVariables
     from .Instrument import Instrument
-    from .ProjectVariables import KNOWN_PROJECT_VARS
+
 from .ProjectPrivilege import ProjectPrivilege
 
 from .helpers.DDL import Sequence, ForeignKey
@@ -32,8 +32,6 @@ EXPLORE_ONLY = "ExploreOnly"
 # Typings, to be clear that these are not e.g. object IDs
 ProjectIDT = int
 ProjectIDListT = List[int]
-
-KNOWN_PROJECT_VARS = {"subsample_coef", "total_water_volume", "individual_volume"}
 
 
 class Project(Model):

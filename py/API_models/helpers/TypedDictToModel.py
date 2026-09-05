@@ -15,7 +15,9 @@ from helpers.pydantic import PydanticDescriptionT
 
 
 def typed_dict_to_model(
-    typed_dict_class: Type, pydantic_descrip: PydanticDescriptionT
+    typed_dict_class: Type,
+    pydantic_descrip: PydanticDescriptionT,
+    extra_config: Optional[ConfigDict],
 ) -> PydanticModelT:
     annotations: Dict[str, Any] = {}
     descrips = pydantic_descrip.get_fields()
@@ -37,6 +39,8 @@ def typed_dict_to_model(
     config = ConfigDict(
         coerce_numbers_to_str=True, from_attributes=True, populate_by_name=True
     )
+    if extra_config is not None:
+        config.update(extra_config)
     ret: PydanticModelT = create_model(
         typed_dict_class.__name__, __config__=config, **annotations
     )

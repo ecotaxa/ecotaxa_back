@@ -46,7 +46,6 @@ from DB.Object import (
     PREDICTED_CLASSIF_QUAL,
 )
 from DB.Project import Project, ProjectIDListT, ProjectIDT
-from DB.ProjectVariables import ProjectVariables
 from DB.TaxoRecast import TaxoRecast, RecastOperation
 from DB.helpers.Direct import text
 from DB.helpers.SQL import OrderClause, SelectClause

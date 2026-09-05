@@ -173,7 +173,10 @@ class DwcOccurrence(BaseModel):
     # identified By # TODO
 
     identificationVerificationStatus: Optional[IdentificationVerificationEnum] = (
-        DwcField(term="http://rs.tdwg.org/dwc/terms/identificationVerificationStatus")
+        DwcField(
+            term="http://rs.tdwg.org/dwc/terms/identificationVerificationStatus",
+            default=None,
+        )
     )
 
     # https://github.com/ecotaxa/ecotaxa_front/issues/764#issuecomment-1508165516

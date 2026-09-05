@@ -5,7 +5,7 @@
 from enum import Enum
 from typing import List, Dict, Optional, Union
 
-from pydantic import field_validator, ConfigDict
+from pydantic import ConfigDict
 
 from helpers.pydantic import BaseModel, Field
 

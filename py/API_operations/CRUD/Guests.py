@@ -15,6 +15,7 @@ from BO.User import GuestBO
 from DB.Collection import CollectionUserRole, CollectionProject
 from DB.ProjectPrivilege import ProjectPrivilege
 from DB.User import Guest, GuestIDListT, GuestIDT, Person, User, UserIDT
+from DB.helpers.Core import select
 from helpers import DateTime
 from helpers.DynamicLogs import get_logger
 from helpers.httpexception import (
@@ -253,7 +254,7 @@ class GuestService(Service):
 
     def _projects_managed_by(self, user: User) -> CollectionIDListT:
         qry = (
-            self.ro_session.query(CollectionProject.collection_id)
+            select(CollectionProject.collection_id)
             .join(
                 ProjectPrivilege,
                 CollectionProject.project_id == ProjectPrivilege.projid,
@@ -261,12 +262,12 @@ class GuestService(Service):
             .filter(ProjectPrivilege.member == user.id)
             .filter(ProjectPrivilege.privilege == ProjectPrivilegeBO.MANAGE)
         )
-        collection_ids = qry.all()
+        collection_ids = self.ro_session.scalars(qry).all()
         return cast(CollectionIDListT, collection_ids)
 
     def _can_manage_guest_throw(self, user: User, guest_id: GuestIDT):
         """
-        check if user can update guest profile (has to be creator_users or associates_users  in a collection managed by the user)
+        check if the user can update its guest profile (has to be creator_users or associates_users in a collection managed by the user)
         """
         collection_ids = self._is_manager_throw(user)
         if user.is_manager():

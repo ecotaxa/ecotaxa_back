@@ -185,28 +185,28 @@ class JsonDumper(Service):
         :param objids:
         :return:
         """
-        ret = select(
+        qry = select(
             Project, Sample, Acquisition, Process, ObjectHeader, ObjectFields, Image
         )
-        ret = ret.join(Sample, Project.all_samples).options(
+        qry = qry.join(Sample, Project.all_samples).options(
             contains_eager(Project.all_samples)
         )
-        ret = ret.join(Acquisition, Sample.all_acquisitions)
-        ret = ret.join(Process, Acquisition.process)
-        ret = ret.join(ObjectHeader, Acquisition.all_objects)
+        qry = qry.join(Acquisition, Sample.all_acquisitions)
+        qry = qry.join(Process, Acquisition.process)
+        qry = qry.join(ObjectHeader, Acquisition.all_objects)
         # Natural joins
-        ret = ret.join(ObjectFields)
-        ret = ret.join(Image, ObjectHeader.all_images).options(
+        qry = qry.join(ObjectFields)
+        qry = qry.join(Image, ObjectHeader.all_images).options(
             contains_eager(ObjectHeader.all_images)
         )
-        ret = ret.filter(ObjectHeader.objid == any_(objids))
+        qry = qry.filter(ObjectHeader.objid == any_(objids))
 
         if self.first_query:
-            logger.info("Query: %s", str(ret))
+            logger.info("Query: %s", str(qry))
             self.first_query = False
 
         with CodeTimer("Get Objects:", logger):
-            objs = [an_obj for an_obj in self.session.execute(ret).unique().scalars()]
+            objs = [an_obj for an_obj in self.session.execute(qry).unique().scalars()]
 
         # We get as many lines as images
         logger.info("NB ROWS JOIN=%d", len(objs))

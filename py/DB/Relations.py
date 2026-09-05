@@ -21,7 +21,6 @@ from .Prediction import Prediction
 from .Process import Process
 from .Project import Project
 from .ProjectPrivilege import ProjectPrivilege
-from .ProjectVariables import ProjectVariables
 from .Sample import Sample
 from .Taxonomy import Taxonomy
 from .Training import Training

@@ -77,7 +77,7 @@ class _ObjectHeaderModel(DescriptiveModel):
         default=None,
     )
     classif_score: Optional[float] = Field(
-        title="Classification who",
+        title="Classification score",
         description="The ML score for this object, if **P**.",
         examples=["null"],
         default=None,
@@ -123,15 +123,6 @@ class _ObjectHeaderComplement(BaseModel):
         title="Classification auto when",
         description="Set if the object was ever predicted, remains forever with these value. Reflect the 'last state' only if classif_qual is 'P'. The classification date.",
         examples=["2021-09-21T14:59:01.007110"],
-        default=None,
-    )
-    complement_info: str = Field(
-        title="Complement info", description="", examples=["Part of ostracoda"]
-    )
-    object_link: Optional[str] = Field(
-        title="Object link",
-        description="Object link.",
-        examples=["http://www.zooscan.obs-vlfr.fr//"],
         default=None,
     )
 

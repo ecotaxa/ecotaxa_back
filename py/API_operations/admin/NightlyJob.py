@@ -13,12 +13,13 @@ from glob import glob
 from pathlib import Path
 from typing import Tuple, Any, List, Optional
 
+from sqlalchemy import select, delete
+
 from API_operations.helpers.JobService import JobServiceBase, ArgsDict
 from BO.Job import JobBO
 from BO.Project import ProjectBO
 from BO.Rights import RightsBO
 from BO.Taxonomy import TaxonomyBO
-from sqlalchemy import select, exists, delete, update
 from DB.Acquisition import ACQ_PRJ_OFFSET
 from DB.Job import JobIDT, Job
 from DB.Object import OBJ_PRJ_OFFSET, ObjectHeader, PREDICTED_CLASSIF_QUAL

@@ -189,7 +189,7 @@ from helpers.fastApiUtils import (
     regular_mem_cleanup,
 )
 from helpers.login import LoginService
-from helpers.pydantic import sort_and_prune, BaseModel
+from helpers.pydantic import sort_and_prune
 
 # from fastapi.middleware.gzip import GZipMiddleware
 

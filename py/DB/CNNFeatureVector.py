@@ -5,8 +5,8 @@
 from typing import TYPE_CHECKING
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy.orm import mapped_column
 from sqlalchemy import text
+from sqlalchemy.orm import mapped_column
 
 from .helpers.DDL import ForeignKey, Index
 from .helpers.ORM import Mapped, Model
