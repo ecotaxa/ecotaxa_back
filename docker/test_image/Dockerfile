@@ -7,7 +7,7 @@ RUN apt-get update
 # postgresql-client # for psycopg2
 # gcc make file cython3 # for uvloop for uvicorn needs cython needs make
 RUN apt-get install \
-    python3.8 python3-venv python3.8-dev python3.8-venv \
+    python3.14 python3-venv python3.14-dev python3.14-venv \
     postgresql-client \
     gcc make file cython3 \
     --no-install-recommends --yes
@@ -16,7 +16,7 @@ RUN apt-get install \
 COPY py/requirements.txt ./reqs.txt
 
 # Create venv, mandatory as we switched away from the python bundled with the OS
-RUN python3.8 -m venv /venv
+RUN python3.14 -m venv /venv
 # Install
 RUN PATH=/venv/bin pip3 install wheel
 RUN PATH=/venv/bin:$PATH pip3 install -r reqs.txt
@@ -29,7 +29,7 @@ FROM ubuntu:18.04 as target
 
 # Cleanup to save on image size
 RUN apt-get update && \
-apt-get install python3.8 python3.8-venv python3.8-distutils \
+apt-get install python3.14 python3.14-venv python3.14-distutils \
 postgresql-client curl \
 libpq5 --no-install-recommends --yes && \
 apt-get clean && \

@@ -7,10 +7,9 @@
 #
 from typing import List
 
-from sqlalchemy import Table, text
-from sqlalchemy_views import CreateView, DropView  # type: ignore # case6
+from sqlalchemy import text
 
-OBJECTS_DEF = text("""
+OBJECTS_DEF = """
 SELECT prj.projid,
        sam.sampleid,
        obh.objid,
@@ -42,20 +41,16 @@ SELECT prj.projid,
     JOIN acquisitions acq ON acq.acq_sample_id = sam.sampleid AND acq.acquisid <@ acq_in_prj(prj.projid)
     JOIN obj_head obh ON obh.acquisid = acq.acquisid AND obh.objid <@ obj_in_prj(prj.projid)
     LEFT JOIN obj_field ofi ON obh.objid = ofi.objfid     -- allow elimination by planner
-    """)
+    """
 
 
 def views_deletion_queries(metadata) -> List:
-    objects = Table("objects", metadata)
-
-    drop_view = DropView(objects, if_exists=True)
+    drop_view = text("drop view if exists objects")
 
     return [drop_view]
 
 
 def views_creation_queries(metadata) -> List:
-    objects = Table("objects", metadata)
-
-    create_view = CreateView(objects, OBJECTS_DEF)
+    create_view = text("create view objects as " + OBJECTS_DEF)
 
     return [create_view]

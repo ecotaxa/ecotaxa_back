@@ -30,8 +30,7 @@ from typing import (
 )
 
 # A Postgresl insert generator, needed for the key conflict clause
-from sqlalchemy import bindparam
-from sqlalchemy.sql import Alias
+from sqlalchemy import bindparam, Subquery, RowMapping, update, delete, TableClause
 
 from API_models.filters import ProjectFiltersDict
 from BO.Classification import (
@@ -51,7 +50,7 @@ from BO.Object import ObjectIDWithParentsT, MANUAL_STATES_TEXT, PREDICTED_STATE_
 from BO.Taxonomy import TaxonomyBO
 from BO.Training import TrainingBO, PredictionBO
 from BO.helpers.MappedTable import MappedTable
-from DB import Session, Query, Process, User, ObjectCNNFeatureVector
+from DB import Session, ObjectCNNFeatureVector
 from DB.Acquisition import Acquisition
 from DB.Image import Image
 from DB.Object import (
@@ -68,15 +67,15 @@ from DB.Object import (
 from DB.Prediction import (
     PSEUDO_TRAINING_SCORE,
 )
+from DB.Process import Process
 from DB.Project import ProjectIDListT, Project
 from DB.Sample import Sample
-from DB.Taxonomy import TaxoStatus
-from DB.Taxonomy import Taxonomy
-from DB.User import UserIDT
+from DB.Taxonomy import Taxonomy, TaxoStatus
+from DB.User import User, UserIDT
 from DB.helpers import Result
 from DB.helpers.Core import select
 from DB.helpers.Direct import func
-from DB.helpers.ORM import Row, Delete, Update, any_, and_, or_, case
+from DB.helpers.ORM import Delete, Update, any_, and_, or_, case
 from DB.helpers.Postgres import pg_insert, PgInsert
 from DB.helpers.SQL import (
     WhereClause,
@@ -540,9 +539,9 @@ class EnumeratedObjectSet(MappedTable):
         """
         # Start with physical images, which are not deleted via a CASCADE on DB side
         # This is maybe due to relationship cycle b/w ObjectHeader and Images @See comment in Image class
-        img_del_qry: Delete = Image.__table__.delete()
-        img_del_qry = img_del_qry.where(Image.objid == any_(a_chunk))
-        img_del_qry = img_del_qry.returning(
+        del_qry: Delete = delete(Image)
+        del_qry = del_qry.where(Image.objid == any_(a_chunk))
+        img_del_qry = del_qry.returning(
             Image.imgid, Image.orig_file_name, Image.thumb_height
         )
         img_from_id_and_orig = Image.img_from_id_and_orig
@@ -615,8 +614,8 @@ class EnumeratedObjectSet(MappedTable):
         prev_nb_objs = len(self.object_ids)
         new_objects_ids = []
         for rec in qry:
-            new_objects_ids.append(rec["objid"])
-            classif_id_lists.append([rec["classif_id"]])  # Single-elem list
+            new_objects_ids.append(rec.objid)
+            classif_id_lists.append([rec.classif_id])  # Single-elem list
             classif_score_lists.append([PSEUDO_TRAINING_SCORE])  # Ditto
 
         # Classify with new training
@@ -637,7 +636,7 @@ class EnumeratedObjectSet(MappedTable):
         Update all self's objects using given parameters, dict of column names and values.
         """
         # Update objects table
-        obj_upd_qry: Update = ObjectHeader.__table__.update()
+        obj_upd_qry: Update = update(ObjectHeader)
         obj_upd_qry = obj_upd_qry.where(ObjectHeader.objid == any_(self.object_ids))
         obj_upd_qry = obj_upd_qry.values(params)
         updated_objs = self.session.execute(
@@ -678,14 +677,12 @@ class EnumeratedObjectSet(MappedTable):
         ]
         # What we want to historize, as a subquery - The current state
         sel_subqry = select(
-            [
-                oh.objid,
-                oh.classif_qual,
-                oh.classif_id,
-                oh.classif_date,
-                oh.classif_who,  # Is NULL when 'P' or initial
-                oh.classif_score,  # Is NULL when not 'P'
-            ]
+            oh.objid,
+            oh.classif_qual,
+            oh.classif_id,
+            oh.classif_date,
+            oh.classif_who,  # Is NULL when 'P' or initial
+            oh.classif_score,  # Is NULL when not 'P'
         )
         if only_qual is not None:
             # Pick only the required states # TODO: Unused, to keep?
@@ -701,8 +698,10 @@ class EnumeratedObjectSet(MappedTable):
         ins_qry = ins_qry.from_select(ins_columns, sel_subqry)
         # TODO: Below not clear nor clean
         ins_qry = ins_qry.on_conflict_do_nothing(constraint="objectsclassifhisto_pkey")
+        ins_qry_cnt = ins_qry.returning(och.objid)
         # logger.info("Histo query: %s", ins_qry.compile())
-        nb_obj_histos = self.session.execute(ins_qry).rowcount  # type: ignore  # case1
+        result = self.session.execute(ins_qry_cnt)
+        nb_obj_histos = len(result.fetchall())
         logger.info(
             " %d out of %d rows copied to log", nb_obj_histos, len(self.object_ids)
         )
@@ -728,8 +727,9 @@ class EnumeratedObjectSet(MappedTable):
             self._apply_on_all(ObjectFields, project, mapped_updates),
         )
 
-    def add_filter(self, upd: Query) -> Query:
-        if ObjectHeader.__tablename__ + "." in str(upd):
+    def add_filter(self, upd: Update) -> Update:
+        assert isinstance(upd.table, TableClause)
+        if upd.table.name == ObjectHeader.__tablename__:
             ret = upd.filter(ObjectHeader.objid == any_(self.object_ids))
         else:
             ret = upd.filter(ObjectFields.objfid == any_(self.object_ids))
@@ -742,7 +742,7 @@ class EnumeratedObjectSet(MappedTable):
         Query for last classification history on all objects of self.
         """
         # Get the historical entries
-        subqry = self.session.query(
+        subqry = select(
             ObjectsClassifHisto,
             func.rank()
             .over(
@@ -751,33 +751,31 @@ class EnumeratedObjectSet(MappedTable):
             )
             .label("rnk"),
         )
-        if from_user_id:
+        if from_user_id is not None:
             subqry = subqry.filter(ObjectsClassifHisto.classif_who == from_user_id)
             # Pick Manual logs from this user
             subqry = subqry.filter(
                 ObjectsClassifHisto.classif_qual.in_(MANUAL_STATES_TEXT)
             )
-        if but_not_from_user_id:
+        if but_not_from_user_id is not None:
             subqry = subqry.filter(
                 or_(
                     ObjectsClassifHisto.classif_who != but_not_from_user_id,
                     ObjectsClassifHisto.classif_who == None,
                 )
             )
-        subq_alias: Alias = subqry.filter(
+        subq_alias: Subquery = subqry.filter(
             ObjectsClassifHisto.objid == any_(self.object_ids)
         ).subquery()
 
         # We have a maximum of 1 line from ObjectsClassifHisto (the one with most recent date) from subquery
-        qry = self.session.query(
+        qry = select(
             ObjectHeader.objid,
             ObjectHeader.classif_id,
             subq_alias.c.classif_date.label("histo_classif_date"),
             case(  # Emulate previous value
-                [
-                    (subq_alias.c.classif_qual.in_(MANUAL_STATES_TEXT), "M"),
-                    (subq_alias.c.classif_qual == PREDICTED_STATE_TEXT, "A"),
-                ]
+                (subq_alias.c.classif_qual.in_(MANUAL_STATES_TEXT), "M"),
+                (subq_alias.c.classif_qual == PREDICTED_STATE_TEXT, "A"),
             ).label("histo_classif_type"),
             func.coalesce(
                 subq_alias.c.classif_qual,
@@ -795,15 +793,16 @@ class EnumeratedObjectSet(MappedTable):
         if from_user_id is not None:
             # If taking history from a user, don't apply to the objects he/she classified
             # in last already.
-            qry = qry.filter(ObjectHeader.classif_who != from_user_id)
+            qry = qry.filter(ObjectHeader.classif_who.__ne__(from_user_id))
             qry = qry.filter(subq_alias.c.rnk == 1)
         else:
             # Taking any history, including nothing, so emit blank history (see isouter above)
             qry = qry.filter(ObjectHeader.objid == any_(self.object_ids))
             qry = qry.filter(or_(subq_alias.c.rnk == 1, subq_alias.c.rnk.is_(None)))
         logger.info("_get_last_classif_history qry:%s", str(qry))
+        res = self.session.execute(qry).mappings()
         with CodeTimer("HISTORY for %d objs: " % len(self.object_ids), logger):
-            ret = [HistoricalLastClassif(**rec) for rec in qry]
+            ret = [HistoricalLastClassif(**rec) for rec in res.fetchall()]
         logger.info("_get_last_classif_history qry: %d rows", len(ret))
         return ret
 
@@ -846,7 +845,7 @@ class EnumeratedObjectSet(MappedTable):
                 if an_histo.histo_classif_qual == NO_HISTO
             ]
         )
-        self.session.bulk_update_mappings(ObjectHeader, updates)
+        self.session.execute(update(ObjectHeader), updates)
         PredictionBO(self.session, impacted_objs).resurrect_predictions(histo)
         # Ensure the history remains "before present row"
         histo_del_qry: Delete = ObjectsClassifHisto.__table__.delete()
@@ -936,7 +935,7 @@ class EnumeratedObjectSet(MappedTable):
                 DUBIOUS_CLASSIF_QUAL,
             ), "Can't (re)classify Predicted objects, use prediction function"
             # Operator change
-            prev_operator_id: Optional[int] = prev_obj["classif_who"]
+            prev_operator_id: Optional[int] = prev_obj.classif_who
             if (
                 prev_classif_id == next_classif_id
                 and prev_classif_qual == target_qualif
@@ -1133,24 +1132,22 @@ class EnumeratedObjectSet(MappedTable):
         # Return statuses
         return nb_updated, all_changes
 
-    def _fetch_classifs_and_lock(self) -> Dict[ObjectIDT, Row]:
+    def _fetch_classifs_and_lock(self) -> dict[ObjectIDT, RowMapping]:
         """
         Fetch, and DB lock, self's objects
         """
         qry = select(
-            [
-                ObjectHeader.objid,
-                ObjectHeader.classif_qual,
-                ObjectHeader.classif_id,
-                ObjectHeader.classif_who,
-                ObjectHeader.classif_date,
-                ObjectHeader.classif_score,
-            ]
+            ObjectHeader.objid,
+            ObjectHeader.classif_qual,
+            ObjectHeader.classif_id,
+            ObjectHeader.classif_who,
+            ObjectHeader.classif_date,
+            ObjectHeader.classif_score,
         ).with_for_update(key_share=True)
         qry = qry.where(ObjectHeader.objid == any_(self.object_ids))
         logger.info("Fetch with lock: %s", qry)
         res: Result = self.session.execute(qry)
-        prev = {rec["objid"]: rec for rec in res.fetchall()}
+        prev = {rec["objid"]: rec for rec in res.mappings()}
         return prev
 
 
@@ -1440,19 +1437,19 @@ class ObjectSetFilter(object):
         if self.invert_time:
             if self.from_time and self.to_time:
                 prfx_where_clause("obh").chain(
-                    "(obh.objtime <= time :fromtime OR obh.objtime >= time :totime)"
+                    "(obh.objtime <= (:fromtime)::time OR obh.objtime >= (:totime)::time)"
                 ).add_param("fromtime", self.from_time).add_param(
                     "totime", self.to_time
                 )
         else:
             if self.from_time:
                 prfx_where_clause("obh").chain(
-                    "obh.objtime >= time :fromtime"
+                    "obh.objtime >= (:fromtime)::time"
                 ).add_param("fromtime", self.from_time)
             if self.to_time:
-                prfx_where_clause("obh").chain("obh.objtime <= time :totime").add_param(
-                    "totime", self.to_time
-                )
+                prfx_where_clause("obh").chain(
+                    "obh.objtime <= (:totime)::time"
+                ).add_param("totime", self.to_time)
 
         if self.validated_from:
             prfx_where_clause("obh").chain(  # TODO: not 100% accurate

@@ -6,6 +6,8 @@ import json
 from datetime import datetime
 from typing import Dict, List, Any, Set, TextIO
 
+from sqlalchemy import select
+
 from API_models.filters import ProjectFiltersDict
 from BO.Mappings import ProjectMapping
 from BO.ObjectSet import DescribedObjectSet
@@ -42,7 +44,7 @@ class JsonDumper(Service):
         super().__init__()
         self.requester_id = current_user
         self.filters = filters
-        prj = self.get_session().query(Project).get(prj_id)
+        prj = self.get_session().get(Project, prj_id)
         # We don't check for existence, so self.prj is Optional[]
         self.prj = prj
         # Work vars
@@ -97,7 +99,7 @@ class JsonDumper(Service):
             else:
                 fld_name = a_field_or_relation.key
                 # This is where SQLAlchemy does all its magic when it's a relation
-                attr = getattr(a_row, fld_name)  # type: ignore # case2
+                attr = getattr(a_row, fld_name)
             if isinstance(attr, list):
                 # Serialize the list of child entities, ordinary relationship
                 children: List[Dict[str, Any]] = []
@@ -183,28 +185,28 @@ class JsonDumper(Service):
         :param objids:
         :return:
         """
-        ret = self.session.query(
+        qry = select(
             Project, Sample, Acquisition, Process, ObjectHeader, ObjectFields, Image
         )
-        ret = ret.join(Sample, Project.all_samples).options(
+        qry = qry.join(Sample, Project.all_samples).options(
             contains_eager(Project.all_samples)
         )
-        ret = ret.join(Acquisition, Sample.all_acquisitions)
-        ret = ret.join(Process, Acquisition.process)
-        ret = ret.join(ObjectHeader, Acquisition.all_objects)
+        qry = qry.join(Acquisition, Sample.all_acquisitions)
+        qry = qry.join(Process, Acquisition.process)
+        qry = qry.join(ObjectHeader, Acquisition.all_objects)
         # Natural joins
-        ret = ret.join(ObjectFields)
-        ret = ret.join(Image, ObjectHeader.all_images).options(
+        qry = qry.join(ObjectFields)
+        qry = qry.join(Image, ObjectHeader.all_images).options(
             contains_eager(ObjectHeader.all_images)
         )
-        ret = ret.filter(ObjectHeader.objid == any_(objids))
+        qry = qry.filter(ObjectHeader.objid == any_(objids))
 
         if self.first_query:
-            logger.info("Query: %s", str(ret))
+            logger.info("Query: %s", str(qry))
             self.first_query = False
 
         with CodeTimer("Get Objects:", logger):
-            objs = [an_obj for an_obj in ret]
+            objs = [an_obj for an_obj in self.session.execute(qry).unique().scalars()]
 
         # We get as many lines as images
         logger.info("NB ROWS JOIN=%d", len(objs))

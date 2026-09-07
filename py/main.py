@@ -6,9 +6,12 @@
 #
 import os
 import re
+import sys
 import time
+from contextlib import asynccontextmanager
+from dataclasses import asdict
 from logging import INFO
-from typing import Union, Tuple, List, Dict, Any, Optional
+from typing import Union, Tuple, List, Dict, Any, cast
 
 from fastapi import (
     FastAPI,
@@ -25,13 +28,13 @@ from fastapi import (
     Body,
     Path,
 )
+from fastapi.exceptions import RequestValidationError
 from fastapi.logger import logger as fastapi_logger
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.templating import Jinja2Templates
-from fastapi_utils.timing import add_timing_middleware
-from sqlalchemy.sql.expression import null
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.responses import JSONResponse
 
 from API_models.constants import Constants
 from API_models.crud import (
@@ -68,7 +71,7 @@ from API_models.exports import (
     BackupExportReq,
 )
 from API_models.filesystem import DirectoryModel
-from API_models.filters import ProjectFilters
+from API_models.filters import Optional, ProjectFilters, ProjectFiltersDict
 from API_models.helpers.Introspect import plain_columns
 from API_models.imports import ImportReq, SimpleImportRsp, SimpleImportReq, ImportRsp
 from API_models.login import LoginReq
@@ -84,6 +87,7 @@ from API_models.objects import (
     ClassifyAutoReq,
     ClassifyAutoReqMult,
     ObjectHeaderModel,
+    HistoricalLastClassificationModel,
 )
 from API_models.prediction import (
     PredictionRsp,
@@ -164,11 +168,11 @@ from BO.ProjectSet import ProjectSetColumnStats
 from BO.Sample import SampleTaxoStats
 from BO.Taxonomy import TaxonBO
 from BO.WoRMSification import WoRMSBO
-from DB import Sample
 from DB.Job import DBJobStateEnum
 from DB.Object import ObjectIDListT
 from DB.Project import ProjectTaxoStat, Project
 from DB.ProjectPrivilege import ProjectPrivilege
+from DB.Sample import Sample
 from DB.TaxoRecast import RecastOperation
 from DB.User import GuestIDT, OrganizationIDT, User, UserIDT
 from helpers.AppConfig import Config
@@ -185,7 +189,7 @@ from helpers.fastApiUtils import (
     regular_mem_cleanup,
 )
 from helpers.login import LoginService
-from helpers.pydantic import sort_and_prune, BaseModel
+from helpers.pydantic import sort_and_prune
 
 # from fastapi.middleware.gzip import GZipMiddleware
 
@@ -196,9 +200,10 @@ fastapi_logger.setLevel(INFO)
 
 api_logger = get_api_logger()
 
+
 app = FastAPI(
     title="EcoTaxa",
-    version="0.0.48",
+    version="0.0.50",
     # openapi URL as seen from navigator, this is included when /docs is required
     # which serves swagger-ui JS app. Stay in /api sub-path.
     openapi_url="/api/openapi.json",
@@ -213,9 +218,6 @@ app = FastAPI(
 init_openid()
 
 app.include_router(openid_router)
-
-# Instrument a bit
-add_timing_middleware(app, record=logger.info, prefix="app", exclude="untimed")
 
 app.add_middleware(
     SessionMiddleware,
@@ -305,13 +307,13 @@ def get_users(
         title="Ids",
         description="String containing the list of one or more id separated by non-num char. \n"
         " \n **If several ids are provided**, one full info is returned per user.",
-        example="1",
+        examples=["1"],
     ),
     fields: Optional[str] = Query(
         default="*default",
         title="Fields",
         description="Return the default fields (typically used in conjunction with an additional field list). For users list display purpose.",
-        example="*default,fieldlist",
+        examples=["*default,fieldlist"],
     ),
     current_user: int = Depends(get_current_user),
 ) -> List[UserModelWithRights]:
@@ -346,12 +348,12 @@ def show_current_user(
     "/users/{user_id}",
     operation_id="update_user",
     tags=["users"],
-    responses={200: {"content": {"application/json": {"example": null}}}},
+    responses={200: {"content": {"application/json": {"example": None}}}},
 )
 def update_user(
     user: UserModelWithRights,
     user_id: int = Path(
-        ..., description="Internal, numeric id of the user.", example=760
+        ..., description="Internal, numeric id of the user.", examples=[760]
     ),
     current_user: int = Depends(get_current_user),
 ) -> None:
@@ -375,7 +377,7 @@ def update_user(
     "/users/create",
     operation_id="create_user",
     tags=["users"],
-    responses={200: {"content": {"application/json": {"example": null}}}},
+    responses={200: {"content": {"application/json": {"example": None}}}},
 )
 def create_user(
     user: UserModelWithRights = Body(...),
@@ -383,7 +385,7 @@ def create_user(
         default=None,
         title="NoBot token",
         description="not-a-robot proof",
-        example="['127.0.0.1', 'ffqsdfsdf']",
+        examples=["['127.0.0.1', 'ffqsdfsdf']"],
     ),
     token: Optional[str] = Query(
         default=None,
@@ -427,10 +429,13 @@ def create_user(
 )
 def get_current_user_prefs(
     project_id: int = Path(
-        ..., description="Internal, numeric id of the project.", example=1
+        ..., description="Internal, numeric id of the project.", examples=[1]
     ),
     key: str = Query(
-        ..., title="Key", description="The preference key, as text.", example="filters"
+        ...,
+        title="Key",
+        description="The preference key, as text.",
+        examples=["filters"],
     ),
     current_user: int = Depends(get_current_user),
 ) -> Any:
@@ -448,20 +453,25 @@ def get_current_user_prefs(
     "/users/my_preferences/{project_id}",
     operation_id="set_current_user_prefs",
     tags=["users"],
-    responses={200: {"content": {"application/json": {"example": null}}}},
+    responses={200: {"content": {"application/json": {"example": None}}}},
 )
 def set_current_user_prefs(
     project_id: int = Path(
-        ..., description="Internal, numeric id of the project.", example=1
+        ..., description="Internal, numeric id of the project.", examples=[1]
     ),
     key: str = Query(
-        ..., title="Key", description="The preference key, as text.", example="filters"
+        ...,
+        title="Key",
+        description="The preference key, as text.",
+        examples=["filters"],
     ),
     value: str = Query(
         ...,
         title="Value",
         description="The value to set this preference to, as text.",
-        example='{"dispfield": " dispfield_orig_id dispfield_classif_auto_score dispfield_classif_when dispfield_random_value", "ipp": "500", "magenabled": "1", "popupenabled": "1", "sortby": "orig_id", "sortorder": "asc", "statusfilter": "", "zoom": "90"}',
+        examples=[
+            '{"dispfield": " dispfield_orig_id dispfield_classif_auto_score dispfield_classif_when dispfield_random_value", "ipp": "500", "magenabled": "1", "popupenabled": "1", "sortby": "orig_id", "sortorder": "asc", "statusfilter": "", "zoom": "90"}'
+        ],
     ),
     current_user: int = Depends(get_current_user),
 ) -> None:
@@ -490,7 +500,7 @@ def search_user(
         default=None,
         title="search by name",
         description="Search by name, use % for searching with 'any char'.",
-        example="%userNa%",
+        examples=["%userNa%"],
     ),
 ) -> List[User]:
     """
@@ -541,10 +551,10 @@ def get_admin_users(current_user: int = Depends(get_current_user)) -> List[User]
 )
 def get_user(
     user_id: int = Path(
-        ..., description="Internal, the unique numeric id of this user.", example=1
+        ..., description="Internal, the unique numeric id of this user.", examples=[1]
     ),
     current_user: int = Depends(get_current_user),
-) -> Optional[User]:
+) -> User:
     """
     Returns **information about the user** corresponding to the given id.
     """
@@ -562,16 +572,16 @@ def get_user(
     "/users/activate/{user_id}/{status}",
     operation_id="activate_user",
     tags=["users"],
-    responses={200: {"content": {"application/json": {"example": null}}}},
+    responses={200: {"content": {"application/json": {"example": None}}}},
 )
 def activate_user(
     user_id: int = Path(
-        ..., description="Internal, the unique numeric id of this user.", example=1
+        ..., description="Internal, the unique numeric id of this user.", examples=[1]
     ),
     status: str = Path(
         ...,
         description="Internal, the status name assign to this user.",
-        example=1,
+        examples=[1],
     ),
     activatereq: UserActivateReq = Body(
         ...,
@@ -581,7 +591,7 @@ def activate_user(
         default=None,
         title="NoBot",
         description="not-a-robot proof",
-        example="['127.0.0.1', 'ffqsdfsdf']",
+        examples=["['127.0.0.1', 'ffqsdfsdf']"],
     ),
     current_user: Optional[int] = Depends(get_optional_current_user),
 ) -> None:
@@ -609,7 +619,7 @@ def activate_user(
     "/users/reset_user_password",
     operation_id="reset_user_password",
     tags=["users"],
-    responses={200: {"content": {"application/json": {"example": null}}}},
+    responses={200: {"content": {"application/json": {"example": None}}}},
 )
 def reset_user_password(
     resetreq: ResetPasswordReq = Body(...),
@@ -617,7 +627,7 @@ def reset_user_password(
         default=None,
         title="NoBot token",
         description="not-a-robot proof",
-        example="['127.0.0.1', 'ffqsdfsdf']",
+        examples=["['127.0.0.1', 'ffqsdfsdf']"],
     ),
     token: Optional[str] = Query(
         default=None,
@@ -671,14 +681,14 @@ def search_organizations(
         ...,
         title="Title",
         description="Search by name, use % for searching with 'any char'.",
-        example="%vill%",
+        examples=["%vill%"],
     )
 ) -> List[OrganizationModel]:
     """
     **Search for organizations.**
     """
     with OrganizationService() as sce:
-        org_names = sce.search_organizations(name)
+        org_names = sce.search(name)
     return org_names
 
 
@@ -707,7 +717,7 @@ def get_organizations(
         title="Ids",
         description="String containing the list of one or more id separated by non-num char. \n"
         " \n **If several ids are provided**, one full info is returned per user.",
-        example="1",
+        examples=["1"],
     ),
     current_user: Optional[int] = Depends(get_optional_current_user),
 ) -> List[OrganizationModel]:
@@ -724,7 +734,7 @@ def get_organizations(
     "/organizations/create",
     operation_id="create_organization",
     tags=["organizations"],
-    responses={200: {"content": {"application/json": {"example": null}}}},
+    responses={200: {"content": {"application/json": {"example": None}}}},
 )
 def create_organization(
     organization: OrganizationModel = Body(...),
@@ -747,12 +757,12 @@ def create_organization(
     "/organizations/{organization_id}",
     operation_id="update_organization",
     tags=["organizations"],
-    responses={200: {"content": {"application/json": {"example": null}}}},
+    responses={200: {"content": {"application/json": {"example": None}}}},
 )
 def update_organization(
     organization: OrganizationModel,
     organization_id: int = Path(
-        ..., description="Internal, numeric id of the organization.", example=760
+        ..., description="Internal, numeric id of the organization.", examples=[760]
     ),
     current_user: int = Depends(get_current_user),
 ) -> None:
@@ -782,13 +792,13 @@ def get_guests(
         title="Ids",
         description="String containing the list of one or more id separated by non-num char. \n"
         " \n **If several ids are provided**, one full info is returned per user.",
-        example="1",
+        examples=["1"],
     ),
     fields: Optional[str] = Query(
         default="*default",
         title="Fields",
         description="Return the default fields (typically used in conjunction with an additional field list). For users list display purpose.",
-        example="*default,fieldlist",
+        examples=["*default,fieldlist"],
     ),
     current_user: int = Depends(get_current_user),
 ) -> List[GuestModel]:
@@ -807,7 +817,7 @@ def get_guests(
     "/guests/create",
     operation_id="create_guest",
     tags=["guests"],
-    responses={200: {"content": {"application/json": {"example": null}}}},
+    responses={200: {"content": {"application/json": {"example": None}}}},
 )
 def create_guest(
     guest: GuestModel = Body(...),
@@ -833,12 +843,12 @@ def create_guest(
     "/guests/{guest_id}",
     operation_id="update_guest",
     tags=["guests"],
-    responses={200: {"content": {"application/json": {"example": null}}}},
+    responses={200: {"content": {"application/json": {"example": None}}}},
 )
 def update_guests(
     guest: GuestModel,
     guest_id: int = Path(
-        ..., description="Internal, numeric id of the guest.", example=760
+        ..., description="Internal, numeric id of the guest.", examples=[760]
     ),
     current_user: int = Depends(get_current_user),
 ) -> None:
@@ -864,7 +874,7 @@ def search_guest(
         default=None,
         title="search by name",
         description="Search by name, use % for searching with 'any char'.",
-        example="%userNa%",
+        examples=["%userNa%"],
     ),
     current_user: int = Depends(get_current_user),
 ) -> List[GuestModel]:
@@ -895,10 +905,10 @@ def search_guest(
 )
 def get_guest(
     guest_id: int = Path(
-        ..., description="Internal, the unique numeric id of this guest.", example=1
+        ..., description="Internal, the unique numeric id of this guest.", examples=[1]
     ),
     current_user: int = Depends(get_current_user),
-) -> Optional[GuestModel]:
+) -> GuestModel:
     """
     Returns **information about the user** corresponding to the given id.
     """
@@ -954,13 +964,13 @@ def list_collections(
         default=None,
         title="Collection Ids",
         description="limit the list to a set of ids.",
-        example="123,45",
+        examples=["123,45"],
     ),
     fields: Optional[str] = Query(
         default="*default",
         title="Fields",
         description="Return the default fields (typically used in conjunction with an additional field list). For users list display purpose.",
-        example="*default,fieldlist",
+        examples=["*default,fieldlist"],
     ),  # TODO: Unused param
     current_user: int = Depends(get_current_user),
 ) -> List[CollectionBO]:
@@ -986,13 +996,13 @@ def search_collections(
         ...,
         title="Title",
         description="Search by title, use % for searching with 'any char'.",
-        example="%coll%",
+        examples=["%coll%"],
     ),
     fields: Optional[str] = Query(
         default="*default",
         title="Fields",
         description="Return the default fields (typically used in conjunction with an additional field list). For users list display purpose.",
-        example="*default,fieldlist",
+        examples=["*default,fieldlist"],
     ),
     current_user: int = Depends(get_current_user),
 ) -> List[CollectionBO]:
@@ -1018,7 +1028,7 @@ def collection_by_title(
         ...,
         title="Title",
         description="Search by **exact** title.",
-        example="My collection",
+        examples=["My collection"],
     )
 ) -> CollectionBO:
     """
@@ -1045,7 +1055,7 @@ def collection_by_short_title(
         ...,
         title="Short title",
         description="Search by **exact** short title.",
-        example="My coll",
+        examples=["My coll"],
     )
 ) -> CollectionBO:
     """
@@ -1074,7 +1084,7 @@ def collection_aggregated_projects_properties(
         ...,
         title="Project Ids",
         description="String containing the list of one or more project id separated by non-num char. \n .",
-        example="1",
+        examples=["1"],
     ),
     current_user: int = Depends(get_current_user),
 ) -> CollectionAggregatedRsp:
@@ -1102,7 +1112,7 @@ def get_collection(
     collection_id: int = Path(
         ...,
         description="Internal, the unique numeric id of this collection.",
-        example=1,
+        examples=[1],
     ),
     current_user: int = Depends(get_current_user),
 ) -> CollectionBO:
@@ -1125,14 +1135,14 @@ def get_collection(
     "/collections/{collection_id}",
     operation_id="update_collection",
     tags=["collections"],
-    responses={200: {"content": {"application/json": {"example": null}}}},
+    responses={200: {"content": {"application/json": {"example": None}}}},
 )
 def update_collection(
     collection: CollectionReq = Body(...),
     collection_id: int = Path(
         ...,
         description="Internal, the unique numeric id of this collection.",
-        example=1,
+        examples=[1],
     ),
     current_user: int = Depends(get_current_user),
 ) -> None:
@@ -1144,7 +1154,7 @@ def update_collection(
 
      Note: The collection is updated only if manageable.
     """
-    collection_update = collection.dict()
+    collection_update = collection.model_dump()
     with CollectionsService() as sce:
         with RightsThrower():
             sce.update(current_user, collection_id, collection_update)
@@ -1154,14 +1164,14 @@ def update_collection(
     "/collections/{collection_id}",
     operation_id="patch_collection",
     tags=["collections"],
-    responses={200: {"content": {"application/json": {"example": null}}}},
+    responses={200: {"content": {"application/json": {"example": None}}}},
 )
 def patch_collection(
     collection: CollectionReq = Body(...),
     collection_id: int = Path(
         ...,
         description="Internal, the unique numeric id of this collection.",
-        example=1,
+        examples=[1],
     ),
     current_user: int = Depends(get_current_user),
 ) -> None:
@@ -1173,7 +1183,7 @@ def patch_collection(
 
      Note: The collection is partiallly updated only if manageable.
     """
-    collection_update = collection.dict(exclude_unset=True)
+    collection_update = collection.model_dump(exclude_unset=True)
     with CollectionsService() as sce:
         with RightsThrower():
             sce.update(current_user, collection_id, collection_update)
@@ -1223,7 +1233,7 @@ def erase_collection(
     collection_id: int = Path(
         ...,
         description="Internal, the unique numeric id of this collection.",
-        example=1,
+        examples=[1],
     ),
     current_user: int = Depends(get_current_user),
 ) -> int:
@@ -1261,6 +1271,7 @@ project_model_columns = plain_columns(ProjectModel)
     operation_id="list_projects",
     tags=["projects"],
     response_model=List[ProjectModel],
+    response_class=MyORJSONResponse,
 )
 async def list_projects(
     current_user: Optional[int] = Depends(get_optional_current_user),
@@ -1268,43 +1279,43 @@ async def list_projects(
         default=None,
         title="Project Ids",
         description="Limit the list to a set of ids.",
-        example="123,45",
+        examples=["123,45"],
     ),
     not_granted: bool = Query(
         default=False,
         title="Not granted",
         description="Return projects on which the current user has _no permission_, but visible to him/her.",
-        example=False,
+        examples=[False],
     ),
     for_managing: bool = Query(
         default=False,
         title="For managing",
         description="Return projects that can be written to (including erased) by the current user.",
-        example=False,
+        examples=[False],
     ),
     order_field: Optional[str] = Query(
         default=None,
         title="Order field",
         description="One of %s" % list(project_model_columns.keys()),
-        example="instrument",
+        examples=["instrument"],
     ),
     fields: Optional[str] = Query(
         default="*all",
         title="Fields",
         description="Return the default fields (typically used in conjunction with an additional field list). For users list display purpose.",
-        example="*default,fieldlist",
+        examples=["*default,fieldlist"],
     ),
     window_start: Optional[int] = Query(
         default=None,
         title="Window start",
         description="Skip `window_start` before returning data.",
-        example="0",
+        examples=["0"],
     ),
     window_size: Optional[int] = Query(
         default=None,
         title="Window size",
         description="Return only `window_size` lines.",
-        example="100",
+        examples=["100"],
     ),
 ) -> MyORJSONResponse:  # List[ProjectBO]:
     """
@@ -1335,6 +1346,7 @@ async def list_projects(
     operation_id="search_projects",
     tags=["projects"],
     response_model=List[ProjectModel],
+    response_class=MyORJSONResponse,
 )
 async def search_projects(  # MyORJSONResponse -> JSONResponse -> Response -> await
     current_user: Optional[int] = Depends(get_optional_current_user),
@@ -1343,61 +1355,61 @@ async def search_projects(  # MyORJSONResponse -> JSONResponse -> Response -> aw
         deprecated=True,
         title="Also others",
         description="",
-        example=False,
+        examples=[False],
     ),
     not_granted: bool = Query(
         default=False,
         title="Not granted",
         description="Return projects on which the current user has _no permission_, but visible to him/her.",
-        example=False,
+        examples=[False],
     ),
     for_managing: bool = Query(
         default=False,
         title="For managing",
         description="Return projects that can be written to (including erased) by the current user.",
-        example=False,
+        examples=[False],
     ),
     title_filter: str = Query(
         default="",
         title="Title filter",
         description="Use this pattern for matching returned projects names.",
-        example="Tara",
+        examples=["Tara"],
     ),
     instrument_filter: str = Query(
         default="",
         title="Instrument filter",
         description="Only return projects where this instrument was used.",
-        example="uvp5",
+        examples=["uvp5"],
     ),
     filter_subset: bool = Query(
         default=False,
         title="Filter subset",
         description="Only return projects having 'subset' in their names.",
-        example=True,
+        examples=[True],
     ),
     order_field: Optional[str] = Query(
         default=None,
         title="Order field",
         description="One of %s" % list(project_model_columns.keys()),
-        example="instrument",
+        examples=["instrument"],
     ),
     fields: Optional[str] = Query(
         default="*all",
         title="Fields",
         description="Return the default fields (typically used in conjunction with an additional field list). For users list display purpose.",
-        example="*default,fieldlist",
+        examples=["*default,fieldlist"],
     ),
     window_start: Optional[int] = Query(
         default=None,
         title="Window start",
         description="Skip `window_start` before returning data.",
-        example="0",
+        examples=["0"],
     ),
     window_size: Optional[int] = Query(
         default=None,
         title="Window size",
         description="Return only `window_size` lines.",
-        example="100",
+        examples=["100"],
     ),
 ) -> MyORJSONResponse:  # List[ProjectBO]:
     """
@@ -1461,7 +1473,7 @@ def create_project(
 )
 def project_subset(
     project_id: int = Path(
-        ..., description="Internal, numeric id of the project.", example=1
+        ..., description="Internal, numeric id of the project.", examples=[1]
     ),
     params: SubsetReq = Body(...),
     current_user: int = Depends(get_current_user),
@@ -1469,6 +1481,10 @@ def project_subset(
     """
     **Subset a project into another one.**
     """
+    if isinstance(params.filters, List):
+        params.filters = cast(
+            ProjectFiltersDict, dict(cast(List, params.filters))
+        )  # TODO: Fix client-side, it was pydantic v1 tolerance
     with SubsetServiceOnProject(project_id, params) as sce:
         with RightsThrower():
             ret = sce.run(current_user)
@@ -1483,13 +1499,13 @@ def project_subset(
 )
 def project_query(
     project_id: int = Path(
-        ..., description="Internal, numeric id of the project.", example=1
+        ..., description="Internal, numeric id of the project.", examples=[1]
     ),
     for_managing: Optional[bool] = Query(
         title="For managing",
         description="For managing this project.",
         default=False,
-        example=False,
+        examples=[False],
     ),
     current_user: Optional[int] = Depends(get_optional_current_user),
 ) -> ProjectBO:
@@ -1511,7 +1527,7 @@ def project_query(
 )
 def project_collections(
     project_id: int = Path(
-        ..., description="Internal, numeric id of the project.", example=1
+        ..., description="Internal, numeric id of the project.", examples=[1]
     ),
     current_user: Optional[int] = Depends(get_optional_current_user),
 ) -> List[MinimalCollectionBO]:
@@ -1536,13 +1552,13 @@ async def project_set_get_projects(  # MyORJSONResponse -> JSONResponse -> Respo
         ...,
         title="Ids",
         description="String containing the list of one or more project id separated by non-num char. \n \n **If several ids are provided**, one stat record will be returned per project.",
-        example="1",
+        examples=["1"],
     ),
     fields: Optional[str] = Query(
         default="*default",
         title="Fields",
         description="Return the default fields (typically used in conjunction with an additional field list). To return selected fields.",
-        example="*default,fieldlist",
+        examples=["*default,fieldlist"],
     ),
     current_user: Optional[int] = Depends(get_optional_current_user),
 ) -> MyORJSONResponse:  # List[ProjectColumnsModel]
@@ -1568,13 +1584,13 @@ async def project_set_get_stats(  # MyORJSONResponse -> JSONResponse -> Response
         ...,
         title="Ids",
         description="String containing the list of one or more project id separated by non-num char. \n \n **If several ids are provided**, one stat record will be returned per project.",
-        example="1",
+        examples=["1"],
     ),
     taxa_ids: str = Query(
         title="Taxa Ids",
         description="**If several taxa_ids are provided**, one stat record will be returned per requested taxa, if populated.\n \n **If taxa_ids is all**, all valued taxa in the project(s) are returned.",
         default="",
-        example="all",
+        examples=["all"],
     ),
     current_user: Optional[int] = Depends(get_optional_current_user),
 ) -> MyORJSONResponse:  # List[ProjectTaxoStats]
@@ -1625,7 +1641,7 @@ def project_set_get_user_stats(
         ...,
         title="Ids",
         description="String containing the list of one or more id separated by non-num char. \n \n **If several ids are provided**, one stat record will be returned per project.",
-        example="1",
+        examples=["1"],
     ),
     current_user: int = Depends(get_current_user),
 ) -> List[ProjectUserStats]:
@@ -1668,25 +1684,25 @@ def project_set_get_column_stats(
         ...,
         title="Project ids",
         description="String containing the list of one or more id separated by non-num char.",
-        example="1400+1453",
+        examples=["1400+1453"],
     ),
     names: str = Query(
         ...,
         title="Column names",
         description="Coma-separated prefixed columns, on which stats are needed.",
-        example="fre.area,obj.depth_min,fre.nb2",
+        examples=["fre.area,obj.depth_min,fre.nb2"],
     ),
     limit: Optional[int] = Query(
         default=None,
         title="Stats limit",
         description="Only compute stats on this number of objects per category.",
-        example=5000,
+        examples=[5000],
     ),
     categories: Optional[str] = Query(
         default=None,
         title="Categories for limit",
         description="String containing the Categories, one or more id separated by non-num char.",
-        example="493,567",
+        examples=["493,567"],
     ),
     current_user: int = Depends(get_current_user),
 ) -> ProjectSetColumnStats:
@@ -1719,7 +1735,7 @@ def project_set_get_column_stats(
 )  # pragma:nocover
 def project_dump(
     project_id: int = Path(
-        ..., description="Internal, numeric id of the project.", example=1
+        ..., description="Internal, numeric id of the project.", examples=[1]
     ),
     filters: ProjectFilters = Body(...),
     current_user: int = Depends(get_current_user),
@@ -1743,19 +1759,19 @@ def project_dump(
 )
 def project_merge(
     project_id: int = Path(
-        ..., description="Internal, numeric id of the project.", example=1
+        ..., description="Internal, numeric id of the project.", examples=[1]
     ),
     source_project_id: int = Query(
         ...,
         title="Source project Id",
         description="Id of the other project. All objects from this source project will be moved to the project_id above and the source project itself will be deleted.",
-        example=2,
+        examples=[2],
     ),
     dry_run: bool = Query(
         ...,
         title="Dry run",
         description="If set, then only a diagnostic of doability will be done.",
-        example=True,
+        examples=[True],
     ),
     current_user: int = Depends(get_current_user),
 ) -> MergeRsp:
@@ -1792,7 +1808,7 @@ def project_merge(
 )
 def project_check(
     project_id: int = Path(
-        ..., description="Internal, numeric id of the project.", example=1
+        ..., description="Internal, numeric id of the project.", examples=[1]
     ),
     current_user: int = Depends(get_current_user),
 ) -> List[str]:
@@ -1831,7 +1847,7 @@ def project_check(
 )
 def project_stats(
     project_id: int = Path(
-        ..., description="Internal, numeric id of the project.", example=1
+        ..., description="Internal, numeric id of the project.", examples=[1]
     ),
     current_user: int = Depends(get_current_user),
 ) -> List[str]:
@@ -1859,11 +1875,11 @@ def project_stats(
     "/projects/{project_id}/recompute_geo",
     operation_id="project_recompute_geography",
     tags=["projects"],
-    responses={200: {"content": {"application/json": {"example": null}}}},
+    responses={200: {"content": {"application/json": {"example": None}}}},
 )
 def project_recompute_geography(
     project_id: int = Path(
-        ..., description="Internal, numeric id of the project.", example=1
+        ..., description="Internal, numeric id of the project.", examples=[1]
     ),
     current_user: int = Depends(get_current_user),
 ) -> None:
@@ -1883,11 +1899,11 @@ def project_recompute_geography(
     "/projects/{project_id}/recompute_sunpos",
     operation_id="project_recompute_sunpos",
     tags=["projects"],
-    responses={200: {"content": {"application/json": {"example": null}}}},
+    responses={200: {"content": {"application/json": {"example": None}}}},
 )
 def project_recompute_sunpos(
     project_id: int = Path(
-        ..., description="Internal, numeric id of the project.", example=1
+        ..., description="Internal, numeric id of the project.", examples=[1]
     ),
     current_user: int = Depends(get_current_user),
 ) -> int:
@@ -1911,7 +1927,7 @@ def project_recompute_sunpos(
 )
 def import_file(
     project_id: int = Path(
-        ..., description="Internal, numeric id of the project.", example=1
+        ..., description="Internal, numeric id of the project.", examples=[1]
     ),
     params: ImportReq = Body(...),
     current_user: int = Depends(get_current_user),
@@ -1933,14 +1949,14 @@ def import_file(
 )
 def simple_import(
     project_id: int = Path(
-        ..., description="Internal, numeric id of the project.", example=1
+        ..., description="Internal, numeric id of the project.", examples=[1]
     ),
     params: SimpleImportReq = Body(...),
     dry_run: bool = Query(
         ...,
         title="Dry run",
         description="If set, then only a diagnostic of doability will be done. In this case, plain value check. If no dry_run, this call will create a background job.",
-        example=True,
+        examples=[True],
     ),
     current_user: int = Depends(get_current_user),
 ) -> Optional[SimpleImportRsp]:
@@ -1961,12 +1977,12 @@ def simple_import(
 )
 def erase_project(
     project_id: int = Path(
-        ..., description="Internal, numeric id of the project.", example=1
+        ..., description="Internal, numeric id of the project.", examples=[1]
     ),
     only_objects: bool = Query(
         title="Only objects",
         description="If set, the project structure is kept, but emptied from any object, sample, acquisition and process.",
-        example=False,
+        examples=[False],
         default=False,
     ),
     current_user: int = Depends(get_current_user),
@@ -1990,12 +2006,12 @@ def erase_project(
     "/projects/{project_id}",
     operation_id="update_project",
     tags=["projects"],
-    responses={200: {"content": {"application/json": {"example": null}}}},
+    responses={200: {"content": {"application/json": {"example": None}}}},
 )
 def update_project(
     project: ProjectModel = Body(...),
     project_id: int = Path(
-        ..., description="Internal, numeric id of the project.", example=1
+        ..., description="Internal, numeric id of the project.", examples=[1]
     ),
     current_user: int = Depends(get_current_user),
 ) -> None:
@@ -2019,12 +2035,12 @@ def update_project(
     "/projects/{project_id}",
     operation_id="patch_project",
     tags=["projects"],
-    responses={200: {"content": {"application/json": {"example": null}}}},
+    responses={200: {"content": {"application/json": {"example": None}}}},
 )
 def patch_project(
     project: ProjectReq = Body(...),
     project_id: int = Path(
-        ..., description="Internal, numeric id of the project.", example=1
+        ..., description="Internal, numeric id of the project.", examples=[1]
     ),
     current_user: int = Depends(get_current_user),
 ) -> None:
@@ -2047,16 +2063,16 @@ def patch_project(
     "/projects/{project_id}/prediction_settings",
     operation_id="set_project_predict_settings",
     tags=["projects"],
-    responses={200: {"content": {"application/json": {"example": null}}}},
+    responses={200: {"content": {"application/json": {"example": None}}}},
 )
 def set_project_predict_settings(
     settings: str = Query(
         ...,
         description="The new prediction settings.",
-        example="seltaxo=84963,59996,56545 baseproject=2562,2571",
+        examples=["seltaxo=84963,59996,56545 baseproject=2562,2571"],
     ),
     project_id: int = Path(
-        ..., description="Internal, numeric id of the project.", example=4223
+        ..., description="Internal, numeric id of the project.", examples=[4223]
     ),
     current_user: int = Depends(get_current_user),
 ) -> None:
@@ -2087,15 +2103,15 @@ def object_similarity_search(
     project_id: int = Path(
         ...,
         description="Internal, numeric id of the project to search in.",
-        example=3426,
+        examples=[3426],
     ),
     object_id: int = Path(
-        ..., description="Object ID to search similar for.", example=1040
+        ..., description="Object ID to search similar for.", examples=[1040]
     ),
     size: int = Query(
         100,
         description="Return at maximum this number of object IDs, by default 100.",
-        example="120",
+        examples=["120"],
     ),
     filters: ProjectFilters = Body(...),
     current_user: Optional[int] = Depends(get_optional_current_user),
@@ -2120,13 +2136,13 @@ def samples_search(
         ...,
         title="Project Ids",
         description="String containing the list of one or more project id separated by non-num char.",
-        example="1,55",
+        examples=["1,55"],
     ),
     id_pattern: str = Query(
         ...,
         title="Pattern Id",
         description="Sample id textual pattern. Use * or '' for 'any matches'. Match is case-insensitive.",
-        example="*",
+        examples=["*"],
     ),
     current_user: Optional[int] = Depends(get_optional_current_user),
 ) -> List[SampleModel]:
@@ -2137,7 +2153,7 @@ def samples_search(
         proj_ids = _split_num_list(project_ids)
         with RightsThrower():
             ret = sce.search(current_user, proj_ids, id_pattern)
-        return [SampleModel.from_orm(sam) for sam in ret]
+        return [SampleModel.model_validate(sam) for sam in ret]
 
 
 @app.get(
@@ -2169,7 +2185,7 @@ def sample_set_get_stats(
         ...,
         title="Sample Ids",
         description="String containing the list of one or more sample ids separated by non-num char.",
-        example="15,5",
+        examples=["15,5"],
     ),
     current_user: Optional[int] = Depends(get_optional_current_user),
 ) -> List[SampleTaxoStats]:
@@ -2217,7 +2233,7 @@ def update_samples(
 )
 def sample_query(
     sample_id: int = Path(
-        ..., description="Internal, the unique numeric id of this sample.", example=1
+        ..., description="Internal, the unique numeric id of this sample.", examples=[1]
     ),
     current_user: Optional[int] = Depends(get_optional_current_user),
 ) -> SampleModel:
@@ -2229,7 +2245,7 @@ def sample_query(
             ret = sce.query(current_user, sample_id)
         if ret is None:
             raise HTTPException(status_code=404, detail="Sample not found")
-        return SampleModel.from_orm(ret)
+        return SampleModel.model_validate(ret)
 
 
 # ######################## END OF SAMPLE
@@ -2243,7 +2259,7 @@ def sample_query(
 )
 def acquisitions_search(
     project_id: int = Query(
-        ..., title="Project id", description="The project id.", example=1
+        ..., title="Project id", description="The project id.", examples=[1]
     ),
     current_user: Optional[int] = Depends(get_optional_current_user),
 ) -> List[AcquisitionModel]:
@@ -2253,7 +2269,7 @@ def acquisitions_search(
     with AcquisitionsService() as sce:
         with RightsThrower():
             ret = sce.search(current_user, project_id)
-        return [AcquisitionModel.from_orm(acq) for acq in ret]
+        return [AcquisitionModel.model_validate(acq) for acq in ret]
 
 
 @app.post(
@@ -2288,7 +2304,7 @@ def acquisition_query(
     acquisition_id: int = Path(
         ...,
         description="Internal, the unique numeric id of this acquisition.",
-        example=1,
+        examples=[1],
     ),
     current_user: Optional[int] = Depends(get_optional_current_user),
 ) -> AcquisitionModel:
@@ -2300,7 +2316,7 @@ def acquisition_query(
             ret = sce.query(current_user, acquisition_id)
         if ret is None:
             raise HTTPException(status_code=404, detail="Acquisition not found")
-        return AcquisitionModel.from_orm(ret)
+        return AcquisitionModel.model_validate(ret)
 
 
 # ######################## END OF ACQUISITION
@@ -2321,7 +2337,7 @@ def instrument_query(
         title="Projects ids",
         description="String containing the list of one or more project ids,"
         " separated by non-num char, or 'all' for all instruments.",
-        example="1,2,3",
+        examples=["1,2,3"],
     )
 ) -> List[str]:
     """
@@ -2371,7 +2387,9 @@ def update_processes(
 )
 def process_query(
     process_id: int = Path(
-        ..., description="Internal, the unique numeric id of this process.", example=1
+        ...,
+        description="Internal, the unique numeric id of this process.",
+        examples=[1],
     ),
     current_user: Optional[int] = Depends(get_optional_current_user),
 ) -> ProcessModel:
@@ -2383,7 +2401,7 @@ def process_query(
             ret = sce.query(current_user, process_id)
         if ret is None:
             raise HTTPException(status_code=404, detail="Process not found")
-        return ProcessModel.from_orm(ret)
+        return ProcessModel.model_validate(ret)
 
 
 # ######################## END OF PROCESS
@@ -2404,7 +2422,7 @@ def process_query(
 async def get_object_set(
     # MyORJSONResponse -> JSONResponse -> Response -> await
     project_id: int = Path(
-        ..., description="Internal, numeric id of the project.", example=1
+        ..., description="Internal, numeric id of the project.", examples=[1]
     ),
     filters: ProjectFilters = Body(...),
     fields: Optional[str] = Query(
@@ -2441,14 +2459,14 @@ name, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostat
 **All other fields must be prefixed by the header "fre."** (for example → fre.circ.).
                    """,
         default=None,
-        example="obj.longitude,fre.feret",
+        examples=["obj.longitude,fre.feret"],
     ),
     order_field: Optional[str] = Query(
         title="Order field",
         description='Order the result using given field. If prefixed with "-" then it will be reversed. '
         "When using *special syntax ss-Innnn*, the order is similarity with given (by its ID) object.",
         default=None,
-        example="obj.longitude",
+        examples=["obj.longitude"],
     ),
     # TODO: order_field should be a user-visible field name, not nXXX, in case of free field
     window_start: Optional[int] = Query(
@@ -2457,7 +2475,7 @@ name, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostat
         description="""
 Allows to return only a slice of the result, by skipping window_start objects before returning data.
 If no **unique order** is specified, the result can vary for same call and conditions.""",
-        example="10",
+        examples=["10"],
     ),
     window_size: Optional[int] = Query(
         default=None,
@@ -2465,7 +2483,7 @@ If no **unique order** is specified, the result can vary for same call and condi
         description="""
 Allows to return only a slice of the result, by returning a _maximum_ of window_size lines.
 If no **unique order** is specified, the result can vary for same call and conditions.""",
-        example="100",
+        examples=["100"],
     ),
     current_user: Optional[int] = Depends(get_optional_current_user),
 ) -> MyORJSONResponse:
@@ -2517,7 +2535,7 @@ If no **unique order** is specified, the result can vary for same call and condi
 )
 def get_object_set_summary(
     project_id: int = Path(
-        ..., description="Internal, numeric id of the project.", example=1
+        ..., description="Internal, numeric id of the project.", examples=[1]
     ),
     only_total: bool = Query(
         ...,
@@ -2556,11 +2574,11 @@ def get_object_set_summary(
     operation_id="reset_object_set_to_predicted",
     tags=["objects"],
     response_model=None,
-    responses={200: {"content": {"application/json": {"example": null}}}},
+    responses={200: {"content": {"application/json": {"example": None}}}},
 )
 def force_object_set_to_predicted(
     project_id: int = Path(
-        ..., description="Internal, numeric id of the project.", example=1
+        ..., description="Internal, numeric id of the project.", examples=[1]
     ),
     filters: ProjectFilters = Body(...),
     current_user: int = Depends(get_current_user),
@@ -2583,20 +2601,20 @@ def force_object_set_to_predicted(
 )
 def revert_object_set_to_history(
     project_id: int = Path(
-        ..., description="Internal, numeric id of the project.", example=1
+        ..., description="Internal, numeric id of the project.", examples=[1]
     ),
     filters: ProjectFilters = Body(...),
     dry_run: bool = Query(
         ...,
         title="Dry run",
         description="If set, then no real write but consequences of the revert will be replied.",
-        example=False,
+        examples=[False],
     ),
     target: Optional[int] = Query(
         title="Target",
         description="Use null/None for reverting using the last annotation from anyone, or a user id for the last annotation from this user.",
         default=None,
-        example=465,
+        examples=[465],
     ),
     current_user: int = Depends(get_current_user),
 ) -> ObjectSetRevertToHistoryRsp:
@@ -2609,7 +2627,11 @@ def revert_object_set_to_history(
                 current_user, project_id, filters.base(), dry_run, target
             )
         ret = ObjectSetRevertToHistoryRsp(
-            last_entries=obj_hist, classif_info=classif_info
+            last_entries=[
+                HistoricalLastClassificationModel.model_validate(asdict(a_cl))
+                for a_cl in obj_hist
+            ],
+            classif_info=classif_info,
         )
     return ret
 
@@ -2623,17 +2645,20 @@ def revert_object_set_to_history(
 )
 def reclassify_object_set(
     project_id: int = Path(
-        ..., description="Internal, numeric id of the project.", example=1
+        ..., description="Internal, numeric id of the project.", examples=[1]
     ),
     filters: ProjectFilters = Body(...),
     forced_id: ClassifIDT = Query(
-        ..., title="Forced Id", description="The new classification Id.", example=23025
+        ...,
+        title="Forced Id",
+        description="The new classification Id.",
+        examples=[23025],
     ),
     reason: str = Query(
         ...,
         title="Reason",
         description="The reason of this new classification.",
-        example="W",
+        examples=["W"],
     ),
     current_user: int = Depends(get_current_user),
 ) -> int:
@@ -2790,7 +2815,7 @@ async def query_object_set_parents(  # MyORJSONResponse -> JSONResponse -> Respo
         ...,
         title="Object IDs list",
         description="The list of object ids.",
-        example=[634509, 6234516, 976544],
+        examples=[[634509, 6234516, 976544]],
     ),
     current_user: int = Depends(get_current_user),
 ) -> ObjectSetQueryRsp:
@@ -2930,7 +2955,7 @@ def query_object_set_predictions(
         ...,
         title="Object IDs list",
         description="The list of object ids.",
-        example=[634509, 6234516, 976544],
+        examples=[[634509, 6234516, 976544]],
     ),
     current_user: int = Depends(get_current_user),
 ) -> PredictionInfoRsp:
@@ -2954,7 +2979,7 @@ def erase_object_set(
         ...,
         title="Object IDs list",
         description="The list of object ids.",
-        example=[634509, 6234516, 976544],
+        examples=[[634509, 6234516, 976544]],
     ),
     current_user: int = Depends(get_current_user),
 ) -> Tuple[int, int, int, int]:
@@ -2978,7 +3003,7 @@ def erase_object_set(
 )
 def object_query(
     object_id: int = Path(
-        ..., description="Internal, the unique numeric id of this object.", example=1
+        ..., description="Internal, the unique numeric id of this object.", examples=[1]
     ),
     current_user: Optional[int] = Depends(get_optional_current_user),
 ) -> ObjectBO:
@@ -3035,7 +3060,7 @@ def object_query(
 )
 def object_query_history(
     object_id: int = Path(
-        ..., description="Internal, the unique numeric id of this object.", example=1
+        ..., description="Internal, the unique numeric id of this object.", examples=[1]
     ),
     current_user: Optional[int] = Depends(get_optional_current_user),
 ) -> List[HistoricalClassification]:
@@ -3098,7 +3123,7 @@ def taxa_tree_status(
                     "example": [
                         {
                             "id": 12876,
-                            "renm_id": null,
+                            "renm_id": None,
                             "name": "Echinodermata X",
                             "type": "P",
                             "nb_objects": 24,
@@ -3128,7 +3153,7 @@ def reclassif_stats(
         ...,
         title="Taxa ids",
         description="String containing the list of one or more taxa id separated by non-num char.",
-        example="12876",
+        examples=["12876"],
     ),
     current_user: Optional[int] = Depends(get_optional_current_user),
 ) -> List[TaxonBO]:
@@ -3155,7 +3180,7 @@ def reclassif_stats(
 )
 def reclassif_project_stats(
     project_id: int = Path(
-        ..., description="Internal, numeric id of the project.", example=1
+        ..., description="Internal, numeric id of the project.", examples=[1]
     ),
     current_user: Optional[int] = Depends(get_optional_current_user),
 ) -> List[Dict[str, Any]]:
@@ -3178,7 +3203,7 @@ def reclassif_project_stats(
                 "application/json": {
                     "example": {
                         "id": 12876,
-                        "renm_id": null,
+                        "renm_id": None,
                         "name": "Echinodermata X",
                         "type": "P",
                         "nb_objects": 24,
@@ -3200,11 +3225,13 @@ def reclassif_project_stats(
             }
         }
     },
-    response_model=TaxonModel,
+    response_model=Optional[TaxonModel],
 )
 def query_taxa(
     taxon_id: int = Path(
-        ..., description="Internal, the unique numeric id of this taxon.", example=12876
+        ...,
+        description="Internal, the unique numeric id of this taxon.",
+        examples=[12876],
     ),
     _current_user: Optional[int] = Depends(get_optional_current_user),
 ) -> Optional[TaxonBO]:
@@ -3224,7 +3251,9 @@ def query_taxa(
 )
 def query_taxa_usage(
     taxon_id: int = Path(
-        ..., description="Internal, the unique numeric id of this taxon.", example=12876
+        ...,
+        description="Internal, the unique numeric id of this taxon.",
+        examples=[12876],
     ),
     _current_user: Optional[int] = Depends(get_optional_current_user),
 ) -> List[Dict[str, Any]]:
@@ -3248,10 +3277,10 @@ def search_taxa(
     query: str = Query(
         ...,
         description="Use this query for matching returned taxa names.",
-        example="Ban",
+        examples=["Ban"],
     ),
     project_id: Optional[int] = Query(
-        default=None, description="Internal, numeric id of the project.", example=1
+        default=None, description="Internal, numeric id of the project.", examples=[1]
     ),
     current_user: Optional[int] = Depends(get_optional_current_user),
 ) -> List[TaxaSearchRsp]:
@@ -3287,7 +3316,7 @@ async def query_taxa_set(  # MyORJSONResponse -> JSONResponse -> Response -> awa
         ...,
         title="Ids",
         description="The separator between numbers is arbitrary non-digit, e.g. ':', '|' or ','.",
-        example="1:2:3",
+        examples=["1:2:3"],
     ),
     _current_user: Optional[int] = Depends(get_optional_current_user),
 ) -> MyORJSONResponse:  # List[TaxonBO]:
@@ -3312,7 +3341,7 @@ def wormsification_taxa_set(  # MyORJSONResponse -> JSONResponse -> Response -> 
         ...,
         title="Ids",
         description="The separator between numbers is arbitrary non-digit, e.g. ':', '|' or ','.",
-        example="1:2:3",
+        examples=["1:2:3"],
     ),
     _current_user: Optional[int] = Depends(get_optional_current_user),
 ) -> MyORJSONResponse:  # Dict[str,WoRMSBO]:
@@ -3333,7 +3362,9 @@ def wormsification_taxa_set(  # MyORJSONResponse -> JSONResponse -> Response -> 
 )
 def get_taxon_in_central(
     taxon_id: int = Path(
-        ..., description="Internal, the unique numeric id of this taxon.", example=12876
+        ...,
+        description="Internal, the unique numeric id of this taxon.",
+        examples=[12876],
     ),
     _current_user: int = Depends(get_current_user),
 ) -> str:
@@ -3349,45 +3380,45 @@ def get_taxon_in_central(
 # noinspection PyUnusedLocal
 @app.put("/taxon/central", operation_id="add_taxon_in_central", tags=["Taxonomy Tree"])
 def add_taxon_in_central(
+    request: Request,  # injected by FastAPI
     name: str = Query(
         ...,
         title="Name",
         description="The taxon/category verbatim name.",
-        example="Echinodermata",
+        examples=["Echinodermata"],
     ),
     parent_id: int = Query(
         ...,
         title="Parent Id",
         description="It's not possible to create a root taxon.",
-        example=2367,
+        examples=[2367],
     ),
     taxotype: str = Query(
         ...,
         title="Taxo Type",
         description="The taxon type, 'M' for Morpho or 'P' for Phylo.",
-        example="P",
+        examples=["P"],
     ),
     creator_email: str = Query(
         ...,
         title="Creator email",
         description="The email of the taxo creator.",
-        example="user.creator@email.com",
+        examples=["user.creator@email.com"],
     ),
-    request: Request = Query(..., title="Request", description=""),
     source_desc: Optional[str] = Query(
         default=None,
         title="Source desc",
         description="The source description.",
-        example="null",
+        examples=["null"],
     ),
     source_url: Optional[str] = Query(
         default=None,
         title="Source url",
         description="The source url.",
-        example="http://www.google.fr/",
+        examples=["http://www.google.fr/"],
     ),
     current_user: int = Depends(get_current_user),
-) -> str:
+) -> Any:  # json
     """
     **Create a taxon** on EcoTaxoServer.
 
@@ -3437,7 +3468,7 @@ def pull_taxa_update_from_central(
     operation_id="query_taxa_in_worms",
     tags=["Taxonomy Tree"],
     include_in_schema=False,
-    response_model=TaxonModel,
+    response_model=Optional[TaxonModel],
 )
 def query_taxa_in_worms(
     aphia_id: int,
@@ -3456,7 +3487,7 @@ def query_taxa_in_worms(
     "/searchworms/{name}",
     operation_id="search_worms_name",
     tags=["Taxonomy Tree"],
-    response_model=Optional[List[Dict]],  # type: ignore
+    response_model=Optional[List[Dict]],
 )
 def search_worms_name(
     name: str,
@@ -3474,7 +3505,7 @@ def search_worms_name(
     "/addworms/",
     operation_id="add_worms_taxon",
     tags=["Taxonomy Tree"],
-    response_model=Any,  # type: ignore
+    response_model=Any,
 )
 def add_worms_taxon(
     taxon: AddWormsTaxonModel = Body(...),
@@ -3492,7 +3523,7 @@ def add_worms_taxon(
     "/taxo_recast",
     operation_id="update_taxonomy_recast",
     tags=["Taxonomy Tree"],
-    responses={200: {"content": {"application/json": {"example": null}}}},
+    responses={200: {"content": {"application/json": {"example": None}}}},
 )
 def update_taxonomy_recast(
     recast: TaxonomyRecastReq = Body(...),
@@ -3511,19 +3542,19 @@ def update_taxonomy_recast(
     "/taxo_recast",
     operation_id="get_taxonomy_recast",
     tags=["Taxonomy Tree"],
-    response_model=TaxoRecastRsp,
+    response_model=Optional[TaxoRecastRsp],
 )
 def get_taxonomy_recast(
     target_id: int = Query(
         ...,
         description="Internal, the unique numeric id of this collection.",
-        example=1,
+        examples=[1],
     ),
     operation: RecastOperation = Query(
         default=None,
         title="Operation name",
         description="One of RecastOperation enum value",
-        example="dwca_export_occurrence",
+        examples=["dwca_export_occurrence"],
     ),
     is_collection: bool = Query(
         default=False,
@@ -3558,13 +3589,13 @@ def search_taxonomy_recast(
         default=None,
         description="Project ids to check, separated by ,. If not given, all"
         " projects readable/administered by the current user are considered.",
-        example="1,2,3",
+        examples=["1,2,3"],
     ),
     operation: RecastOperation = Query(
         ...,
         title="Operation name",
         description="One of RecastOperation enum value",
-        example="project_import",
+        examples=["project_import"],
     ),
     current_user: int = Depends(get_current_user),
 ) -> List[TaxoRecastSearchRsp]:
@@ -3596,7 +3627,7 @@ def get_taxonomy_worms(
         title="Taxa Ids",
         description="taxon id separated by ,",
         default="",
-        example="all",
+        examples=["all"],
     ),
     current_user: int = Depends(get_current_user),
 ) -> Dict[str, int]:
@@ -3625,7 +3656,7 @@ def get_taxonomy_worms(
 def digest_project_images(
     max_digests: Optional[int],
     project_id: int = Path(
-        ..., description="Internal, numeric id of the project.", example=1
+        ..., description="Internal, numeric id of the project.", examples=[1]
     ),
     current_user: int = Depends(get_current_user),
 ) -> str:
@@ -3648,7 +3679,7 @@ def digest_project_images(
 )
 def cleanup_images_1(
     project_id: int = Query(
-        ..., description="Internal, numeric id of the project.", example=1
+        ..., description="Internal, numeric id of the project.", examples=[1]
     ),
     max_deletes: Optional[int] = None,
     current_user: int = Depends(get_current_user),
@@ -3670,7 +3701,7 @@ def cleanup_images_1(
     operation_id="nightly_maintenance",
     tags=["WIP"],
     include_in_schema=False,
-    response_model=str,
+    response_model=int,
 )
 def nightly_maintenance(current_user: int = Depends(get_current_user)) -> int:
     """
@@ -3710,7 +3741,7 @@ async def direct_db_query(  # MyORJSONResponse -> JSONResponse -> Response -> aw
         ...,
         title="Query",
         description="The SQL to execute.",
-        example="select count(1) from objects",
+        examples=["select count(1) from objects"],
     ),
     current_user: int = Depends(get_current_user),
 ) -> MyORJSONResponse:
@@ -3736,19 +3767,19 @@ def list_jobs(
         False,
         title="For admin",
         description="If FALSE return the jobs for current user, else return all of them.",
-        example=False,
+        examples=[False],
     ),
     job_type: Optional[str] = Query(
         None,
         title="Job type",
         description="The job type, e.g. FileImport, BackupExport, Prediction...",
-        example="import",
+        examples=["import"],
     ),
     job_status: Optional[DBJobStateEnum] = Query(
         None,
         title="Job status",
         description="The job status: P(ending), R(unning), A(sking), E(rror), F(inished).",
-        example=DBJobStateEnum.Finished,
+        examples=[DBJobStateEnum.Finished],
     ),
     current_user: int = Depends(get_current_user),
 ) -> List[JobBO]:
@@ -3767,7 +3798,9 @@ def list_jobs(
 )
 def get_job(
     job_id: int = Path(
-        ..., description="Internal, the unique numeric id of this job.", example=47445
+        ...,
+        description="Internal, the unique numeric id of this job.",
+        examples=[47445],
     ),
     current_user: int = Depends(get_current_user),
 ) -> JobBO:
@@ -3784,11 +3817,13 @@ def get_job(
     "/jobs/{job_id}/answer",
     operation_id="reply_job_question",
     tags=["jobs"],
-    responses={200: {"content": {"application/json": {"example": null}}}},
+    responses={200: {"content": {"application/json": {"example": None}}}},
 )
 def reply_job_question(
     job_id: int = Path(
-        ..., description="Internal, the unique numeric id of this job.", example=47445
+        ...,
+        description="Internal, the unique numeric id of this job.",
+        examples=[47445],
     ),
     reply: Dict[str, Any] = Body(default={}, title="Reply job question"),
     current_user: int = Depends(get_current_user),
@@ -3814,11 +3849,13 @@ def reply_job_question(
     "/jobs/{job_id}/restart",
     operation_id="restart_job",
     tags=["jobs"],
-    responses={200: {"content": {"application/json": {"example": null}}}},
+    responses={200: {"content": {"application/json": {"example": None}}}},
 )
 def restart_job(
     job_id: int = Path(
-        ..., description="Internal, the unique numeric id of this job.", example=47445
+        ...,
+        description="Internal, the unique numeric id of this job.",
+        examples=[47445],
     ),
     current_user: int = Depends(get_current_user),
 ) -> None:
@@ -3837,7 +3874,9 @@ def restart_job(
 @app.get("/jobs/{job_id}/log", operation_id="get_job_log_file", tags=["jobs"])
 async def get_job_log_file(  # async due to FileResponse
     job_id: int = Path(
-        ..., description="Internal, the unique numeric id of this job.", example=47445
+        ...,
+        description="Internal, the unique numeric id of this job.",
+        examples=[47445],
     ),
     current_user: int = Depends(get_current_user),
 ) -> FileResponse:
@@ -3865,7 +3904,9 @@ async def get_job_log_file(  # async due to FileResponse
 )
 async def get_job_file(  # async due to StreamingResponse
     job_id: int = Path(
-        ..., description="Internal, the unique numeric id of this job.", example=47445
+        ...,
+        description="Internal, the unique numeric id of this job.",
+        examples=[47445],
     ),
     current_user: int = Depends(get_current_user),
     range_header: Optional[str] = Header(None, alias="Range"),
@@ -3896,11 +3937,13 @@ async def get_job_file(  # async due to StreamingResponse
     "/jobs/{job_id}",
     operation_id="erase_job",
     tags=["jobs"],
-    responses={200: {"content": {"application/json": {"example": null}}}},
+    responses={200: {"content": {"application/json": {"example": None}}}},
 )
 def erase_job(
     job_id: int = Path(
-        ..., description="Internal, the unique numeric id of this job.", example=47445
+        ...,
+        description="Internal, the unique numeric id of this job.",
+        examples=[47445],
     ),
     current_user: int = Depends(get_current_user),
 ) -> None:
@@ -3930,7 +3973,10 @@ def erase_job(
 )
 def list_common_files(
     path: str = Query(
-        ..., title="path", description="", example="/ftp_plankton/Ecotaxa_Exported_data"
+        ...,
+        title="path",
+        description="",
+        examples=["/ftp_plankton/Ecotaxa_Exported_data"],
     ),
     current_user: int = Depends(get_current_user),
 ) -> DirectoryModel:
@@ -3954,7 +4000,7 @@ def list_common_files(
     response_model=DirectoryModel,
 )
 def list_user_files(
-    sub_path: str,  # = Query(..., title="Sub path", description="", example=""),
+    sub_path: str,  # = Query(..., title="Sub path", description="", examples=[""]),
     current_user: int = Depends(get_current_user),
 ) -> DirectoryModel:
     """
@@ -3985,7 +4031,7 @@ def list_user_files(
     response_model=str,
 )
 async def put_user_file(  # async due to await file store
-    file: UploadFile = File(..., title="File", description=""),
+    file: UploadFile = File(..., title="File", description="data stream"),
     path: Optional[str] = Form(
         title="Path",
         description="The destination path of the file.",
@@ -4188,7 +4234,7 @@ def system_error(_current_user: int = Depends(get_current_user)) -> None:
     "/noop",
     operation_id="do_nothing",
     tags=["misc"],
-    response_model=Union[ObjectHeaderModel, HistoricalClassificationModel],  # type: ignore
+    response_model=Union[ObjectHeaderModel, HistoricalClassificationModel],
 )
 def do_nothing(_current_user: int = Depends(get_current_user)):
     """
@@ -4237,25 +4283,25 @@ def get_migrated_ids(
         "",
         title="Project IDs",
         description="String containing the list of one or more project ids separated by non-num char.",
-        example="1,2,3",
+        examples=["1,2,3"],
     ),
     samples: str = Query(
         "",
         title="Sample IDs",
         description="String containing the list of one or more sample ids separated by non-num char.",
-        example="1,2,3",
+        examples=["1,2,3"],
     ),
     acquisitions: str = Query(
         "",
         title="Acquisition IDs",
         description="String containing the list of one or more acquisition ids separated by non-num char.",
-        example="1,2,3",
+        examples=["1,2,3"],
     ),
     objects: str = Query(
         "",
         title="Object IDs",
         description="String containing the list of one or more object ids separated by non-num char.",
-        example="1,2,3",
+        examples=["1,2,3"],
     ),
 ) -> MigratedIDsRsp:
     """
@@ -4282,10 +4328,10 @@ async def get_image(  # async due to StreamingResponse
     dir_id: str = Path(
         ...,
         description="Internal, image directory ID, 0-padded if < 1000.",
-        example="0123",
+        examples=["0123"],
     ),
     img_in_dir: str = Path(
-        ..., description="Internal, image path in directory.", example="0075.jpg"
+        ..., description="Internal, image path in directory.", examples=["0075.jpg"]
     ),
 ) -> StreamingResponse:
     """
@@ -4311,6 +4357,25 @@ async def get_image(  # async due to StreamingResponse
 #     time.sleep(random()/10)
 #     return Response(sce.run(), media_type="text/plain")
 
+
+# Instrument a bit
+@app.middleware("http")
+async def timing_middleware(request: Request, call_next):
+    start_wall = time.perf_counter()
+    start_cpu = time.process_time()
+    response = await call_next(request)
+    wall_ms = (time.perf_counter() - start_wall) * 1000
+    cpu_ms = (time.process_time() - start_cpu) * 1000
+    endpoint = request.scope.get("endpoint")
+    func_name = (
+        f"{endpoint.__module__}.{endpoint.__name__}"
+        if endpoint and hasattr(endpoint, "__name__")
+        else request.url.path
+    )
+    logger.info(f"TIMING: Wall: {wall_ms:7.1f}ms | CPU: {cpu_ms:7.1f}ms | {func_name}")
+    return response
+
+
 app.add_exception_handler(
     status.HTTP_500_INTERNAL_SERVER_ERROR, internal_server_error_handler
 )
@@ -4322,8 +4387,26 @@ dump_openapi(app, __file__)
 JOB_INTERVAL = 5
 
 
-@app.on_event("startup")
-def startup_event() -> None:
+def register_exception(app: FastAPI):
+    @app.exception_handler(RequestValidationError)
+    async def validation_exception_handler(
+        request: Request, exc: RequestValidationError
+    ):
+        exc_str = f"{exc}".replace("\n", " ").replace("   ", " ")
+        # or logger.error(f'{exc}')
+        print(request.url, exc_str, file=sys.stderr)
+        content = {"status_code": 10422, "message": exc_str, "data": None}
+        return JSONResponse(
+            content=content, status_code=status.HTTP_422_UNPROCESSABLE_CONTENT
+        )
+
+
+register_exception(app)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup logic
     # Small service construction & check, to ensure config and the DB are OK
     with ConstantsService() as sce:
         sce.config.validate()
@@ -4337,10 +4420,13 @@ def startup_event() -> None:
     JobScheduler.FILTER = [PredictForProject.JOB_TYPE]
     JobScheduler.launch_at_interval(JOB_INTERVAL)
 
+    yield
 
-@app.on_event("shutdown")
-def shutdown_event() -> None:
+    # Shutdown logic
     JobScheduler.shutdown()
+
+
+app.router.lifespan_context = lifespan
 
 
 def _split_num_list(ids: str) -> List[int]:

@@ -203,7 +203,7 @@ class ImagingInstrumentName(DwC_ExtendedMeasurementOrFact):
 
 
 class AnalyticalInstrumentName(DwC_ExtendedMeasurementOrFact):
-    def __init__(self,event_id:str,value_id: str,value: str):
+    def __init__(self, event_id: str, value_id: str, value: str):
         super().__init__(
             eventID=event_id,
             measurementType="Analytical instrument name",

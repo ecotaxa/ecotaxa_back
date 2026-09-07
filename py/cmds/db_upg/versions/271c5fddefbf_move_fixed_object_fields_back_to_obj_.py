@@ -9,7 +9,7 @@ Create Date: 2021-02-03 10:04:58.437275
 # revision identifiers, used by Alembic.
 from db_upg.versions.a74a857fe352_no_dup_fk_in_objects import (
     OBJECTS_DDL_a74a857fe352,
-)  # type:ignore
+)  # type: ignore
 
 revision = "271c5fddefbf"
 down_revision = "da78c15a7c21"

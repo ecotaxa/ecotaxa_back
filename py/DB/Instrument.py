@@ -4,10 +4,10 @@
 #
 
 from sqlalchemy import event
+from sqlalchemy.orm import mapped_column
 
-from DB.helpers.ORM import Model, Insert
+from DB.helpers.ORM import Model, Insert, Mapped
 from data.Instruments import DEFAULT_INSTRUMENTS
-from .helpers.DDL import Column
 from .helpers.Postgres import VARCHAR
 
 InstrumentIDT = str
@@ -21,9 +21,9 @@ class Instrument(Model):
     """
 
     __tablename__ = "instrument"
-    instrument_id: str = Column(VARCHAR(32), primary_key=True)
-    name: str = Column(VARCHAR(255))
-    bodc_url: str = Column(VARCHAR(255))
+    instrument_id: Mapped[str] = mapped_column(VARCHAR(32), primary_key=True)
+    name: Mapped[str | None] = mapped_column(VARCHAR(255))
+    bodc_url: Mapped[str | None] = mapped_column(VARCHAR(255))
 
     def __str__(self):
         return "{0} ({1})".format(self.instrument_id, self.name)

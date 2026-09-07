@@ -5,7 +5,7 @@
 from enum import Enum
 from typing import List, Dict, Optional, Union
 
-from pydantic import Extra
+from pydantic import ConfigDict
 
 from helpers.pydantic import BaseModel, Field
 
@@ -89,12 +89,12 @@ class ProjectIdReq(BaseModel):
         title="Collection Id",
         description="The Collection to export if requested.",
         default=None,
-        example=1,
+        examples=[1],
     )
     project_id: Union[int, str] = Field(
         title="Project Id",
         description="The project(int) or projects (str, project ids list) to export.",
-        example=1,
+        examples=[1],
     )
 
 
@@ -106,12 +106,12 @@ class ExportReq(ProjectIdReq):
     exp_type: ExportTypeEnum = Field(
         title="Export type",
         description="The export type.",
-        example=ExportTypeEnum.general_tsv,
+        examples=[ExportTypeEnum.general_tsv],
     )
     use_latin1: bool = Field(
         title="Use latin1",
         description="Export using latin 1 character set, AKA iso-8859-1. Default is utf-8.",
-        example=False,
+        examples=[False],
         default=False,
     )
     tsv_entities: str = Field(
@@ -119,63 +119,63 @@ class ExportReq(ProjectIdReq):
         description="For 'TSV' type, the entities to export, one letter for each of "
         "O(bject), P(rocess), A(cquisition), S(ample), "
         "C(omments).",
-        example="OPAS",
+        examples=["OPAS"],
         default="",
     )
     only_annotations: bool = Field(
         title="Backup annotations",
         description="For 'BAK' type, only save objects' last annotation data in backup.",
         default=False,
-        example=False,
+        examples=[False],
     )
     split_by: str = Field(
         title="Split by",
         description="For 'TSV' type, inside archives, split in one directory per... "
         "'sample', 'acquisition', 'taxon' or '' (no split).",
-        example="sample",
+        examples=["sample"],
         default="",
     )
     coma_as_separator: bool = Field(
         title="Coma as separator",
         description="For 'TSV' type, use a , instead of . for decimal separator.",
-        example=False,
+        examples=[False],
         default=False,
     )
     format_dates_times: bool = Field(
         title="Format dates times",
         description="For 'TSV' type, format dates and times using - and : respectively.",
-        example=False,
+        examples=[False],
         default=True,
     )
     with_images: bool = Field(
         title="With images",
         description="For 'BAK' and 'DOI' types, export images as well.",
-        example=False,
+        examples=[False],
         default=False,
     )
     with_internal_ids: bool = Field(
         title="With internal ids",
         description="For 'TSV' type, export internal DB IDs.",
-        example=False,
+        examples=[False],
         default=False,
     )
     with_types_row: Optional[bool] = Field(
         title="With types row",
         description="Add an EcoTaxa-compatible second line with types.",
-        example=False,
+        examples=[False],
         default=False,
     )
     only_first_image: bool = Field(
         title="Only first image",
         description="For 'DOI' type, export only first (displayed) image.",
-        example=False,
+        examples=[False],
         default=False,
     )
     # TODO: Move A(acquisition) to U(subsample) but it needs propagation to client side.
     quantity: List[Union[ExportTypeEnum, SummaryExportQuantitiesOptionsEnum]] = Field(
         title="Quantity",
         description="The quantity to compute. Abundance is always possible.",
-        example=[SummaryExportQuantitiesOptionsEnum.abundance],
+        examples=[[SummaryExportQuantitiesOptionsEnum.abundance]],
         default=[SummaryExportQuantitiesOptionsEnum.abundance],
     )
     sum_subtotal: SummaryExportGroupingEnum = Field(
@@ -183,7 +183,7 @@ class ExportReq(ProjectIdReq):
         description="For 'SUM', 'ABO', 'CNC' and 'BIV' types, if "
         "computations should be combined. "
         "Per A(cquisition) or S(ample) or <Empty>(just taxa).",
-        example="A",
+        examples=["A"],
         default=SummaryExportGroupingEnum.just_by_taxon,
     )
     formulae: Dict[str, str] = Field(
@@ -192,22 +192,23 @@ class ExportReq(ProjectIdReq):
         "free columns. Python syntax, prefixes are 'sam', 'ssm' and 'obj'."
         "Variables used in computations are 'total_water_volume', 'subsample_coef' "
         "and 'individual_volume'",
-        example={
-            "subsample_coef": "1/ssm.sub_part",
-            "total_water_volume": "sam.tot_vol/1000",
-            "individual_volume": "4.0/3.0*math.pi*(math.sqrt(obj.area/math.pi)*ssm.pixel_size)**3",
-        },
+        examples=[
+            {
+                "subsample_coef": "1/ssm.sub_part",
+                "total_water_volume": "sam.tot_vol/1000",
+                "individual_volume": "4.0/3.0*math.pi*(math.sqrt(obj.area/math.pi)*ssm.pixel_size)**3",
+            }
+        ],
         default={},
     )
     out_to_ftp: bool = Field(
         title="Out to ftp",
         description="Copy result file to FTP area (if configured). Original file is still available.",
-        example=False,
+        examples=[False],
         default=False,
     )
 
-    class Config:
-        schema_extra = {"title": "Export request Model"}
+    model_config = ConfigDict(json_schema_extra={"title": "Export request Model"})
 
 
 class GeneralExportReq(ProjectIdReq):
@@ -218,42 +219,43 @@ class GeneralExportReq(ProjectIdReq):
     split_by: ExportSplitOptionsEnum = Field(
         title="Split by",
         description="If not none, separate (in ZIP sub-directories) output per given field.",
-        example=ExportSplitOptionsEnum.sample,
+        examples=[ExportSplitOptionsEnum.sample],
         default=ExportSplitOptionsEnum.none,
     )
     with_images: ExportImagesOptionsEnum = Field(
         title="With images",
         description="Add in ZIP first (i.e. visible) image, all images, or no image.⚠️ 'all' means maybe several lines per object in TSVs.",
-        example=ExportImagesOptionsEnum.first,
+        examples=[ExportImagesOptionsEnum.first],
         default=ExportImagesOptionsEnum.none,
     )
     with_internal_ids: bool = Field(
         title="With internal ids",
         description="Export internal database IDs.",
-        example=False,
+        examples=[False],
         default=False,
     )
     with_types_row: bool = Field(
         title="With types row",
         description="Add an EcoTaxa-compatible second line with types.",
-        example=False,
+        examples=[False],
         default=False,
     )
     only_annotations: bool = Field(
         title="Backup annotations",
         description="Only save objects' last annotation data.",
         default=False,
-        example=False,
+        examples=[False],
     )
     out_to_ftp: bool = Field(
         title="Out to ftp",
         description="Copy result file to FTP area (if configured). Original file is still available.",
         default=False,
-        example=False,
+        examples=[False],
     )
 
-    class Config:
-        schema_extra = {"title": "General Export request Model"}
+    model_config = ConfigDict(
+        json_schema_extra={"title": "General Export request Model"}
+    )
 
 
 class SummaryExportReq(ProjectIdReq):
@@ -267,13 +269,13 @@ class SummaryExportReq(ProjectIdReq):
     ] = Field(
         title="Quantity",
         description="The quantity to compute. Abundance is always possible.",
-        example=SummaryExportQuantitiesOptionsEnum.abundance,
+        examples=[SummaryExportQuantitiesOptionsEnum.abundance],
         default=SummaryExportQuantitiesOptionsEnum.abundance,
     )
     summarise_by: SummaryExportSumOptionsEnum = Field(
         title="Summarise by",
         description="Computations aggregation level.",
-        example=SummaryExportSumOptionsEnum.acquisition,
+        examples=[SummaryExportSumOptionsEnum.acquisition],
         default=SummaryExportSumOptionsEnum.sample,
     )
     formulae: Dict[str, str] = Field(
@@ -282,18 +284,24 @@ class SummaryExportReq(ProjectIdReq):
         "free columns. Python syntax, prefixes are 'sam', 'ssm' and 'obj'."
         "Variables used in computations are 'total_water_volume', 'subsample_coef' "
         "and 'individual_volume'",
-        example={
-            "subsample_coef": "1/ssm.sub_part",
-            "total_water_volume": "sam.tot_vol/1000",
-            "individual_volume": "4.0/3.0*math.pi*(math.sqrt(obj.area/math.pi)*ssm.pixel_size)**3",
-        },
+        examples=[
+            {
+                "subsample_coef": "1/ssm.sub_part",
+                "total_water_volume": "sam.tot_vol/1000",
+                "individual_volume": "4.0/3.0*math.pi*(math.sqrt(obj.area/math.pi)*ssm.pixel_size)**3",
+            }
+        ],
         default={},
     )
     out_to_ftp: bool = Field(
         title="Out to ftp",
         description="Copy result file to FTP area (if configured). Original file is still available.",
         default=False,
-        example=False,
+        examples=[False],
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={"title": "Summary Export request Model"}
     )
 
 
@@ -306,11 +314,12 @@ class BackupExportReq(ProjectIdReq):
         title="Out to ftp",
         description="Copy result file to FTP area. Original file is still available.",
         default=False,
-        example=False,
+        examples=[False],
     )
 
-    class Config:
-        schema_extra = {"title": "Backup Export request Model"}
+    model_config = ConfigDict(
+        json_schema_extra={"title": "Backup Export request Model"}
+    )
 
 
 class DarwinCoreExportReq(BaseModel):
@@ -322,13 +331,13 @@ class DarwinCoreExportReq(BaseModel):
     collection_id: int = Field(
         title="Collection Id",
         description="The collection to export, by its internal Id.",
-        example=1,
+        examples=[1],
     )
     # Transform
     dry_run: bool = Field(
         title="Dry run",
         description="If set, then only a diagnostic of doability will be done.",
-        example=False,
+        examples=[False],
         default=False,
     )
 
@@ -336,7 +345,7 @@ class DarwinCoreExportReq(BaseModel):
         title="Include predicted",
         description="If set, then predicted objects, as well as validated ones, will be exported. "
         "A validation status will allow to distinguish between the two possible statuses.",
-        example=False,
+        examples=[False],
         default=False,
     )
     # Output
@@ -344,31 +353,32 @@ class DarwinCoreExportReq(BaseModel):
         title="With absent",
         description="If set, then *absent* records will be generated, in the relevant samples, "
         "for categories present in other samples.",
-        example=False,
+        examples=[False],
         default=False,
     )
     with_computations: List[SciExportTypeEnum] = Field(
         title="With computations",
         description="Compute organisms abundances (ABO), concentrations (CNC) or biovolumes (BIV). Several possible.",
-        example=["ABO"],
+        examples=[["ABO"]],
         default=[],
     )
     extra_xml: List[str] = Field(
         title="Extra XML",
         description="XML blocks which will be output, reformatted, inside the <dataset> tag of produced EML. "
         "Formal schema is in dataset section of: https://eml.ecoinformatics.org/schema/eml_xsd ",
-        example={
-            """<associatedParty>
+        examples=[
+            {
+                """<associatedParty>
     <individualName><givenName>Coco</givenName><surName>Rico</surName>
     </individualName>
     <organizationName>CHICK</organizationName>
       </associatedParty>""",
-        },
+            }
+        ],
         default=[],
     )
 
-    class Config:
-        extra = Extra.forbid
+    model_config = ConfigDict(extra="forbid")
 
 
 class ExportRsp(BaseModel):
@@ -379,21 +389,23 @@ class ExportRsp(BaseModel):
     errors: List[str] = Field(
         title="Errors",
         description="Showstopper problems found preventing building the archive.",
-        example=[
-            "No content produced.",
-            " See previous warnings or check the presence of samples in the projects",
+        examples=[
+            [
+                "No content produced.",
+                " See previous warnings or check the presence of samples in the projects",
+            ]
         ],
         default=[],
     )
     warnings: List[str] = Field(
         title="Warnings",
         description="Problems found while building the archive, which do not prevent producing it.",
-        example=["No occurrence added for sample '3456' in 1"],
+        examples=[["No occurrence added for sample '3456' in 1"]],
         default=[],
     )
     job_id: int = Field(
         title="Job Id",
         description="The created job, 0 if there were problems.",
-        example=12376,
+        examples=[12376],
         default=0,
     )

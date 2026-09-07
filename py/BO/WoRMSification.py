@@ -5,13 +5,14 @@
 # A description of transformation to the WoRMS taxonomic system.
 #
 from typing import List, Set, Dict, Optional
+
 from sqlalchemy.orm import Session
+
 from BO.Classification import ClassifIDT
 from BO.ObjectSetQueryPlus import TaxoRemappingT
-from BO.Taxonomy import TaxonBOSet, WoRMSBO
 from BO.TaxoRecast import TaxoRecastBO
+from BO.Taxonomy import TaxonBOSet, WoRMSBO
 from DB.Taxonomy import TaxonomyIDT, TaxoType
-
 from helpers.DynamicLogs import get_logger
 
 logger = get_logger(__name__)

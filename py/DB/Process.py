@@ -2,13 +2,16 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import List
+from typing import TYPE_CHECKING, List
 
-from .Acquisition import Acquisition
-from .helpers.DDL import Column, ForeignKey
-from .helpers.ORM import Model
-from .helpers.ORM import relationship
+from sqlalchemy.orm import mapped_column
+
+from .helpers.DDL import ForeignKey
+from .helpers.ORM import Model, Mapped
 from .helpers.Postgres import VARCHAR, BIGINT
+
+if TYPE_CHECKING:
+    from .Acquisition import Acquisition
 
 PROCESS_FREE_COLUMNS = 31
 
@@ -21,16 +24,17 @@ class Process(Model):
     # DB table
     __tablename__ = "process"
     # Twin table with Acquisitions
-    processid: int = Column(
+    processid: Mapped[int] = mapped_column(
         BIGINT,
-        ForeignKey(Acquisition.acquisid, ondelete="CASCADE", onupdate="CASCADE"),
+        ForeignKey("acquisitions.acquisid", ondelete="CASCADE", onupdate="CASCADE"),
         primary_key=True,
     )
     # i.e. process_id from TSV
-    orig_id = Column(VARCHAR(255), nullable=False)
+    orig_id: Mapped[str] = mapped_column(VARCHAR(255))
 
-    # The relationships are created in Relations.py but the typing here helps IDE
-    acquisition: relationship
+    if TYPE_CHECKING:
+        # The relationship(s) are created in Relations.py but the typing here helps IDE
+        acquisition: Mapped[Acquisition]
 
     def pk(self) -> int:
         return self.processid
@@ -40,4 +44,4 @@ class Process(Model):
 
 
 for i in range(1, PROCESS_FREE_COLUMNS):
-    setattr(Process, "t%02d" % i, Column(VARCHAR(250)))
+    setattr(Process, "t%02d" % i, mapped_column(VARCHAR(250)))

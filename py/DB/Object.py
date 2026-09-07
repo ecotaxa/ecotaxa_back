@@ -2,14 +2,12 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-# noinspection PyPackageRequirements
-from __future__ import annotations
 
-import datetime
-from typing import Dict, Set, Iterable, TYPE_CHECKING, List
+from datetime import date, time, datetime
+from typing import List, TYPE_CHECKING, Dict
 
 # noinspection PyPackageRequirements
-from sqlalchemy import Index, Column, ForeignKey, Integer, text, func, event, DDL  # fmt:skip
+from sqlalchemy import Index, ForeignKey, text, func, event, DDL  # fmt:skip
 # noinspection PyPackageRequirements
 from sqlalchemy.dialects.postgresql import (
     BIGINT,
@@ -23,26 +21,23 @@ from sqlalchemy.dialects.postgresql import (
     TIMESTAMP,
 )  # fmt:skip
 # noinspection PyPackageRequirements
-from sqlalchemy.orm import relationship, Session
+from sqlalchemy.orm import Session, mapped_column
 
 from BO.helpers.TSVHelpers import convert_degree_minute_float_to_decimal_degree
 from .Acquisition import Acquisition
 from .Image import Image
-from .Project import Project, ProjectIDT
-from .Sample import Sample
-from .Taxonomy import Taxonomy
-from .User import User
-from .helpers.ORM import Model
+from .helpers.ORM import Model, Mapped
+
+if TYPE_CHECKING:
+    from .Taxonomy import Taxonomy
+    from .User import User
+    from .CNNFeatureVector import ObjectCNNFeatureVector
 
 # Typings
 ObjectIDT = int
 ObjectIDListT = List[int]
 
 OBJ_PRJ_OFFSET = 100_000_000  # AKA 1e8
-
-if TYPE_CHECKING:
-    pass
-    # from .Image import Image
 
 # Classification qualification
 PREDICTED_CLASSIF_QUAL = "P"  # ML found, during the training starting at 'classif_date' moment, that the object _could be_ a 'classif_id' with 'classif_score' confidence.
@@ -64,58 +59,72 @@ for k, v in classif_qual_labels.items():
 class ObjectHeader(Model):
     __tablename__ = "obj_head"
     # Self
-    objid = Column(BIGINT, primary_key=True, autoincrement=False)  # 8 bytes align d
+    objid: Mapped[int] = mapped_column(
+        BIGINT, primary_key=True, autoincrement=False
+    )  # 8 bytes align d
     # Parent
-    acquisid = Column(
+    acquisid: Mapped[int] = mapped_column(
         BIGINT,
         ForeignKey("acquisitions.acquisid", ondelete="CASCADE", onupdate="CASCADE"),
-        nullable=False,
     )  # 8 bytes align d
     # Author of last change in/to 'V' or 'D'
-    classif_who = Column(Integer, ForeignKey(User.id))  # 4 bytes align i
+    classif_who: Mapped[int | None] = mapped_column(
+        INTEGER, ForeignKey("users.id")
+    )  # 4 bytes align i
     # User-visible classification
-    classif_id = Column(INTEGER, ForeignKey(Taxonomy.id))  # 4 bytes align i
+    classif_id: Mapped[int | None] = mapped_column(
+        INTEGER, ForeignKey("taxonomy.id")
+    )  # 4 bytes align i
 
     # 86400 different values, basically all possible minutes of day
-    objtime = Column(TIME)  # 8 bytes align d
-    latitude = Column(DOUBLE_PRECISION)  # 8 bytes align d
-    longitude = Column(DOUBLE_PRECISION)  # 8 bytes align d
-    depth_min = Column(FLOAT)  # AKA DOUBLE_PRECISION, 8 bytes align d
-    depth_max = Column(
+    objtime: Mapped[time | None] = mapped_column(TIME)  # 8 bytes align d
+    latitude: Mapped[float | None] = mapped_column(DOUBLE_PRECISION)  # 8 bytes align d
+    longitude: Mapped[float | None] = mapped_column(DOUBLE_PRECISION)  # 8 bytes align d
+    depth_min: Mapped[float | None] = mapped_column(
+        FLOAT
+    )  # AKA DOUBLE_PRECISION, 8 bytes align d
+    depth_max: Mapped[float | None] = mapped_column(
         FLOAT
     )  # AKA DOUBLE_PRECISION, 8 bytes align d # max = 99999999999 conventional value prevents move to float4
     # _only_ 7018 different values
-    objdate = Column(DATE)  # 4 bytes align i
+    objdate: Mapped[date | None] = mapped_column(DATE)  # 4 bytes align i
     #
     # One of the *_CLASSIF_QUAL above
-    classif_qual = Column(CHAR(1))  # 2 bytes (len + content) align c as len < 127
+    classif_qual: Mapped[str | None] = mapped_column(
+        CHAR(1)
+    )  # 2 bytes (len + content) align c as len < 127
     #
-    sunpos = Column(
+    sunpos: Mapped[str | None] = mapped_column(
         CHAR(1)
     )  # Sun position, from date, time and coords # 2 bytes (len + content) align c as len < 127
     # Date of move to present classif_qual+classif_id, see top comment on states for details
-    classif_date = Column(TIMESTAMP)  # 8 bytes align d
+    classif_date: Mapped[datetime | None] = mapped_column(TIMESTAMP)  # 8 bytes align d
     # If the object is Predicted, its score
-    classif_score = Column(DOUBLE_PRECISION)  # 8 bytes align d
+    classif_score: Mapped[float | None] = mapped_column(
+        DOUBLE_PRECISION
+    )  # 8 bytes align d
 
     # User-provided identifier
-    orig_id = Column(
-        VARCHAR(255), nullable=False
+    orig_id: Mapped[str] = mapped_column(
+        VARCHAR(255)
     )  # (len+1) bytes, align i if len > 127
 
     # 176M values in DB as of 2024-02-02
-    object_link = Column(VARCHAR(255))
+    object_link: Mapped[str | None] = mapped_column(VARCHAR(255))
 
-    complement_info = Column(VARCHAR)  # e.g. "Part of ostracoda"
+    complement_info: Mapped[str | None] = mapped_column(
+        VARCHAR
+    )  # e.g. "Part of ostracoda"
 
-    # The relationships are created in Relations.py but the typing here helps the IDE
-    fields: ObjectFields
-    cnn_features: relationship
-    classif: relationship
-    classifier: relationship
-    all_images: Iterable[Image]
-    acquisition: relationship
-    history: relationship
+    if TYPE_CHECKING:
+        # The relationship(s) are created in Relations.py but the typing here helps IDE
+        fields: Mapped["ObjectFields"]
+        cnn_features: Mapped[ObjectCNNFeatureVector]
+        classif: Mapped[Taxonomy]
+        classifier: Mapped[User]
+        all_images: Mapped[List[Image]]
+        acquisition: Mapped[Acquisition]
+        history: Mapped[List["ObjectsClassifHisto"]]
 
     @classmethod
     def get_next_pk(cls, session: Session, prj_id: int) -> int:
@@ -130,28 +139,6 @@ class ObjectHeader(Model):
             .scalar()
         )
         return res + 1 if res else prj_id * OBJ_PRJ_OFFSET + 1
-
-    @classmethod
-    def fetch_existing_objects(
-        cls, session: Session, prj_id: ProjectIDT
-    ) -> Dict[str, int]:
-        qry = session.query(ObjectHeader.orig_id, ObjectHeader.objid)
-        qry = qry.join(Acquisition).join(Sample).join(Project)
-        qry = qry.filter(Project.projid == prj_id)
-        qry = qry.filter(ObjectHeader.objid.op("<@")(func.obj_in_prj(prj_id)))
-        ret = {orig_id: objid for orig_id, objid in qry}
-        return ret
-
-    @classmethod
-    def fetch_existing_ranks(cls, session: Session, prj_id) -> Dict[int, Set[int]]:
-        ret: Dict[int, Set[int]] = {}
-        qry = session.query(Image.objid, Image.imgrank)
-        qry = qry.join(ObjectHeader).join(Acquisition).join(Sample).join(Project)
-        qry = qry.filter(ObjectHeader.objid.op("<@")(func.obj_in_prj(prj_id)))
-        qry = qry.filter(Project.projid == prj_id)
-        for objid, imgrank in qry:
-            ret.setdefault(objid, set()).add(imgrank)
-        return ret
 
     @staticmethod
     def _geo_from_txt(txt: str, min_v: float, max_v: float) -> float:
@@ -179,24 +166,24 @@ class ObjectHeader(Model):
         return float(txt)
 
     @staticmethod
-    def time_from_txt(txt: str) -> datetime.time:
+    def time_from_txt(txt: str) -> time:
         """Convert/check time before setting field. HHMM with optional SS. Or strictly HH:MM:SS
         :raises ValueError"""
         if txt[2:3] == txt[5:6] == ":":
-            return datetime.time(int(txt[0:2]), int(txt[3:5]), int(txt[6:8]))
+            return time(int(txt[0:2]), int(txt[3:5]), int(txt[6:8]))
         # Left pad with 0s as they tend to be truncated by spreadsheets e.g. 320 -> 0320
         txt = "0" * (4 - len(txt)) + txt if len(txt) < 4 else txt
         # Right pad with 0s for seconds e.g. 0320 -> 032000
         txt += "0" * (6 - len(txt)) if len(txt) < 6 else ""
-        return datetime.time(int(txt[0:2]), int(txt[2:4]), int(txt[4:6]))
+        return time(int(txt[0:2]), int(txt[2:4]), int(txt[4:6]))
 
     @staticmethod
-    def date_from_txt(txt: str) -> datetime.date:
+    def date_from_txt(txt: str) -> date:
         """Convert/check date before setting field. Format YYYYMMDD or YYYY-MM-DD
         :raises ValueError"""
         if txt[4:5] == txt[7:8] == "-":
-            return datetime.date(int(txt[0:4]), int(txt[5:7]), int(txt[8:10]))
-        return datetime.date(int(txt[0:4]), int(txt[4:6]), int(txt[6:8]))
+            return date(int(txt[0:4]), int(txt[5:7]), int(txt[8:10]))
+        return date(int(txt[0:4]), int(txt[4:6]), int(txt[6:8]))
 
     def __lt__(self, other):
         return self.objid < other.objid
@@ -209,22 +196,24 @@ USED_FIELDS_FOR_CLASSIF = {  # From Import user point of view, only these can be
     ObjectHeader.classif_who.name,
     ObjectHeader.classif_score.name,
 }
-HIDDEN_FIELDS_FOR_CLASSIF = {}  # Internally managed
+HIDDEN_FIELDS_FOR_CLASSIF: Dict[str, str] = {}  # Internally managed
 NON_UPDATABLE_VIA_API = USED_FIELDS_FOR_CLASSIF.union(HIDDEN_FIELDS_FOR_CLASSIF)
 
 
 class ObjectFields(Model):
     __tablename__ = "obj_field"
-    objfid = Column(
+    objfid: Mapped[int] = mapped_column(
         BIGINT,
         ForeignKey(ObjectHeader.objid, ondelete="CASCADE", onupdate="CASCADE"),
         primary_key=True,
     )
     # Not a real FK, this is used for a cluster which groups together data blocks by acquisition
     # TODO: Remove in favor of PK projid header
-    acquis_id = Column(BIGINT, nullable=False)
-    # The relationships are created in Relations.py but the typing here helps the IDE
-    object: relationship
+    acquis_id: Mapped[int] = mapped_column(BIGINT)
+
+    if TYPE_CHECKING:
+        # The relationship(s) are created in Relations.py but the typing here helps IDE
+        object: Mapped[ObjectHeader]
 
 
 # TODO
@@ -238,10 +227,9 @@ class ObjectFields(Model):
 # Add free columns, numerical and textual ones
 for i in range(1, 501):
     # 8 bytes each, if present
-    setattr(ObjectFields, "n%02d" % i, Column(FLOAT))
+    setattr(ObjectFields, "n%02d" % i, mapped_column(FLOAT))
 for i in range(1, 21):
-    setattr(ObjectFields, "t%02d" % i, Column(VARCHAR(250)))
-
+    setattr(ObjectFields, "t%02d" % i, mapped_column(VARCHAR(250)))
 
 Index(  # We CLUSTER using this one, object ids tend to be consecutively read
     "obj_field_acquisid_objfid_idx",
@@ -300,27 +288,38 @@ DEFAULT_CLASSIF_HISTORY_DATE = "TO_TIMESTAMP(0)"
 
 class ObjectsClassifHisto(Model):
     __tablename__ = "objectsclassifhisto"
-    objid = Column(
+    objid: Mapped[int] = mapped_column(
         BIGINT,
         ForeignKey(ObjectHeader.objid, ondelete="CASCADE", onupdate="CASCADE"),
         primary_key=True,
     )  # 8 bytes align d
     # Date of manual setting of 'V' or 'D', training date for 'P'
-    classif_date = Column(TIMESTAMP, primary_key=True)  # 8 bytes align d
+    classif_date: Mapped[datetime] = mapped_column(
+        TIMESTAMP, primary_key=True
+    )  # 8 bytes align d
     # The score associated with 'P' state
-    classif_score = Column(DOUBLE_PRECISION)  # 8 bytes align d
-    classif_id = Column(
-        INTEGER, ForeignKey(Taxonomy.id, ondelete="CASCADE"), nullable=False
+    classif_score: Mapped[float | None] = mapped_column(
+        DOUBLE_PRECISION
+    )  # 8 bytes align d
+    classif_who: Mapped[int | None] = mapped_column(
+        INTEGER, ForeignKey("users.id")
+    )  # 4 bytes align i
+
+    classif_id: Mapped[int] = mapped_column(
+        INTEGER, ForeignKey("taxonomy.id", ondelete="CASCADE")
     )  # 4 bytes align i
     # The person who caused the 'D' or 'V' state
-    classif_who = Column(Integer, ForeignKey(User.id))  # 4 bytes align i
-    classif_qual = Column(
-        CHAR(1), nullable=False
+    # Redundant with the one above, but kept as is in DB
+    # classif_who = Column(Integer, ForeignKey("users.id"))  # 4 bytes align i
+    classif_qual: Mapped[str] = mapped_column(
+        CHAR(1)
     )  # 2 bytes (len + content) align c as len < 127
-    # The relationships are created in Relations.py but the typing here helps the IDE
-    object: relationship
-    classif: relationship
-    classifier: relationship
+
+    if TYPE_CHECKING:
+        # The relationship(s) are created in Relations.py but the typing here helps IDE
+        object: Mapped[ObjectHeader]
+        classif: Mapped[Taxonomy]
+        classifier: Mapped[User]
 
 
 # Usage, e.g.

@@ -19,6 +19,7 @@ from DB.User import UserIDT
 from FS.MachineLearningModels import SavedModels
 from FS.Vault import Vault
 from helpers.DynamicLogs import get_logger, LogsSwitcher
+
 # TODO: Move somewhere else
 from .helpers.JobService import JobServiceBase, ArgsDict
 from .helpers.Service import Service
@@ -53,7 +54,7 @@ class PredictForProject(JobServiceBase):
         return ret
 
     def init_args(self, args: ArgsDict) -> ArgsDict:
-        args["req"] = self.req.dict()
+        args["req"] = self.req.model_dump()
         args["filters"] = self.filters
         return args
 

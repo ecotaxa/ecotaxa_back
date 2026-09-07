@@ -36,7 +36,7 @@ class JobCRUDService(Service):
         List jobs, if administrator mode then list all of them (for monitoring) else only return the jobs
         owned by caller.
         """
-        # current_user = self.ro_session.query(User).get(current_user_id)
+        # current_user = self.ro_session.get(User,current_user_id)
         current_user: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
         # assert current_user is not None
         assert not admin_mode or (
@@ -57,9 +57,9 @@ class JobCRUDService(Service):
         Return a single job BO by its id. Users/admin can query archived job if they know how.
         """
         # Sanity & security checks
-        job = self.ro_session.query(Job).get(job_id)
+        job = self.ro_session.get(Job, job_id)
         assert job is not None, NOT_FOUND
-        # current_user = self.ro_session.query(User).get(current_user_id)
+        # current_user = self.ro_session.get(User,current_user_id)
         current_user: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
         # assert current_user is not None
         assert (job.owner_id == current_user_id) or (
@@ -76,7 +76,7 @@ class JobCRUDService(Service):
             job = JobBO.get_for_update(self.session, job_id)
         except ValueError:
             assert False, NOT_FOUND
-        # current_user = self.ro_session.query(User).get(current_user_id)
+        # current_user = self.ro_session.get(User,current_user_id)
         current_user: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
         # assert current_user is not None
         assert (job.owner_id == current_user_id) or (

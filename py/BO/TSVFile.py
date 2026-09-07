@@ -21,8 +21,7 @@ from typing import (
     Type,
 )
 
-# noinspection PyPackageRequirements
-from PIL import Image as PIL_Image  # type: ignore
+from PIL import Image as PIL_Image
 
 import BO.Mappings as GlobalMapping
 from BO.Mappings import ProjectMapping, ParentTableClassT, TABLE_TO_PREFIX
@@ -624,7 +623,7 @@ class TSVFile(object):
                 upper_level_orig_id = parent_orig_id
             else:
                 # Fetch the process from DB, it's same PK as Acquisition
-                parent = session.query(Process).get(upper_level_pk)
+                parent = session.get(Process, upper_level_pk)
                 assert parent is not None
 
             # OK we have something to update
@@ -810,9 +809,11 @@ class TSVFile(object):
                     [object_head_to_write, object_fields_to_write],
                 ):
                     # Fetch the record to update, .get is cache-friendly
-                    obj = session.query(a_cls).get(objid)
+                    obj = session.get(a_cls, objid)
                     assert obj is not None
+                    assert isinstance(obj, (ObjectHeader, ObjectFields))
                     if a_cls == ObjectHeader:
+                        assert isinstance(obj, ObjectHeader)
                         an_upd.update_from_obj(  # Don't kill hidden but useful field(s)
                             obj, set(HIDDEN_FIELDS_FOR_CLASSIF.keys()), force=True
                         )  # TODO: Useless now

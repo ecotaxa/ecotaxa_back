@@ -5,7 +5,7 @@
 from typing import List, Union, Optional, Dict, Any
 
 from fastapi import HTTPException
-from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
+from starlette.status import HTTP_422_UNPROCESSABLE_CONTENT
 
 from API_models.crud import CreateCollectionReq, CollectionAggregatedRsp
 from BO.Collection import CollectionBO, CollectionIDT
@@ -216,7 +216,7 @@ class CollectionsService(Service):
             ] + [usr for usr in req["associate_users"] if usr in req["creator_users"]]
             if len(commonusers) > 0:
                 raise HTTPException(
-                    HTTP_422_UNPROCESSABLE_ENTITY,
+                    HTTP_422_UNPROCESSABLE_CONTENT,
                     detail=[DETAIL_EXCLUSIVE_CREATOR_ASSOCIATE],
                 )
         return

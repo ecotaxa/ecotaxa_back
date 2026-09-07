@@ -3,15 +3,17 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 from enum import Enum
-from typing import Optional, Any
+from typing import Any
+
+from sqlalchemy.orm import mapped_column
 
 from DB.helpers import Session
-from DB.helpers.DDL import Index, Column, ForeignKey, Sequence
+from DB.helpers.DDL import Index, ForeignKey, Sequence
 from DB.helpers.Direct import text
 from DB.helpers.Postgres import CHAR, BIGINT, VARCHAR, BYTEA, SMALLINT
 from .helpers import Result
 from .helpers.Hints import RECURS_HINT
-from .helpers.ORM import Model
+from .helpers.ORM import Model, Mapped
 from .helpers.VirtualColumn import VirtualColumnSet, VirtualColumn
 
 MIN_IMGID = 1000  # In prod' it's 1721, this will be used during tests and all-in-one standalone install
@@ -19,19 +21,19 @@ MIN_IMGID = 1000  # In prod' it's 1721, this will be used during tests and all-i
 
 class Image(Model):
     __tablename__ = "images"
-    imgid = Column(BIGINT, Sequence("seq_images", start=MIN_IMGID), nullable=False)
+    imgid: Mapped[int] = mapped_column(BIGINT, Sequence("seq_images", start=MIN_IMGID))
     # The Object that this image belongs to, with its rank inside
-    objid = Column(
+    objid: Mapped[int] = mapped_column(
         BIGINT, ForeignKey("obj_head.objid", onupdate="CASCADE"), primary_key=True
     )
-    imgrank = Column(SMALLINT, primary_key=True)
-    width = Column(SMALLINT, nullable=False)
-    height = Column(SMALLINT, nullable=False)
+    imgrank: Mapped[int] = mapped_column(SMALLINT, primary_key=True)
+    width: Mapped[int] = mapped_column(SMALLINT)
+    height: Mapped[int] = mapped_column(SMALLINT)
     # file_name = Column(VARCHAR(255), nullable=False) # Now computed
-    orig_file_name = Column(VARCHAR(255), nullable=False)
+    orig_file_name: Mapped[str] = mapped_column(VARCHAR(255))
     # thumb_file_name = Column(VARCHAR(255)) # Now computed
-    thumb_width = Column(SMALLINT)
-    thumb_height = Column(SMALLINT)
+    thumb_width: Mapped[int | None] = mapped_column(SMALLINT)
+    thumb_height: Mapped[int | None] = mapped_column(SMALLINT)
 
     @staticmethod
     def fetch_existing_images(session: Session, prj_id):
@@ -68,9 +70,7 @@ class Image(Model):
         return self.thumb_img_from_id_if_there(self.imgid, self.thumb_height)
 
     @staticmethod
-    def thumb_img_from_id_if_there(
-        imgid: int, thumb_height: Optional[int]
-    ) -> Optional[str]:
+    def thumb_img_from_id_if_there(imgid: int, thumb_height: int | None) -> str | None:
         # Thumbnails are all .jpg with same naming scheme, if present
         if thumb_height is None:
             return None
@@ -88,7 +88,7 @@ class FileNameVirtualColumn(VirtualColumn):
     @staticmethod
     def result_to_py(from_sel: Any) -> Any:
         # For some SQLAlchemy reason we select a tuple (row/record) but we get a str
-        imgid, orig_file_name = from_sel[1:-1].split(",", 1)
+        imgid, orig_file_name = from_sel
         # The name on the right gets enclosed in double quote if it contains a space
         orig_file_name = orig_file_name.strip('"')
         imgid = int(imgid)
@@ -103,10 +103,10 @@ class ThumbFileNameVirtualColumn(VirtualColumn):
     @staticmethod
     def result_to_py(from_sel: Any) -> Any:
         # For some SQLAlchemy reason we select a tuple (row) but we get a str
-        if from_sel[1] == ",":
+        if from_sel[1] is None:
             return None  # No height, 99% of the cases
-        thumb_height, imgid = [int(n) for n in from_sel[1:-1].split(",", 1)]
-        return Image.thumb_img_from_id_if_there(imgid, thumb_height)
+        thumb_height, imgid = from_sel
+        return Image.thumb_img_from_id_if_there(int(imgid), thumb_height)
 
 
 IMAGE_VIRTUAL_COLUMNS: VirtualColumnSet = VirtualColumnSet(
@@ -129,15 +129,15 @@ class ImageFile(Model):
     # An image on disk. Can be referenced (or not...) from the application
     __tablename__ = "image_file"
     # No FK as imgid is not anymore a PK or unique in Image
-    imgid = Column(BIGINT, primary_key=True)
+    imgid: Mapped[int] = mapped_column(BIGINT, primary_key=True)
     # Extension shortened
-    ext: str = Column(CHAR(3), default="?", server_default="?", nullable=False)
+    ext: Mapped[str] = mapped_column(CHAR(3), default="?", server_default="?")
     # State w/r to the application
-    state: str = Column(CHAR, default="?", server_default="?", nullable=False)
+    state: Mapped[str] = mapped_column(CHAR, default="?", server_default="?")
     # What can be found in digest column
-    digest_type: str = Column(CHAR, default="?", server_default="?", nullable=False)
+    digest_type: Mapped[str] = mapped_column(CHAR, default="?", server_default="?")
     # A digital signature
-    digest = Column(BYTEA, nullable=True)
+    digest: Mapped[bytes | None] = mapped_column(BYTEA)
 
 
 Index(

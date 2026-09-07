@@ -7,10 +7,15 @@
 import base64
 import hashlib
 import hmac
+
 # TODO: if it exists, find the stubs somewhere
 from typing import Union
 
-from passlib.context import CryptContext  # type: ignore
+# Note: passlib uses in Python3.14 a python implementation of crypto algos
+# as 'crypt' module has been deprecated. It's a bit slower and eats lots of CPUs.
+# but we use it only at each login or account creation. The rest is JWT.
+from passlib.context import CryptContext
+from sqlalchemy import select, func
 
 from API_operations.helpers.Service import Service
 from BO.Rights import NOT_AUTHORIZED
@@ -47,18 +52,14 @@ class LoginService(Service):
         assert username is not None, NOT_AUTHORIZED
         account_validation = self.config.get_account_validation() == "on"
         # if account validation is "on" and account is pending
-        from sqlalchemy import func
 
+        user_qry = select(User)
+        user_qry = user_qry.where(func.lower(User.email).__eq__(func.lower(username)))
         if account_validation == True:
-            user_qry = self.session.query(User).filter(
-                func.lower(User.email) == func.lower(username)
-            )
+            pass
         else:
-            user_qry = self.session.query(User).filter(
-                func.lower(User.email) == func.lower(username),
-                User.status == UserStatus.active.value,
-            )
-        db_users = user_qry.all()
+            user_qry = user_qry.where(User.status == UserStatus.active.value)
+        db_users = self.session.execute(user_qry).scalars().all()
         assert len(db_users) == 1, NOT_AUTHORIZED
         the_user: User = db_users[0]
         # verif even user is not active , in order to let modify email only if mail_status is False

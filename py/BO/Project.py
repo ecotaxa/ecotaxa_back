@@ -2,9 +2,9 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-import typing
 import json
 import re
+import typing
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
@@ -42,8 +42,6 @@ from BO.User import (
     MinimalUserBOListT,
     UserActivityListT,
 )
-
-from DB.User import UserIDT, UserIDListT
 from DB.Acquisition import Acquisition
 from DB.Collection import CollectionProject, Collection
 from DB.Object import (
@@ -62,12 +60,12 @@ from DB.Project import (
     ANNOTATE_STATUS,
     ANNOTATE_NO_PREDICTION,
     EXPLORE_ONLY,
-    KNOWN_PROJECT_VARS,
 )
 from DB.ProjectPrivilege import ProjectPrivilege
-from DB.Instrument import Instrument
+from DB.ProjectVariables import KNOWN_PROJECT_VARS
 from DB.Sample import Sample
 from DB.User import Role, User, UserStatus
+from DB.User import UserIDT, UserIDListT
 from DB.helpers import Session, Result
 from DB.helpers.Bean import Bean
 from DB.helpers.Core import select
@@ -90,8 +88,6 @@ from DB.helpers.ORM import (
 from helpers.DynamicLogs import get_logger
 from helpers.FieldListType import FieldListType
 from helpers.Timer import CodeTimer
-from helpers.pydantic import Field, BaseModel
-from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 if TYPE_CHECKING:
     # Avoid a circular import: API_models.crud itself imports from BO.Project.
@@ -592,7 +588,7 @@ class ProjectBO(object):
         proj_id = self._project.projid
         # strip title
         title = title.strip()
-        assert instrument is not None, "A valid Instrument is needed."
+        assert instrument is not None, "Project update: A valid Instrument is needed."
         # Field reflexes
         if cnn_network_id != self._project.cnn_network_id:
             # Delete CNN features, which depend on the CNN network
@@ -606,7 +602,7 @@ class ProjectBO(object):
         self._project.popoverfieldlist = popoverfieldlist
         self._project.cnn_network_id = cnn_network_id
         self._project.comments = comments
-        self._project.access = access
+        self._project.access = access if access is not None else AccessLevelEnum.OPEN
         self._project.formulae = json.loads(formulae) if formulae is not None else None
         # Inverse for extracted values
         self._project.initclassiflist = ",".join(
@@ -623,7 +619,7 @@ class ProjectBO(object):
         }
         # Remove all to avoid tricky diffs
         session.query(ProjectPrivilege).filter(
-            ProjectPrivilege.projid == proj_id
+            ProjectPrivilege.projid.__eq__(proj_id)
         ).delete()
         # Add all
         contact_used = False
@@ -661,7 +657,7 @@ class ProjectBO(object):
             if modelfield == "instrument":
                 assert (
                     projectreq.instrument is not None
-                ), "A valid Instrument is needed."
+                ), "Project patch: A valid Instrument is needed."
                 self._project.instrument_id = projectreq.instrument.strip()
             elif modelfield == "title":
                 assert (
@@ -731,7 +727,7 @@ class ProjectBO(object):
         """
         from DB.helpers.ORM import MetaData
 
-        metadata = MetaData(bind=session.get_bind())
+        metadata = MetaData()
         # TODO: Cache in a member
         mappings = ProjectMapping().load_from_project(self._project)
         num_fields_cols = set(
@@ -760,10 +756,13 @@ class ProjectBO(object):
 
     @staticmethod
     def update_taxo_stats(session: Session, projid: int):
-        sql = text(
-            f"""
+        sql = text(f"""
         DELETE FROM projects_taxo_stat pts
          WHERE pts.projid = :prjid;
+         """)
+        session.execute(sql, {"prjid": projid})
+        sql = text(
+            f"""
         INSERT INTO projects_taxo_stat(projid, id, nbr, nbr_v, nbr_d, nbr_p)
         SELECT {RECURS_HINT} sam.projid, COALESCE(obh.classif_id, -1) id, COUNT(*) nbr,
                COUNT(CASE WHEN obh.classif_qual = '"""
@@ -785,8 +784,7 @@ class ProjectBO(object):
 
     @staticmethod
     def update_stats(session: Session, projid: int):
-        sql = text(
-            """
+        sql = text("""
         UPDATE projects
            SET objcount=tsp.nbr_sum,
                pctclassified=100.0*nbrclassified/tsp.nbr_sum,
@@ -798,8 +796,7 @@ class ProjectBO(object):
                WHERE projid = :prjid
               GROUP BY projid) tsp ON prj.projid = tsp.projid
         WHERE projects.projid = :prjid
-          AND prj.projid = :prjid"""
-        )
+          AND prj.projid = :prjid""")
         session.execute(sql, {"prjid": projid})
 
     @staticmethod
@@ -825,7 +822,7 @@ class ProjectBO(object):
             sql += ", pts.id"
         res: Result = session.execute(text(sql), params)
         with CodeTimer("stats for %d projects:" % len(prj_ids), logger):
-            ret = [ProjectTaxoStats(**rec) for rec in res]  # type: ignore # case4
+            ret = [ProjectTaxoStats(**rec) for rec in res.mappings()]
         for a_stat in ret:
             a_stat.used_taxa.sort()
         return ret
@@ -1013,9 +1010,9 @@ class ProjectBO(object):
                      AND NOT prj.title ILIKE '%%subset%%'  """
         if project_ids != "":
             sql_params.update(
-                {"pids": tuple([int(p.strip()) for p in project_ids.split(",")])}
+                {"pids": [int(p.strip()) for p in project_ids.split(",")]}
             )
-            sql += """ AND prj.projid IN :pids """
+            sql += """ AND prj.projid = ANY(:pids) """
         if order_field in FieldsList.order_field():
             if order_field == "instrument":
                 order_field = "instrument_id"
@@ -1229,7 +1226,7 @@ class ProjectBO(object):
             )
             qry = qry.filter(Process.processid.in_(acqs_4_samples))
         elif table == ObjectFields:
-            samples_4_prj = Query(Sample.sampleid).filter(Sample.projid == prj_id)
+            samples_4_prj = Query(Sample.sampleid).filter(Sample.projid.__eq__(prj_id))
             acqs_4_samples = Query(Acquisition.acquisid).filter(
                 Acquisition.acq_sample_id.in_(samples_4_prj)
             )
@@ -1303,8 +1300,7 @@ class ProjectBO(object):
                            JOIN samples sam ON sam.sampleid = acq.acq_sample_id AND sam.projid = :prjid
                           WHERE obh.objid <@ obj_in_prj(:prjid)
                             AND COALESCE(obh.classif_id, -1) = ANY(:ids)
-                       GROUP BY obh.classif_id"""
-                % ObjectHeader.__tablename__
+                       GROUP BY obh.classif_id""" % ObjectHeader.__tablename__
             )
             session.execute(
                 text(pts_ins), {"prjid": prj_id, "ids": list(ids_not_in_db)}
@@ -1340,7 +1336,7 @@ class ProjectBO(object):
         Recompute sun position for all objects.
         :return the number of objects with sun position changed
         """
-        used_fields = sorted(USED_FIELDS_FOR_SUNPOS)
+        used_fields: List[str] = sorted(USED_FIELDS_FOR_SUNPOS)
         qry_cols = [ObjectHeader.objid, ObjectHeader.sunpos] + [
             getattr(ObjectHeader, fld) for fld in used_fields
         ]
@@ -1363,7 +1359,7 @@ class ProjectBO(object):
                 new_pos = compute_sun_position(Bean(vals_dict))
                 cache[vals] = new_pos
             if new_pos != sunpos:
-                obj = session.query(ObjectHeader).get(objid)
+                obj = session.get(ObjectHeader, objid)
                 assert obj is not None
                 obj.sunpos = new_pos
                 ret += 1
@@ -1447,7 +1443,7 @@ class ProjectBOSet(object):
         if "instrument" in projectfields:
             projectfields.remove("instrument")
             projectfields.extend(["instrument_id"])
-        selectfields: List[str] = [getattr(Project, fld) for fld in projectfields]
+        selectfields = [getattr(Project, fld) for fld in projectfields]
         options = []
         if selectfields:
             options.append(load_only(*selectfields))
@@ -1554,7 +1550,7 @@ class CollectionProjectBOSet(ProjectBOSet):
         stats = ProjectBO.read_user_stats(session, project_ids)
         ids: UserIDListT = []
         for stat in stats:
-            ids = ids + [annotator.id for annotator in stat.annotators]
+            ids += [annotator.id for annotator in stat.annotators]
         qry = session.query(User).filter(User.id == any_(ids))
         if status is not None:
             qry = qry.filter(User.status == status)

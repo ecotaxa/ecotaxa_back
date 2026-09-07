@@ -5,9 +5,11 @@
 # Clients to Google API services, so far just one.
 #
 from typing import Optional, List
-from fastapi import HTTPException
-from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY, HTTP_401_UNAUTHORIZED
+
 import requests
+from fastapi import HTTPException
+from starlette.status import HTTP_422_UNPROCESSABLE_CONTENT, HTTP_401_UNAUTHORIZED
+
 from helpers.AppConfig import Config
 
 MAX_CAPTCHA_TOKEN_LENGTH = 4096
@@ -58,7 +60,7 @@ class ReCAPTCHAClient(object):
                     detail = ["invalid no_bot reason 2"]
         if detail != []:
             raise HTTPException(
-                status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=detail,
             )
         remote_ip = no_bot[0]

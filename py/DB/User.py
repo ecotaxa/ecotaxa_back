@@ -2,28 +2,28 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from __future__ import annotations
-
+from datetime import datetime
 from enum import Enum
-from typing import Iterable, TYPE_CHECKING, Optional, List
+from typing import TYPE_CHECKING, List
 
-from sqlalchemy import event, SmallInteger
+from sqlalchemy.orm import mapped_column
 
 from data.Countries import countries_by_name
 from .helpers.DDL import (
-    Column,
-    ForeignKey,
-    Sequence,
-    Integer,
-    String,
     Boolean,
+    ForeignKey,
+    Integer,
+    Sequence,
+    String,
 )
 from .helpers.Direct import func
-from .helpers.ORM import Model, relationship, Insert
-from .helpers.Postgres import TIMESTAMP, INTEGER
+from .helpers.ORM import Insert, Mapped, SmallInteger, event, Model
+from .helpers.Postgres import INTEGER, TIMESTAMP
 
 if TYPE_CHECKING:
+    from .Object import ObjectHeader
     from .ProjectPrivilege import ProjectPrivilege
+    from .UserPreferences import UserPreferences
 
 # Typings, to be clear that these are not e.g. object IDs
 UserIDT = int
@@ -56,9 +56,11 @@ class PeopleOrganizationDirectory(str, Enum):
 
 class Organization(Model):
     __tablename__ = "organizations"
-    id: int = Column(Integer, Sequence("organizations_id_seq"), primary_key=True)
-    name: str = Column(String(512), unique=True, nullable=False)
-    directories: Optional[str] = Column(String(2000), nullable=True)
+    id: Mapped[int] = mapped_column(
+        Integer, Sequence("organizations_id_seq"), primary_key=True
+    )
+    name: Mapped[str] = mapped_column(String(512), unique=True)
+    directories: Mapped[str | None] = mapped_column(String(2000))
 
     def __str__(self):
         return "{0} ({1})".format(self.name, self.directories)
@@ -66,15 +68,21 @@ class Organization(Model):
 
 class Person(Model):
     __tablename__ = "users"
-    id: int = Column(Integer, Sequence("seq_users"), primary_key=True)
-    email: str = Column(String(255), unique=True, nullable=False)
-    name: str = Column(String(255), nullable=False)
-    country: str = Column(String(50))
-    orcid: str = Column(String(20), nullable=True)
-    type = Column(String(10), nullable=False)
-    usercreationdate = Column(TIMESTAMP, default=func.now())
-    organization_id = Column(INTEGER, ForeignKey("organizations.id"), nullable=True)
-    organization: Organization
+    id: Mapped[int] = mapped_column(Integer, Sequence("seq_users"), primary_key=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True)
+    name: Mapped[str] = mapped_column(String(255))
+    country: Mapped[str | None] = mapped_column(String(50))
+    orcid: Mapped[str | None] = mapped_column(String(20))
+    type: Mapped[str] = mapped_column(String(10), nullable=False)
+    usercreationdate: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP, default=func.now()
+    )
+    organization_id: Mapped[int | None] = mapped_column(
+        INTEGER, ForeignKey("organizations.id")
+    )
+    if TYPE_CHECKING:
+        # The relationship(s) are created in Relations.py but the typing here helps IDE
+        organization: Mapped[Organization]
     __mapper_args__ = {
         "polymorphic_on": type,
         "polymorphic_identity": "person",
@@ -95,7 +103,7 @@ class Guest(Person):
         "polymorphic_identity": "guest",
     }
 
-    def to_user(self) -> User:
+    def to_user(self) -> "User":
         user = User()
         user.id = self.id
         user.name = self.name
@@ -108,29 +116,31 @@ class Guest(Person):
 
 
 class User(Person):
-    password: str = Column(String(255))
-    status: int = Column(SmallInteger(), default=1)
-    status_date = Column(TIMESTAMP)
-    status_admin_comment: str = Column(String(255))
-    preferences: str = Column(String(40000))
-    usercreationreason = Column(String(1000))
+    password: Mapped[str | None] = mapped_column(String(255))
+    status: Mapped[int | None] = mapped_column(SmallInteger(), default=1)
+    status_date: Mapped[datetime | None] = mapped_column(TIMESTAMP)
+    status_admin_comment: Mapped[str | None] = mapped_column(String(255))
+    preferences: Mapped[str | None] = mapped_column(String(40000))
+    usercreationreason: Mapped[str | None] = mapped_column(String(1000))
     # Mail status: True for verified, default NULL
-    mail_status: bool = Column(Boolean(), nullable=True)
+    mail_status: Mapped[bool | None] = mapped_column(Boolean())
     # Date the mail status was set
-    mail_status_date = Column(
-        TIMESTAMP
-    )  # The relationships are created in Relations.py but the typing here helps the IDE
-
-    roles: relationship
-    # The projects that user has rights in, so he/she can participate at various levels.
-    privs_on_projects: Iterable[ProjectPrivilege]
-    # The objects of which _present_ classification was done by the user
-    classified_objects: relationship
-    # Preferences, per project, the global ones kept in field above.
-    preferences_for_projects: relationship
+    mail_status_date: Mapped[datetime | None] = mapped_column(TIMESTAMP)
     __mapper_args__ = {
         "polymorphic_identity": "user",
     }
+
+    if TYPE_CHECKING:
+        # The relationships are created in Relations.py but the typing here helps the IDE
+        roles: Mapped[List["Role"]]
+        # The projects that user has rights in, so he/she can participate at various levels.
+        privs_on_projects: Mapped[List[ProjectPrivilege]]
+        # The objects of which _present_ classification was done by the user
+        classified_objects: Mapped[
+            List[ObjectHeader]
+        ]  # TODO: Repeat should not be needed, mypy bug
+        # Preferences, one instance for each project
+        preferences_for_projects: Mapped[List[UserPreferences]]
 
     def has_role(self, role: str) -> bool:
         # TODO: Cache a bit. All roles are just python objects due to SQLAlchemy magic.
@@ -148,10 +158,14 @@ class Role(Model):
     """
 
     __tablename__ = "roles"
-    id = Column(Integer(), primary_key=True)  # ,Sequence('seq_roles')
-    name = Column(String(80), unique=True, nullable=False)
-    # The relationships are created in Relations.py but the typing here helps the IDE
-    users: relationship
+    id: Mapped[int] = mapped_column(
+        Integer(), primary_key=True
+    )  # ,Sequence('seq_roles')
+    name: Mapped[str] = mapped_column(String(80), unique=True)
+
+    if TYPE_CHECKING:
+        # The relationship(s) are created in Relations.py but the typing here helps IDE
+        users: Mapped[List[User]]
 
     APP_ADMINISTRATOR = "Application Administrator"
     USERS_ADMINISTRATOR = "Users Administrator"
@@ -180,8 +194,12 @@ class UserRole(Model):
     """
 
     __tablename__ = "users_roles"
-    user_id = Column(Integer(), ForeignKey("users.id"), primary_key=True)
-    role_id = Column(Integer(), ForeignKey("roles.id"), primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer(), ForeignKey("users.id"), primary_key=True
+    )
+    role_id: Mapped[int] = mapped_column(
+        Integer(), ForeignKey("roles.id"), primary_key=True
+    )
 
 
 class Country(Model):
@@ -190,7 +208,7 @@ class Country(Model):
     """
 
     __tablename__ = "countrylist"
-    countryname = Column(String(50), primary_key=True, nullable=False)
+    countryname: Mapped[str] = mapped_column(String(50), primary_key=True)
 
 
 @event.listens_for(Country.__table__, "after_create")
@@ -209,15 +227,15 @@ class TempPasswordReset(Model):
     """
 
     __tablename__ = "user_password_reset"
-    user_id = Column(
+    user_id: Mapped[int] = mapped_column(
         Integer(),
         ForeignKey(
             "users.id", name="user_password_reset_user_id_fkey", ondelete="CASCADE"
         ),
         primary_key=True,
     )
-    temp_password = Column(String(255), nullable=False)
-    creation_date = Column(TIMESTAMP, default=func.now(), nullable=False)
+    temp_password: Mapped[str] = mapped_column(String(255))
+    creation_date: Mapped[datetime] = mapped_column(TIMESTAMP, default=func.now())
 
 
 class UserQuality(Model):
@@ -226,12 +244,12 @@ class UserQuality(Model):
     """
 
     __tablename__ = "user_quality"
-    user_id = Column(
+    user_id: Mapped[int] = mapped_column(
         Integer(),
         ForeignKey("users.id", name="user_quality_user_id_fkey", ondelete="CASCADE"),
         primary_key=True,
     )
-    password_strong = Column(Boolean(), nullable=False)
-    check_date = Column(
-        TIMESTAMP, default=func.now(), onupdate=func.now(), nullable=False
+    password_strong: Mapped[bool] = mapped_column(Boolean())
+    check_date: Mapped[datetime] = mapped_column(
+        TIMESTAMP, default=func.now(), onupdate=func.now()
     )

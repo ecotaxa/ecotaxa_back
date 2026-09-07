@@ -137,12 +137,12 @@ class JobServiceBase(Service, LogEmitter, ABC):
         self.session.commit()
 
     def _get_job(self) -> Job:
-        job: Optional[Job] = self.session.query(Job).get(self.job_id)
+        job: Optional[Job] = self.session.get(Job, self.job_id)
         assert job is not None
         return job
 
     def _get_owner_id(self) -> UserIDT:
-        job: Optional[Job] = self.session.query(Job).get(self.job_id)
+        job: Optional[Job] = self.session.get(Job, self.job_id)
         assert job is not None
         return job.owner_id
 
@@ -207,7 +207,7 @@ class JobServiceOnProjectBase(JobServiceBase, ABC):
         super().__init__()
         self.prj_id: ProjectIDT = prj_id
         # Work vars, load straight away
-        prj = self.get_session().query(Project).get(prj_id)
+        prj = self.get_session().get(Project, prj_id)
         assert prj is not None
         self.prj = prj
 

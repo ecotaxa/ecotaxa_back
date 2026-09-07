@@ -62,7 +62,7 @@ class BaseJobRunner:
         to create it. Report here.
         """
         session = Service().session
-        the_job = session.query(Job).get(job_id)
+        the_job = session.get(Job, job_id)
         assert the_job is not None
         the_job.state = DBJobStateEnum.Error
         the_job.progress_msg = str(te)
@@ -219,7 +219,7 @@ class JobScheduler(Service):
         cls.the_timer = threading.Timer(
             interval=interval, function=cls.launch, args=[interval]
         )
-        cls.the_timer.setName("JobTimer")
+        cls.the_timer.name = "JobTimer"
         cls.the_timer.start()
 
     @classmethod

@@ -23,7 +23,7 @@ logger = getLogger()
 
 
 def main():
-    EcoTaxaExistingDB.write_config(CONF_FILE, "localhost", 5434)
+    EcoTaxaExistingDB.write_config(CONF_FILE, "localhost", 5436)
     current_user_id = ADMIN_USER_ID
     loops = 10000
     with CodeTimer("%d get user " % loops, logger) as tim:
@@ -37,5 +37,5 @@ def main():
                 # ret.last_used_projects = Preferences(ret).recent_projects(session=sce.session)  # type:ignore
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

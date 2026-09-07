@@ -14,6 +14,7 @@ from DB.Object import ObjectHeader, ObjectIDT
 from DB.Process import Process, ProcessOrigIDT
 from DB.Project import ProjectIDT
 from DB.Sample import Sample, SampleOrigIDT
+from DB.helpers.Core import select
 
 
 class ProjectTopology(object):
@@ -44,20 +45,29 @@ class ProjectTopology(object):
         """
         Read the project topology from DB.
         """
-        qry = session.query(
-            Sample.orig_id, Acquisition.orig_id, Process.orig_id, ObjectHeader.objid
+        stmt = (
+            select(
+                Sample.orig_id,
+                Acquisition.orig_id,
+                Process.orig_id,
+                ObjectHeader.objid,
+            )
+            .select_from(Sample)
+            .join(Sample.all_acquisitions)
+            .join(Acquisition.process)
+            .join(Acquisition.all_objects)
+            .where(
+                Sample.projid == prj_id,
+                Acquisition.acquisid.op("<@")(func.acq_in_prj(prj_id)),
+                ObjectHeader.objid.op("<@")(func.obj_in_prj(prj_id)),
+            )
         )
-        qry = qry.join(Acquisition, Sample.sampleid == Acquisition.acq_sample_id)
-        qry = qry.join(Process, Acquisition.acquisid == Process.processid)
-        qry = qry.join(ObjectHeader, Acquisition.acquisid == ObjectHeader.acquisid)
-        qry = qry.filter(Sample.projid == prj_id)
-        qry = qry.filter(Acquisition.acquisid.op("<@")(func.acq_in_prj(prj_id)))
-        qry = qry.filter(ObjectHeader.objid.op("<@")(func.obj_in_prj(prj_id)))
+
         sam_orig_id: str
         acq_orig_id: str
         prc_orig_id: str
         objid: ObjectIDT
-        for sam_orig_id, acq_orig_id, prc_orig_id, objid in qry:
+        for sam_orig_id, acq_orig_id, prc_orig_id, objid in session.execute(stmt):
             # Get/create acquisitions for this sample
             objs_for_acquisition = self.add_association(sam_orig_id, acq_orig_id)
             # Store twin process

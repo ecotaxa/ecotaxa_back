@@ -6,7 +6,7 @@
 # Global preferences for a user
 #
 
-from typing import List, Tuple, Union, Optional
+from typing import Tuple, Union, Optional, List, cast
 
 from sqlalchemy.orm import Session
 
@@ -47,7 +47,7 @@ class TaxoRecastBO(object):
                 .all()
             )
             assert len(ret) > 0, NOT_FOUND
-            project_ids = ret
+            project_ids = cast(List[int], ret)
         else:
             project_ids = [target_id]
         if for_update:
@@ -90,7 +90,7 @@ class TaxoRecastBO(object):
             .filter(TaxoRecast.operation == operation.value)
             .filter(TaxoRecast.project_id.in_(project_ids))
         )
-        return qry.all()
+        return qry.tuples().all()
 
     @staticmethod
     def valid_remap(val) -> Optional[str]:

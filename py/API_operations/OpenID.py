@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Dict
 from urllib.parse import urlencode
 
-from authlib.integrations.starlette_client import OAuth  # type:ignore
+from authlib.integrations.starlette_client import OAuth
 from fastapi import APIRouter, Request, HTTPException
 from starlette.responses import RedirectResponse
 

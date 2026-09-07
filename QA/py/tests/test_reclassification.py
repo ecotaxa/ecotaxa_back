@@ -74,7 +74,7 @@ def test_reclassify_invalid_filters(fastapi):
     for filters in invalid_filters:
         rsp = fastapi.post(url, headers=ADMIN_AUTH, json=filters)
         assert (
-            rsp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+            rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         ), f"Filters {filters} should have been rejected"
 
 

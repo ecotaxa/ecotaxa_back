@@ -81,7 +81,7 @@ def test_taxotree_query(fastapi):
 
     url = TAXA_SEARCH_URL.format(project_id=prj_id, query="")
     # Unauthenticated call
-    rsp = fastapi.get(url, json={})
+    rsp = fastapi.get(url)
     # Security barrier
     assert rsp.status_code == status.HTTP_200_OK
 
@@ -96,7 +96,7 @@ def test_taxotree_query(fastapi):
 
     url = TAXA_SEARCH_URL.format(project_id=prj_id, query=quote_plus(" cyano "))
     # Unauthenticated call
-    rsp = fastapi.get(url, json={})
+    rsp = fastapi.get(url)
     assert rsp.json() == [
         {
             "aphia_id": None,

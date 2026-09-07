@@ -3,19 +3,24 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 from typing import Dict, Tuple, List
+from typing import TYPE_CHECKING
 
 from sqlalchemy import func, DDL, event  # fmt: skip
-# noinspection PyProtectedMember
-from sqlalchemy.orm import relationship, Session
+from sqlalchemy.orm import mapped_column
 
-from .Project import Project
-from .Sample import Sample
-from .helpers.DDL import Column, ForeignKey, Index
+from .helpers.DDL import ForeignKey, Index
 from .helpers.Direct import text
-from .helpers.ORM import Model
+from .helpers.ORM import Model, Session, Mapped
 from .helpers.Postgres import VARCHAR, BIGINT
 
 ACQUISITION_FREE_COLUMNS = 31
+
+if TYPE_CHECKING:
+    from .Process import Process
+    from .Object import ObjectHeader
+
+from .Project import Project
+from .Sample import Sample
 
 ACQ_PRJ_OFFSET = 10_000_000  # AKA 1e7
 
@@ -30,21 +35,22 @@ class Acquisition(Model):
     # Historical (plural) name of the table
     __tablename__ = "acquisitions"
     # Self ID
-    acquisid: int = Column(BIGINT, primary_key=True, autoincrement=False)
+    acquisid: Mapped[int] = mapped_column(BIGINT, primary_key=True, autoincrement=False)
     # Parent ID
     # TODO: Delete cascade
-    acq_sample_id: int = Column(
-        BIGINT, ForeignKey("samples.sampleid", onupdate="CASCADE"), nullable=False
+    acq_sample_id: Mapped[int] = mapped_column(
+        BIGINT, ForeignKey("samples.sampleid", onupdate="CASCADE")
     )
     # i.e. acq_id from TSV
-    orig_id: str = Column(VARCHAR(255), nullable=False)
+    orig_id: Mapped[str] = mapped_column(VARCHAR(255))
     # TODO: Put into a dedicated table
-    instrument = Column(VARCHAR(255))
+    instrument: Mapped[str | None] = mapped_column(VARCHAR(255))
 
-    # The relationships are created in Relations.py but the typing here helps IDE
-    sample: relationship
-    process: relationship
-    all_objects: relationship
+    if TYPE_CHECKING:
+        # The relationship(s) are created in Relations.py but the typing here helps IDE
+        sample: Mapped[Sample]
+        process: Mapped[Process]
+        all_objects: Mapped[List[ObjectHeader]]
 
     def pk(self) -> int:
         return self.acquisid
@@ -93,7 +99,7 @@ class Acquisition(Model):
 
 
 for i in range(1, ACQUISITION_FREE_COLUMNS):
-    setattr(Acquisition, "t%02d" % i, Column(VARCHAR(250)))
+    setattr(Acquisition, "t%02d" % i, mapped_column(VARCHAR(250)))
 
 Index(
     "is_acquis_sample_orig_id",

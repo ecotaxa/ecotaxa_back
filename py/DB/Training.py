@@ -8,18 +8,23 @@
 # Only exception to this rule is when predicted objects disappear.
 #
 from datetime import datetime
+from typing import TYPE_CHECKING, List
 
 from sqlalchemy.dialects.postgresql import (
     VARCHAR,
     INTEGER,
     TIMESTAMP,
 )
+from sqlalchemy.orm import mapped_column
 
-from .Project import Project
-from .User import User
-from .helpers.DDL import Column, ForeignKey, Index
+from .helpers.DDL import ForeignKey, Index
+from .helpers.ORM import Mapped
 from .helpers.ORM import Model
-from .helpers.ORM import relationship
+
+if TYPE_CHECKING:
+    from .User import User
+    from .Prediction import Prediction
+    from .Project import Project
 
 TrainingIDT = int
 IN_PROGRESS_DATE = datetime.fromtimestamp(0)
@@ -28,23 +33,24 @@ IN_PROGRESS_DATE = datetime.fromtimestamp(0)
 class Training(Model):
     __tablename__ = "training"
     # Below, SQLA/Alembic automatically makes column SERIAL, sequence from PG is 'training_training_id_seq'
-    training_id: int = Column(INTEGER, primary_key=True)
+    training_id: Mapped[int] = mapped_column(INTEGER, primary_key=True)
     # The target project.
-    projid: int = Column(
-        INTEGER, ForeignKey(Project.projid, ondelete="CASCADE"), nullable=True
+    projid: Mapped[int | None] = mapped_column(
+        INTEGER, ForeignKey("projects.projid", ondelete="CASCADE")
     )
     # Who launched or is responsible for the training operation
-    training_author: int = Column(INTEGER, ForeignKey(User.id), nullable=False)
+    training_author: Mapped[int] = mapped_column(INTEGER, ForeignKey("users.id"))
     # When it occurred
-    training_start: datetime = Column(TIMESTAMP, nullable=False)
-    training_end: datetime = Column(TIMESTAMP, nullable=False)
+    training_start: Mapped[datetime] = mapped_column(TIMESTAMP)
+    training_end: Mapped[datetime] = mapped_column(TIMESTAMP)
     # The settings used?
-    training_path: str = Column(VARCHAR(80), nullable=False)
+    training_path: Mapped[str] = mapped_column(VARCHAR(80))
 
-    # The relationships are created in Relations.py but the typing here helps the IDE
-    author: relationship
-    predictions: relationship
-    project: relationship
+    if TYPE_CHECKING:
+        # The relationship(s) are created in Relations.py but the typing here helps IDE
+        author: Mapped[User]
+        predictions: Mapped[List[Prediction]]
+        project: Mapped[Project]
 
     def __str__(self):
         return "Training #{0} by user {1} on the {2}".format(

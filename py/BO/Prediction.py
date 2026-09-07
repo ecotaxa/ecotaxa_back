@@ -10,6 +10,7 @@
 from typing import Dict
 
 import numpy as np  # type: ignore
+
 # from numpy import ndarray
 from sqlalchemy import func
 
@@ -24,8 +25,10 @@ from DB.Object import ObjectHeader, ObjectIDT
 from DB.Project import ProjectIDT
 from DB.Sample import Sample
 from DB.helpers import Session
+
 # from DB.helpers.DBWriter import DBWriter
 from DB.helpers.ORM import and_
+
 # from DB.helpers.Postgres import BIGINT
 from helpers.DynamicLogs import get_logger
 
@@ -163,8 +166,8 @@ class DeepFeatures(object):
     #     Read CNN lines AKA features, in order, for given object_ids, into a NumPy array
     #     """
     #     res = cls.read_for_objects(session, oid_lst)
-    #     ret: np.ndarray = np.ndarray(
-    #         shape=(len(oid_lst), N_DEEP_FEATURES), dtype=np.float32
+    #     ret: ndarray = np.ndarray(
+    #         shape=(len(oid_lst), len(res.keys())), dtype=np.float32
     #     )
     #     ndx = 0
     #     for a_row in res:

@@ -106,7 +106,7 @@ def get_predictions_stats(obj_ids):
         }
         pred_objects = list()
         trainings = set()
-        for rec in res.fetchall():
+        for rec in res.mappings().fetchall():
             # print(rec, file=stderr)
             if rec["object_id"] not in pred_objects:
                 pred_objects.append(rec["object_id"])
@@ -263,7 +263,7 @@ def classify_auto_incorrect(fastapi, obj_ids):
             "keep_log": True,
         },
     )
-    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
 
 # Note: to go faster in a local dev environment, use "filled_database" instead of "database" below
@@ -825,7 +825,9 @@ def test_classif(fastapi, tstlogs):
     sce_check_consistency("revert of force after revert")
 
     # Delete some object via API, leave the one which was predicted twice (#1)
-    rsp = fastapi.delete(OBJECT_SET_DELETE_URL, headers=ADMIN_AUTH, json=obj_ids[2:6])
+    rsp = fastapi.request(
+        "DELETE", OBJECT_SET_DELETE_URL, headers=ADMIN_AUTH, json=obj_ids[2:6]
+    )  # TODO: This DELETE+body is discouraged
     assert rsp.status_code == status.HTTP_200_OK
     # They should disappear from some predictions
     assert get_predictions_stats(obj_ids) == {

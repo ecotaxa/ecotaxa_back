@@ -35,7 +35,7 @@ from .ORM import text, Session, column, Integer
 def populate(store1, sess, seq_name, size):
     store = store1
     res = sess.execute(
-        "select nextval('%s') FROM generate_series(1,%d)" % (seq_name, size)
+        text("select nextval('%s') FROM generate_series(1,%d)" % (seq_name, size))
     )
     for a_num in res:
         store.append(a_num[0])

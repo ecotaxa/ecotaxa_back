@@ -11,6 +11,7 @@ from typing import Dict, Optional, Any, List, Final
 from DB import Session
 from DB.Job import Job, JobIDT, DBJobStateEnum
 from DB.User import UserIDT
+from DB.helpers.Core import select
 from helpers import DateTime
 from helpers.DynamicLogs import get_logger
 
@@ -102,7 +103,7 @@ class JobBO(object):
 
     @classmethod
     def get_one(cls, session: Session, job_id: JobIDT) -> Optional["JobBO"]:
-        job = session.query(Job).get(job_id)
+        job = session.get(Job, job_id)
         if job is None:
             return None
         return JobBO(job)
@@ -113,7 +114,8 @@ class JobBO(object):
         Return a single JobBO. If used in a 'with' context, the session will commit on context exit.
         Note: it's not only the Job which will be committed, but the _whole_ session.
         """
-        job = session.query(Job).with_for_update().get(job_id)
+        stmt = select(Job).where(Job.id == job_id).with_for_update()
+        job = session.execute(stmt).scalar_one_or_none()
         if job is None:
             raise ValueError(f"Missing job {job_id}")
         job.updated_on = DateTime.now_time()

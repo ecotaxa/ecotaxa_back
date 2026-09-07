@@ -14,6 +14,8 @@ from pathlib import Path
 from typing import Optional, Tuple, TextIO, Dict, List, Set, Any, Union
 from zipfile import ZipFile
 
+from sqlalchemy import bindparam
+
 from API_models.exports import (
     ExportRsp,
     ExportReq,
@@ -37,14 +39,13 @@ from BO.ProjectVars import REQUIRED_VARS_PER_QUANTITY, QUANTITY_NAMES
 from BO.Rights import RightsBO, Action
 from BO.Taxonomy import TaxonomyBO
 from BO.Vocabulary import Vocabulary, Units
-from DB import Image
+from DB.Image import Image
 from DB.Object import (
     VALIDATED_CLASSIF_QUAL,
     DUBIOUS_CLASSIF_QUAL,
     PREDICTED_CLASSIF_QUAL,
 )
 from DB.Project import Project, ProjectIDListT, ProjectIDT
-from DB.ProjectVariables import ProjectVariables
 from DB.TaxoRecast import TaxoRecast, RecastOperation
 from DB.helpers.Direct import text
 from DB.helpers.SQL import OrderClause, SelectClause
@@ -54,6 +55,8 @@ from helpers import (
     DateTime,
 )  # Need to keep the whole module imported, as the function is mocked
 from helpers.DynamicLogs import get_logger, LogsSwitcher
+
+# TODO: Move somewhere else
 from ..helpers.JobService import JobServiceBase, ArgsDict  # fmt:skip
 
 logger = get_logger(__name__)
@@ -150,7 +153,7 @@ class ProjectExport(JobServiceBase):
         return ret
 
     def init_args(self, args: ArgsDict) -> ArgsDict:
-        args["req"] = self.req.dict()
+        args["req"] = self.req.model_dump()
         args["filters"] = self.filters
         return args
 
@@ -372,10 +375,13 @@ class ProjectExport(JobServiceBase):
 
     def _get_fast_count(self, project_ids: ProjectIDListT) -> int:
         # Get a fast count of the maximum of what to do
-        count_sql = (
+        count_sql = text(
             "SELECT SUM(nbr) AS cnt FROM projects_taxo_stat WHERE projid IN :prjs"
+        ).bindparams(bindparam("prjs", expanding=True))
+        res = self.ro_session.execute(
+            count_sql,
+            {"prjs": tuple(project_ids)},
         )
-        res = self.ro_session.execute(text(count_sql), {"prjs": tuple(project_ids)})
         obj_count = res.one()[0]
         return obj_count
 
@@ -613,7 +619,7 @@ class ProjectExport(JobServiceBase):
         # Prepare TSV structure
         col_descs = [
             a_desc
-            for a_desc in res.cursor.description  # type:ignore # case2
+            for a_desc in res.cursor.description  # type: ignore # case5
             if a_desc.name != "img_internal_id"
         ]
         # read latitude column to get float DB type
@@ -1001,8 +1007,7 @@ class ProjectExport(JobServiceBase):
             .set_grouping(ResultGrouping.without_taxo(self._grouping_from_req(True)))
         )
         out_id_cols = [
-            self.SCI_SUMMARY_ID_ALIASES[a_col]
-            for a_col in self._id_columns_from_req()
+            self.SCI_SUMMARY_ID_ALIASES[a_col] for a_col in self._id_columns_from_req()
         ]
         all_sampling_units: Set[Tuple] = set()
         # Tuples here have either one, two or three values
@@ -1136,7 +1141,9 @@ class ProjectExport(JobServiceBase):
         # Set common aliases, not all of them is always used
         aug_qry.set_aliases(self.SCI_SUMMARY_ID_ALIASES)
         aug_qry.add_selects(id_cols)
-        aug_qry.add_selects(["txo.display_name", self.ANNOTATION_CATEGORY_HIERARCHY_SQL])
+        aug_qry.add_selects(
+            ["txo.display_name", self.ANNOTATION_CATEGORY_HIERARCHY_SQL]
+        )
         return aug_qry
 
     def _project_formulae(self, project_id: ProjectIDT) -> Dict[str, str]:
@@ -1337,7 +1344,7 @@ class ProjectExport(JobServiceBase):
         res = qry.all()
         if res is None or len(res) != 1:
             return None
-        the_one = json.loads(res[0].transforms)
+        the_one = json.loads(str(res[0].transforms))
         transforms: Dict[ClassifIDT, Optional[ClassifIDT]] = {}
         for k, v in the_one.items():
             if v is None:
@@ -1361,7 +1368,7 @@ class SpecializedProjectExport(ProjectExport):
         pass
 
     def init_args(self, args: ArgsDict) -> ArgsDict:
-        args["req"] = self.sreq.dict()  # Serialize the specialized version
+        args["req"] = self.sreq.model_dump()  # Serialize the specialized version
         args["filters"] = self.filters
         return args
 

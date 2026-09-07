@@ -22,7 +22,12 @@ from fastapi import FastAPI, Depends, HTTPException
 from fastapi.openapi.models import OAuthFlows as OAuthFlowsModel
 from fastapi.security import OAuth2
 from fastapi.security.utils import get_authorization_scheme_param
-from itsdangerous import URLSafeTimedSerializer, TimestampSigner, SignatureExpired, BadSignature  # type: ignore
+from itsdangerous import (
+    URLSafeTimedSerializer,
+    TimestampSigner,
+    SignatureExpired,
+    BadSignature,
+)
 from pydantic.main import BaseModel
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
@@ -55,6 +60,89 @@ async def internal_server_error_handler(
     return PlainTextResponse(data, status_code=status_code)
 
 
+def adapt_openapi_31_to_30(d: dict):
+    """
+    Recursively traverses the OpenAPI dictionary to convert 3.1 specific
+    syntax structures back into 3.0 compatible formats.
+    """
+    if not isinstance(d, dict):
+        return
+
+    # 1. Convert OpenAPI 3.1 'examples' array to OpenAPI 3.0 'example' single value
+    if "examples" in d:
+        if isinstance(d["examples"], list) and len(d["examples"]) > 0:
+            d["example"] = d["examples"][0]
+        elif isinstance(d["examples"], dict) and len(d["examples"]) > 0:
+            first_key = next(iter(d["examples"]))
+            example_obj = d["examples"][first_key]
+            d["example"] = (
+                example_obj["value"]
+                if isinstance(example_obj, dict) and "value" in example_obj
+                else example_obj
+            )
+        del d["examples"]
+
+    # 2. Translate 'prefixItems' (Tuples/Fixed-size arrays) into a standard 3.0 'items' schema
+    if "prefixItems" in d:
+        if isinstance(d["prefixItems"], list) and len(d["prefixItems"]) > 0:
+            d["items"] = d["prefixItems"][0]
+        del d["prefixItems"]
+
+    # 3. Remove uUnsupported keywords in OpenAPI 3.0
+    if "propertyNames" in d:
+        del d["propertyNames"]
+    if "exclude_unset" in d:
+        del d["exclude_unset"]
+
+    # 4. Translate 'contentMediaType' file uploads into OpenAPI 3.0 'binary' format strings
+    if "contentMediaType" in d:
+        d["type"] = "string"
+        d["format"] = "binary"
+        del d["contentMediaType"]
+
+    # 5. Fix legacy generator issues: Flatten 'anyOf'/'oneOf' nullable types into 'nullable: true'
+    for key in ["anyOf", "oneOf"]:
+        if key in d and isinstance(d[key], list):
+            sub_schemas = d[key]
+            # Check if one of the sub-schemas represents a 'null' type
+            has_null = any(
+                s.get("type") == "null" for s in sub_schemas if isinstance(s, dict)
+            )
+            # Extract the actual data type schema (the first non-null schema available)
+            real_schema = next(
+                (
+                    s
+                    for s in sub_schemas
+                    if isinstance(s, dict) and s.get("type") != "null"
+                ),
+                None,
+            )
+
+            if has_null and real_schema:
+                # Merge the ENTIRE nested schema instead of just the type attribute
+                # This ensures keys like 'items' or '$ref' are preserved for arrays/objects
+                for k, v in real_schema.items():
+                    d[k] = v
+                d["nullable"] = True
+                # Safely delete the anyOf/oneOf structure that breaks old codegen tools
+                del d[key]
+                break
+
+    # 6. Safety Net: Enforce the mandatory 'items' key for all array types to satisfy OpenAPI 3.0 validators
+    # (Moved below anyOf flattening to catch unpacked arrays)
+    if d.get("type") == "array" and "items" not in d:
+        d["items"] = {"type": "string"}
+
+    # Recursively continue the deep cleanup process throughout the data structure
+    for key, value in d.items():
+        if isinstance(value, dict):
+            adapt_openapi_31_to_30(value)
+        elif isinstance(value, list):
+            for item in value:
+                if isinstance(item, dict):
+                    adapt_openapi_31_to_30(item)
+
+
 # In a development environment, dump the API definition at each run
 def dump_openapi(app: FastAPI, main_path: str):  # pragma: no cover
     import sys
@@ -64,8 +152,16 @@ def dump_openapi(app: FastAPI, main_path: str):  # pragma: no cover
     import json
     from pathlib import Path
 
+    try:
+        openapi = app.openapi()
+        openapi["openapi"] = "3.0.2"
+        adapt_openapi_31_to_30(openapi["components"]["schemas"])
+        adapt_openapi_31_to_30(openapi["paths"])
+        app.openapi_schema = openapi
+    except Exception as e:
+        print(f"Failed to dump openapi", e)
     json_def = json.dumps(
-        app.openapi(),
+        openapi,
         ensure_ascii=False,
         allow_nan=False,
         indent=2,
@@ -245,7 +341,7 @@ class ValidityThrower(object):
             if exc_type == AssertionError:
                 if exc_val.args:
                     raise HTTPException(
-                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                         detail=exc_val.args[0],
                     )
             # Re-raise
@@ -263,11 +359,13 @@ class MyORJSONResponse(JSONResponse):
 
     @classmethod
     def register(cls, a_class: Type[Any], its_model: Type[BaseModel]):
-        cls.type_to_fields[a_class] = list(its_model.__fields__.keys())
+        cls.type_to_fields[a_class] = list(its_model.model_fields.keys())
 
     @classmethod
     def orjson_default(cls, obj: Any) -> Union[str, Dict[str, Any]]:
         # ORJSon calls this method when it cannot serialize an object.
+        if isinstance(obj, dict):  # E.g. ReadOnlyModel
+            return obj.copy()
         # We mimic FastApi behavior of fetching data from the object using the model fields
         fields = cls.type_to_fields.get(obj.__class__)
         if fields is None:
@@ -280,6 +378,16 @@ class MyORJSONResponse(JSONResponse):
         if out_fields is not None:
             fields = [fld for fld in fields if fld in out_fields]
         ret = {fld: getattr(obj, fld) for fld in fields}
+        # In case of issue with a model field, comment out the following lines.
+        # The exception is not visible, I guess ORJSON consumes it.
+        # ret = {}
+        # for fld in fields:
+        #     try:
+        #         ret[fld] = getattr(obj, fld)
+        #     except AttributeError:
+        #         msg = "Field " + fld + "declared in model but not found in " + obj.__class__.__name__
+        #         print(msg, sys.stderr)
+        #         raise TypeError(msg)
         return ret
 
     try:
@@ -297,6 +405,7 @@ class MyORJSONResponse(JSONResponse):
                 err_msg = str(te)
                 logging.warning("Orjson problem '%s' encoding %s", err_msg, content)
                 # Switch to more permissive encoding
+                # assert err_msg is None, err_msg
                 ret = json.dumps(content).encode("utf-8", errors="replace")
             return ret
 
@@ -311,7 +420,7 @@ class MyORJSONResponse(JSONResponse):
 def _get_range_header(range_header: str, file_size: int) -> Tuple[int, int]:
     def _invalid_range():
         return HTTPException(
-            status.HTTP_416_REQUESTED_RANGE_NOT_SATISFIABLE,
+            status.HTTP_416_RANGE_NOT_SATISFIABLE,
             detail=f"Invalid/unsupported request range (Range:{range_header!r})",
         )
 

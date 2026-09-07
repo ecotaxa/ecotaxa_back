@@ -120,9 +120,7 @@ def test_collection_lifecycle(fastapi, who):
 
     # Update the abstract
     url = COLLECTION_UPDATE_URL.format(collection_id=coll_id)
-    the_coll[
-        "abstract"
-    ] = """   
+    the_coll["abstract"] = """   
     A bit less abstract...
     """
     # short_title only on second round

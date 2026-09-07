@@ -1,3 +1,3 @@
 """
-    External services we depend on.
+External services we depend on.
 """

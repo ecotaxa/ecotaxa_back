@@ -9,7 +9,10 @@ from typing import List, Any
 
 from BO.ProjectTidying import ProjectTopology
 from BO.Rights import RightsBO, Action
-from DB import ObjectHeader, Acquisition, Sample, Project, ObjectFields
+from DB.Acquisition import Acquisition
+from DB.Object import ObjectHeader, ObjectFields
+from DB.Project import Project
+from DB.Sample import Sample
 from .helpers.Service import Service
 
 

@@ -481,7 +481,7 @@ class MailProvider(object):
                 s = "(%s)" % " ".join(chain(*c))
                 return s
 
-            (_, data) = mail.uid("search", search_string(criteria))
+            _, data = mail.uid("search", search_string(criteria))
             if data is not None and isinstance(data, list):
                 inbox_item_list = data[0].split()
                 if len(inbox_item_list) > 0:

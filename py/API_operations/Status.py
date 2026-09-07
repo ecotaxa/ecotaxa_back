@@ -28,7 +28,7 @@ class StatusService(Service):
         """
         if current_user_id is None:
             return "UP!"
-        # current_user = self.ro_session.query(User).get(current_user_id)
+        # current_user = self.ro_session.get(User,current_user_id)
         current_user: Optional[User] = RightsBO.get_optional_user(
             self.ro_session, current_user_id
         )

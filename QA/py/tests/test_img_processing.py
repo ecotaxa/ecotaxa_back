@@ -26,7 +26,7 @@ def compare_images(img1_path, img2_path):
     with PIL_Image.open(img1_path) as im1, PIL_Image.open(img2_path) as im2:
         if im1.size != im2.size:
             return False
-        return list(im1.getdata()) == list(im2.getdata())
+        return list(im1.get_flattened_data()) == list(im2.get_flattened_data())
 
 
 @pytest.fixture

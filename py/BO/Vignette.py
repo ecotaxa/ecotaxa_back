@@ -5,9 +5,11 @@
 from configparser import ConfigParser
 from os.path import realpath, dirname, join
 from pathlib import Path
+from typing import Union
 
-import numpy as np  # type: ignore
-from PIL import Image, ImageDraw, ImageFont  # type: ignore
+import numpy as np
+from PIL import Image, ImageDraw, ImageFont
+from PIL.Image import Resampling
 
 HERE = dirname(realpath(__file__))
 
@@ -29,7 +31,7 @@ class VignetteMaker(object):
         self.invert: bool = section["invert"].upper() == "Y"
         self.fontcolor = section["fontcolor"]
         # 254 is nearly white, easier to detect programmatically
-        self.bgcolor = "black" if self.fontcolor == "white" else 254
+        self.bgcolor: Union[str, int] = "black" if self.fontcolor == "white" else 254
         self.footerheight_px = int(section["footerheight_px"])
         # Processing option, not relaed to image itself
         self.keep_original: bool = section.get("keeporiginal", "n").lower() == "y"
@@ -45,8 +47,8 @@ class VignetteMaker(object):
         return self.keep_original
 
     def make_vignette(self, in_file_path: Path):
-        pil_image = Image.open(self.src_base / in_file_path)
-        np_img = np.array(pil_image)
+        pil_image_file = Image.open(self.src_base / in_file_path)
+        np_img = np.array(pil_image_file)
         scalebarsize_px = int(
             round(self.scalebarsize_mm * 1000 / self.pixel_size, 0) * self.scale
         )
@@ -64,7 +66,7 @@ class VignetteMaker(object):
                     int(pil_image.size[0] * self.scale),
                     int(pil_image.size[1] * self.scale),
                 ),
-                Image.BICUBIC,
+                Resampling.BICUBIC,
             )
         # Generate scale band at the bottom of the image
         orig_img = pil_image

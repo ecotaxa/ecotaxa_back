@@ -4,11 +4,11 @@
 #
 from typing import Optional
 
-from PIL import Image as PIL_Image, PngImagePlugin  # type: ignore
-from PIL.GifImagePlugin import GifImageFile  # type: ignore
-from PIL.Image import DecompressionBombError  # type: ignore
-from PIL.JpegImagePlugin import JpegImageFile  # type: ignore
-from PIL.PngImagePlugin import PngImageFile  # type: ignore
+from PIL import Image as PIL_Image
+from PIL.GifImagePlugin import GifImageFile
+from PIL.Image import DecompressionBombError
+from PIL.JpegImagePlugin import JpegImageFile
+from PIL.PngImagePlugin import PngImageFile
 
 from DB.helpers.Bean import Bean
 from FS.Vault import Vault
@@ -16,7 +16,8 @@ from FS.Vault import Vault
 SUPPORTED_FORMATS = {PngImageFile.format, JpegImageFile.format, GifImageFile.format}
 
 # increase maximum size to 20kx20k pixels
-PIL_Image.MAX_IMAGE_PIXELS = 20000*20000
+PIL_Image.MAX_IMAGE_PIXELS = 20000 * 20000
+
 
 class ImageBO(object):
     """
@@ -53,7 +54,7 @@ class ImageBO(object):
         Get dimensions from given image, return a string with the error in case of issue.
         It is assumed that the image is valid, i.e. did not throw an exception in above validate()
         """
-        im = PIL_Image.open(vault.image_path(sub_path))
+        im: PIL_Image.Image = PIL_Image.open(vault.image_path(sub_path))
         image_to_write.width = im.size[0]
         image_to_write.height = im.size[1]
         # Generate a thumbnail if image is too large

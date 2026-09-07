@@ -23,9 +23,11 @@ from BO.Sample import (
     DescribedSampleSet,
     SampleTaxoStats,
 )
+from DB.Acquisition import Acquisition
 from DB.Acquisition import AcquisitionIDT, AcquisitionIDListT
 from DB.Process import ProcessIDT, ProcessIDListT
 from DB.Project import ProjectIDT, ProjectIDListT
+from DB.Sample import Sample
 from DB.Sample import SampleIDT, SampleIDListT
 from DB.User import UserIDT
 
@@ -80,7 +82,7 @@ class SamplesService(Service):
         current_user_id: Optional[UserIDT],
         project_ids: ProjectIDListT,
         orig_id_pattern: str,
-    ) -> List[SampleBO]:
+    ) -> List[Sample]:
         # Security check
         if current_user_id is None:
             [
@@ -97,7 +99,7 @@ class SamplesService(Service):
         sample_set = DescribedSampleSet(self.ro_session, project_ids, orig_id_pattern)
         # mappings = ProjectMapping().load_from_project(project)
         # ret.map_free_columns(mappings.sample_mappings)
-        return sample_set.list()
+        return list(sample_set.list())
 
     def read_taxo_stats(
         self, current_user_id: Optional[UserIDT], sample_ids: SampleIDListT
@@ -169,7 +171,7 @@ class AcquisitionsService(Service):
 
     def search(
         self, current_user_id: Optional[UserIDT], project_id: ProjectIDT
-    ) -> List[AcquisitionBO]:
+    ) -> List[Acquisition]:
         # Security check
         if current_user_id is None:
             project = RightsBO.anonymous_wants(self.ro_session, Action.READ, project_id)
@@ -180,7 +182,7 @@ class AcquisitionsService(Service):
         acquisition_set = DescribedAcquisitionSet(self.ro_session, project_id)
         # mappings = ProjectMapping().load_from_project(project)
         # ret.map_free_columns(mappings.sample_mappings)
-        return acquisition_set.list()
+        return list(acquisition_set.list())
 
 
 class ProcessesService(Service):

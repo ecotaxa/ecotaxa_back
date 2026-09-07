@@ -5,7 +5,6 @@ from fastapi.testclient import TestClient
 from helpers.AppConfig import Config
 from tests.fastapi_fixture import FAKE_SERVER
 
-
 # Since the middleware is already added to main.app, we can just use the fastapi fixture
 # or a fresh TestClient if we don't need the security patching.
 # FixLocationMiddleware depends on Config().get_account_validation_url()
@@ -55,26 +54,26 @@ def test_fix_location_middleware(config, test_app):
     assert front_url == FAKE_SERVER
 
     # Test internal-like redirect
-    response = client.get("/test-redirect-internal", allow_redirects=False)
+    response = client.get("/test-redirect-internal", follow_redirects=False)
     assert response.status_code == 302
     assert response.headers["location"] == f"{front_url}some-path"
 
     # Test external redirect
-    response = client.get("/test-redirect-external", allow_redirects=False)
+    response = client.get("/test-redirect-external", follow_redirects=False)
     assert response.status_code == 302
     assert response.headers["location"] == f"{front_url}some-path"
 
     # Test relative redirect
-    response = client.get("/test-redirect-relative", allow_redirects=False)
+    response = client.get("/test-redirect-relative", follow_redirects=False)
     assert response.status_code == 302
     assert response.headers["location"] == "/relative-path"
 
     # Test https redirect are not damaged
-    response = client.get("/test-redirect-https", allow_redirects=False)
+    response = client.get("/test-redirect-https", follow_redirects=False)
     assert response.status_code == 302
     assert response.headers["location"] == "https://localhost:8000/some-path"
 
     # Test redirect with no path after host
-    response = client.get("/test-redirect-no-slash", allow_redirects=False)
+    response = client.get("/test-redirect-no-slash", follow_redirects=False)
     assert response.status_code == 302
     assert response.headers["location"] == front_url

@@ -1,3 +1,3 @@
 """
-    Entry points for API calls.
+Entry points for API calls.
 """

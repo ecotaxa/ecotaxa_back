@@ -41,7 +41,7 @@ def test_plain_API_login(database, client):
     url = LOGIN_URL
     # Wrong params
     rsp = client.post(url, data={"usernazme": "foo", "password": "bar"})
-    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
     # OK params, wrong values
     rsp = client.post(url, json={"username": "foo", "password": "bar"})
@@ -105,7 +105,7 @@ def test_plain_API_login(database, client):
         with LoginService() as lsce:
             lsce.pwd_context.hash("nimda")
             # Update creator's password to a strong one
-            usr = sce.session.query(User).get(CREATOR_USER_ID)
+            usr = sce.session.get(User, CREATOR_USER_ID)
             usr.password = lsce.hash_password("StrongP@ssw0rd!")
             sce.session.commit()
 

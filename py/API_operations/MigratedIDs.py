@@ -31,24 +31,24 @@ class MigratedIDsService(Service):
                     res.projects[pid] = mapping[pid]
 
         if sam_ids:
-            q = self.ro_session.query(SampleIdOld2New).filter(
+            q_sam = self.ro_session.query(SampleIdOld2New).filter(
                 SampleIdOld2New.old_id.in_(sam_ids)
             )
-            for row in q:
-                res.samples[row.old_id] = row.new_id
+            for row_sam in q_sam.all():
+                res.samples[row_sam.old_id] = row_sam.new_id
 
         if acq_ids:
-            q = self.ro_session.query(AcquisIdOld2New).filter(
+            q_acq = self.ro_session.query(AcquisIdOld2New).filter(
                 AcquisIdOld2New.old_id.in_(acq_ids)
             )
-            for row in q:
-                res.acquisitions[row.old_id] = row.new_id
+            for row_acq in q_acq:
+                res.acquisitions[row_acq.old_id] = row_acq.new_id
 
         if obj_ids:
-            q = self.ro_session.query(ObjidOld2New).filter(
+            q_obj = self.ro_session.query(ObjidOld2New).filter(
                 ObjidOld2New.old_id.in_(obj_ids)
             )
-            for row in q:
-                res.objects[row.old_id] = row.new_id
+            for row_obj in q_obj:
+                res.objects[row_obj.old_id] = row_obj.new_id
 
         return res

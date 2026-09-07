@@ -2,34 +2,41 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+import inspect
 
 # noinspection PyUnresolvedReferences,PyPackageRequirements
-from typing import List, Any, Optional, Dict, Type
+from typing import List, Any, Optional, Dict, Type, TYPE_CHECKING
 
 # Just to avoid tagging every "pydantic" reference in PyCharm, as pydantic is included in FastAPI
 # noinspection PyUnresolvedReferences
 from pydantic import (
-    BaseConfig,
+    ConfigDict,
     BaseModel,
-    Field,
+    Field as PydanticField,
     create_model,
-    root_validator,
+    model_validator,
+    field_validator,
     dataclasses,
     validator,
 )
 
+# noinspection PyUnresolvedReferences
+from pydantic.fields import FieldInfo
 
-class DescriptiveModel(BaseModel):
+
+class DescriptiveModel:
     """Just fields descriptions, these models can be combined
     with various containers to be sent across the wire."""
 
-    class Config:
-        arbitrary_types_allowed = (
-            True  # We don't check that classes inside models are models themselves
-        )
+    # model_config = ConfigDict(from_attributes=True)
+
+    @classmethod
+    def get_fields(cls) -> Dict[str, FieldInfo]:
+        return dict(inspect.getmembers(cls, lambda value: isinstance(value, FieldInfo)))
 
 
 PydanticDescriptionT = Type[DescriptiveModel]
+Field = PydanticField
 
 
 def sort_and_prune(

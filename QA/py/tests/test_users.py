@@ -16,7 +16,7 @@ from tests.test_user_admin import USER_UPDATE_URL, USER_CREATE_URL, USER_GET_URL
 def config_captcha(monkeypatch):
     def mock_verify_captcha(*args, **kwargs):
         from fastapi import HTTPException
-        from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
+        from starlette.status import HTTP_422_UNPROCESSABLE_CONTENT
 
         if len(args) > 1:
             argbot = args[1]
@@ -34,7 +34,7 @@ def config_captcha(monkeypatch):
                     detail = ["invalid no_bot reason 2"]
         if detail != []:
             raise HTTPException(
-                status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=detail,
             )
 

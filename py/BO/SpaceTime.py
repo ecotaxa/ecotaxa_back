@@ -4,11 +4,10 @@
 #
 import datetime
 from datetime import time, date
-from typing import Optional
+from typing import Optional, TypedDict
 
-from astral import LocationInfo, Depression  # type: ignore
-from astral.sun import sun  # type: ignore
-from typing_extensions import TypedDict
+from astral import LocationInfo, Depression
+from astral.sun import sun
 
 # TODO: Caching a single value is useful, but less than several of them
 from DB.helpers.Bean import Bean
@@ -20,6 +19,12 @@ class AstralCache(TypedDict, total=False):
     long: Optional[float]
     lat: Optional[float]
     r: Optional[str]
+
+
+class SunInterval(TypedDict):
+    from_time: time
+    to_time: time
+    interpretation: str
 
 
 astral_cache: AstralCache = {
@@ -81,20 +86,39 @@ def calc_astral_day_time(date: datetime.date, time, latitude, longitude):
     s = sun(loc.observer, date=date, dawn_dusk_depression=Depression.NAUTICAL)
     ret = "?"
     # The intervals and their interpretation
-    interp = (
-        {"from:": s["dusk"].time(), "to:": s["dawn"].time(), "=>": "N"},
-        {"from:": s["dawn"].time(), "to:": s["sunrise"].time(), "=>": "A"},
-        {"from:": s["sunrise"].time(), "to:": s["sunset"].time(), "=>": "D"},
-        {"from:": s["sunset"].time(), "to:": s["dusk"].time(), "=>": "U"},
+    interp: tuple[SunInterval, ...] = (
+        {
+            "from_time": s["dusk"].time(),
+            "to_time": s["dawn"].time(),
+            "interpretation": "N",
+        },
+        {
+            "from_time": s["dawn"].time(),
+            "to_time": s["sunrise"].time(),
+            "interpretation": "A",
+        },
+        {
+            "from_time": s["sunrise"].time(),
+            "to_time": s["sunset"].time(),
+            "interpretation": "D",
+        },
+        {
+            "from_time": s["sunset"].time(),
+            "to_time": s["dusk"].time(),
+            "interpretation": "U",
+        },
     )
     for intrv in interp:
-        if intrv["from:"] < intrv["to:"] and intrv["from:"] <= time <= intrv["to:"]:
+        if (
+            intrv["from_time"] < intrv["to_time"]
+            and intrv["from_time"] <= time <= intrv["to_time"]
+        ):
             # Normal interval
-            ret = intrv["=>"]
-        elif intrv["from:"] > intrv["to:"] and (
-            time >= intrv["from:"] or time <= intrv["to:"]
+            ret = intrv["interpretation"]
+        elif intrv["from_time"] > intrv["to_time"] and (
+            time >= intrv["from_time"] or time <= intrv["to_time"]
         ):
             # Change of day b/w the 2 parts of the interval
-            ret = intrv["=>"]
+            ret = intrv["interpretation"]
 
     return ret

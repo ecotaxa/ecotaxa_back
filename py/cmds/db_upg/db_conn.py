@@ -6,5 +6,6 @@ app_config = Config()
 try:
     # TODO: Dirty
     conn = Service.build_connection(app_config)
-except:
+except Exception as e:
+    print("Could not get DB migration connection", e)
     conn = None

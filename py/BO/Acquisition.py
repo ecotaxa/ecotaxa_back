@@ -5,7 +5,7 @@
 #
 # An Acquisition business object
 #
-from typing import List, Optional, ClassVar
+from typing import List, Optional, ClassVar, Sequence
 
 from BO.Classification import ClassifIDListT
 from BO.ColumnUpdate import ColUpdateList
@@ -16,7 +16,7 @@ from DB.Acquisition import Acquisition, AcquisitionIDT, AcquisitionIDListT
 from DB.Object import ObjectHeader
 from DB.Project import ProjectIDT, ProjectIDListT, Project
 from DB.Sample import Sample
-from DB.helpers.ORM import any_, and_
+from DB.helpers.ORM import any_, and_, Update, select
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
 
@@ -38,7 +38,7 @@ class AcquisitionBO(MappedEntity):
 
     def __init__(self, session: Session, acquisition_id: AcquisitionIDT):
         super().__init__(session)
-        self.acquis = session.query(Acquisition).get(acquisition_id)
+        self.acquis = session.get(Acquisition, acquisition_id)
 
     def __getattr__(self, item):
         """Fallback for 'not found' field after the C getattr() call.
@@ -91,7 +91,7 @@ class EnumeratedAcquisitionSet(MappedTable):
         """
         return self._apply_on_all(Acquisition, project, updates.lst)
 
-    def add_filter(self, upd):
+    def add_filter(self, upd: Update) -> Update:
         return upd.filter(Acquisition.acquisid == any_(self.ids))
 
 
@@ -104,14 +104,13 @@ class DescribedAcquisitionSet(object):
         self._session = session
         self.prj_id = prj_id
 
-    def list(self) -> List[AcquisitionBO]:
+    def list(self) -> Sequence[Acquisition]:
         """
-        Return all acquisitions from description.
+        Return all acquisitions BOs from project.
         TODO: No free columns value so far.
         """
-        qry = self._session.query(Acquisition)
+        qry = select(Acquisition)
         qry = qry.join(Sample)
         qry = qry.join(Project)
-        qry = qry.filter(Project.projid == self.prj_id)
-        ret = [an_acquis for an_acquis in qry]
-        return ret
+        qry = qry.filter(Project.projid.__eq__(self.prj_id))
+        return self._session.scalars(qry).fetchall()

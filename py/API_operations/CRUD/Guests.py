@@ -3,7 +3,7 @@
 # Copyright (C) 2025  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 
-from typing import Optional, List
+from typing import Optional, List, cast
 
 from fastapi import HTTPException
 
@@ -15,6 +15,7 @@ from BO.User import GuestBO
 from DB.Collection import CollectionUserRole, CollectionProject
 from DB.ProjectPrivilege import ProjectPrivilege
 from DB.User import Guest, GuestIDListT, GuestIDT, Person, User, UserIDT
+from DB.helpers.Core import select
 from helpers import DateTime
 from helpers.DynamicLogs import get_logger
 from helpers.httpexception import (
@@ -79,7 +80,7 @@ class GuestService(Service):
         current_user: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
         self._is_manager_throw(current_user)
         self._can_manage_guest_throw(current_user, guest_id)
-        guest_to_update: Optional[Guest] = self.session.query(Guest).get(guest_id)
+        guest_to_update: Optional[Guest] = self.session.get(Guest, guest_id)
         if guest_to_update is None:
             raise HTTPException(status_code=422, detail=[NOT_FOUND])
         self._is_valid_person_throw(update_src, guest_to_update.id)
@@ -97,7 +98,7 @@ class GuestService(Service):
         current_user: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
         self._is_manager_throw(current_user)
         # TODO: Not consistent with others e.g. project.query()
-        ret = self.ro_session.query(Guest).get(guest_id)
+        ret = self.ro_session.get(Guest, guest_id)
         return ret
 
     def get_full_by_id(
@@ -105,7 +106,7 @@ class GuestService(Service):
     ) -> GuestModel:
         current_user: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
         self._is_manager_throw(current_user)
-        db_guest = self.ro_session.query(Guest).get(guest_id)
+        db_guest = self.ro_session.get(Guest, guest_id)
         if db_guest is None:
             raise HTTPException(status_code=404, detail=DETAIL_NOT_FOUND)
         else:
@@ -114,7 +115,7 @@ class GuestService(Service):
 
     @staticmethod
     def _get_guest_profile(db_guest: Guest) -> GuestModel:
-        ret = GuestModel.from_orm(db_guest)
+        ret = GuestModel.model_validate(db_guest)
         return ret
 
     def _limit_qry(self, current_user: User, qry):
@@ -253,7 +254,7 @@ class GuestService(Service):
 
     def _projects_managed_by(self, user: User) -> CollectionIDListT:
         qry = (
-            self.ro_session.query(CollectionProject.collection_id)
+            select(CollectionProject.collection_id)
             .join(
                 ProjectPrivilege,
                 CollectionProject.project_id == ProjectPrivilege.projid,
@@ -261,12 +262,12 @@ class GuestService(Service):
             .filter(ProjectPrivilege.member == user.id)
             .filter(ProjectPrivilege.privilege == ProjectPrivilegeBO.MANAGE)
         )
-        collection_ids = qry.all()
-        return collection_ids
+        collection_ids = self.ro_session.scalars(qry).all()
+        return cast(CollectionIDListT, collection_ids)
 
     def _can_manage_guest_throw(self, user: User, guest_id: GuestIDT):
         """
-        check if user can update guest profile (has to be creator_users or associates_users  in a collection managed by the user)
+        check if the user can update its guest profile (has to be creator_users or associates_users in a collection managed by the user)
         """
         collection_ids = self._is_manager_throw(user)
         if user.is_manager():

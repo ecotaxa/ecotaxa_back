@@ -4,14 +4,14 @@
 #
 #  Models used in CRUD API_operations.
 #
-from typing import Optional, Dict, List, Any, Union
+from typing import Any, Dict, List, Optional, Union
 
 from API_models.constants import FORMULAE
 from BO.Collection import CollectionIDT
 from BO.ColumnUpdate import ColUpdate
-from BO.DataLicense import LicenseEnum, AccessLevelEnum
+from BO.DataLicense import AccessLevelEnum, LicenseEnum
 from BO.Job import DBJobStateEnum
-from BO.Project import ProjectUserStats, ProjectColumns, ProjectBO
+from BO.Project import ProjectBO, ProjectColumns, ProjectUserStats
 from BO.ProjectSet import ProjectSetColumnStats
 from BO.Sample import SampleTaxoStats
 from DB.Acquisition import Acquisition
@@ -19,11 +19,16 @@ from DB.Collection import Collection
 from DB.Instrument import UNKNOWN_INSTRUMENT
 from DB.Job import Job, JobIDT
 from DB.Process import Process
-from DB.Project import Project, ProjectIDT, ProjectIDListT
+from DB.Project import Project, ProjectIDListT, ProjectIDT
 from DB.Sample import Sample, SampleIDT
-from DB.User import User, Guest, Organization, OrganizationIDT
-from DB.User import UserIDT
-from helpers.pydantic import BaseModel, Field, DescriptiveModel, validator
+from DB.User import Guest, Organization, OrganizationIDT, User, UserIDT
+from helpers.pydantic import (
+    BaseModel,
+    ConfigDict,
+    DescriptiveModel,
+    Field,
+    field_validator,
+)
 from .helpers.DBtoModel import combine_models
 from .helpers.DataclassToModel import dataclass_to_model_with_suffix
 
@@ -39,19 +44,19 @@ class _OrganizationModel(DescriptiveModel):
     id: OrganizationIDT = Field(
         title="Organization Id",
         description="OrganizationIDT unique identifier.",
-        example=1,
+        examples=[1],
         default=-1,
     )
     name: str = Field(
         title="Organization Name",
         description="Organization's full name, as text.",
-        example="OrganizationName",
+        examples=["OrganizationName"],
     )
     directories: Optional[str] = Field(
         default=None,
         title="Directories",
         description="References to official directories where the organization is referenced, separated by ,.",
-        example="edmo:1278",
+        examples=["edmo:1278"],
     )
 
 
@@ -60,16 +65,19 @@ OrganizationModel = combine_models(Organization, _OrganizationModel)
 
 # Minimal user information
 class _MinimalUserModel(DescriptiveModel):
-    id: UserIDT = Field(
-        title="Id", description="The unique numeric id of this user.", example=1
+    id: Optional[UserIDT] = Field(
+        title="Id",
+        description="The unique numeric id of this user.",
+        examples=[1],
+        default=-1,  # For creation
     )
     email: str = Field(
         title="Email",
         description="User's email address, as text, used during registration.",
-        example="ecotaxa.api.user@gmail.com",
+        examples=["ecotaxa.api.user@gmail.com"],
     )
     name: str = Field(
-        title="Name", description="User's full name, as text.", example="userName"
+        title="Name", description="User's full name, as text.", examples=["userName"]
     )
 
 
@@ -80,12 +88,12 @@ class _DBGuestModel(_MinimalUserModel):
     orcid: str = Field(
         title="ORCID ID",
         description="The orcid id https://support.orcid.org.",
-        example="0000-0001-2345-6789",
+        examples=["0000-0001-2345-6789"],
     )
     country: str = Field(
         title="Country",
         description="The country name, as text (but chosen in a consistent list).",
-        example="France",
+        examples=["France"],
     )
 
 
@@ -96,7 +104,7 @@ class MinUserModel(_MinUserModel):
     organisation: str = Field(
         title="Organisation",
         description="User's organisation name, as text.",
-        example="Oceanographic Laboratory of Villefranche sur Mer - LOV",
+        examples=["Oceanographic Laboratory of Villefranche sur Mer - LOV"],
     )
 
 
@@ -104,62 +112,61 @@ class GuestModel(_GuestModel):
     organisation: str = Field(
         title="Organisation",
         description="User's organisation name, as text.",
-        example="Oceanographic Laboratory of Villefranche sur Mer - LOV",
+        examples=["Oceanographic Laboratory of Villefranche sur Mer - LOV"],
     )
 
 
 # Direct mirror of DB models, i.e. the minimal + the rest we want
 class _FullUserModel(_MinimalUserModel):
     status: int = Field(
-        default=1,
         title="Account status",
         description="Status of the user : 1 for active, 0 for inactive ,2 for pending, -1 for blocked",
-        example=1,
+        examples=[1],
     )
     status_date = Field(
         title="status date",
         description="Timestamp status modification date",
-        example="2020-11-05T12:31:48.299713",
+        examples=["2020-11-05T12:31:48.299713"],
     )
     status_admin_comment: str = Field(
         title="Comment",
-        description="Optional Users admininistrator comment about the account status.",
-        example="",
+        description="Optional Users administrator comment about the account status.",
+        examples=[""],
     )
     country: str = Field(
         title="Country",
         description="The country name, as text (but chosen in a consistent list).",
-        example="France",
+        examples=["France"],
     )
     orcid: str = Field(
         title="ORCID ID",
         description="The orcid id https://support.orcid.org.",
-        example="0000-0001-2345-6789",
+        examples=["0000-0001-2345-6789"],
     )
     usercreationdate = Field(
         title="User creation date",
         description="The date of creation of the user, as text formatted according to the ISO 8601 standard.",
-        example="2020-11-05T12:31:48.299713",
+        examples=["2020-11-05T12:31:48.299713"],
     )
     usercreationreason = Field(
         title="User creation reason",
         description="Paragraph describing the usage of EcoTaxa made by the user.",
-        example="Analysis of size and shapes of plastic particles",
+        examples=["Analysis of size and shapes of plastic particles"],
     )
     password: str = Field(
         title="User's password'",
         description="Encrypted (or not) password.",
-        example="$foobar45$",
+        examples=["$foobar45$"],
     )
     mail_status: bool = Field(
         title="Mail status",
         description="True for verified, False for waiting for verification, None for no action.",
-        example=True,
+        examples=[True],
     )
     mail_status_date = Field(
         title="Mail status date",
         description="Timestamp mail status modification date",
-        example="2020-11-05T12:31:48.299713",
+        examples=["2020-11-05T12:31:48.299713"],
     )
 
 
@@ -169,36 +176,40 @@ _UserModelFromDB = combine_models(User, _FullUserModel)
 # TODO JCE - description example
 class _Project2Model(DescriptiveModel):
     projid: ProjectIDT = Field(
-        title="Project Id", description="The project Id.", example=4824
+        title="Project Id", description="The project Id.", examples=[4824]
     )
     title: str = Field(
-        title="Title", description="The project title.", example="MyProject"
+        title="Title", description="The project title.", examples=["MyProject"]
     )
     status: str = Field(
-        title="Status", description="The project status.", example="Annotate"
+        title="Status", description="The project status.", examples=["Annotate"]
     )
     objcount: float = Field(
-        title="Object count", description="The number of objects.", example=32292.0
+        title="Object count", description="The number of objects.", examples=[32292.0]
     )
     pctvalidated: float = Field(
         title="Percentage validated",
         description="Percentage of validated images.",
-        example=0.015483711135885049,
+        examples=[0.015483711135885049],
     )
     pctclassified: float = Field(
         title="Percentage classified",
         description="Percentage of classified images.",
-        example=100.0,
+        examples=[100.0],
     )
     classifsettings: str = Field(
         title="Classification settings",
         description="",
-        example="baseproject=1602\ncritvar=%area,angle,area,area_exc,bx,by,cdexc,centroids,circ.,circex,convarea,convperim,cv,elongation,esd,fcons,feret,feretareaexc,fractal,height,histcum1,histcum2,histcum3,intden,kurt,lat_end,lon_end,major,max,mean,meanpos,median,min,minor,mode,nb1,nb2,perim.,perimareaexc,perimferet,perimmajor,range,skelarea,skew,slope,sr,stddev,symetrieh,symetriehc,symetriev,symetrievc,thickr,width,x,xm,xstart,y,ym,ystart\nposttaxomapping=\nseltaxo=45074,84963,61990,13333,82399,61973,62005,25930,25932,61996,78426,81941,11514,85076,85061,30815,85185,92230,85079,84993,25824,85115,85004,26525,25944,11509,26524,92112,84976,25942,84980,85078,78418,84977,85060,61993,61991,85069,81871,74144,11758,72431,13381,11518,5,18758,85117,92042,84968,84997,87826,92236,92237,92039,84989,85193,83281,78412,92239,71617,81977,45071,12865,85044,81940,85067,12908,85116,56693,85008,92139,92068\nusemodel_foldername=testln1",
+        examples=[
+            "baseproject=1602\ncritvar=%area,angle,area,area_exc,bx,by,cdexc,centroids,circ.,circex,convarea,convperim,cv,elongation,esd,fcons,feret,feretareaexc,fractal,height,histcum1,histcum2,histcum3,intden,kurt,lat_end,lon_end,major,max,mean,meanpos,median,min,minor,mode,nb1,nb2,perim.,perimareaexc,perimferet,perimmajor,range,skelarea,skew,slope,sr,stddev,symetrieh,symetriehc,symetriev,symetrievc,thickr,width,x,xm,xstart,y,ym,ystart\nposttaxomapping=\nseltaxo=45074,84963,61990,13333,82399,61973,62005,25930,25932,61996,78426,81941,11514,85076,85061,30815,85185,92230,85079,84993,25824,85115,85004,26525,25944,11509,26524,92112,84976,25942,84980,85078,78418,84977,85060,61993,61991,85069,81871,74144,11758,72431,13381,11518,5,18758,85117,92042,84968,84997,87826,92236,92237,92039,84989,85193,83281,78412,92239,71617,81977,45071,12865,85044,81940,85067,12908,85116,56693,85008,92139,92068\nusemodel_foldername=testln1"
+        ],
     )
     classiffieldlist: str = Field(
         title="Classification field list",
         description="",
-        example="depth_min=depth_min\r\ndepth_max=depth_max\r\narea=area [pixel]\r\nmean=mean [0-255]\r\nfractal=fractal\r\nmajor=major [pixel]\r\nsymetrieh=symetrieh\r\ncirc.=circ\r\nferet = Feret [pixel]",
+        examples=[
+            "depth_min=depth_min\r\ndepth_max=depth_max\r\narea=area [pixel]\r\nmean=mean [0-255]\r\nfractal=fractal\r\nmajor=major [pixel]\r\nsymetrieh=symetrieh\r\ncirc.=circ\r\nferet = Feret [pixel]"
+        ],
     )
     initclassiflist: str = Field(
         title="Initial categories",
@@ -207,14 +218,16 @@ class _Project2Model(DescriptiveModel):
     popoverfieldlist: str = Field(
         title="Pop over field list",
         description="",
-        example="depth_min=depth_min\r\ndepth_max=depth_max\r\narea=area [pixel]\r\nmean=mean [0-255]\r\nfractal=fractal\r\nmajor=major [pixel]\r\nsymetrieh=symetrieh\r\ncirc.=circ\r\nferet = Feret [pixel]",
+        examples=[
+            "depth_min=depth_min\r\ndepth_max=depth_max\r\narea=area [pixel]\r\nmean=mean [0-255]\r\nfractal=fractal\r\nmajor=major [pixel]\r\nsymetrieh=symetrieh\r\ncirc.=circ\r\nferet = Feret [pixel]"
+        ],
     )
     comments: str = Field(
-        title="Comments", description="The project comments.", example=""
+        title="Comments", description="The project comments.", examples=[""]
     )
-    rf_models_used: str = Field(title="Rf models used", description="", example="")
+    rf_models_used: str = Field(title="Rf models used", description="", examples=[""])
     cnn_network_id: str = Field(
-        title="Cnn network id", description="", example="SCN_zooscan_group1"
+        title="Cnn network id", description="", examples=["SCN_zooscan_group1"]
     )
     access: AccessLevelEnum = Field(
         title="Access level",
@@ -226,13 +239,13 @@ class _Project2Model(DescriptiveModel):
             ]
         ),
         default=AccessLevelEnum.PUBLIC,
-        example=AccessLevelEnum.PUBLIC,
+        examples=[AccessLevelEnum.PUBLIC],
     )
     formulae: Optional[str] = Field(
         title="Formulae",
         description="Concentration formulae.",
         default=FORMULAE,
-        example="",
+        examples=[""],
     )
 
 
@@ -241,12 +254,12 @@ _ProjectModelFromDB = combine_models(Project, _Project2Model)
 
 class ProjectSummaryModel(BaseModel):
     projid: ProjectIDT = Field(
-        title="Project Id", description="Project unique identifier.", example=1
+        title="Project Id", description="Project unique identifier.", examples=[1]
     )
     title: str = Field(
         title="Project title",
         description="Project's title.",
-        example="Zooscan Tara Med",
+        examples=["Zooscan Tara Med"],
     )
 
 
@@ -254,21 +267,23 @@ class UserModelWithRights(_UserModelFromDB):
     organisation: str = Field(
         title="Organisation",
         description="User's organisation name, as text.",
-        example="Oceanographic Laboratory of Villefranche sur Mer - LOV",
+        examples=["Oceanographic Laboratory of Villefranche sur Mer - LOV"],
     )
     can_do: List[int] = Field(
         title="User's permissions",
         description="List of User's allowed actions : 1 create a project, 2 administrate the app, 3 administrate users, 4 create taxon.",
         default=[],
-        example=[1, 4],
+        examples=[[1, 4]],
     )
     last_used_projects: List[ProjectSummaryModel] = Field(
         title="Last used projects",
         description="List of User's last used projects.",
         default=[],
-        example=[
-            {"projid": 3, "title": "Zooscan point B"},
-            {"projid": 1, "title": "Zooscan Tara Med"},
+        examples=[
+            [
+                {"projid": 3, "title": "Zooscan point B"},
+                {"projid": 1, "title": "Zooscan Tara Med"},
+            ]
         ],
     )
 
@@ -277,24 +292,24 @@ class UserModelWithRights(_UserModelFromDB):
 # We exclude free columns from base model, they will be mapped in a dedicated sub-entity
 class _Sample2Model(DescriptiveModel):
     sampleid: SampleIDT = Field(
-        title="Sample Id", description="The sample Id.", example=100
+        title="Sample Id", description="The sample Id.", examples=[100]
     )
     projid: ProjectIDT = Field(
-        title="Project Id", description="The project Id.", example=4
+        title="Project Id", description="The project Id.", examples=[4]
     )
     orig_id: str = Field(
         title="Original id",
         description="Original sample ID from initial TSV load.",
-        example="dewex_leg2_19",
+        examples=["dewex_leg2_19"],
     )
     latitude: float = Field(
-        title="Latitude", description="The latitude.", example=42.0231666666667
+        title="Latitude", description="The latitude.", examples=[42.0231666666667]
     )
     longitude: float = Field(
-        title="Longitude", description="The longitude.", example=4.71766666666667
+        title="Longitude", description="The longitude.", examples=[4.71766666666667]
     )
     dataportal_descriptor: str = Field(
-        title="Dataportal descriptor.", description="", example=""
+        title="Dataportal descriptor.", description="", examples=[""]
     )
 
 
@@ -303,20 +318,20 @@ _SampleModelFromDB = combine_models(Sample, _Sample2Model)
 
 class _Acquisition2Model(DescriptiveModel):
     acquisid: int = Field(
-        title="Acquisition Id", description="The acquisition Id.", example=144
+        title="Acquisition Id", description="The acquisition Id.", examples=[144]
     )
     acq_sample_id: int = Field(
         title="Acquisition sample Id",
         description="The acquisition sample Id.",
-        example=1039,
+        examples=[1039],
     )
     orig_id: str = Field(
         title="Original id",
         description="Original acquisition ID from initial TSV load.",
-        example="uvp5_station1_cast1b",
+        examples=["uvp5_station1_cast1b"],
     )
     instrument: str = Field(
-        title="Instrument", description="Instrument used.", example="uvp5"
+        title="Instrument", description="Instrument used.", examples=["uvp5"]
     )
 
 
@@ -324,13 +339,13 @@ _AcquisitionModelFromDB = combine_models(Acquisition, _Acquisition2Model)
 
 
 class _Process2Model(DescriptiveModel):
-    processid: int = Field(
-        title="Process id", description="The process Id.", example=1000
+    processid = Field(
+        title="Process id", description="The process Id.", examples=[1000]
     )
-    orig_id: str = Field(
+    orig_id = Field(
         title="Original id",
         description="Original process ID from initial TSV load.",
-        example="zooprocess_045",
+        examples=["zooprocess_045"],
     )
 
 
@@ -339,38 +354,40 @@ _ProcessModelFromDB = combine_models(Process, _Process2Model)
 
 # TODO JCE - example
 class _Collection2Model(DescriptiveModel):
-    id: CollectionIDT = Field(title="Id", description="The collection Id.", example=1)
-    external_id: str = Field(
-        title="External Id", description="The external Id.", example=""
+    id: CollectionIDT = Field(
+        title="Id", description="The collection Id.", examples=[1]
     )
-    external_id_system: str = Field(
-        title="External id system", description="The external Id system.", example=""
+    external_id = Field(
+        title="External Id", description="The external Id.", examples=[""]
+    )
+    external_id_system = Field(
+        title="External id system", description="The external Id system.", examples=[""]
     )
     title: str = Field(
-        title="Title", description="The collection title.", example="My collection"
+        title="Title", description="The collection title.", examples=["My collection"]
     )
     short_title: str = Field(
         title="Short title",
         description="The collection short title.",
-        example="My coll",
+        examples=["My coll"],
     )
     citation: str = Field(
-        title="Citation", description="The collection citation.", example=""
+        title="Citation", description="The collection citation.", examples=[""]
     )
     license: str = Field(
         title="License",
         description="The collection license.",
-        example=LicenseEnum.CC_BY,
+        examples=[LicenseEnum.CC_BY],
     )
     abstract: str = Field(
         title="Abstract",
         description="The collection abstract. It appears in the IPT under the description label",
-        example="",
+        examples=[""],
     )
     description: str = Field(
         title="Description",
         description="The collection description. It appears in the EMLMeta fields as the additional_info field and in the IPT under the additional info label.",
-        example="",
+        examples=[""],
     )
 
 
@@ -382,31 +399,31 @@ class _AddedToProject(BaseModel):
         title="Object free cols",
         description="Object free columns.",
         default={},
-        example={"area": "n01", "esd": "n02"},
+        examples=[{"area": "n01", "esd": "n02"}],
     )
     sample_free_cols: FreeColT = Field(
         title="Sample free cols",
         description="Sample free columns.",
         default={},
-        example={"barcode": "t01"},
+        examples=[{"barcode": "t01"}],
     )
     acquisition_free_cols: FreeColT = Field(
         title="Acquisition free cols",
         description="Acquisition free columns.",
         default={},
-        example={"flash_delay": "t01"},
+        examples=[{"flash_delay": "t01"}],
     )
     process_free_cols: FreeColT = Field(
         title="Process free cols",
         description="Process free columns.",
         default={},
-        example={"nb_images": "t01"},
+        examples=[{"nb_images": "t01"}],
     )
     init_classif_list: List[int] = Field(
         title="Init classification list",
         description="Favorite taxa used in classification.",
         default=[],
-        example=[5, 11493, 11498, 11509],
+        examples=[[5, 11493, 11498, 11509]],
     )
 
     managers: List[MinUserModel] = Field(
@@ -425,23 +442,26 @@ class _AddedToProject(BaseModel):
     contact: Optional[MinUserModel] = Field(
         title="Contact",
         description="The contact person is a manager who serves as the contact person for other users and EcoTaxa's managers.",
+        default=None,
     )
     instrument: Optional[str] = Field(
         title="Instrument",
         description="This project's instrument code.",
-        example="Zooscan",
+        examples=["Zooscan"],
+        default=None,
     )
     instrument_url: Optional[str] = Field(
         title="Instrument URL",
         description="This project's instrument BODC definition.",
-        example="https://vocab.nerc.ac.uk/collection/L22/current/TOOL1581/",
+        examples=["https://vocab.nerc.ac.uk/collection/L22/current/TOOL1581/"],
+        default=None,
     )
 
     highest_right: str = Field(
         title="Highest right",
         description="The highest right for requester on this project. One of 'Manage', 'Annotate', 'View'.",
         default="",
-        example="View",
+        examples=["View"],
     )
     # owner: UserModel = Field(title="Owner of this project")
 
@@ -457,13 +477,10 @@ class ProjectModel(_AddedToProject, _ProjectModelFromDB):
         title="Formulae",
         description="Concentration formulae.",
         default=FORMULAE,
-        example="",
+        examples=[""],
     )
 
-    class Config:
-        orm_mode = True
-        exclude_unset = True
-        allow_population_by_field_name = True
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 
 class ProjectReq(BaseModel):
@@ -472,18 +489,19 @@ class ProjectReq(BaseModel):
         default=None,
         title="Title",
         description="The project title.",
-        example="MyProject",
+        examples=["MyProject"],
     )
     instrument: Optional[str] = Field(
+        default=None,
         title="Instrument",
         description="This project's instrument code.",
-        example="Zooscan",
+        examples=["Zooscan"],
     )
     status: Optional[str] = Field(
         default=None,
         title="Status",
         description="The project status.",
-        example="Annotate",
+        examples=["Annotate"],
     )
     access: AccessLevelEnum = Field(
         title="Access level",
@@ -495,13 +513,15 @@ class ProjectReq(BaseModel):
             ]
         ),
         default=AccessLevelEnum.PUBLIC,
-        example=AccessLevelEnum.PUBLIC,
+        examples=[AccessLevelEnum.PUBLIC],
     )
     classiffieldlist: Optional[str] = Field(
         default=None,
         title="Classification field list",
         description="",
-        example="depth_min=depth_min\r\ndepth_max=depth_max\r\narea=area [pixel]\r\nmean=mean [0-255]\r\nfractal=fractal\r\nmajor=major [pixel]\r\nsymetrieh=symetrieh\r\ncirc.=circ\r\nferet = Feret [pixel]",
+        examples=[
+            "depth_min=depth_min\r\ndepth_max=depth_max\r\narea=area [pixel]\r\nmean=mean [0-255]\r\nfractal=fractal\r\nmajor=major [pixel]\r\nsymetrieh=symetrieh\r\ncirc.=circ\r\nferet = Feret [pixel]"
+        ],
     )
     initclassiflist: Optional[str] = Field(
         default=None,
@@ -510,19 +530,22 @@ class ProjectReq(BaseModel):
     )
 
     comments: Optional[str] = Field(
-        default=None, title="Comments", description="The project comments.", example=""
+        default=None,
+        title="Comments",
+        description="The project comments.",
+        examples=[""],
     )
     cnn_network_id: Optional[str] = Field(
         default=None,
         title="Cnn network id",
         description="",
-        example="SCN_zooscan_group1",
+        examples=["SCN_zooscan_group1"],
     )
     formulae: Optional[str] = Field(
         title="Formulae",
         description="Concentration formulae.",
         default=FORMULAE,
-        example="",
+        examples=[""],
     )
     managers: List[MinUserModel] = Field(
         title="Managers", description="Managers of this project.", default=[]
@@ -538,18 +561,20 @@ class ProjectReq(BaseModel):
         default=[],
     )
     contact: Optional[MinUserModel] = Field(
+        default=None,
         title="Contact",
         description="The contact person is a manager who serves as the contact person for other users and EcoTaxa's managers.",
     )
 
-    @validator("formulae")
+    @field_validator("formulae")
+    @classmethod
     def formulae_validator(cls, v):
         v = ProjectBO.formulae_validator(v)
         return v
 
-    class Config:
-        schema_extra = {"title": "Update full or partial Project Model"}
-        exclude_unset = True
+    model_config = ConfigDict(
+        json_schema_extra={"title": "Update full or partial Project Model"}
+    )
 
 
 class UpdateProjectReq(ProjectReq):
@@ -557,36 +582,43 @@ class UpdateProjectReq(ProjectReq):
         title="Init classification list",
         description="Favorite taxa used in classification.",
         default=[],
-        example=[5, 11493, 11498, 11509],
+        examples=[[5, 11493, 11498, 11509]],
     )
     popoverfieldlist: Optional[str] = Field(
         default=None,
         title="Pop over field list",
-        example="depth_min=depth_min\r\ndepth_max=depth_max\r\narea=area [pixel]\r\nmean=mean [0-255]\r\nfractal=fractal\r\nmajor=major [pixel]\r\nsymetrieh=symetrieh\r\ncirc.=circ\r\nferet = Feret [pixel]",
+        examples=[
+            "depth_min=depth_min\r\ndepth_max=depth_max\r\narea=area [pixel]\r\nmean=mean [0-255]\r\nfractal=fractal\r\nmajor=major [pixel]\r\nsymetrieh=symetrieh\r\ncirc.=circ\r\nferet = Feret [pixel]"
+        ],
     )
 
-    @validator("title")
+    @field_validator("title")
+    @classmethod
     def title_validator(cls, v):
-        assert v is not None, AssertionError("A valid Instrument is needed.")
+        assert v is not None, AssertionError("A valid Title is needed.")
         return v
 
-    @validator("instrument")
+    @field_validator("instrument")
+    @classmethod
     def instrument_validator(cls, v):
         assert v is not None, AssertionError("A valid Instrument is needed.")
         return v
 
-    @validator("contact")
+    @field_validator("contact")
+    @classmethod
     def contact_validator(cls, v):
         assert v is not None, AssertionError("A valid Contact is needed.")
         return v
 
-    @validator("formulae")
+    @field_validator("formulae")
+    @classmethod
     def update_formulae_validator(cls, v):
         v = ProjectBO.formulae_validator(v)
         return v
 
-    class Config:
-        schema_extra = {"title": "Update full or partial Project Model"}
+    model_config = ConfigDict(
+        json_schema_extra={"title": "Update full or partial Project Model"}
+    )
 
 
 class CollectionAggregatedRsp(BaseModel):
@@ -603,7 +635,7 @@ class CollectionAggregatedRsp(BaseModel):
         title="Instrument",
         description="The collection instrument from projects.",
         default=UNKNOWN_INSTRUMENT,
-        example="UVP5",
+        examples=["UVP5"],
     )
     access: AccessLevelEnum = Field(
         title="Access",
@@ -614,7 +646,7 @@ class CollectionAggregatedRsp(BaseModel):
                 for access in AccessLevelEnum
             ]
         ),
-        example=AccessLevelEnum.OPEN,
+        examples=[AccessLevelEnum.OPEN],
         default=AccessLevelEnum.OPEN,
     )
     initclassiflist: str = Field(
@@ -641,29 +673,33 @@ class CollectionAggregatedRsp(BaseModel):
     privileges: Dict[str, List[MinUserModel]] = Field(
         title="privileges",
         description="Aggregated user privileges of projects with user minimal right on projects",
-        example={
-            "managers": [],
-            "annotators": [],
-            "viewers": [],
-        },
+        examples=[
+            {
+                "managers": [],
+                "annotators": [],
+                "viewers": [],
+            }
+        ],
         default={"managers": [], "annotators": [], "viewers": []},
     )
     freecols: Dict[str, Dict[str, str]] = Field(
         title="freecols",
         description="Common free cols of projects.",
         default={},
-        example={
-            "mappingobj": {"n01": "annotation_confidencepmax"},
-            "mappingsample": {"t01": "cruise", "t02": "vessel", "t03": "barcode"},
-            "mappingprocess": {},
-            "mappingacq": {},
-        },
+        examples=[
+            {
+                "mappingobj": {"n01": "annotation_confidencepmax"},
+                "mappingsample": {"t01": "cruise", "t02": "vessel", "t03": "barcode"},
+                "mappingprocess": {},
+                "mappingacq": {},
+            }
+        ],
     )
     excluded: Dict[str, ProjectIDListT] = Field(
         title="excluded",
         default={},
         description="Excluded projects for common values ",
-        example={"status": [1, 5, 12], "access": [1]},
+        examples=[{"status": [1, 5, 12], "access": [1]}],
     )
 
 
@@ -672,7 +708,7 @@ class SampleModel(_SampleModelFromDB):
         title="Free columns",
         description="Free columns from sample mapping in project.",
         default={},
-        example={"flash_delay": "t01"},
+        examples=[{"flash_delay": "t01"}],
     )
 
 
@@ -680,22 +716,22 @@ class _DBSampleTaxoStatsDescription(DescriptiveModel):
     sample_id: SampleIDT = Field(title="Sample id", description="The sample id.")
     used_taxa = Field(
         title="Used taxa",
-        description="The taxa/category ids used inside the sample. -1 for unclassified objects.",
+        description="The taxa/category ids used inside the sample. -1 for stats on unclassified objects.",
     )
     nb_unclassified: int = Field(
-        title="Number unclassified",
+        title="Number of unclassified",
         description="The number of unclassified objects inside the sample.",
     )
     nb_validated: int = Field(
-        title="Number validated",
+        title="Number of validated",
         description="The number of validated objects inside the sample.",
     )
     nb_dubious: int = Field(
-        title="Number dubious",
+        title="Number of dubious",
         description="The number of dubious objects inside the sample.",
     )
     nb_predicted: int = Field(
-        title="Number predicted",
+        title="Number of predicted",
         description="The number of predicted objects inside the sample.",
     )
 
@@ -710,7 +746,7 @@ class AcquisitionModel(_AcquisitionModelFromDB):
         title="Free columns",
         description="Free columns from acquisition mapping in project.",
         default={},
-        example={"bottomdepth": 322, "ship": "suroit"},
+        examples=[{"bottomdepth": 322, "ship": "suroit"}],
     )
 
 
@@ -718,10 +754,12 @@ class ProcessModel(_ProcessModelFromDB):
     free_columns: Dict[str, Any] = Field(
         title="Free columns from process mapping in project",
         default={},
-        example={
-            "software": "zooprocess_pid_to_ecotaxa_7.26_2017/12/19",
-            "pressure_gain": "10",
-        },
+        examples=[
+            {
+                "software": "zooprocess_pid_to_ecotaxa_7.26_2017/12/19",
+                "pressure_gain": "10",
+            }
+        ],
     )
 
 
@@ -730,18 +768,24 @@ class CreateProjectReq(BaseModel):
         title="Clone of id",
         description="Internal, numeric id of a project to clone as a new one. By default it does not clone anything.",
         default=None,
-        example=2,
+        examples=[2],
     )
     title: str = Field(
         title="Title",
         description="The project title, as text.",
-        example="My new project title",
+        examples=["My new project title"],
     )
     instrument: str = Field(
         title="Instrument",
         description="The project instrument.",
         default=UNKNOWN_INSTRUMENT,
-        example="UVP5",
+        examples=["UVP5"],
+    )
+    visible: bool = Field(
+        title="Visible",
+        description="When TRUE, the project is created visible by all users.",
+        default=True,
+        examples=[True],
     )
     access: AccessLevelEnum = Field(
         title="Access",
@@ -753,18 +797,19 @@ class CreateProjectReq(BaseModel):
             ]
         ),
         default=AccessLevelEnum.PUBLIC,
-        example=AccessLevelEnum.PUBLIC,
+        examples=[AccessLevelEnum.PUBLIC],
     )
 
-    class Config:
-        schema_extra = {"title": "Create project request Model"}
+    model_config = ConfigDict(
+        json_schema_extra={"title": "Create project request Model"}
+    )
 
 
 class BulkUpdateReq(BaseModel):
     target_ids: List[int] = Field(
         title="Target Id",
         description="The IDs of the target entities.",
-        example=[1, 5, 290],
+        examples=[[1, 5, 290]],
     )
     updates: List[ColUpdate] = Field(
         title="Updates",
@@ -773,42 +818,43 @@ class BulkUpdateReq(BaseModel):
         ucol : A column name, pseudo-columns AKA free ones, are OK. \n\n \
         uval : The new value to set, always as a string \n\n \
     }",
-        example=[{"ucol": "sub_part", "uval": "2"}],
+        examples=[[{"ucol": "sub_part", "uval": "2"}]],
     )
 
-    class Config:
-        schema_extra = {"title": "Update request Model"}
+    model_config = ConfigDict(json_schema_extra={"title": "Update request Model"})
 
 
 # TODO: Derive from ProjectTaxoStats
 class ProjectTaxoStatsModel(BaseModel):
-    projid: ProjectIDT = Field(title="projid", description="The project id.", example=1)
+    projid: ProjectIDT = Field(
+        title="projid", description="The project id.", examples=[1]
+    )
     used_taxa: List[int] = Field(
-        title="used_taxa",
+        title="Used taxa",
         description="The taxa/category ids used inside the project."
         " An id of -1 means some unclassified objects.",
         default=[],
-        example=[45072, 78418, 84963, 85011, 85012, 85078],
+        examples=[[45072, 78418, 84963, 85011, 85012, 85078]],
     )
     nb_unclassified: int = Field(
-        title="nb_unclassified",
+        title="Number of unclassified",
         description="The number of unclassified objects inside the project.",
-        example=0,
+        examples=[0],
     )
     nb_validated: int = Field(
-        title="nb_validated",
+        title="Number of validated",
         description="The number of validated objects inside the project.",
-        example=5000,
+        examples=[5000],
     )
     nb_dubious: int = Field(
-        title="nb_dubious",
+        title="Number of dubious",
         description="The number of dubious objects inside the project.",
-        example=56,
+        examples=[56],
     )
     nb_predicted: int = Field(
-        title="nb_predicted",
+        title="Number of predicted",
         description="The number of predicted objects inside the project.",
-        example=1345,
+        examples=[1345],
     )
 
 
@@ -862,17 +908,18 @@ ProjectColumnsModel = dataclass_to_model_with_suffix(
 
 class CreateCollectionReq(BaseModel):
     title: str = Field(
-        title="Title", description="The collection title.", example="My collection"
+        title="Title", description="The collection title.", examples=["My collection"]
     )
     project_ids: List[int] = Field(
         title="Project ids",
         description="The list of composing project IDs.",
-        example=[1],
-        min_items=1,
+        examples=[[1]],
+        min_length=1,
     )
 
-    class Config:
-        schema_extra = {"title": "Create collection request Model"}
+    model_config = ConfigDict(
+        json_schema_extra={"title": "Create collection request Model"}
+    )
 
 
 class _AddedToCollection(BaseModel):
@@ -883,19 +930,21 @@ class _AddedToCollection(BaseModel):
     project_ids: List[int] = Field(
         title="Project ids",
         description="The list of composing project IDs.",
-        example=[1],
-        min_items=1,
+        examples=[[1]],
+        min_length=1,
     )
     provider_user: Optional[MinUserModel] = Field(
         title="Provider user",
         description="""Is the person who
         is responsible for the content of this metadata record. Writer of the title and abstract.""",
+        default=None,
     )
     contact_user: Optional[MinUserModel] = Field(
         title="Contact user",
         description="""Is the person who
         should be contacted in cases of questions regarding the content of the dataset or any data restrictions.
         This is also the person who is most likely to stay involved in the dataset the longest.""",
+        default=None,
     )
     creator_users: List[MinUserModel] = Field(
         title="Creator users",
@@ -927,10 +976,12 @@ class _AddedToCollection(BaseModel):
         title="Creators and associates display order",
         description="display order of creators and asosciates (users and organizations) needed to publish",
         default={"creators": [], "associates": []},
-        example={
-            "creators": ["123_o", "657_u", "213_u"],
-            "associates": ["13_u", "823_o", "3_u"],
-        },
+        examples=[
+            {
+                "creators": ["123_o", "657_u", "213_u"],
+                "associates": ["13_u", "823_o", "3_u"],
+            }
+        ],
     )
     is_private: bool = Field(
         title="Is the collection private.",
@@ -944,8 +995,7 @@ class CollectionModel(_AddedToCollection, _CollectionModelFromDB):
     Basic and computed information about the Collection.
     """
 
-    class Config:
-        schema_extra = {"title": "Collection Model"}
+    model_config = ConfigDict(json_schema_extra={"title": "Collection Model"})
 
 
 class CollectionReq(BaseModel):
@@ -953,121 +1003,154 @@ class CollectionReq(BaseModel):
     update full or partial collection Request model
     """
 
-    external_id: Union[str, None] = Field(
-        title="External Id", description="The external Id.", example=""
+    external_id: Optional[str] = Field(
+        title="External Id",
+        description="The external Id.",
+        examples=[""],
+        default=None,
     )
-    title: Union[str, None] = Field(
-        title="Title", description="The collection title.", example="My collection"
+    title: Optional[str] = Field(
+        title="Title",
+        description="The collection title.",
+        examples=["My collection"],
+        default=None,
     )
-    short_title: Union[str, None] = Field(
+    short_title: Optional[str] = Field(
         title="Short title",
         description="The collection short title.",
-        example="My coll",
+        examples=["My coll"],
+        default=None,
     )
     provider_user: Union[UserIDT, Any] = Field(
         title="Provider user Id",
         description="""Id of the person who
         is responsible for the content of this metadata record. Writer of the title and abstract.""",
+        default=None,
     )
     contact_user: Union[UserIDT, Any] = Field(
         title="Contact user Id",
         description="""Id of the person who
         should be contacted in cases of questions regarding the content of the dataset or any data restrictions.
         This is also the person who is most likely to stay involved in the dataset the longest.""",
+        default=None,
     )
-    project_ids: Union[ProjectIDListT, None] = Field(
+    project_ids: Optional[ProjectIDListT] = Field(
         title="Project ids",
         description="The list of composing project IDs.",
-        example=[1],
-        min_items=1,
+        examples=[[1]],
+        min_length=1,
+        default=None,
     )
-    license: Union[LicenseEnum, None] = Field(
+    license: Optional[LicenseEnum] = Field(
         title="License",
         description="The collection license.",
-        example=LicenseEnum.CC_BY,
+        examples=[LicenseEnum.CC_BY],
+        default=None,
     )
-    citation: Union[str, None] = Field(
-        title="Citation", description="The collection citation.", example=""
+    citation: Optional[str] = Field(
+        title="Citation",
+        description="The collection citation.",
+        examples=[""],
+        default=None,
     )
-    abstract: Union[str, None] = Field(
-        title="Abstract", description="The collection abstract.", example=""
+    abstract: Optional[str] = Field(
+        title="Abstract",
+        description="The collection abstract.",
+        examples=[""],
+        default=None,
     )
-    description: Union[str, None] = Field(
-        title="Description", description="The collection description.", example=""
+    description: Optional[str] = Field(
+        title="Description",
+        description="The collection description.",
+        examples=[""],
+        default=None,
     )
-    creator_users: Union[List[Union[UserIDT, Any]], None] = Field(
+    creator_users: Optional[List[Union[UserIDT, Any]]] = Field(
         title="Creator users Ids",
         description="""List of users id's or dict with name, organization for external persons.""",
+        default=None,
     )
-    associate_users: Union[List[Union[UserIDT, Any]], None] = Field(
+    associate_users: Optional[List[Union[UserIDT, Any]]] = Field(
         title="Associate users",
         description="""List of users id's or dict with name, organization for external persons.""",
+        default=None,
     )
-    creator_organisations: Union[List[Union[OrganizationIDT, Any]], None] = Field(
+    creator_organisations: Optional[List[Union[OrganizationIDT, Any]]] = Field(
         title="Creator organisations Ids or names",
         description="""All
         organisations who are responsible for the creation of the collection. Data creators should
         receive credit for their work and should therefore be included in the citation.""",
+        default=None,
     )
-    associate_organisations: Union[List[Union[OrganizationIDT, Any]], None] = Field(
+    associate_organisations: Optional[List[Union[OrganizationIDT, Any]]] = Field(
         title="Associate organisations",
         description="""Other
         organisation(s) Ids or names associated with the collection.""",
+        default=None,
     )
     display_order: Dict[str, Any] = Field(
         title="Creators and associates display order",
         description="display order of creators and asosciates (users and organizations) needed to publish",
         default={"creators": [], "associates": []},
-        example={
-            "creators": ["123_o", "657_u", "213_u"],
-            "associates": ["13_u", "823_o", "3_u"],
-        },
+        examples=[
+            {
+                "creators": ["123_o", "657_u", "213_u"],
+                "associates": ["13_u", "823_o", "3_u"],
+            }
+        ],
     )
 
-    class Config:
-        schema_extra = {"title": "Update full or partial Collection Model"}
-        exclude_unset = True
+    model_config = ConfigDict(
+        json_schema_extra={
+            "title": "Update full or partial Collection Model",
+            "exclude_unset": True,
+        }
+    )
 
 
 class _Job2Model(DescriptiveModel):
-    id: JobIDT = Field(title="id", description="Job unique identifier.", example=47445)
+    id: JobIDT = Field(
+        title="id", description="Job unique identifier.", examples=[47445]
+    )
     owner_id: UserIDT = Field(
         title="owner_id",
         description="The user who created and thus owns the job. ",
-        example=1,
+        examples=[1],
     )
     type: str = Field(
         title="type",
         description="The job type, e.g. import, export... ",
-        example="Subset",
+        examples=["Subset"],
     )
     state: str = Field(
         title="state",
         description="What the job is doing. Could be 'P' for Pending (Waiting for an execution thread), 'R' for Running (Being executed inside a thread), 'A' for Asking (Needing user information before resuming), 'E' for Error (Stopped with error), 'F' for Finished (Done).",
-        example=DBJobStateEnum.Finished,
+        examples=[DBJobStateEnum.Finished],
     )
     step: str = Field(
-        title="step", description="Where in the workflow the job is. ", example="null"
+        title="step",
+        description="Where in the workflow the job is. ",
+        examples=["null"],
     )
     progress_pct: int = Field(
         title="progress_pct",
         description="The progress percentage for UI. ",
-        example=100,
+        examples=[100],
     )
     progress_msg: str = Field(
         title="progress_msg",
         description="The message for UI, short version. ",
-        example="Done",
+        examples=["Done"],
     )
     creation_date = Field(
         title="creation_date",
         description="The date of creation of the Job, as text formatted according to the ISO 8601 standard.",
-        example="2021-09-28T08:43:20.196061",
+        examples=["2021-09-28T08:43:20.196061"],
     )
     updated_on = Field(
         title="updated_on",
         description="Last time that anything changed in present line. ",
-        example="2021-09-28T08:43:21.441969",
+        examples=["2021-09-28T08:43:21.441969"],
     )
 
 
@@ -1083,44 +1166,49 @@ class _AddedToJob(BaseModel):
         title="params",
         description="Creation parameters.",
         default={},
-        example={
-            "prj_id": 1,
-            "req": {
-                "filters": {"taxo": "85067", "taxochild": "N"},
-                "dest_prj_id": 1,
-                "group_type": "S",
-                "limit_type": "P",
-                "limit_value": 100.0,
-                "do_images": True,
-            },
-        },
+        examples=[
+            {
+                "prj_id": 1,
+                "req": {
+                    "filters": {"taxo": "85067", "taxochild": "N"},
+                    "dest_prj_id": 1,
+                    "group_type": "S",
+                    "limit_type": "P",
+                    "limit_value": 100.0,
+                    "do_images": True,
+                },
+            }
+        ],
     )
     result: Dict[str, Any] = Field(
         title="result",
         description="Final result of the run.",
         default={},
-        example={"rowcount": 3},
+        examples=[{"rowcount": 3}],
     )
     errors: List[str] = Field(
         title="errors",
         description="The errors seen during last step.",
         default=[],
-        example=[],
+        examples=[[]],
     )
     question: Dict[str, Any] = Field(
         title="question",
         description="The data provoking job move to Asking state.",
         default={},
-        example={},
+        examples=[{}],
     )
     reply: Dict[str, Any] = Field(
         title="reply",
         description="The data provided as a reply to the question.",
         default={},
-        example={},
+        examples=[{}],
     )
     inside: Dict[str, Any] = Field(
-        title="inside", description="Internal state of the job.", default={}, example={}
+        title="inside",
+        description="Internal state of the job.",
+        default={},
+        examples=[{}],
     )
 
 
@@ -1138,7 +1226,7 @@ class ResetPasswordReq(BaseModel):
     id: UserIDT = Field(
         title="User Id",
         description="User unique identifier.",
-        example=1,
+        examples=[1],
         default=-1,
     )
     email: Optional[str] = Field(title="Email", default=None)
@@ -1159,7 +1247,7 @@ class UserActivateReq(BaseModel):
         default=None,
         title="Reason",
         description="status,optional users administrator comment related to the status. ",
-        example="Email is not accepted....",
+        examples=["Email is not accepted...."],
     )
     password: Optional[str] = Field(
         default=None,

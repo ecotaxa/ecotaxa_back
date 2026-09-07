@@ -5,18 +5,17 @@
 # Login-related model(s)
 #
 
-from helpers.pydantic import BaseModel, Field
+from helpers.pydantic import BaseModel, ConfigDict, Field
 
 
 class LoginReq(BaseModel):
     password: str = Field(
-        title="User's password", description="User password.", example="test!"
+        title="User's password", description="User password.", examples=["test!"]
     )
     username: str = Field(
         title="User's email",
         description="User email used during registration.",
-        example="ecotaxa.api.user@gmail.com",
+        examples=["ecotaxa.api.user@gmail.com"],
     )
 
-    class Config:
-        schema_extra = {"title": "Login request Model"}
+    model_config = ConfigDict(json_schema_extra={"title": "Login request Model"})

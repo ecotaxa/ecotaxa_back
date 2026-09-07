@@ -35,7 +35,7 @@ class ImportServiceBase(JobServiceOnProjectBase, ABC):
 
     def init_args(self, args: ArgsDict) -> ArgsDict:
         super().init_args(args)
-        args["req"] = self.req.dict()
+        args["req"] = self.req.model_dump()
         return args
 
     def unzip_if_needed(self, owner_id: UserIDT) -> str:

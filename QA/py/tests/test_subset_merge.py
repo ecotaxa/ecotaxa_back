@@ -11,6 +11,7 @@ import pytest
 from starlette.testclient import TestClient
 
 # noinspection PyPackageRequirements
+from API_models.filters import ProjectFiltersDict
 from API_models.merge import MergeRsp
 from API_models.subset import SubsetReq, SubsetRsp
 
@@ -89,7 +90,7 @@ def test_subset_merge_uvp6(fastapi, tstlogs, ccheck):
     # Add a numerical feature into the subset
     with ProjectsService() as sce:
         session = sce.session
-        db_prj: Project = session.query(Project).get(subset_prj_id)
+        db_prj: Project = session.get(Project, subset_prj_id)
         mapg = ProjectMapping().load_from_project(db_prj)
         mapg.add_column(ObjectFields.__tablename__, "object", "foobar", "n")
         db_col = mapg.search_field("object_foobar")
@@ -1426,7 +1427,7 @@ def test_empty_subset_uvp6(database, fastapi, caplog):
 
     subset_prj_id = create_project(ADMIN_USER_ID, "Empty subset")
     # OK this test is just for covering the code in filters
-    filters: ProjectFilters = {
+    filters: ProjectFiltersDict = {
         "taxo": "23456",
         "taxochild": "Y",
         "statusfilter": "V",
@@ -1480,7 +1481,7 @@ def test_empty_subset_uvp6_other(fastapi, caplog):
 
     subset_prj_id = create_project(ADMIN_USER_ID, "Empty subset")
     # OK this test is just for covering (more) the code in filters
-    filters: ProjectFilters = {
+    filters: ProjectFiltersDict = {
         "taxo": "23456",
         "taxochild": "N",
         "statusfilter": "NVW",

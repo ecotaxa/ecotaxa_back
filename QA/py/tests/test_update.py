@@ -305,7 +305,7 @@ def test_api_updates(fastapi, caplog, tstlogs):
 
     # Update latitude in the only sample
     # Note: we cannot update a free column as there are 0 for simple import
-    req = {"target_ids": [sample_id], "updates": [{"ucol": "latitude", "uval": 52.6}]}
+    req = {"target_ids": [sample_id], "updates": [{"ucol": "latitude", "uval": "52.6"}]}
     rsp = fastapi.post(url, headers=ADMIN_AUTH, json=req)
     assert rsp.status_code == status.HTTP_200_OK
     assert rsp.json() == 1

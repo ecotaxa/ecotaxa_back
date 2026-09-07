@@ -3,7 +3,7 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import Tuple, List, Set, Dict, TypeVar, Type, Any, Union
+from typing import Tuple, List, Set, Dict, TypeVar, Type, Any, Union, ClassVar
 
 # noinspection PyUnresolvedReferences
 from sqlalchemy import (
@@ -19,11 +19,15 @@ from sqlalchemy import (
     func,
     case,
     text,
-    select,
     column,
     Integer,
+    SmallInteger,
     Float,
     FLOAT,
+    event,
+    select,
+    update,
+    delete,
     desc,
     values,
 )
@@ -31,7 +35,6 @@ from sqlalchemy import (
 # For exporting
 # noinspection PyUnresolvedReferences
 from sqlalchemy.engine.row import Row
-from sqlalchemy.ext.declarative import declarative_base
 
 # noinspection PyUnresolvedReferences
 from sqlalchemy.orm import (
@@ -41,6 +44,8 @@ from sqlalchemy.orm import (
     joinedload,
     subqueryload,
     selectinload,
+    InstrumentedAttribute,
+    DeclarativeBase,
     load_only,
 )
 
@@ -51,7 +56,7 @@ from sqlalchemy.orm import relationship, RelationshipProperty, aliased, Mapped
 from sqlalchemy.sql import Delete, Update, Insert, ColumnElement
 
 # noinspection PyUnresolvedReferences
-from sqlalchemy.sql.elements import Label
+from sqlalchemy.sql.elements import Label, CollectionAggregate
 
 # noinspection PyUnresolvedReferences
 from sqlalchemy.sql.functions import concat
@@ -61,13 +66,13 @@ from sqlalchemy.sql.selectable import Alias
 
 from . import Session
 
-_Base: type = declarative_base()
 
-
-class Model(_Base):  # type: ignore
-    __abstract__ = True  # prevent SQLAlchemy from trying to map
-    __tablename__: str
-    __table__: Any
+class Model(DeclarativeBase):
+    __abstract__ = (
+        True  # TODO: Should not be needed that high. Maybe in some child classes.
+    )
+    # All our models are based on Tables. In general case it's a FromClause, but not here.
+    __table__: ClassVar[Table]
 
 
 # Just forD fun :)
@@ -210,13 +215,11 @@ def minimal_model_of(
     return Ret
 
 
-def any_(items_list: Union[List[int], List[str]]):
-    # TODO: Get proper mapping, it seems a bit too much for sqlalchemy-stubs
+def any_(items_list: Union[List[int], List[str]]) -> CollectionAggregate[bool]:
     # noinspection PyTypeChecker
     return _pg_any(items_list)  # type: ignore
 
 
 def all_(items_list: Union[List[int], List[str]]):
-    # TODO: Get proper mapping, it seems a bit too much for sqlalchemy-stubs
     # noinspection PyTypeChecker
     return _pg_all(items_list)  # type: ignore

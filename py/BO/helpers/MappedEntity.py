@@ -10,7 +10,16 @@
 #
 from abc import ABCMeta
 from collections import OrderedDict
-from typing import Any, List, Callable, Tuple, Optional, Dict, ClassVar
+from typing import (
+    Any,
+    List,
+    Callable,
+    Tuple,
+    Optional,
+    Dict,
+    ClassVar,
+    OrderedDict as OrderedDictT,
+)
 
 from BO.Mappings import TableMapping, ProjectMapping
 from BO.ProjectVars import ProjectVar
@@ -36,7 +45,7 @@ class MappedEntity(metaclass=ABCMeta):
     def __init__(self, session: Session):
         self._session = session
         # Extension
-        self.free_columns: Any = OrderedDict()
+        self.free_columns: OrderedDictT = OrderedDict()
 
     def exists(self) -> bool:
         return getattr(self, self.FREE_COLUMNS_ATTRIBUTE) is not None

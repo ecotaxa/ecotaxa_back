@@ -151,7 +151,7 @@ def test_user_file_operations(fastapi):
     # 1. Create a directory
     dir_name = "test_dir_unique_" + str(int(time.time()))
     rsp = api_create_user_file(fastapi, dir_name, CREATOR_AUTH)
-    if rsp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY:
+    if rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT:
         print(rsp.json())
     assert rsp.status_code == status.HTTP_200_OK
     assert dir_name in rsp.json()

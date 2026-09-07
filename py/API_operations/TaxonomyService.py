@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import List, Optional, Dict, Any, Union
 
 from fastapi import HTTPException
-from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
+from starlette.status import HTTP_422_UNPROCESSABLE_CONTENT
 
 from API_models.taxonomy import (
     TaxaSearchRsp,
@@ -185,7 +185,7 @@ class TaxonomyService(Service):
         # Just remove and re-add
         if recast.operation not in RecastOperation.__members__:
             raise HTTPException(
-                HTTP_422_UNPROCESSABLE_ENTITY, detail="operation not supported"
+                HTTP_422_UNPROCESSABLE_CONTENT, detail="operation not supported"
             )
         qry = TaxoRecastBO.query_recast(
             self.session,
@@ -222,7 +222,7 @@ class TaxonomyService(Service):
         operation: RecastOperation,
         is_collection: bool = False,
     ) -> Optional[TaxoRecastRsp]:
-        assert operation in RecastOperation.__members__, HTTP_422_UNPROCESSABLE_ENTITY
+        assert operation in RecastOperation.__members__, HTTP_422_UNPROCESSABLE_CONTENT
         qry = TaxoRecastBO.query_recast(
             self.ro_session,
             current_user_id,
@@ -253,9 +253,11 @@ class TaxonomyService(Service):
         projects readable/administered by the current user.
         Permission check is done once, in bulk, by ProjectBO.projects_for_user (single
         SQL query), instead of one permission check per project."""
-        assert operation in RecastOperation.__members__, HTTP_422_UNPROCESSABLE_ENTITY
+        assert operation in RecastOperation.__members__, HTTP_422_UNPROCESSABLE_CONTENT
         current_user: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
-        id_filter = ",".join(str(prj_id) for prj_id in project_ids) if project_ids else ""
+        id_filter = (
+            ",".join(str(prj_id) for prj_id in project_ids) if project_ids else ""
+        )
         allowed_project_ids = ProjectBO.projects_for_user(
             self.ro_session, current_user, project_ids=id_filter
         )
@@ -310,17 +312,17 @@ class TaxonomyService(Service):
     ):
         resp = TaxoRecastBO.valid_remap(remapping)
         if resp is not None:
-            raise HTTPException(HTTP_422_UNPROCESSABLE_ENTITY, detail=[resp])
+            raise HTTPException(HTTP_422_UNPROCESSABLE_CONTENT, detail=[resp])
         if isWoRMS:
             qry = (
                 self.ro_session.query(Taxonomy.id)
                 .filter(Taxonomy.id.in_(remapping.values()))
-                .filter(Taxonomy.aphia_id is None)
+                .filter(Taxonomy.aphia_id.is_(None))
             )
-            not_valid = [t.id for t in qry]
+            not_valid = [str(t.id) for t in qry]
             if len(not_valid):
                 raise HTTPException(
-                    HTTP_422_UNPROCESSABLE_ENTITY,
+                    HTTP_422_UNPROCESSABLE_CONTENT,
                     detail=[
                         " error  taxa recast is not WoRMS compatible "
                         + ", ".join(not_valid)

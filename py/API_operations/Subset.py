@@ -4,8 +4,9 @@
 #
 import shutil
 from pathlib import Path
-from typing import List, Tuple, Dict, Set, Iterable
+from typing import List, Tuple, Dict, Set, Iterable, Sequence, cast
 
+from API_models.filters import ProjectFiltersDict
 from API_models.subset import SubsetReq, SubsetRsp, LimitMethods, GroupDefinitions
 from BO.Bundle import InBundle
 from BO.Mappings import ProjectMapping
@@ -32,6 +33,7 @@ from DB.helpers.Bean import bean_of, Bean
 from DB.helpers.DBWriter import DBWriter
 from DB.helpers.Direct import text
 from DB.helpers.ORM import any_
+from DB.helpers.ORM import select
 from DB.helpers.SQL import SelectClause
 from FS.Vault import Vault
 from helpers.DynamicLogs import get_logger, LogsSwitcher
@@ -66,7 +68,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
     def __init__(self, prj_id: int, req: SubsetReq):
         super().__init__(prj_id)
         # Load the destination project
-        dest_prj = self.get_session().query(Project).get(req.dest_prj_id)
+        dest_prj = self.get_session().get(Project, req.dest_prj_id)
         assert dest_prj is not None
         self.dest_prj: Project = dest_prj
         self.req = req
@@ -78,7 +80,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
 
     def init_args(self, args: ArgsDict) -> ArgsDict:
         super().init_args(args)
-        args["req"] = self.req.dict()
+        args["req"] = self.req.model_dump()
         return args
 
     @staticmethod
@@ -161,7 +163,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         # Copy mappings to destination. We could narrow them to the minimum?
         custom_mapping.write_to_project(self.dest_prj)
 
-    def _db_fetch(self, object_ids: ObjectIDListT) -> Iterable[DBObjectTupleT]:
+    def _db_fetch(self, object_ids: ObjectIDListT) -> Sequence[DBObjectTupleT]:
         """
         Do a DB read of given objects, with auxiliary objects.
         :param object_ids: The list of IDs
@@ -169,7 +171,15 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         """
         # TODO: Depending on filter, the joins could be plain (not outer)
         # E.g. if asked for a set of samples
-        ret = self.ro_session.query(ObjectHeader)
+        ret = select(
+            ObjectHeader,
+            ObjectFields,
+            ObjectCNNFeatureVector,
+            Image,
+            Sample,
+            Acquisition,
+            Process,
+        )
         ret = (
             ret.join(ObjectHeader.acquisition)
             .join(Acquisition.process)
@@ -182,21 +192,12 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         )
         ret = ret.filter(ObjectHeader.objid == any_(object_ids))
         ret = ret.order_by(ObjectHeader.objid, Image.imgid)
-        ret = ret.with_entities(
-            ObjectHeader,
-            ObjectFields,
-            ObjectCNNFeatureVector,
-            Image,
-            Sample,
-            Acquisition,
-            Process,
-        )
 
         if self.first_query:
             logger.info("Query: %s", str(ret))
             self.first_query = False
 
-        return ret
+        return self.session.execute(ret).tuples().fetchall()
 
     def _db_fetch_histo(
         self, object_ids: ObjectIDListT
@@ -333,6 +334,7 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
             writer.add_classif_log(obj, histo)
         # Do images
         if new_records > 0 and image and image.imgid is not None:
+            assert source_imgid is not None
             # We have an image, with a new imgid
             prev_path = Image.img_from_id_and_orig(source_imgid, image.orig_file_name)
             old_imgpath = Path(self.vault.image_path(prev_path))
@@ -391,7 +393,10 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
 
         # Prepare a where clause and parameters from filter
         object_set: DescribedObjectSet = DescribedObjectSet(
-            self.session, self.prj, self._get_owner_id(), self.req.filters
+            self.session,
+            self.prj,
+            self._get_owner_id(),
+            cast(ProjectFiltersDict, self.req.filters),
         )
         select_clause = SelectClause().add_expr("obh.objid")
         from_, where, params = object_set.get_sql(select_clause)
