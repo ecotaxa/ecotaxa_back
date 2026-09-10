@@ -7,14 +7,15 @@
 # A set of projects
 #
 
+import math
 from dataclasses import dataclass
+from itertools import islice
 from typing import List, Dict, Optional, Generator, Tuple, Final
 
 import numpy as np
-from numpy import ndarray
 
 from API_models.filters import ProjectFiltersDict
-from BO.Classification import ClassifIDT, ClassifIDListT
+from BO.Classification import ClassifIDListT, ClassifIDT
 from BO.Object import ObjectBO
 from BO.ObjectSet import DescribedObjectSet
 from BO.Rights import RightsBO, Action
@@ -177,15 +178,14 @@ class FeatureConsistentProjectSet(object):
 
     def np_read_all(
         self,
-    ) -> Tuple[ndarray, List[int], ClassifIDListT]:  # TODO: ObjectIDListT
+    ) -> Tuple[np.ndarray, List[int], ClassifIDListT]:  # TODO: ObjectIDListT
         """
         Read the dataset as a numpy array. NULL and infinities become an np NaN.
         """
         res = self.read_all()
         obj_ids: List[int] = []
         classif_ids: ClassifIDListT = []
-        rc = res.rowcount  # type: ignore # case1
-        np_table = self.np_read(res, rc, self.column_names, obj_ids, classif_ids, {})
+        np_table = self.np_read(res, 0, self.column_names, obj_ids, classif_ids, {})
         return np_table, obj_ids, classif_ids
 
     @staticmethod
@@ -197,31 +197,31 @@ class FeatureConsistentProjectSet(object):
         classif_ids: ClassifIDListT,
         replacements: Dict[str, float],
     ) -> np.ndarray:
-        # Allocate memory in one go
-        # TODO: float32 is a shameless attempt to save memory
-        np_table: np.ndarray = np.ndarray(
-            shape=(nb_lines, len(columns)), dtype=np.float32
-        )
         nan = float("nan")
-        not_known = {float("inf"), float("-inf"), nan, None}
         repl_get = replacements.get
-        for ndx in range(nb_lines):
-            try:
-                objid, classif_id, *vals = next(res)
-            except StopIteration:
-                # crop the resulting NP
-                np_table.resize((ndx, len(columns)), refcheck=False)
-                break
+        features_list = []
+        isfinite = math.isfinite  # not float("inf"), float("-inf") or NaN
+        limit = nb_lines if nb_lines > 0 else None
+        for row in islice(res, limit):
+            objid, classif_id, *vals = row
             vals = [
-                repl_get(a_col, nan) if a_val in not_known else a_val
+                (
+                    repl_get(a_col, nan)
+                    if a_val is None or not isfinite(a_val)
+                    else a_val
+                )
                 for a_val, a_col in zip(vals, columns)
             ]  # Map all absent values
             obj_ids.append(objid)
             classif_ids.append(classif_id)
-            np_table[ndx] = vals
+            features_list.append(vals)
+        # TODO: float32 is a shameless attempt to save memory
+        np_table = np.array(features_list, dtype=np.float32)
         return np_table
 
-    def np_stats(self, nb_table: ndarray) -> Tuple[Dict[str, float], Dict[str, float]]:
+    def np_stats(
+        self, nb_table: np.ndarray
+    ) -> Tuple[Dict[str, float], Dict[str, float]]:
         # Compute medians & variance per _present_ feature
         np_medians_per_col = {}
         np_variances_per_col = {}
@@ -267,22 +267,31 @@ class LimitedInCategoriesProjectSet(FeatureConsistentProjectSet):
         self.categories = categories
 
     def _add_random_limit(self, sql: str) -> str:
-        prj_in_list = ",".join([f"({prj_id})" for prj_id in self.prj_ids])
         categ_in_list = ",".join([str(classif_id) for classif_id in self.categories])
+        sels_for_prjs = []
+        for prj_id in self.prj_ids:
+            prj_sql = (
+                f"( SELECT sam2.projid, obh2.objid, obh2.classif_id, obh2.orig_id "
+                f"    FROM samples sam2 "
+                f"    JOIN acquisitions acq2 ON acq2.acq_sample_id = sam2.sampleid "
+                f"                          AND acq2.acquisid <@ acq_in_prj({prj_id}) "
+                f"    JOIN obj_head obh2 ON obh2.acquisid = acq2.acquisid "
+                f"                      AND obh2.objid <@ obj_in_prj({prj_id}) "
+                f"                      AND obh2.classif_qual = 'V' "
+                f"                      AND obh2.classif_id IN (SELECT UNNEST(ids) FROM cats)"
+                f"   WHERE sam2.projid = {prj_id} )"
+            )
+            sels_for_prjs.append(prj_sql)
+        rndm_union = " UNION ALL ".join(sels_for_prjs)
         random_view = (
-            " WITH rndm AS ( SELECT objid, projid FROM"
-            " ( SELECT sam2.projid, obh2.objid, "
-            "          ROW_NUMBER() OVER (PARTITION BY obh2.classif_id "
-            "                             ORDER BY HASHTEXT(obh2.orig_id)) rrank "  # TODO predictable random?
-            "     FROM (VALUES {0}) AS prjs(projid) "
-            "     JOIN samples sam2 ON sam2.projid = prjs.projid "
-            "     JOIN acquisitions acq2 ON acq2.acq_sample_id = sam2.sampleid "
-            "     JOIN obj_head obh2 ON obh2.acquisid = acq2.acquisid "
-            "                       AND obh2.objid <@ obj_in_prj(prjs.projid) "
-            "                       AND obh2.classif_qual = 'V' AND obh2.classif_id IN ({2})"
-            " ) q"
-            " WHERE rrank <= {1} )"
-        ).format(prj_in_list, self.random_limit, categ_in_list)
+            f" WITH cats AS ( SELECT ARRAY[{categ_in_list}]::int[] AS ids ),"
+            f"    rndm AS ( SELECT objid, projid FROM"
+            f" ( SELECT projid, objid, "
+            f"          ROW_NUMBER() OVER (PARTITION BY classif_id "
+            f"                             ORDER BY HASHTEXT(orig_id)) rrank "  # TODO predictable random?
+            f"     FROM ( {rndm_union} ) all_objs ) q"
+            f" WHERE rrank <= {self.random_limit} )"
+        )
         sql = sql.replace("WITH flat", ", flat")
         for prjid in self.prj_ids:
             sql = sql.replace(
