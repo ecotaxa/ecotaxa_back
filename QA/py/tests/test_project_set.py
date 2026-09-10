@@ -109,6 +109,28 @@ def test_project_set(fastapi):
         stats = prj_set2.read_columns_stats()
         assert stats.counts == (2, 2, 2, 2, 2, 2)
 
+    # Regression: with a per-category limit, *every* source project must feed the
+    # learning set, not only the first one (the VALUES clause in _add_random_limit
+    # used to collapse the project list to a single row).
+    # The collection's second project holds a single validated object in category
+    # 85012; that object must show up whatever the order of prj_ids.
+    objs_by_prj = {a_prj: _prj_query(fastapi, ADMIN_AUTH, a_prj) for a_prj in ids}
+    small_prj = min(ids, key=lambda p: len(objs_by_prj[p]))
+    small_prj_obj_ids = set(objs_by_prj[small_prj])
+    assert len(small_prj_obj_ids) >= 1
+    for prj_order in (ids, list(reversed(ids))):
+        with Service() as sce:
+            prj_set_multi = LimitedInCategoriesProjectSet(
+                session=sce.ro_session,
+                prj_ids=prj_order,
+                column_names=features,
+                random_limit=100,  # big enough to keep every matching object
+                categories=[92731, 85012],
+            )
+            _np, multi_obj_ids, multi_classif_ids = prj_set_multi.np_read_all()
+        assert small_prj_obj_ids.issubset(set(multi_obj_ids))
+        assert 85012 in multi_classif_ids
+
 
 def test_project_set_get_projects(fastapi):
     coll_id, coll_title, prj_id = create_test_collection(fastapi, "prj_set_get_prj")

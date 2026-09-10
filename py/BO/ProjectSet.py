@@ -274,7 +274,7 @@ class LimitedInCategoriesProjectSet(FeatureConsistentProjectSet):
             " ( SELECT sam2.projid, obh2.objid, "
             "          ROW_NUMBER() OVER (PARTITION BY obh2.classif_id "
             "                             ORDER BY HASHTEXT(obh2.orig_id)) rrank "  # TODO predictable random?
-            "     FROM (VALUES ({0})) AS prjs(projid) "
+            "     FROM (VALUES {0}) AS prjs(projid) "
             "     JOIN samples sam2 ON sam2.projid = prjs.projid "
             "     JOIN acquisitions acq2 ON acq2.acq_sample_id = sam2.sampleid "
             "     JOIN obj_head obh2 ON obh2.acquisid = acq2.acquisid "
