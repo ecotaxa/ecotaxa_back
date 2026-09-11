@@ -447,15 +447,25 @@ class ProjectBO(object):
             self.instrument_url = project.instrument.bodc_url
 
     def mapping_enrich(self, project: Project, fields: List[str]) -> None:
-        mappings = ProjectMapping().load_from_project(project)
+        mappings = ProjectMapping()
         if "obj_free_cols" in fields:
-            self.obj_free_cols = mappings.object_mappings.tsv_cols_to_real
+            self.obj_free_cols = mappings.object_mappings.load_from_equal_list(
+                project.mappingobj
+            ).tsv_cols_to_real
         if "sample_free_cols" in fields:
-            self.sample_free_cols = mappings.sample_mappings.tsv_cols_to_real
+            self.sample_free_cols = mappings.sample_mappings.load_from_equal_list(
+                project.mappingsample
+            ).tsv_cols_to_real
         if "acquisition_free_cols" in fields:
-            self.acquisition_free_cols = mappings.acquisition_mappings.tsv_cols_to_real
+            self.acquisition_free_cols = (
+                mappings.acquisition_mappings.load_from_equal_list(
+                    project.mappingacq
+                ).tsv_cols_to_real
+            )
         if "process_free_cols" in fields:
-            self.process_free_cols = mappings.process_mappings.tsv_cols_to_real
+            self.process_free_cols = mappings.process_mappings.load_from_equal_list(
+                project.mappingprocess
+            ).tsv_cols_to_real
 
     def classif_enrich(self, project: Project, fields: List[str]) -> None:
         if "init_classif_list" in fields:
