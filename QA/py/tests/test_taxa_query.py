@@ -20,6 +20,7 @@ def test_root_taxa(fastapi):
     json = rsp.json()
     for a_taxon in json:
         a_taxon["nb_objects"] = 0  # Unpredictable
+        a_taxon["nb_children_objects"] = 0  # Unpredictable
         a_taxon["children"].sort()
     json.sort(key=lambda a_taxon: a_taxon["id"])
     assert json == [
