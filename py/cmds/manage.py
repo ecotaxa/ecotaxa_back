@@ -173,5 +173,38 @@ def build():
     _do_static(sess)
 
 
+@app.command(name="run-nightly", help="Run Nightly Maintenance task.")
+def run_nightly(
+    admin_user_id: int = typer.Option(
+        ..., "--user-id", "-u", help="Admin user ID to assign the job to"
+    ),
+):
+    from API_operations.admin.NightlyJob import NightlyJobService
+    from API_operations.helpers.Service import Service
+    from BO.Job import JobBO
+    from DB.Job import Job, DBJobStateEnum
+
+    # 1. Instantiate and run the maintenance job
+    typer.echo(f"Starting NightlyMaintenance job for admin user #{admin_user_id}...")
+    with NightlyJobService() as sce:
+        job_id = sce.run(admin_user_id)
+        # Mark as running immediately so that concurrent background schedulers do not pick it up
+        with JobBO.get_for_update(sce.session, job_id) as job_bo:
+            job_bo.state = DBJobStateEnum.Running
+        typer.echo(f"Created Job #{job_id}. Executing maintenance tasks...")
+        sce.run_in_background()
+
+    # 2. Check status from DB
+    with Service() as service:
+        job = service.session.get(Job, job_id)
+        if job and job.state == DBJobStateEnum.Finished:
+            typer.echo(f"NightlyMaintenance Job #{job_id} finished successfully.")
+            raise typer.Exit(code=0)
+        else:
+            err_msg = job.progress_msg if job else "Unknown error"
+            typer.echo(f"NightlyMaintenance Job #{job_id} failed: {err_msg}", err=True)
+            raise typer.Exit(code=1)
+
+
 if __name__ == "__main__":
     app()
