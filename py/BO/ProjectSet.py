@@ -7,19 +7,15 @@
 # A set of projects
 #
 
-import math
 from dataclasses import dataclass
-from itertools import islice
 from typing import List, Dict, Optional, Generator, Tuple, Final
 
-import numpy as np
-
 from API_models.filters import ProjectFiltersDict
-from BO.Classification import ClassifIDListT, ClassifIDT
+from BO.Classification import ClassifIDT
 from BO.Object import ObjectBO
 from BO.ObjectSet import DescribedObjectSet
 from BO.Rights import RightsBO, Action
-from DB.Object import ObjectIDListT
+# from DB.Object import ObjectIDListT
 from DB.Project import ProjectIDListT, Project
 from DB.User import UserIDT
 from DB.helpers import Session, Result
@@ -176,64 +172,64 @@ class FeatureConsistentProjectSet(object):
         res: Result = self.session.execute(text(sql))
         return res
 
-    def np_read_all(
-        self,
-    ) -> Tuple[np.ndarray, List[int], ClassifIDListT]:  # TODO: ObjectIDListT
-        """
-        Read the dataset as a numpy array. NULL and infinities become an np NaN.
-        """
-        res = self.read_all()
-        obj_ids: List[int] = []
-        classif_ids: ClassifIDListT = []
-        np_table = self.np_read(res, 0, self.column_names, obj_ids, classif_ids, {})
-        return np_table, obj_ids, classif_ids
+    # def np_read_all(
+    #     self,
+    # ) -> Tuple[np.ndarray, List[int], ClassifIDListT]:  # TODO: ObjectIDListT
+    #     """
+    #     Read the dataset as a numpy array. NULL and infinities become an np NaN.
+    #     """
+    #     res = self.read_all()
+    #     obj_ids: List[int] = []
+    #     classif_ids: ClassifIDListT = []
+    #     np_table = self.np_read(res, 0, self.column_names, obj_ids, classif_ids, {})
+    #     return np_table, obj_ids, classif_ids
 
-    @staticmethod
-    def np_read(
-        res: Result,
-        nb_lines: int,
-        columns: List[str],
-        obj_ids: ObjectIDListT,
-        classif_ids: ClassifIDListT,
-        replacements: Dict[str, float],
-    ) -> np.ndarray:
-        nan = float("nan")
-        repl_get = replacements.get
-        features_list = []
-        isfinite = math.isfinite  # not float("inf"), float("-inf") or NaN
-        limit = nb_lines if nb_lines > 0 else None
-        for row in islice(res, limit):
-            objid, classif_id, *vals = row
-            vals = [
-                (
-                    repl_get(a_col, nan)
-                    if a_val is None or not isfinite(a_val)
-                    else a_val
-                )
-                for a_val, a_col in zip(vals, columns)
-            ]  # Map all absent values
-            obj_ids.append(objid)
-            classif_ids.append(classif_id)
-            features_list.append(vals)
-        # TODO: float32 is a shameless attempt to save memory
-        np_table = np.array(features_list, dtype=np.float32)
-        return np_table
+    # @staticmethod
+    # def np_read(
+    #     res: Result,
+    #     nb_lines: int,
+    #     columns: List[str],
+    #     obj_ids: ObjectIDListT,
+    #     classif_ids: ClassifIDListT,
+    #     replacements: Dict[str, float],
+    # ) -> np.ndarray:
+    #     nan = float("nan")
+    #     repl_get = replacements.get
+    #     features_list = []
+    #     isfinite = math.isfinite  # not float("inf"), float("-inf") or NaN
+    #     limit = nb_lines if nb_lines > 0 else None
+    #     for row in islice(res, limit):
+    #         objid, classif_id, *vals = row
+    #         vals = [
+    #             (
+    #                 repl_get(a_col, nan)
+    #                 if a_val is None or not isfinite(a_val)
+    #                 else a_val
+    #             )
+    #             for a_val, a_col in zip(vals, columns)
+    #         ]  # Map all absent values
+    #         obj_ids.append(objid)
+    #         classif_ids.append(classif_id)
+    #         features_list.append(vals)
+    #     # TODO: float32 is a shameless attempt to save memory
+    #     np_table = np.array(features_list, dtype=np.float32)
+    #     return np_table
 
-    def np_stats(
-        self, nb_table: np.ndarray
-    ) -> Tuple[Dict[str, float], Dict[str, float]]:
-        # Compute medians & variance per _present_ feature
-        np_medians_per_col = {}
-        np_variances_per_col = {}
-        for ndx, a_col in enumerate(self.column_names):
-            feat_col = nb_table[:, ndx]
-            # Clean from NaNs
-            clean_col_col = feat_col[~np.isnan(feat_col)]
-            np_median = np.median(clean_col_col)
-            np_variance = np.var(clean_col_col)
-            np_medians_per_col[a_col] = np_median
-            np_variances_per_col[a_col] = np_variance
-        return np_medians_per_col, np_variances_per_col
+    # def np_stats(
+    #     self, nb_table: np.ndarray
+    # ) -> Tuple[Dict[str, float], Dict[str, float]]:
+    #     # Compute medians & variance per _present_ feature
+    #     np_medians_per_col = {}
+    #     np_variances_per_col = {}
+    #     for ndx, a_col in enumerate(self.column_names):
+    #         feat_col = nb_table[:, ndx]
+    #         # Clean from NaNs
+    #         clean_col_col = feat_col[~np.isnan(feat_col)]
+    #         np_median = np.median(clean_col_col)
+    #         np_variance = np.var(clean_col_col)
+    #         np_medians_per_col[a_col] = np_median
+    #         np_variances_per_col[a_col] = np_variance
+    #     return np_medians_per_col, np_variances_per_col
 
     def amend_sql(self, sql: str) -> str:
         return sql
