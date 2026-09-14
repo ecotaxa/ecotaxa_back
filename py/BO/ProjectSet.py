@@ -19,6 +19,7 @@ from BO.Classification import ClassifIDListT, ClassifIDT
 from BO.Object import ObjectBO
 from BO.ObjectSet import DescribedObjectSet
 from BO.Rights import RightsBO, Action
+
 from DB.Object import ObjectIDListT
 from DB.Project import ProjectIDListT, Project
 from DB.User import UserIDT
