@@ -15,6 +15,7 @@ from typing import Tuple, Any, List, Optional
 
 from sqlalchemy import select, delete
 
+from API_operations.TaxoManager import CentralTaxonomyService
 from API_operations.helpers.JobService import JobServiceBase, ArgsDict
 from BO.Job import JobBO
 from BO.Project import ProjectBO
@@ -96,11 +97,13 @@ class NightlyJobService(JobServiceBase):
         self.compute_all_projects_taxo_stats(all_prj_ids, 10, 40)
         self.compute_all_projects_stats(all_prj_ids, 40, 70)
         self.refresh_taxo_tree_stats(70)
-        self.clean_old_jobs(75)
+        self.pull_taxa_updates(72)
+        self.push_taxa_stats(74)
+        self.clean_old_jobs(76)
         self.clean_old_prediction_histo(78)
         self.clean_aborted_trainings(80)
         const_status = self.check_consistency(82, 92)
-        self.users_files_maintenance(92, 100)
+        self.users_files_maintenance(92, 97)
         if not const_status:
             self.set_job_result(
                 errors=["See log for consistency problems"], infos={"status": "error"}
@@ -118,6 +121,21 @@ class NightlyJobService(JobServiceBase):
         progress = round(start + (end - start) / total * self.curr)
         self.update_progress(progress, "Processing project %d" % chunk[-1])
         chunk.clear()
+
+    def pull_taxa_updates(self, start: int) -> None:
+        """
+        Pull taxa changes from EcoTaxoServer.
+        """
+        self.update_progress(start, "Pulling taxonomy updates from central")
+        logger.info("Starting pull of taxonomy updates from central")
+        with CentralTaxonomyService() as sce:
+            ret = sce.pull_updates()
+        if ret.get("error"):
+            logger.error(
+                "Pull of taxonomy updates from central failed: %s", ret["error"]
+            )
+        else:
+            logger.info("Pull of taxonomy updates from central done: %s", ret)
 
     def compute_all_projects_taxo_stats(
         self, all_proj_ids: ProjectIDListT, start: int, end: int
@@ -163,6 +181,16 @@ class NightlyJobService(JobServiceBase):
         TaxonomyBO.compute_stats(self.session)
         self.session.commit()
         logger.info("Recompute of taxonomy stats done")
+
+    def push_taxa_stats(self, start: int) -> None:
+        """
+        Push taxa usage statistics to EcoTaxoServer.
+        """
+        self.update_progress(start, "Pushing taxonomy stats to central")
+        logger.info("Starting push of taxonomy stats to central")
+        with CentralTaxonomyService() as sce:
+            ret = sce.push_stats()
+        logger.info("Push of taxonomy stats to central done: %s", ret)
 
     def clean_old_jobs(self, start: int) -> None:
         """

@@ -49,7 +49,7 @@ def do_nightly(fastapi):
     return log
 
 
-def test_nightly_job(fastapi, caplog, tstlogs):
+def test_nightly_job(fastapi, caplog, tstlogs, mock_taxoserver):
     # TODO: Not a real test, as we can't know in advance when the test runs, so the output
     # can't be verified against a reference.
 

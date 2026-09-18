@@ -46,7 +46,7 @@ def test_manage_run_nightly_missing_user_id(config):
     assert "Missing option" in result.output or "user-id" in result.output
 
 
-def test_manage_run_nightly_explicit_admin_user_id(database):
+def test_manage_run_nightly_explicit_admin_user_id(database, mock_taxoserver):
     app = get_app()
     result = runner.invoke(app, ["run-nightly", "--user-id", str(ADMIN_USER_ID)])
     assert result.exit_code == 0

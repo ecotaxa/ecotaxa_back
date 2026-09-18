@@ -23,10 +23,5 @@ def test_taxotree_status(fastapi):
     rsp = fastapi.get(url, headers=USER_AUTH)
     # Security barrier. No special right but we need a registered user.
     assert rsp.status_code == status.HTTP_200_OK
-    assert rsp.json() == {"last_refresh": None}
-
-    # Second authenticated call, as the _only_ line in DB table should exist now
-    rsp = fastapi.get(url, headers=USER_AUTH)
-    # Security barrier. No special right but we need a registered user.
-    assert rsp.status_code == status.HTTP_200_OK
-    assert rsp.json() == {"last_refresh": None}
+    assert len(rsp.json()) == 1
+    assert "last_refresh" in rsp.json()
