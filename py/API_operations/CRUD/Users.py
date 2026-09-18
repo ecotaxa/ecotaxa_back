@@ -430,7 +430,11 @@ class UserService(Service):
 
     def search(self, current_user_id: UserIDT, by_name: Optional[str]) -> List[User]:
         _: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
-        qry = self.ro_session.query(User).filter(User.status == UserStatus.active.value)
+        qry = (
+            self.ro_session.query(User)
+            .filter(User.status == UserStatus.active.value)
+            .order_by(User.id)
+        )
         if by_name is not None:
             qry = qry.filter(User.name.ilike(by_name))
         else:

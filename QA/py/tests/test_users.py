@@ -2,15 +2,14 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-import logging
+from urllib.parse import urlencode
 
 import pytest
 from API_operations.CRUD.Users import UserService
-from helpers.httpexception import DETAIL_EMAIL_OWNED_BY_OTHER, DETAIL_INVALID_EMAIL
+from helpers.httpexception import DETAIL_EMAIL_OWNED_BY_OTHER
 
 from tests.test_import import ADMIN_USER_ID, create_project
-
-from tests.test_user_admin import USER_UPDATE_URL, USER_CREATE_URL, USER_GET_URL
+from tests.test_user_admin import USER_CREATE_URL
 
 
 def config_captcha(monkeypatch):
@@ -73,15 +72,13 @@ def test_prefs_set_get(database):
             )
 
 
-# test with verif email off  new user
+# test with verif email off new user
 def test_user_create_ordinary(monkeypatch, fastapi):
-    import urllib.parse
-
     config_captcha(monkeypatch)
     # Create user email no bot
     url = USER_CREATE_URL
     usr_json = {
-        "email": "ddduser5",
+        "email": "old_admin",  # From load.sql
         "id": None,
         "name": "Ordinary User",
         "organisation": "Homework",
@@ -90,7 +87,7 @@ def test_user_create_ordinary(monkeypatch, fastapi):
     assert rsp.status_code == 422
     assert rsp.json() == {"detail": ["reCaptcha verif needs data"]}
     params = {"no_bot": [""]}
-    urlparams = url + "?" + urllib.parse.urlencode(params, doseq=True)
+    urlparams = url + "?" + urlencode(params, doseq=True)
     rsp = fastapi.post(urlparams, json=usr_json)
     assert rsp.status_code == 422
     assert rsp.json() == {"detail": ["invalid no_bot reason 1"]}
@@ -98,12 +95,12 @@ def test_user_create_ordinary(monkeypatch, fastapi):
     for i in range(1, 400):
         strbot += str(i)
     params = {"no_bot": ["", strbot]}
-    urlparams = url + "?" + urllib.parse.urlencode(params, doseq=True)
+    urlparams = url + "?" + urlencode(params, doseq=True)
     rsp = fastapi.post(urlparams, json=usr_json)
     assert rsp.status_code == 422
     assert rsp.json() == {"detail": ["invalid no_bot reason 2"]}
     params = {"no_bot": ["193.4.123.4", "sdfgdqsg"]}
-    urlparams = url + "?" + urllib.parse.urlencode(params, doseq=True)
+    urlparams = url + "?" + urlencode(params, doseq=True)
     rsp = fastapi.post(urlparams, json=usr_json)
     assert rsp.status_code == 422
     assert rsp.json() == {"detail": [DETAIL_EMAIL_OWNED_BY_OTHER]}
@@ -114,7 +111,7 @@ def test_user_create_ordinary(monkeypatch, fastapi):
         "organisation": "Homework",
     }
     rsp = fastapi.post(urlparams, json=usr_json)
-    assert rsp.json() == None
+    assert rsp.json() is None
     assert rsp.status_code == 200
 
     # note should check password
