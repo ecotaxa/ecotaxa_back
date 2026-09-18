@@ -15,3 +15,6 @@ from tstlogs_fixture import *
 
 # noinspection PyUnresolvedReferences
 from logspy_feature import *
+
+# noinspection PyUnresolvedReferences
+from taxoserver_fixture import *
