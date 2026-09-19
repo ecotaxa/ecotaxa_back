@@ -174,7 +174,7 @@ class UserService(Service):
             # Unauthenticated user tries to create an account
             # Verify not a robot
             self._verify_captcha_throw(no_bot)
-            # request email verification if  validation is on
+            # request email verification if validation is on
             admin_user = None
             # check valid user
             if self.verify_email:

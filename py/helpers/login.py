@@ -8,7 +8,6 @@ import base64
 import hashlib
 import hmac
 
-# TODO: if it exists, find the stubs somewhere
 from typing import Union
 
 # Note: passlib uses in Python3.14 a python implementation of crypto algos
