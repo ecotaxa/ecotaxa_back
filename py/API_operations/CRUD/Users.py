@@ -162,6 +162,15 @@ class UserService(Service):
         no_bot: Optional[List[str]],
         token: Optional[str],
     ) -> UserIDT:
+        """
+        Create a new user or handle account creation / email verification workflow.
+
+        :param current_user_id: ID of the currently logged-in user, if any (must be admin if creating directly without token).
+        :param new_user: User model containing user details and rights to create.
+        :param no_bot: Captcha answers for unauthenticated user registration.
+        :param token: Verification token when confirming or modifying registration via an email link.
+        :return: Created or modified user ID, or -1 if email verification was initiated.
+        """
         cols_to_upd: List = []
         if new_user.id is None:
             new_user.id = -1
@@ -285,7 +294,7 @@ class UserService(Service):
             assert new_user.password is not None, "Modify new user needs a password"
             self._verify_and_update_password_throw(new_user.password, usr)
         # update a profile with information requested by the main user admin - status to 0
-        cols_to_upd = self.COMMON_UPDATABLE_COLS
+        cols_to_upd = self.COMMON_UPDATABLE_COLS.copy()
         self._set_user_row(
             new_user,
             usr,
@@ -312,14 +321,14 @@ class UserService(Service):
         self._is_valid_user_throw(update_src, user_to_update.id)
         if self._current_is_admin(current_user):
             if current_user.id == user_to_update.id and update_src.status is None:
-                cols_to_upd = self.COMMON_UPDATABLE_COLS
+                cols_to_upd = self.COMMON_UPDATABLE_COLS.copy()
             else:
-                cols_to_upd = self.ADMIN_UPDATABLE_COLS
+                cols_to_upd = self.ADMIN_UPDATABLE_COLS.copy()
         elif (
             current_user.id == user_id
             and current_user.status == UserStatus.active.value
         ):
-            cols_to_upd = self.COMMON_UPDATABLE_COLS
+            cols_to_upd = self.COMMON_UPDATABLE_COLS.copy()
         else:
             raise HTTPException(
                 status_code=403,
