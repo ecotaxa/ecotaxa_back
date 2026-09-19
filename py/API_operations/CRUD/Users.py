@@ -172,6 +172,10 @@ class UserService(Service):
             new_user.id = -1
         if token is not None or current_user_id is None:
             # Unauthenticated user tries to create an account
+            if token is not None:
+                self._verify_token_throw(
+                    new_user.id, token, short=False, email=new_user.email
+                )
             # Verify not a robot
             self._verify_captcha_throw(no_bot)
             # request email verification if validation is on

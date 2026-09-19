@@ -4,7 +4,6 @@
 #
 from urllib.parse import urlencode
 
-from API_operations.helpers.UserValidation import UserValidation, ActivationType
 from BO.Rights import NOT_FOUND, NOT_AUTHORIZED
 from DB.User import UserStatus
 from helpers.AppConfig import Config
@@ -68,10 +67,27 @@ def set_config_on(monkeypatch, validation="on"):
 
     from providers.MailProvider import MailProvider
 
+    captured_tokens = []
+    orig_populate_mail_message = MailProvider._populate_mail_message
+
+    def spy_populate_mail_message(self, model_name, values, *args, **kwargs):
+        token = getattr(values, "token", None)
+        if token is not None:
+            captured_tokens.append(token)
+        return orig_populate_mail_message(self, model_name, values, *args, **kwargs)
+
     monkeypatch.setattr(MailProvider, "send_mail", mock_send_mail)
     monkeypatch.setattr(MailProvider, "_get_ticket", mock_get_ticket)
+    monkeypatch.setattr(
+        MailProvider, "_populate_mail_message", spy_populate_mail_message
+    )
 
     config_captcha(monkeypatch)
+
+    def get_last_token():
+        return captured_tokens[-1] if captured_tokens else None
+
+    return get_last_token
 
 
 def user_confirm_email(
@@ -80,15 +96,12 @@ def user_confirm_email(
     ref_json,
     url,
     password,
-    id,
-    action,
-    resp_detail,
-    resp_code,
-    login_code,
-    login_detail=None,
+    token,
+    expected_rsp_code,
+    expected_rsp_detail=None,
+    expected_login_code=None,
+    expected_login_detail=None,
 ):
-    # fake token - received in mail - user can post a create/update/validate request
-    token = UserValidation()._generate_token(email=email, id=id, action=action)
     params = {"no_bot": ["193.4.123.4", "sdfgdqsg"]}
     if url.find(URL_ACTIVATE) > -1:
         ref_json["token"] = token
@@ -97,21 +110,19 @@ def user_confirm_email(
 
     urlparams = url + "?" + urlencode(params, doseq=True)
     rsp = fastapi.post(urlparams, json=ref_json)
-    # user confirm
-    if rsp.status_code == 422:
-        assert rsp.json() == resp_detail
-    assert rsp.status_code == resp_code
-    assert rsp.json() == resp_detail
+    # user confirmation
+    assert rsp.status_code == expected_rsp_code
+    assert rsp.json() == expected_rsp_detail
 
-    if login_code is not None:
+    if expected_login_code is not None:
         # user can login ? depends on user_validation choice
         url = LOGIN_URL
         rsplogin = fastapi.post(url, json={"username": email, "password": password})
-        assert rsplogin.status_code == login_code
-        if login_code == 200:
+        assert rsplogin.status_code == expected_login_code
+        if expected_login_code == 200:
             assert len(rsplogin.json()) > 30
         else:
-            assert rsplogin.json() == login_detail
+            assert rsplogin.json() == expected_login_detail
 
 
 def create_db_user(
@@ -175,7 +186,7 @@ def search_user_id_by_name(fastapi, name, auth=ADMIN_AUTH):
 
 def test_user_create_with_confirmation(monkeypatch, fastapi):
     # modify config to have user validation "off"
-    set_config_on(monkeypatch, "off")
+    get_last_token = set_config_on(monkeypatch, "off")
     email = "myemail_confirm777@mailtest.provider.net"
     # name is not  "" to bypass ( old version = no more used - one version only)
     usr_json = {
@@ -225,11 +236,9 @@ def test_user_create_with_confirmation(monkeypatch, fastapi):
         ref_json=ref_json,
         url=USER_CREATE_URL,
         password=password,
-        id=-1,
-        action=ActivationType.create,
-        resp_detail=None,
-        resp_code=200,
-        login_code=200,
+        token=get_last_token(),
+        expected_rsp_code=200,
+        expected_login_code=200,
     )
 
     new_user_id = search_user_id_by_name(fastapi, "test create with confirmationonly11")
@@ -240,7 +249,7 @@ def test_user_create_with_confirmation(monkeypatch, fastapi):
 
 def test_user_update_with_confirmation(monkeypatch, fastapi):
     # modify config to have user validation "off"
-    set_config_on(monkeypatch, "off")
+    get_last_token = set_config_on(monkeypatch, "off")
 
     db_user_id = create_db_user(
         email="ordinary_user_confirmation@test.org",
@@ -307,24 +316,15 @@ def test_user_update_with_confirmation(monkeypatch, fastapi):
     err = verify_user(fastapi, db_user_id, ADMIN_AUTH, res_user)
     assert err == []
 
-    # fake token - received in mail  - user should confirm email
-    urlactivate = URL_ACTIVATE_USER.format(user_id=db_user_id, status="n")
-    user_confirm_email(
-        fastapi,
-        email,
-        ref_json={"password": "zero6"},
-        url=urlactivate,
-        password="zero6",
-        id=db_user_id,
-        action=ActivationType.update,
-        resp_detail=None,
-        resp_code=200,
-        login_code=200,
+    # admin activates the user again
+    rsp = fastapi.post(
+        URL_ACTIVATE_USER.format(user_id=db_user_id, status=UserStatus.active.name),
+        headers=USERS_ADMIN_AUTH,
+        json={},
     )
-    # mail status should be True as the user was able to confirm
+    assert rsp.status_code == 200
     res_user = {
         "email": email,
-        "mail_status": True,
         "status": UserStatus.active.value,
     }
     err = verify_user(fastapi, db_user_id, ADMIN_AUTH, res_user)
@@ -346,17 +346,16 @@ def test_user_update_with_confirmation(monkeypatch, fastapi):
     err = verify_user(fastapi, db_user_id, ADMIN_AUTH, res_user)
     assert err == []
     # and confirm again
+    urlactivate = URL_ACTIVATE_USER.format(user_id=db_user_id, status="n")
     user_confirm_email(
         fastapi,
         email,
         ref_json={"password": "zero6"},
         url=urlactivate,
         password="zero6",
-        id=db_user_id,
-        action=ActivationType.update,
-        resp_detail=None,
-        resp_code=200,
-        login_code=200,
+        token=get_last_token(),
+        expected_rsp_code=200,
+        expected_login_code=200,
     )
     res_user = {
         "email": email,
@@ -401,12 +400,11 @@ def test_user_update_with_confirmation(monkeypatch, fastapi):
         ref_json={"password": password},
         url=url,
         password=password,
-        id=db_user_id,
-        action=ActivationType.update,
-        resp_detail={"detail": [NOT_AUTHORIZED]},
-        resp_code=403,
-        login_code=403,
-        login_detail={"detail": "You can't do this."},
+        token=get_last_token(),
+        expected_rsp_code=403,
+        expected_rsp_detail={"detail": [NOT_AUTHORIZED]},
+        expected_login_code=403,
+        expected_login_detail={"detail": "You can't do this."},
     )
     res_user = {
         "email": email,
@@ -423,11 +421,9 @@ def test_user_update_with_confirmation(monkeypatch, fastapi):
         ref_json={"password": password},
         url=url,
         password=password,
-        id=db_user_id,
-        action=ActivationType.update,
-        resp_detail=None,
-        resp_code=200,
-        login_code=200,
+        token=get_last_token(),
+        expected_rsp_code=200,
+        expected_login_code=200,
     )
     res_user = {
         "email": email,
@@ -447,7 +443,7 @@ def test_user_update_with_confirmation(monkeypatch, fastapi):
 
 def test_user_create_with_validation(monkeypatch, fastapi):
     # modify config to have user validation "on"
-    set_config_on(monkeypatch)
+    get_last_token = set_config_on(monkeypatch)
     # Create user email no bot
     usr_json = {
         "email": "user@test.mailtest.com",
@@ -512,11 +508,9 @@ def test_user_create_with_validation(monkeypatch, fastapi):
         ref_json=ref_json,
         url=USER_CREATE_URL,
         password=None,
-        id=-1,
-        action=ActivationType.create,
-        resp_detail={"detail": [DETAIL_PASSWORD_STRENGTH_ERROR]},
-        resp_code=422,
-        login_code=None,
+        token=get_last_token(),
+        expected_rsp_code=422,
+        expected_rsp_detail={"detail": [DETAIL_PASSWORD_STRENGTH_ERROR]},
     )  # Cannot confirm email with a weak password
 
     password = "Zzzza?123"
@@ -527,11 +521,8 @@ def test_user_create_with_validation(monkeypatch, fastapi):
         ref_json=ref_json,
         url=USER_CREATE_URL,
         password=password,
-        id=-1,
-        action=ActivationType.create,
-        resp_detail=None,
-        resp_code=200,
-        login_code=None,
+        token=get_last_token(),
+        expected_rsp_code=200,
     )
 
     new_user_id = search_user_id_by_name(fastapi, "test create with validation")
@@ -597,7 +588,7 @@ def test_user_create_with_validation(monkeypatch, fastapi):
     rsp = fastapi.post(urlparams, json=req_json)
     assert rsp.json() == {"detail": [NOT_FOUND]}
     assert rsp.status_code == 422
-    # admin  validates user
+    # admin validates user
     rsp = fastapi.post(
         URL_ACTIVATE_USER.format(user_id=new_user_id, status=UserStatus.active.name),
         headers=USERS_ADMIN_AUTH,
@@ -609,13 +600,7 @@ def test_user_create_with_validation(monkeypatch, fastapi):
     rsp = fastapi.post(urlparams, json=req_json)
     assert rsp.status_code == 200
     assert rsp.json() is None
-    # fake token to test user reset password
-    # has to monkeypatch the hash_password from LoginService to have a 200 response status_code
-    temp_password = "temp_password"
-    token = UserValidation()._generate_token(
-        email=email, id=new_user_id, action=temp_password
-    )
-    params = {"no_bot": ["193.4.123.4", "sdfgdqsg"], "token": token}
+    params = {"no_bot": ["193.4.123.4", "sdfgdqsg"], "token": get_last_token()}
 
     req_json = {
         "email": email,
@@ -624,13 +609,19 @@ def test_user_create_with_validation(monkeypatch, fastapi):
     }
     urlparams = url + "?" + urlencode(params, doseq=True)
     rsp = fastapi.post(urlparams, json=req_json)
-    assert rsp.json() == {"detail": [NOT_AUTHORIZED]}
-    assert rsp.status_code == 401
+    assert rsp.json() is None
+    assert rsp.status_code == 200
+
+    # verify user can login with new password
+    login_rsp = fastapi.post(
+        LOGIN_URL, json={"username": email, "password": "ZzzzA?123"}
+    )
+    assert login_rsp.status_code == 200
 
 
 def test_user_update_with_validation(fastapi, monkeypatch):
     # modify config to have user validation "on"
-    set_config_on(monkeypatch)
+    get_last_token = set_config_on(monkeypatch)
 
     db_user_id = create_db_user(
         email="ordinary_user_validation@test.org",
@@ -720,11 +711,8 @@ def test_user_update_with_validation(fastapi, monkeypatch):
         ref_json={"password": password},
         url=urlactivate,
         password=password,
-        id=db_user_id,
-        action=ActivationType.update,
-        resp_detail=None,
-        resp_code=200,
-        login_code=None,
+        token=get_last_token(),
+        expected_rsp_code=200,
     )
     # mail_status is True, status is 0 waiting for account validation
     res_user = {
@@ -745,3 +733,36 @@ def test_user_update_with_validation(fastapi, monkeypatch):
     rsp = fastapi.put(url, headers=user_auth, json=ref_json)
     assert rsp.status_code == 200
     assert rsp.json() is None
+
+
+def test_create_with_bogus_token_is_refused(monkeypatch, fastapi):
+    set_config_on(monkeypatch, "off")
+    # vérification d'email active
+    params = {"no_bot": ["193.4.123.4", "sdfgdqsg"], "token": "not-a-token"}
+    body = {
+        "id": None,
+        "email": "forged@victim.org",
+        "name": "Forged Account",
+        "organisation": "Somewhere",
+        "password": "Zzzza?123",
+    }
+    url = USER_CREATE_URL + "?" + urlencode(params, doseq=True)
+    rsp = fastapi.post(url, json=body)
+    assert rsp.status_code == 403
+
+
+def test_set_config_on_spies_token(monkeypatch, fastapi):
+    get_last_token = set_config_on(monkeypatch, "off")
+    assert get_last_token() is None
+
+    usr_json = {
+        "id": None,
+        "email": "spy_token_test@mailtest.provider.net",
+        "name": "Spy Token User",
+        "organisation": "Test Org",
+    }
+    params = {"no_bot": ["193.4.123.4", "sdfgdqsg"]}
+    urlparams = USER_CREATE_URL + "?" + urlencode(params, doseq=True)
+    rsp = fastapi.post(urlparams, json=usr_json)
+    assert rsp.status_code == 200
+    assert len(get_last_token()) > 0
