@@ -295,7 +295,8 @@ def test_user_update_with_confirmation(monkeypatch, fastapi):
     res_user = {"email": email, "status": UserStatus.inactive.value}
     err = verify_user(fastapi, db_user_id, ADMIN_AUTH, res_user)
     assert err == []
-    # not authorized
+
+    # not authorized to ordinary users
     ref_json["creationreason"] = "test reason"
     rsp = fastapi.put(url, headers=USER2_AUTH, json=ref_json)
     assert rsp.status_code == 403
@@ -323,8 +324,25 @@ def test_user_update_with_confirmation(monkeypatch, fastapi):
         json={},
     )
     assert rsp.status_code == 200
+
+    # # user should confirm email # TODO: Clear up. It contradicts above statement
+    # urlactivate = URL_ACTIVATE_USER.format(user_id=db_user_id, status="n")
+    # assert get_last_token() is not None
+    # user_confirm_email(
+    #     fastapi,
+    #     email,
+    #     ref_json={"password": "zero6"},
+    #     url=urlactivate,
+    #     password="zero6",
+    #     token=get_last_token(),
+    #     expected_rsp_code=200,
+    #     expected_login_code=200,
+    # )
+
+    # mail status should be True as the user was able to confirm
     res_user = {
         "email": email,
+        # "mail_status": True, # TODO: Is None
         "status": UserStatus.active.value,
     }
     err = verify_user(fastapi, db_user_id, ADMIN_AUTH, res_user)
