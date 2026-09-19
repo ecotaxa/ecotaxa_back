@@ -2,9 +2,6 @@ import pytest
 from API_operations.OpenID import oauth, THE_PROVIDER
 from tests.fastapi_fixture import FAKE_SERVER
 
-# TODO: previous test_users_* and test_v_* tests depend on hard-coded user IDs.
-# Hence the not-so-intuitive name of present file
-
 
 def get_provider():
     provider = getattr(oauth, THE_PROVIDER, None)
