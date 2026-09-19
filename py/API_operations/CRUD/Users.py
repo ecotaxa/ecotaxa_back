@@ -84,8 +84,6 @@ class UserService(Service):
         if self.verify_email or self.account_validation:
             self._uservalidation = UserValidation()
 
-    # Configuration keys TODO
-
     COMMON_UPDATABLE_COLS = [
         User.email,
         User.password,
@@ -98,8 +96,6 @@ class UserService(Service):
     ADMIN_UPDATABLE_COLS = COMMON_UPDATABLE_COLS + [
         User.status,
     ]
-
-    EXCLUDE_KEYS = ["password", "last_used_projects", "can_do"]
 
     # check context to know if the email has to be verified
 
@@ -327,6 +323,7 @@ class UserService(Service):
         elif (
             current_user.id == user_id
             and current_user.status == UserStatus.active.value
+            and update_src.id == user_id
         ):
             cols_to_upd = self.COMMON_UPDATABLE_COLS.copy()
         else:
@@ -659,13 +656,12 @@ class UserService(Service):
 
         return (major_update and current_status_on) or just_confirmed
 
+    @staticmethod
     def _validate_user_throw(
-        self, update_src: UserModelWithRights, user_to_update: User, add_condition=True
+        update_src: UserModelWithRights, user_to_update: User, add_condition=True
     ) -> None:
-        verify_password = (
-            add_condition
-            and self._uservalidation is not None
-            and (update_src.password != user_to_update.password)
+        verify_password = add_condition and (
+            update_src.password != user_to_update.password
         )
         UserBO.validate_usr(update_src, verify_password)
 
