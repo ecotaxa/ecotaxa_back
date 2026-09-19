@@ -132,7 +132,7 @@ class PersonBO(object):
                     found_items[u]["id"] = rec[0]
 
     @staticmethod
-    def has_ident_person(
+    def has_identical_person(
         session: Session, person_data: dict, _id: Optional[int] = -1
     ) -> Optional[Person]:
         """

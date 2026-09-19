@@ -1235,7 +1235,10 @@ class ResetPasswordReq(BaseModel):
 
 class UserActivateReq(BaseModel):
     """
-    Request to modify status of a user by a Users Administrator or confirm email_status, or resend emails (when token is expired) to confirm email or modify pending profile by a user.
+    Request to modify status of a user by a Users Administrator
+        or confirm email_status
+        or resend emails (when token is expired) to confirm email
+        or modify pending profile by a user.
     """
 
     token: Optional[str] = Field(

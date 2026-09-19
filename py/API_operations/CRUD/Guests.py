@@ -165,7 +165,7 @@ class GuestService(Service):
         ret = sorted(ret, key=lambda d: d.id, reverse=True)
         return ret
 
-    def _has_ident_person_throw(self, person_data: dict, _id: int = -1) -> None:
+    def _has_identical_person_throw(self, person_data: dict, _id: int = -1) -> None:
         """
         Exception if the mail exists and id!=person_data["id"]
         """
@@ -173,7 +173,7 @@ class GuestService(Service):
         if "email" not in person_data.keys():
             detail = [DETAIL_CANT_CHECK_VALIDITY]
         else:
-            is_other: Optional[Person] = GuestBO.has_ident_person(
+            is_other: Optional[Person] = GuestBO.has_identical_person(
                 self.ro_session, person_data, _id
             )
             if is_other is not None:
@@ -233,7 +233,7 @@ class GuestService(Service):
                 detail=[DETAIL_INVALID_EMAIL],
             )
         # check if another user exists with the same new name or new email
-        self._has_ident_person_throw(
+        self._has_identical_person_throw(
             mod_src.__dict__,
             guest_id,
         )

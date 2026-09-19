@@ -86,11 +86,13 @@ def test_user_create_ordinary(monkeypatch, fastapi):
     rsp = fastapi.post(url, json=usr_json)
     assert rsp.status_code == 422
     assert rsp.json() == {"detail": ["reCaptcha verif needs data"]}
+
     params = {"no_bot": [""]}
     urlparams = url + "?" + urlencode(params, doseq=True)
     rsp = fastapi.post(urlparams, json=usr_json)
     assert rsp.status_code == 422
     assert rsp.json() == {"detail": ["invalid no_bot reason 1"]}
+
     strbot = ""
     for i in range(1, 400):
         strbot += str(i)
@@ -99,11 +101,13 @@ def test_user_create_ordinary(monkeypatch, fastapi):
     rsp = fastapi.post(urlparams, json=usr_json)
     assert rsp.status_code == 422
     assert rsp.json() == {"detail": ["invalid no_bot reason 2"]}
+
     params = {"no_bot": ["193.4.123.4", "sdfgdqsg"]}
     urlparams = url + "?" + urlencode(params, doseq=True)
     rsp = fastapi.post(urlparams, json=usr_json)
     assert rsp.status_code == 422
     assert rsp.json() == {"detail": [DETAIL_EMAIL_OWNED_BY_OTHER]}
+
     usr_json = {
         "id": None,
         "email": "ddduser56",

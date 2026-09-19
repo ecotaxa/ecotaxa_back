@@ -566,8 +566,6 @@ def get_user(
 
 
 #  activate a new user if external validation is on
-
-
 @app.post(
     "/users/activate/{user_id}/{status}",
     operation_id="activate_user",
@@ -639,9 +637,10 @@ def reset_user_password(
     """
     reset user password **return NULL on success**
 
-    🔒 Depending on logged user, different authorizations apply:
+    🔒 Depending on the logged user, different authorizations apply:
     - An administrator or user administrator can reset a user password.
-    - An unlogged user can ask for a reset  in two steps. and receive a mail with a token. But must eventually provide a no-robot proof.
+    - An unlogged user can ask for a reset in two steps and receive a mail with a token.
+        But must eventually provide a no-robot proof.
 
     If back-end configuration for self-creation check is Google reCAPTCHA,
     then no_bot is a pair [remote IP, reCAPTCHA response].

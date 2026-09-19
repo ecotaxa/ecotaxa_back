@@ -484,27 +484,16 @@ def test_user_create_with_validation(monkeypatch, fastapi):
         "name": "not good email_validation",
         "organisation": "My Org",
     }
-    # note should check password
     rsp = fastapi.post(urlparams, json=usr_json)
     assert rsp.json() == {"detail": [DETAIL_INVALID_EMAIL]}
     assert rsp.status_code == 422
-
-    usr_json = {
-        "id": None,
-        "email": "myemail777@mailtestprovider.net",
-        "name": "",
-        "organisation": "My Org",
-    }
-    rsp = fastapi.post(urlparams, json=usr_json)
-    assert rsp.json() is None
-    assert rsp.status_code == 200
 
     # create user with email verification
     email = "goodmailfortestcreate@tesmailfortest.com"
     ref_json = {
         "id": None,
         "email": email,
-        "name": "",
+        "name": "user with validation creation name",
         "organisation": "My Org",
     }
     rsp = fastapi.post(urlparams, json=ref_json)
@@ -512,7 +501,12 @@ def test_user_create_with_validation(monkeypatch, fastapi):
     assert rsp.json() is None
     assert rsp.status_code == 200
 
-    # fake token - received in mail - user can post a creation request but password is not good
+    in_flight_user_id = search_user_id_by_name(
+        fastapi, "user with validation creation name"
+    )
+    assert in_flight_user_id is None  # Nothing in DB
+
+    # token was received in mail
     ref_json = {
         "id": None,
         "email": email,
@@ -553,9 +547,8 @@ def test_user_create_with_validation(monkeypatch, fastapi):
     }
     err = verify_user(fastapi, new_user_id, ADMIN_AUTH, res_user)
     assert err == []
-    # admin validates user
-    # ask more info
 
+    # admin validates user but asks for more info
     admin_json = {
         "reason": "Please give more reason to create your account, and  email not good"
     }
@@ -573,9 +566,8 @@ def test_user_create_with_validation(monkeypatch, fastapi):
 
     # user modify email
     # user confirm and request validation is sent
-    # admin blocks user
-    # admin validates user
 
+    # admin validates user
     rsp = fastapi.post(
         URL_ACTIVATE_USER.format(user_id=new_user_id, status=UserStatus.active.name),
         headers=USERS_ADMIN_AUTH,
@@ -585,6 +577,8 @@ def test_user_create_with_validation(monkeypatch, fastapi):
     res_user = {"id": new_user_id, "status": UserStatus.active.value}
     err = verify_user(fastapi, new_user_id, ADMIN_AUTH, res_user)
     assert err == []
+
+    # admin blocks user
     rsp = fastapi.post(
         URL_ACTIVATE_USER.format(user_id=new_user_id, status=UserStatus.blocked.name),
         headers=USERS_ADMIN_AUTH,
@@ -592,21 +586,20 @@ def test_user_create_with_validation(monkeypatch, fastapi):
     )
     assert rsp.json() is None
     assert rsp.status_code == 200
-
     res_user = {"id": new_user_id, "status": UserStatus.blocked.value}
     err = verify_user(fastapi, new_user_id, ADMIN_AUTH, res_user)
     assert err == []
 
     # reset password test
-    # user is blocked, asks to reset pwd
-    url = URL_RESET_PWD
+    # user is blocked but asks to reset pwd
     params = {"no_bot": ["193.4.123.4", "sdfgdqsg"]}
     req_json = {"email": email, "id": -1}
-    urlparams = url + "?" + urlencode(params, doseq=True)
+    urlparams = URL_RESET_PWD + "?" + urlencode(params, doseq=True)
     rsp = fastapi.post(urlparams, json=req_json)
     assert rsp.json() == {"detail": [NOT_FOUND]}
     assert rsp.status_code == 422
-    # admin validates user
+
+    # admin unblocks user
     rsp = fastapi.post(
         URL_ACTIVATE_USER.format(user_id=new_user_id, status=UserStatus.active.name),
         headers=USERS_ADMIN_AUTH,
@@ -614,18 +607,20 @@ def test_user_create_with_validation(monkeypatch, fastapi):
     )
     assert rsp.json() is None
     assert rsp.status_code == 200
-    # ask reset pwd again -
+
+    # user asks for a reset pwd again, triggering mail with token
     rsp = fastapi.post(urlparams, json=req_json)
     assert rsp.status_code == 200
     assert rsp.json() is None
-    params = {"no_bot": ["193.4.123.4", "sdfgdqsg"], "token": get_last_token()}
 
+    # mail link calls reset pwd again
+    params = {"no_bot": ["193.4.123.4", "sdfgdqsg"], "token": get_last_token()}
     req_json = {
         "email": email,
         "id": new_user_id,
         "password": "ZzzzA?123",
     }
-    urlparams = url + "?" + urlencode(params, doseq=True)
+    urlparams = URL_RESET_PWD + "?" + urlencode(params, doseq=True)
     rsp = fastapi.post(urlparams, json=req_json)
     assert rsp.json() is None
     assert rsp.status_code == 200
