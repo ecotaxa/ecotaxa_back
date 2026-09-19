@@ -845,7 +845,7 @@ def create_guest(
     tags=["guests"],
     responses={200: {"content": {"application/json": {"example": None}}}},
 )
-def update_guests(
+def update_guest(
     guest: GuestModel,
     guest_id: int = Path(
         ..., description="Internal, numeric id of the guest.", examples=[760]
