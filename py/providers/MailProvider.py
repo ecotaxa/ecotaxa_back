@@ -158,7 +158,7 @@ class MailProvider(object):
                 # message as plain text
                 smtp.sendmail(sender_email, recipients, msg.as_string())
                 logger.info(
-                    "Email subject %s sent  to '%s'"
+                    "Email subject %s sent to '%s'"
                     % (msg["Subject"], ", ".join(recipients))
                 )
             except smtplib.SMTPException as e:

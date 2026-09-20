@@ -375,7 +375,7 @@ class UserService(Service):
             if status is None:
                 raise HTTPException(
                     status_code=422,
-                    detail=[DETAIL_INVALID_STATUS],
+                    detail=[DETAIL_INVALID_STATUS + ":" + status_name],
                 )
             # current_user: Optional[User] = self.ro_session.get(User,current_user_id )
             current_user: User = RightsBO.get_user_throw(
@@ -779,8 +779,8 @@ class UserService(Service):
         if self._uservalidation:
             if (
                 self.verify_email
-                and update_src.status == False
-                and user_to_update.mail_status == False
+                and update_src.status is False
+                and user_to_update.mail_status is False
             ):
                 assistance_email = self._get_assistance_email()
                 self._uservalidation.request_email_verification(

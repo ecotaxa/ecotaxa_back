@@ -2,6 +2,7 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+import pytest
 from urllib.parse import urlencode
 
 from BO.Rights import NOT_FOUND, NOT_AUTHORIZED
@@ -613,6 +614,11 @@ def test_user_create_with_validation(monkeypatch, fastapi):
     assert rsp.status_code == 200
     assert rsp.json() is None
 
+    # Check that the user is still active despite the request. Not possible to attack someone's account.
+    res_user = {"id": new_user_id, "status": UserStatus.active.value}
+    err = verify_user(fastapi, new_user_id, ADMIN_AUTH, res_user)
+    assert err == []
+
     # mail link calls reset pwd again
     params = {"no_bot": ["193.4.123.4", "sdfgdqsg"], "token": get_last_token()}
     req_json = {
@@ -779,3 +785,126 @@ def test_set_config_on_spies_token(monkeypatch, fastapi):
     rsp = fastapi.post(urlparams, json=usr_json)
     assert rsp.status_code == 200
     assert len(get_last_token()) > 0
+
+
+@pytest.mark.parametrize("validation", ["on", "off"])
+def test_user_mail_update_with_validation(monkeypatch, fastapi, validation):
+    # Enable email verification and set account validation mode ("on" or "off")
+    get_last_token = set_config_on(monkeypatch, validation=validation)
+
+    # 1. Create an active user with verified mail in the database
+    initial_email = f"user_mail_update_{validation}@test.org"
+    password = "zero6"
+    db_user_id = create_db_user(
+        email=initial_email,
+        name=f"User Mail Update {validation}",
+        organisation="Test Org",
+        password=password,
+        status=UserStatus.active.value,
+        mail_status=True,
+    )
+
+    user_auth = {"Authorization": f"Bearer {db_user_id}"}
+    url_user_update = USER_UPDATE_URL.format(user_id=db_user_id)
+
+    user_json = {
+        "id": db_user_id,
+        "name": f"User Mail Update {validation}",
+        "organisation": "Test Org",
+        "email": "invalid_email_format",
+    }
+
+    # 2. Validation & Uniqueness Checks:
+    # 2.1 Format validation: invalid email format returns 422 DETAIL_INVALID_EMAIL
+    rsp = fastapi.put(url_user_update, headers=user_auth, json=user_json)
+    assert rsp.status_code == 422
+    assert rsp.json() == {"detail": [DETAIL_INVALID_EMAIL]}
+
+    # 2.2 Uniqueness validation: email owned by another user returns 422 DETAIL_EMAIL_OWNED_BY_OTHER
+    user_json["email"] = "real@users.com"
+    rsp = fastapi.put(url_user_update, headers=user_auth, json=user_json)
+    assert rsp.status_code == 422
+    assert rsp.json() == {"detail": [DETAIL_EMAIL_OWNED_BY_OTHER]}
+
+    # 3. Successful Major Data Change (Email Modification):
+    # Updating to a valid, unique email triggers deactivation and resets mail_status to False
+    new_email = f"user_new_confirmed_email_{validation}@test.org"
+    user_json["email"] = new_email
+    rsp = fastapi.put(url_user_update, headers=user_auth, json=user_json)
+    assert rsp.status_code == 200
+    assert rsp.json() is None
+
+    # Verify user state: email updated, mail_status is False, account deactivated (status 0)
+    res_user = {
+        "email": new_email,
+        "mail_status": False,
+        "status": UserStatus.inactive.value,
+    }
+    err = verify_user(fastapi, db_user_id, ADMIN_AUTH, res_user)
+    assert err == []
+
+    # 4. Email Verification & Confirmation Flow:
+    last_token = get_last_token()
+    assert last_token is not None
+
+    url_activate = URL_ACTIVATE_USER.format(user_id=db_user_id, status="n")
+
+    # 4.1 Confirm with invalid password fails with 403 Forbidden
+    user_confirm_email(
+        fastapi,
+        new_email,
+        ref_json={"password": "WrongPassword123!"},
+        url=url_activate,
+        password="WrongPassword123!",
+        token=last_token,
+        expected_rsp_code=403,
+        expected_rsp_detail={"detail": [NOT_AUTHORIZED]},
+        expected_login_code=403,
+        expected_login_detail={"detail": "You can't do this."},
+    )
+
+    # 4.2 Confirm with valid password succeeds: mail_status becomes True
+    user_confirm_email(
+        fastapi,
+        new_email,
+        ref_json={"password": password},
+        url=url_activate,
+        password=password,
+        token=last_token,
+        expected_rsp_code=200,
+        expected_login_code=200 if validation == "off" else None,
+    )
+
+    if validation == "on":
+        # Verify mail_status is restored to True while status remains inactive pending admin validation
+        res_user = {
+            "email": new_email,
+            "mail_status": True,
+            "status": UserStatus.inactive.value,
+        }
+        err = verify_user(fastapi, db_user_id, ADMIN_AUTH, res_user)
+        assert err == []
+
+        # 5. Administrator Activation:
+        rsp = fastapi.post(
+            URL_ACTIVATE_USER.format(user_id=db_user_id, status=UserStatus.active.name),
+            headers=USERS_ADMIN_AUTH,
+            json={},
+        )
+        assert rsp.status_code == 200
+
+    # User is now fully active with the new verified email address
+    res_user = {
+        "email": new_email,
+        "mail_status": True,
+        "status": UserStatus.active.value,
+    }
+    err = verify_user(fastapi, db_user_id, ADMIN_AUTH, res_user)
+    assert err == []
+
+    # Verify user can log in with new email and password
+    login_rsp = fastapi.post(
+        LOGIN_URL, json={"username": new_email, "password": password}
+    )
+    assert login_rsp.status_code == 200
+    assert len(login_rsp.json()) > 30
