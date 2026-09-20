@@ -368,7 +368,10 @@ class UserService(Service):
                     detail=[DETAIL_INVALID_PARAMETER],
                 )
         elif status_name is not None:
-            status = UserStatus[status_name]
+            try:
+                status = UserStatus[status_name]
+            except KeyError:
+                status = None
             if status is None:
                 raise HTTPException(
                     status_code=422,
@@ -1176,7 +1179,7 @@ class UserService(Service):
         if token:
             user_id = self._reset_password_with_token_throw(reset_req, token)
         else:
-            # verify if the email exists  in the db
+            # verify if the email exists in the db
             self._has_identical_user_throw(dict({"email": reset_req.email}), True)
             # store a temporary unique password in the db for the user_id
             user_id = self._set_temporary_password_throw(reset_req)
