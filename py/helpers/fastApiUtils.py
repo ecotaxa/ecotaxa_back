@@ -60,10 +60,11 @@ async def internal_server_error_handler(
     return PlainTextResponse(data, status_code=status_code)
 
 
-def adapt_openapi_31_to_30(d: dict):
+def adapt_openapi_31_to_30(d: dict):  # pragma: no cover
     """
     Recursively traverses the OpenAPI dictionary to convert 3.1 specific
     syntax structures back into 3.0 compatible formats.
+    TODO: Remove as soon as client side supports OpenAPI 3.1
     """
     if not isinstance(d, dict):
         return
@@ -88,7 +89,7 @@ def adapt_openapi_31_to_30(d: dict):
             d["items"] = d["prefixItems"][0]
         del d["prefixItems"]
 
-    # 3. Remove uUnsupported keywords in OpenAPI 3.0
+    # 3. Remove unsupported keywords in OpenAPI 3.0
     if "propertyNames" in d:
         del d["propertyNames"]
     if "exclude_unset" in d:
