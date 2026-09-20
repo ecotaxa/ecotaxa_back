@@ -637,9 +637,7 @@ def reset_user_password(
     """
     reset user password **return NULL on success**
 
-    🔒 Depending on the logged user, different authorizations apply:
-    - An administrator or user administrator can reset a user password.
-    - An unlogged user can ask for a reset in two steps and receive a mail with a token.
+    An unlogged user can ask for a reset in two steps and receive a mail with a token.
         But must eventually provide a no-robot proof.
 
     If back-end configuration for self-creation check is Google reCAPTCHA,

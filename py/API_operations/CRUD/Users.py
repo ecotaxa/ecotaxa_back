@@ -1171,6 +1171,7 @@ class UserService(Service):
         # active only when validation is on
         self._uservalidation = self._is_validation_active_throw()
         if current_user_id is not None:
+            # TODO: Maybe Admin reset password of another user here. But need to care about token life and sent mail text.
             # reset only if not connected
             raise HTTPException(status_code=422, detail=[DETAIL_NOTHING_DONE])
         # Unauthenticated user asks to reset his password
