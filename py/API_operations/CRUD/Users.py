@@ -368,7 +368,10 @@ class UserService(Service):
                     detail=[DETAIL_INVALID_PARAMETER],
                 )
         elif status_name is not None:
-            status = UserStatus[status_name]
+            try:
+                status = UserStatus[status_name]
+            except KeyError:
+                status = None
             if status is None:
                 raise HTTPException(
                     status_code=422,
