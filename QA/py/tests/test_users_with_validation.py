@@ -160,7 +160,7 @@ def create_db_user(
 
 
 def verify_user(fastapi, id, auth, res_user):
-    url = "/users?ids=" + str(id)
+    url = "/users?ids=" + str(id) + "&fields=*summary"
     rsp = fastapi.get(url, headers=auth)
     assert rsp.status_code == 200
     read_json = rsp.json()
@@ -551,7 +551,7 @@ def test_user_create_with_validation(monkeypatch, fastapi):
 
     # admin validates user but asks for more info
     admin_json = {
-        "reason": "Please give more reason to create your account, and  email not good"
+        "reason": "Please give more reason to create your account, and email is not good"
     }
     rsp = fastapi.post(
         URL_ACTIVATE_USER.format(user_id=new_user_id, status=UserStatus.pending.name),
@@ -563,10 +563,53 @@ def test_user_create_with_validation(monkeypatch, fastapi):
     res_user = {"email": email, "mail_status": True, "status": UserStatus.pending.value}
     err = verify_user(fastapi, new_user_id, ADMIN_AUTH, res_user)
     assert err == []
-    # user can MODIFY account
+
+    # user can modify his account to comply with admin request (hopefully)
 
     # user modify email
+    email = "goodmailfortestcreate_mod@tesmailfortest.com"
+    ref_json = {
+        "id": new_user_id,
+        "email": email,
+        "name": "test create with validation",
+        "organisation": "test my university",
+        "password": password,
+    }
+    params = {"no_bot": ["193.4.123.4", "sdfgdqsg"], "token": get_last_token()}
+    urlparams = USER_CREATE_URL + "?" + urlencode(params, doseq=True)
+    rsp = fastapi.post(urlparams, json=ref_json)
+    assert rsp.status_code == 200
+    assert rsp.json() is None
+
+    # user is deactivated (status 0), and mail_status is False after email modification
+    res_user = {
+        "email": email,
+        "mail_status": False,
+        "status": UserStatus.inactive.value,
+    }
+    err = verify_user(fastapi, new_user_id, ADMIN_AUTH, res_user)
+    assert err == []
+
     # user confirm and request validation is sent
+    urlactivate = URL_ACTIVATE_USER.format(user_id=new_user_id, status="n")
+    user_confirm_email(
+        fastapi,
+        email,
+        ref_json={"password": password},
+        url=urlactivate,
+        password=password,
+        token=get_last_token(),
+        expected_rsp_code=200,
+    )
+
+    # mail_status restored to True, status remains inactive pending admin validation
+    res_user = {
+        "email": email,
+        "mail_status": True,
+        "status": UserStatus.inactive.value,
+    }
+    err = verify_user(fastapi, new_user_id, ADMIN_AUTH, res_user)
+    assert err == []
 
     # admin validates user
     rsp = fastapi.post(

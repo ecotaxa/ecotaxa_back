@@ -4,6 +4,7 @@
 #
 from datetime import timedelta, timezone
 from typing import Optional, List, Any, Tuple
+from uuid import uuid4
 
 from fastapi import HTTPException
 from sqlalchemy import func, select
@@ -172,10 +173,6 @@ class UserService(Service):
             new_user.id = -1
         if token is not None or current_user_id is None:
             # Unauthenticated user tries to create an account
-            if token is not None:
-                self._verify_token_throw(
-                    new_user.id, token, short=False, email=new_user.email
-                )
             # Verify not a robot
             self._verify_captcha_throw(no_bot)
             # request email verification if validation is on
@@ -188,6 +185,9 @@ class UserService(Service):
                         user_id = self._modify_new_user(new_user, token)
                         return user_id
                     else:
+                        self._verify_token_throw(
+                            new_user.id, token, short=False, email=new_user.email
+                        )
                         new_user.mail_status = True
                         cols_to_upd.extend([User.mail_status])
                 else:
@@ -774,12 +774,15 @@ class UserService(Service):
         return self._validation_emails
 
     def _conditional_email_verification(
-        self, update_src, user_to_update, action_type
+        self,
+        update_src: UserModelWithRights,
+        user_to_update: User,
+        action_type: ActivationType,
     ) -> None:
         if self._uservalidation:
             if (
                 self.verify_email
-                and update_src.status is False
+                and update_src.status == UserStatus.inactive
                 and user_to_update.mail_status is False
             ):
                 assistance_email = self._get_assistance_email()
@@ -934,7 +937,7 @@ class UserService(Service):
             update_src.mail_status = mail_status
             status_cols.append(User.mail_status)
             keep_active = self._keep_active()
-            update_src.status = int(keep_active and mail_status == True)
+            update_src.status = int(keep_active and mail_status is True)
             if user is None or update_src.status != user.status:
                 status_cols.append(User.status)
         return update_src, status_cols
@@ -962,7 +965,7 @@ class UserService(Service):
         comment: Optional[str] = None,
     ) -> None:
         """
-        admin modify user status, status_admin_comment and  status_date
+        admin modify user status, status_admin_comment and status_date
         """
         if status is None:
             raise HTTPException(
@@ -1167,6 +1170,9 @@ class UserService(Service):
         """
         Reset a user password by creating a token and temporary password then sending the information and update the modified password.
         TODO : move to _uservalidation when Users model and "crud ops" are normalized
+
+        :return: ID of the user whose password was reset (when token is provided)
+                 or for whom a temporary reset password was set (when requesting reset email).
         """
         # active only when validation is on
         self._uservalidation = self._is_validation_active_throw()
@@ -1238,22 +1244,18 @@ class UserService(Service):
         if email != "":
             user_ask_reset: Optional[User] = self._get_active_user_by_email(email)
             if user_ask_reset is not None:
-                import uuid
-
-                temp_password = uuid.uuid4().hex
+                user_id = user_ask_reset.id
+                temp_password = uuid4().hex
                 with LoginService() as sce:
                     hash_temp_password = sce.hash_password(temp_password)
                     temp_rs: Optional[TempPasswordReset] = self.session.get(
-                        TempPasswordReset, user_ask_reset.id
+                        TempPasswordReset, user_id
                     )
                 if temp_rs is None:
                     temp_rs = TempPasswordReset()
-                    temp_rs.user_id = user_ask_reset.id
-                    temp_rs.temp_password = hash_temp_password
+                    temp_rs.user_id = user_id
                     self.session.add(temp_rs)
-                else:
-                    temp_rs.temp_password = hash_temp_password
-                    user_id = user_ask_reset.id
+                temp_rs.temp_password = hash_temp_password
                 self.session.commit()
                 user_profile = UserModelWithRights.model_validate(user_ask_reset)
                 assistance_email = self._get_assistance_email()

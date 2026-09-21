@@ -119,3 +119,14 @@ def test_user_create_ordinary(monkeypatch, fastapi):
     assert rsp.status_code == 200
 
     # note should check password
+
+
+def test_orcid_check_digit():
+    # Test valid check digits including numerical and 'X'
+    # Reference: https://support.orcid.org/hc/en-us/articles/360006897674-Structure-of-the-ORCID-Identifier
+    # 0000-0002-1825-0097 -> base digits: "000000021825009" -> check digit: '7'
+    # 0000-0001-5109-3700 -> base digits: "000000015109370" -> check digit: '0'
+    # 0000-0002-1694-233X -> base digits: "000000021694233" -> check digit: 'X'
+    assert UserService.generate_check_digit("000000021825009") == "7"
+    assert UserService.generate_check_digit("000000015109370") == "0"
+    assert UserService.generate_check_digit("000000021694233") == "X"

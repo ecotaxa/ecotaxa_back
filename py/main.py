@@ -397,7 +397,7 @@ def create_user(
     """
     **Create a new user**, return **NULL upon success.**
 
-    🔒 Depending on logged user, different authorizations apply:
+    🔒 Depending on the logged user, different authorizations apply:
     - An administrator or user administrator can create a user.
     - An unlogged user can self-create an account. But must eventually provide a no-robot proof.
     - An ordinary logged user cannot create another account.
@@ -646,7 +646,7 @@ def reset_user_password(
     with UserService() as sce:
         with ValidityThrower(), RightsThrower():
             user_id = sce.reset_password(current_user, resetreq, no_bot, token)
-            if token and user_id != -1:
+            if token and user_id != -1:  # User was modified maybe
                 with DBSyncService(User, User.id, user_id) as ssce:
                     ssce.wait()
 
