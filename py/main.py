@@ -3343,7 +3343,8 @@ def wormsification_taxa_set(  # MyORJSONResponse -> JSONResponse -> Response -> 
     _current_user: Optional[int] = Depends(get_optional_current_user),
 ) -> MyORJSONResponse:  # Dict[str,WoRMSBO]:
     """
-    Returns **information about several taxa**, including their lineage.
+    Resolve taxa to their closest WoRMS entry.
+    Morphological taxa are resolved to their nearest phylogenetic parent mapped to WoRMS.
     """
     num_ids = _split_num_list(ids)
     with TaxonomyService() as sce:
