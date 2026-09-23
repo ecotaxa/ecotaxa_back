@@ -1,4 +1,4 @@
-status	taxonid	annotation_category	count
+annotation_status	annotation_category	annotation_hierarchy	count
 V	Cyclopoida	Biota>Animalia>Arthropoda>Crustacea>Multicrustacea>Copepoda>Neocopepoda>Podoplea>Cyclopoida	1
 V	Oncaeidae	Biota>Animalia>Arthropoda>Crustacea>Multicrustacea>Copepoda>Neocopepoda>Podoplea>Cyclopoida>Ergasilida>Oncaeidae	2
 V	detritus	not-living>detritus	4
