@@ -95,8 +95,6 @@ class UserFilesFolderService(Service):
             # Prevent hammering on the endpoint
             time.sleep(0.5)
             assert False, "Not found"
-        except UnprocessableEntityException as e:
-            raise HTTPException(status_code=e.status_code, detail=e.message)
         except Exception as e:
             raise HTTPException(status_code=500, detail=DETAIL_UNKNOWN_ERROR)
 
