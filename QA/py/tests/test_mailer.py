@@ -105,7 +105,7 @@ def test_send_mail_success_sends_and_quits(mocker):
     ],
 )
 def test_send_mail_raises_http_exception_on_smtp_exception(
-    mocker, smtp_exception, expected_code, expected_detail
+    mocker, smtp_exception, expected_code, expected_detail, caplog
 ):
     # Arrange
     provider = make_provider()
@@ -132,6 +132,12 @@ def test_send_mail_raises_http_exception_on_smtp_exception(
     assert exc.status_code == expected_code
     assert any(expected_detail in d for d in exc.detail)
     assert not mock_smtp.quit.called
+
+    # Validate that error was logged
+    assert any(
+        record.levelname == "ERROR" and expected_detail in record.message
+        for record in caplog.records
+    )
 
 
 def test_get_ticket_returns_none_when_add_ticket_empty(mocker):

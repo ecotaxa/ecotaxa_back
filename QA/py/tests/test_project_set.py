@@ -13,7 +13,6 @@ from tests.test_classification import OBJECT_SET_CLASSIFY_URL
 from tests.test_collections import COLLECTION_QUERY_URL
 from tests.test_objectset_query import _prj_query
 
-
 PROJECT_SET_PROJECTS_URL = "/project_set/projects?ids={prj_ids}"
 
 

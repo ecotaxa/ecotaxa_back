@@ -7,8 +7,6 @@
 import base64
 import hashlib
 import hmac
-
-# TODO: if it exists, find the stubs somewhere
 from typing import Union
 
 # Note: passlib uses in Python3.14 a python implementation of crypto algos
@@ -55,7 +53,7 @@ class LoginService(Service):
 
         user_qry = select(User)
         user_qry = user_qry.where(func.lower(User.email).__eq__(func.lower(username)))
-        if account_validation == True:
+        if account_validation is True:
             pass
         else:
             user_qry = user_qry.where(User.status == UserStatus.active.value)
@@ -173,11 +171,12 @@ class LoginService(Service):
 
         return not (is_plaintext or single_hash)
 
-    def verify_status_throw(self, the_user: User, account_validation: bool):
+    @staticmethod
+    def verify_status_throw(the_user: User, account_validation: bool):
         """
         If account validation is on "on" returns only the necessary data to modify a profile or request new confirmation mails
         """
-        if account_validation == True and the_user.status != UserStatus.active.value:
+        if account_validation is True and the_user.status != UserStatus.active.value:
             from fastapi import HTTPException
 
             if the_user.status == UserStatus.pending.value:

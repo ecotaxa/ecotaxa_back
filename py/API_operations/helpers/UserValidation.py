@@ -225,7 +225,7 @@ class UserValidation(object):
         action: Optional[str] = None,
     ) -> Optional[str]:
         try:
-            if short == True:
+            if short is True:
                 age = SHORT_TOKEN_AGE
             else:
                 age = PROFILE_TOKEN_AGE

@@ -36,6 +36,8 @@ class UserStatus(int, Enum):
     blocked = -1
     inactive = 0
     active = 1
+    # pending is assigned explicitly by an administrator when rejecting initial registration
+    # and requesting profile corrections.
     pending = 2
 
 

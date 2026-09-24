@@ -3,7 +3,6 @@ from helpers.httpexception import DETAIL_EMAIL_OWNED_BY_OTHER
 
 from tests.credentials import ADMIN_AUTH, USER_AUTH, ORDINARY_USER_USER_ID
 
-
 # noinspection PyPackageRequirements
 
 
@@ -39,12 +38,23 @@ def test_user_update(fastapi):
         ]
     }
 
-    # Self update
+    # Self update basic fields
     url = USER_UPDATE_URL.format(user_id=ORDINARY_USER_USER_ID)
     rsp = fastapi.put(url, headers=USER_AUTH, json=read_json)
     assert rsp.status_code == 200
-    # actual = rsp.json()
-    # assert actual == expected
+    assert rsp.json() is None
+
+    # Self update weak password
+    passwd_json = read_json | {
+        "password": "foo",
+    }
+    url = USER_UPDATE_URL.format(user_id=ORDINARY_USER_USER_ID)
+    rsp = fastapi.put(url, headers=USER_AUTH, json=passwd_json)
+    assert rsp.status_code == 422
+    # Self update strong password
+    passwd_json["password"] = "ThisIs-St4ong:"
+    rsp = fastapi.put(url, headers=USER_AUTH, json=passwd_json)
+    assert rsp.status_code == 200
 
 
 def test_user_create(fastapi):

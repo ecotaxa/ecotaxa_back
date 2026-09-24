@@ -116,7 +116,7 @@ class MailProvider(object):
         Sendmail .
         """
         if self.SENDER_ACCOUNT is None:
-            # make a response explaining why  the mail was not sent
+            # make a response explaining why the mail was not sent
             return
         for recipient in recipients:
             if not self.is_email(recipient):
@@ -158,7 +158,7 @@ class MailProvider(object):
                 # message as plain text
                 smtp.sendmail(sender_email, recipients, msg.as_string())
                 logger.info(
-                    "Email subject %s sent  to '%s'"
+                    "Email subject %s sent to '%s'"
                     % (msg["Subject"], ", ".join(recipients))
                 )
             except smtplib.SMTPException as e:

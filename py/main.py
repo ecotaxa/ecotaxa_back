@@ -397,7 +397,7 @@ def create_user(
     """
     **Create a new user**, return **NULL upon success.**
 
-    🔒 Depending on logged user, different authorizations apply:
+    🔒 Depending on the logged user, different authorizations apply:
     - An administrator or user administrator can create a user.
     - An unlogged user can self-create an account. But must eventually provide a no-robot proof.
     - An ordinary logged user cannot create another account.
@@ -566,8 +566,6 @@ def get_user(
 
 
 #  activate a new user if external validation is on
-
-
 @app.post(
     "/users/activate/{user_id}/{status}",
     operation_id="activate_user",
@@ -639,9 +637,8 @@ def reset_user_password(
     """
     reset user password **return NULL on success**
 
-    🔒 Depending on logged user, different authorizations apply:
-    - An administrator or user administrator can reset a user password.
-    - An unlogged user can ask for a reset  in two steps. and receive a mail with a token. But must eventually provide a no-robot proof.
+    An unlogged user can ask for a reset in two steps and receive a mail with a token.
+        But must eventually provide a no-robot proof.
 
     If back-end configuration for self-creation check is Google reCAPTCHA,
     then no_bot is a pair [remote IP, reCAPTCHA response].
@@ -649,7 +646,7 @@ def reset_user_password(
     with UserService() as sce:
         with ValidityThrower(), RightsThrower():
             user_id = sce.reset_password(current_user, resetreq, no_bot, token)
-            if token and user_id != -1:
+            if token and user_id != -1:  # User was modified maybe
                 with DBSyncService(User, User.id, user_id) as ssce:
                     ssce.wait()
 
@@ -845,7 +842,7 @@ def create_guest(
     tags=["guests"],
     responses={200: {"content": {"application/json": {"example": None}}}},
 )
-def update_guests(
+def update_guest(
     guest: GuestModel,
     guest_id: int = Path(
         ..., description="Internal, numeric id of the guest.", examples=[760]

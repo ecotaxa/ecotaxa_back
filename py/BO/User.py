@@ -132,7 +132,7 @@ class PersonBO(object):
                     found_items[u]["id"] = rec[0]
 
     @staticmethod
-    def has_ident_person(
+    def has_identical_person(
         session: Session, person_data: dict, _id: Optional[int] = -1
     ) -> Optional[Person]:
         """
@@ -298,7 +298,7 @@ class UserBO(PersonBO):
         """
         # name & email are mandatory by DB constraints and therefore made so by pydantic model
         errors: List[str] = UserBO.check_fields(user_model.__dict__, UserBO.to_check)
-        # can check is password is strong  if password not None
+        # can check is password is strong if password is present
         if verify_password:
             from helpers.httpexception import DETAIL_PASSWORD_STRENGTH_ERROR
 
