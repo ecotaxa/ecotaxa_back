@@ -114,9 +114,9 @@ class NightlyJobService(JobServiceBase):
         logger.info("Job done")
 
     def stats_progress_update(
-        self, start: int, chunk: ProjectIDListT, total: int, end: int
+        self, stage: str, start: int, chunk: ProjectIDListT, total: int, end: int
     ) -> None:
-        logger.info("Done for %s", chunk)
+        logger.info(f"Done {stage} for %s", chunk)
         self.curr += len(chunk)
         progress = round(start + (end - start) / total * self.curr)
         self.update_progress(progress, "Processing project %d" % chunk[-1])
@@ -151,8 +151,8 @@ class NightlyJobService(JobServiceBase):
             self.session.commit()
             chunk.append(proj_id)
             if len(chunk) == self.REPORT_EVERY:
-                self.stats_progress_update(start, chunk, total, end)
-        logger.info("Done for %s", chunk)
+                self.stats_progress_update("taxo stats", start, chunk, total, end)
+        logger.info("Done taxo stats for %s", chunk)
 
     def compute_all_projects_stats(
         self, all_proj_ids: ProjectIDListT, start: int, end: int
@@ -169,8 +169,8 @@ class NightlyJobService(JobServiceBase):
             self.session.commit()
             chunk.append(proj_id)
             if len(chunk) == self.REPORT_EVERY:
-                self.stats_progress_update(start, chunk, total, end)
-        logger.info("Done for %s", chunk)
+                self.stats_progress_update("stats", start, chunk, total, end)
+        logger.info("Done stats for %s", chunk)
 
     def refresh_taxo_tree_stats(self, start: int) -> None:
         """
@@ -352,25 +352,9 @@ class NightlyJobService(JobServiceBase):
                 no_problem = False
         return no_problem
 
-    def get_tree_time(self, path: Path, ptime: int) -> int:
-        """return max creation time of subdirs in seconds"""
-        dtime = ptime
-        for entry in os.scandir(path):
-            if entry.name[0 : len(self.trashdirpattern)] == self.trashdirpattern:
-                continue
-            try:
-                is_dir = entry.is_dir(follow_symlinks=False)
-            except OSError as error:
-                logger.error("Error calling is_dir():", error)
-                continue
-            if is_dir:
-                dtime = int(os.path.getctime(entry.path))
-
-                if ptime > dtime:
-                    dtime = self.get_tree_time(Path(entry.path), dtime)
-        return dtime
-
-    def delete_empty_samples(self, all_proj_ids: ProjectIDListT, start: int, end: int):
+    def delete_empty_samples(
+        self, all_proj_ids: ProjectIDListT, start: int, end: int
+    ) -> None:
         self.update_progress(start, "Find and delete empty samples")
         logger.info("Find and delete empty samples")
         total = len(all_proj_ids)
@@ -417,7 +401,7 @@ class NightlyJobService(JobServiceBase):
     @staticmethod
     def _delete_definitely(
         loggerfilename: str, item: Path, tf: int, prefix: Optional[str] = None
-    ):
+    ) -> None:
         if prefix is None:
             name = str(item)
         else:
@@ -425,19 +409,19 @@ class NightlyJobService(JobServiceBase):
         if item.is_dir():
             try:
                 shutil.rmtree(item)
-                with open(loggerfilename, "w") as loggerfile:
+                with open(loggerfilename, "a", encoding="utf-8") as loggerfile:
                     loggerfile.write(
-                        "Directory '%s' removed '%s'" % (name, time.ctime(tf))
+                        "Directory '%s' removed '%s'\n" % (name, time.ctime(tf))
                     )
-                loggerfile.close()
             except Exception as e:
                 logger.error("Error deleting directory '%s' '%s' ", name, str(e))
         else:
             try:
                 os.remove(item)
-                with open(loggerfilename, "w") as loggerfile:
-                    loggerfile.write("File '%s' removed '%s'" % (name, time.ctime(tf)))
-                loggerfile.close()
+                with open(loggerfilename, "a", encoding="utf-8") as loggerfile:
+                    loggerfile.write(
+                        "File '%s' removed '%s'\n" % (name, time.ctime(tf))
+                    )
             except Exception as e:
                 logger.error("Error deleting file '%s' '%s' ", name, str(e))
 
@@ -447,9 +431,7 @@ class NightlyJobService(JobServiceBase):
         """
         logger.info("Start Users Files Maintenance")
         self.update_progress(start, "User Files Maintenance")
-        timelive: Optional[str] = self.config.get_time_to_live()
-        if timelive is None or timelive == "":
-            return None
+        timelive = self.config.get_time_to_live()
         if int(timelive) >= 1:
             # 10 times less for trash to live
             trashlive = int(timelive) / 10
@@ -460,9 +442,7 @@ class NightlyJobService(JobServiceBase):
             return None
         time_to_live = int(timelive) * 3600 * 24  # in seconds
         trash_to_live = trashlive * 3600 * 24  # in seconds
-        usersfiles: Optional[str] = self.config.get_users_files_dir()
-        if usersfiles is None:
-            return None
+        usersfiles = self.config.get_users_files_dir()
         users_files_dir = usersfiles
         # loggerfilename - file in root users myfiles where deletions are logged ( too long for the main job log)
         today = datetime.datetime.now()
@@ -502,51 +482,50 @@ class NightlyJobService(JobServiceBase):
         # bottom to top scandir
         for entry in glob(users_files_dir + os.path.sep + userdirpattern + "*"):
             item = Path(entry)
-            if item.is_dir():
-                pathtodelete = []
-                for root, dirs, files in os.walk(entry, topdown=False):
-                    for a_dir in dirs:
-                        if a_dir[0 : len(self.trashdirpattern)] != self.trashdirpattern:
-                            dirpath = Path(root).joinpath(a_dir)
-                            ptime = int(os.path.getctime(dirpath))
-                            if ptime < old:
-                                candelete = self._can_delete_dir(
-                                    str(dirpath), old, self.trashdirpattern
-                                )
-                                if candelete:
-                                    todel: Tuple[Path, int] = (dirpath, ptime)
-                                    pathtodelete.append(todel)
-
-                if len(pathtodelete) > 0:
-                    for todel in pathtodelete:
-                        self._delete_definitely(
-                            loggerfilename,
-                            todel[0],
-                            todel[1],
-                            users_files_dir,
+            if not item.is_dir():
+                continue
+            pathtodelete = []
+            for root, dirs, files in os.walk(entry, topdown=False):
+                for a_dir in dirs:
+                    if a_dir.startswith(self.trashdirpattern):
+                        continue
+                    dirpath = Path(root).joinpath(a_dir)
+                    ptime = int(os.path.getctime(dirpath))
+                    if ptime < old:
+                        candelete = self._can_delete_dir(
+                            str(dirpath), old, self.trashdirpattern
                         )
+                        if candelete:
+                            todel: Tuple[Path, int] = (dirpath, ptime)
+                            pathtodelete.append(todel)
+
+            for dirpath, ptime in pathtodelete:
+                self._delete_definitely(
+                    loggerfilename,
+                    dirpath,
+                    ptime,
+                    users_files_dir,
+                )
         logger.info("End removing directories older than %s day(s)", str(timelive))
         self.update_progress(end, "Users Files Maintenance terminated")
         return None
 
     @staticmethod
-    def _can_delete_dir(startpath, ptime, excluded) -> bool:
-        candelete = True
+    def _can_delete_dir(startpath: str, ptime: int, excluded: str) -> bool:
         for root, dirs, files in os.walk(startpath, topdown=True):
             for a_file in files:
                 filepath = Path(root).joinpath(a_file)
                 tf = int(os.path.getctime(filepath))
                 if tf >= ptime:
-                    candelete = False
-                    break
+                    return False
             for a_dir in dirs:
-                if a_dir[0 : len(excluded)] != excluded:
-                    dirpath = Path(root).joinpath(a_dir)
-                    tf = int(os.path.getctime(dirpath))
-                    if tf >= ptime:
-                        candelete = False
-                        break
-        return candelete
+                if a_dir.startswith(excluded):
+                    continue
+                dirpath = Path(root).joinpath(a_dir)
+                tf = int(os.path.getctime(dirpath))
+                if tf >= ptime:
+                    return False
+        return True
 
 
 @dataclass
