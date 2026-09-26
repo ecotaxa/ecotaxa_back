@@ -16,12 +16,12 @@ from tests.test_objectset_query import _prj_query
 PROJECT_SET_PROJECTS_URL = "/project_set/projects?ids={prj_ids}"
 
 
-def test_project_set(fastapi):
-    # Functions used during prediction
+def setup_test_projects_for_column_stats(fastapi, tag: str = "prj_set_tst"):
     # Reuse the collection functions, as there are 2 projects there
-    coll_id, coll_title, prj_id = create_test_collection(fastapi, "prj_set_tst")
+    coll_id, coll_title, prj_id = create_test_collection(fastapi, tag)
     url = COLLECTION_QUERY_URL.format(collection_id=coll_id)
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
+    assert rsp.status_code == status.HTTP_200_OK
     ids = rsp.json()["project_ids"]
     assert len(ids) == 2
     # Prediction runs on validated objects
@@ -40,6 +40,12 @@ def test_project_set(fastapi):
             },
         )
         assert rsp.status_code == status.HTTP_200_OK
+    return ids
+
+
+def test_project_set(fastapi):
+    # Functions used during prediction
+    ids = setup_test_projects_for_column_stats(fastapi, "prj_set_tst")
     # Build dataset
     features = [
         "obj.depth_min",

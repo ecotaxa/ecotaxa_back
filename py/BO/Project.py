@@ -3,7 +3,6 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 import json
-import re
 import typing
 from dataclasses import dataclass
 from datetime import datetime
@@ -113,54 +112,6 @@ DEFAULT_FORMULAE: Final = {
     "4/3 * math.pi * (major_axis * pixel_size) * (minor_axis * pixel_size)**2",
     "4/3 * pi * (major_axis * pixel_size) * (minor_axis * pixel_size)^2",
 }
-
-
-def _strip_default_formulae(values: Dict[str, Any]) -> Optional[dict]:
-    """Drop keys whose value is empty, "none" (any case) or None, blanking
-    known default formulae first so they get dropped the same way."""
-    cleaned = {}
-    for key, value in values.items():
-        if value is None:
-            continue
-        if isinstance(value, str):
-            value = value.strip()
-            if value in DEFAULT_FORMULAE:
-                value = ""
-            if value == "" or value.lower() == "none":
-                continue
-        cleaned[key] = value
-    return cleaned if cleaned else None
-
-
-def _formulae_str_to_dict(formulae: Union[dict, str, None]) -> Optional[dict]:
-    """Normalize target_proj.formulae (dict, legacy string, or None) into a dict.
-
-    The back-end can return formulae as a dict already, as the string "None",
-    or as one string where each valid key (FORMULAE_KEYS) is directly
-    followed by ':' and its value, with no reliable separator between
-    entries (blank, \r, \r\n or nothing at all).
-    """
-    if isinstance(formulae, dict):
-        return _strip_default_formulae(formulae)
-    if formulae is None or formulae.strip() == "" or formulae.strip().lower() == "none":
-        return None
-    try:
-        parsed = json.loads(formulae)
-        if isinstance(parsed, dict):
-            return _strip_default_formulae(parsed)
-    except (json.JSONDecodeError, TypeError):
-        pass
-    keys_pattern = "|".join(FORMULAE_KEYS)
-    normalized = re.sub(r"\s*(" + keys_pattern + r"):", r";\1:", formulae.strip())
-    result = {}
-    for chunk in normalized.split(";"):
-        chunk = chunk.strip()
-        if not chunk:
-            continue
-        key, _, value = chunk.partition(":")
-        value = value.strip()
-        result[key] = None if value.lower() == "none" else value
-    return _strip_default_formulae(result)
 
 
 class MappingColumnEnum(str, Enum):
