@@ -1,4 +1,4 @@
-sampleid	acquisid	status	taxonid	annotation_category	biovolume
+sample_id	acq_id	annotation_status	annotation_category	annotation_hierarchy	biovolume
 m106_mn01_n1_sml	generic_m106_mn01_n1_sml	P	Cyclopoida	Biota>Animalia>Arthropoda>Crustacea>Multicrustacea>Copepoda>Neocopepoda>Podoplea>Cyclopoida	0
 m106_mn01_n1_sml	generic_m106_mn01_n1_sml	P	Micrococcineae	Biota>Bacteria>Micrococcineae	0
 m106_mn01_n1_sml	generic_m106_mn01_n1_sml	P	Oncaeidae	Biota>Animalia>Arthropoda>Crustacea>Multicrustacea>Copepoda>Neocopepoda>Podoplea>Cyclopoida>Ergasilida>Oncaeidae	939655.358344749
