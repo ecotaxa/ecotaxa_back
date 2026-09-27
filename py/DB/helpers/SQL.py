@@ -35,11 +35,11 @@ class SelectClause(object):
         self.expressions: List[str] = []
         self.aliases: List[Optional[str]] = []
 
-    def clone(self) -> "SelectClause":
-        new_clause = SelectClause()
-        new_clause.expressions = self.expressions[:]
-        new_clause.aliases = self.aliases[:]
-        return new_clause
+    # def clone(self) -> "SelectClause":
+    #     new_clause = SelectClause()
+    #     new_clause.expressions = self.expressions[:]
+    #     new_clause.aliases = self.aliases[:]
+    #     return new_clause
 
     def add_expr(self, expr: str, alias: Optional[str] = None) -> Self:
         self.expressions.append(expr)
@@ -80,10 +80,10 @@ class SelectClause(object):
                 refs.add(match.group(1))
         return refs
 
-    def _remove_items(self, indices: List[int]):
-        for i in sorted(indices, reverse=True):
-            del self.expressions[i]
-            del self.aliases[i]
+    # def _remove_items(self, indices: List[int]):
+    #     for i in sorted(indices, reverse=True):
+    #         del self.expressions[i]
+    #         del self.aliases[i]
 
     @staticmethod
     def copy_for_ref(
@@ -131,20 +131,20 @@ class SelectClause(object):
                 self.expressions[i] = expr.replace(from_expr, to_expr)
         return self
 
-    def remove_for_table_alias(self, table_alias: str):
-        indices_to_remove = []
-        for i, expr in enumerate(self.expressions):
-            # Find refs in this expression
-            refs = {match.group(1) for match in COL_RE.finditer(expr)}
-            if table_alias in refs:
-                indices_to_remove.append(i)
-        self._remove_items(indices_to_remove)
+    # def remove_for_table_alias(self, table_alias: str):
+    #     indices_to_remove = []
+    #     for i, expr in enumerate(self.expressions):
+    #         # Find refs in this expression
+    #         refs = {match.group(1) for match in COL_RE.finditer(expr)}
+    #         if table_alias in refs:
+    #             indices_to_remove.append(i)
+    #     self._remove_items(indices_to_remove)
 
-    def remove_for_column_alias(self, col_alias: str):
-        indices_to_remove = [
-            i for i, alias in enumerate(self.aliases) if alias == col_alias
-        ]
-        self._remove_items(indices_to_remove)
+    # def remove_for_column_alias(self, col_alias: str):
+    #     indices_to_remove = [
+    #         i for i, alias in enumerate(self.aliases) if alias == col_alias
+    #     ]
+    #     self._remove_items(indices_to_remove)
 
     @staticmethod
     def seen_as(expr: str, alias: Optional[str]) -> str:
@@ -170,16 +170,16 @@ class SelectClause(object):
                 return self.expressions[i]
         return ""
 
-    @staticmethod
-    def is_a_record(expr: str) -> bool:
-        return RECORD_RE.match(expr) is not None
+    # @staticmethod
+    # def is_a_record(expr: str) -> bool:
+    #     return RECORD_RE.match(expr) is not None
 
-    @staticmethod
-    def composing_columns(record: str) -> List[str]:
-        # Remove parentheses
-        clean_expr = record.strip("()")
-        # Split by comma
-        return [c.strip() for c in clean_expr.split(",")]
+    # @staticmethod
+    # def composing_columns(record: str) -> List[str]:
+    #     # Remove parentheses
+    #     clean_expr = record.strip("()")
+    #     # Split by comma
+    #     return [c.strip() for c in clean_expr.split(",")]
 
 
 class AliasedSelectClause(SelectClause):
@@ -249,30 +249,30 @@ class FromClause(object):
                 sqls.append("JOIN " + lateral + a_join)
         return f"\n{indent}".join(sqls)
 
-    def remove_if_refers_to(self, table_name: str) -> None:
-        indices_to_remove = [
-            i for i, a_join in enumerate(self.joins) if table_name in a_join
-        ]
-        # Iterating in reverse to remove indices correctly
-        for i in sorted(indices_to_remove, reverse=True):
-            if i in self.left_joins:
-                self.left_joins.remove(i)
-            if i in self.lateral_joins:
-                self.lateral_joins.remove(i)
-            # Adjust indices
-            self.left_joins = {
-                idx if idx < i else idx - 1 for idx in self.left_joins if idx != i
-            }
-            self.lateral_joins = {
-                idx if idx < i else idx - 1 for idx in self.lateral_joins if idx != i
-            }
-            del self.joins[i]
-            # Update aliases
-            self.table_aliases = OrderedDict(
-                (alias, (idx if idx < i else idx - 1))
-                for alias, idx in self.table_aliases.items()
-                if idx != i
-            )
+    # def remove_if_refers_to(self, table_name: str) -> None:
+    #     indices_to_remove = [
+    #         i for i, a_join in enumerate(self.joins) if table_name in a_join
+    #     ]
+    #     # Iterating in reverse to remove indices correctly
+    #     for i in sorted(indices_to_remove, reverse=True):
+    #         if i in self.left_joins:
+    #             self.left_joins.remove(i)
+    #         if i in self.lateral_joins:
+    #             self.lateral_joins.remove(i)
+    #         # Adjust indices
+    #         self.left_joins = {
+    #             idx if idx < i else idx - 1 for idx in self.left_joins if idx != i
+    #         }
+    #         self.lateral_joins = {
+    #             idx if idx < i else idx - 1 for idx in self.lateral_joins if idx != i
+    #         }
+    #         del self.joins[i]
+    #         # Update aliases
+    #         self.table_aliases = OrderedDict(
+    #             (alias, (idx if idx < i else idx - 1))
+    #             for alias, idx in self.table_aliases.items()
+    #             if idx != i
+    #         )
 
     def set_outer(self, join_start: str) -> "FromClause":
         """Signal that the clause starting with join_start should be a LEFT one"""
@@ -425,9 +425,9 @@ class WhereClause(object):
             refs = set([a_match.group(0) for a_match in COL_RE.finditer(a_cond)])
             yield a_cond, refs
 
-    def clear(self):
-        self.ands.clear()
-        self.params.clear()
+    # def clear(self):
+    #     self.ands.clear()
+    #     self.params.clear()
 
     def replace_table(self, table_from: str, table_to: str):
         """Textual substitution of a table name in all conditions"""
@@ -543,13 +543,13 @@ class OrderClause(object):
         ]
         return self
 
-    def replace_aliases(self, table_ref: str, select: SelectClause):
-        for i, expr in enumerate(self.expressions):
-            if COL_RE.search(expr):
-                continue
-            # Ref to a selected expression, we have aliases in such case
-            col_or_alias, asc_or_desc = expr.split(maxsplit=1)
-            sel_expr = select.find_expr_for_alias(col_or_alias)
-            if not f"{table_ref}." in sel_expr:
-                continue
-            self.expressions[i] = sel_expr + " " + asc_or_desc
+    # def replace_aliases(self, table_ref: str, select: SelectClause):
+    #     for i, expr in enumerate(self.expressions):
+    #         if COL_RE.search(expr):
+    #             continue
+    #         # Ref to a selected expression, we have aliases in such case
+    #         col_or_alias, asc_or_desc = expr.split(maxsplit=1)
+    #         sel_expr = select.find_expr_for_alias(col_or_alias)
+    #         if not f"{table_ref}." in sel_expr:
+    #             continue
+    #         self.expressions[i] = sel_expr + " " + asc_or_desc
