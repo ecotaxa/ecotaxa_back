@@ -5,6 +5,7 @@
 from typing import List, Union, Optional, Dict, Any
 
 from fastapi import HTTPException
+from sqlalchemy.orm import Query
 from starlette.status import HTTP_422_UNPROCESSABLE_CONTENT
 
 from API_models.crud import CreateCollectionReq, CollectionAggregatedRsp
@@ -73,22 +74,22 @@ class CollectionsService(Service):
     ) -> List[CollectionBO]:
         qry = self.ro_session.query(Collection)
         if collection_ids is not None:
-            ids = collection_ids.split(",")
+            ids = [
+                int(i.strip()) for i in collection_ids.split(",") if i.strip().isdigit()
+            ]
             if len(ids) > 0:
                 qry = qry.where(Collection.id.in_(ids))
-        ret = []
-        for a_rec in qry:
-            coll_bo = CollectionBO(a_rec)
-            coll_bo._read_composing_projects()
-            checked = self._check_permission(current_user_id, coll_bo.project_ids)
-            if checked is None:
-                continue
-            coll_bo.enrich()
-            ret.append(coll_bo)
-        return ret
+            else:
+                return []
+        return self._return_collections(qry, current_user_id)
 
     def search(self, current_user_id: UserIDT, title: str) -> List[CollectionBO]:
         qry = self.ro_session.query(Collection).filter(Collection.title.ilike(title))
+        return self._return_collections(qry, current_user_id)
+
+    def _return_collections(
+        self, qry: Query[Collection], current_user_id: int
+    ) -> List[Any]:
         ret = []
         for a_rec in qry:
             coll_bo = CollectionBO(a_rec)

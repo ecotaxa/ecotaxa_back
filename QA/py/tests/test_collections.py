@@ -13,6 +13,7 @@ from tests.test_update_prj import PROJECT_UPDATE_URL
 
 PROJECT_EXPORT_EMODNET_URL = "/export/darwin_core?dry_run=False"
 
+COLLECTION_LIST_URL = "/collections"
 COLLECTION_CREATE_URL = "/collections/create"
 COLLECTION_QUERY_URL = "/collections/{collection_id}"
 COLLECTION_SEARCH_URL = "/collections/search?title={title}"
@@ -152,44 +153,73 @@ def test_collection_lifecycle(fastapi, who):
     else:
         short_title = None
         external_id = "?"
-    assert rsp.json() == [
-        {
-            "abstract": """   
+    expected_collection_data = {
+        "abstract": """   
     A bit less abstract...
     """,
-            "associate_organisations": [
-                {"id": 8, "name": "An org", "directories": None}
-            ],
-            "associate_users": [],
-            "external_id": external_id,
-            "external_id_system": "?",
-            "citation": None,
-            "contact_user": {
-                "email": "real2@users.com",
-                "id": ORDINARY_USER3_USER_ID,
-                "name": "Real User 3",
-                "organisation": "Double Dash - Institute - DDORG",
-            },
-            "creator_organisations": [
-                {"id": 7, "name": "At least one (ONE)", "directories": None}
-            ],
-            "creator_users": [],
-            "description": None,
-            "id": coll_id,
-            "license": "",
-            "project_ids": [prj_id],
-            "provider_user": {
-                "email": "real2@users.com",
-                "id": ORDINARY_USER3_USER_ID,
-                "name": "Real User 3",
-                "organisation": "Double Dash - Institute - DDORG",
-            },
-            "title": "Test collection",
-            "short_title": short_title,
-            "display_order": {"creators": ["7_o"], "associates": ["8_o"]},
-            "is_private": False,
-        }
-    ]
+        "associate_organisations": [{"id": 8, "name": "An org", "directories": None}],
+        "associate_users": [],
+        "external_id": external_id,
+        "external_id_system": "?",
+        "citation": None,
+        "contact_user": {
+            "email": "real2@users.com",
+            "id": ORDINARY_USER3_USER_ID,
+            "name": "Real User 3",
+            "organisation": "Double Dash - Institute - DDORG",
+        },
+        "creator_organisations": [
+            {"id": 7, "name": "At least one (ONE)", "directories": None}
+        ],
+        "creator_users": [],
+        "description": None,
+        "id": coll_id,
+        "license": "",
+        "project_ids": [prj_id],
+        "provider_user": {
+            "email": "real2@users.com",
+            "id": ORDINARY_USER3_USER_ID,
+            "name": "Real User 3",
+            "organisation": "Double Dash - Institute - DDORG",
+        },
+        "title": "Test collection",
+        "short_title": short_title,
+        "display_order": {"creators": ["7_o"], "associates": ["8_o"]},
+        "is_private": False,
+    }
+    assert rsp.json() == [expected_collection_data]
+
+    # List collections (GET /collections)
+    # Unauthenticated
+    rsp = fastapi.get(COLLECTION_LIST_URL)
+    assert rsp.status_code == status.HTTP_403_FORBIDDEN
+
+    # Authenticated without collection_ids parameter
+    rsp = fastapi.get(COLLECTION_LIST_URL, headers=who)
+    assert rsp.status_code == status.HTTP_200_OK
+    colls = rsp.json()
+    assert any(c["id"] == coll_id for c in colls)
+    matched_coll = next(c for c in colls if c["id"] == coll_id)
+    assert matched_coll == expected_collection_data
+
+    # Authenticated with matching collection_ids parameter
+    rsp = fastapi.get(f"{COLLECTION_LIST_URL}?collection_ids={coll_id}", headers=who)
+    assert rsp.status_code == status.HTTP_200_OK
+    assert rsp.json() == [expected_collection_data]
+
+    # Authenticated with multiple collection_ids including non-existent id
+    rsp = fastapi.get(
+        f"{COLLECTION_LIST_URL}?collection_ids={coll_id},999999", headers=who
+    )
+    assert rsp.status_code == status.HTTP_200_OK
+    assert rsp.json() == [expected_collection_data]
+
+    # Authenticated with only non-existent collection_ids
+    rsp = fastapi.get(
+        f"{COLLECTION_LIST_URL}?collection_ids=999998,999999", headers=who
+    )
+    assert rsp.status_code == status.HTTP_200_OK
+    assert rsp.json() == []
 
     # Test project to collection link
     url = PROJECT_COLLECTIONS_URL.format(project_id=prj_id)
