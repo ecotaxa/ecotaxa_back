@@ -1,17 +1,14 @@
-import pytest
 from starlette import status
 
 from tests.api_wrappers import JOB_QUERY_URL, JOB_DELETE_URL
 from tests.credentials import (
     ADMIN_AUTH,
     ADMIN_USER_ID,
-    CREATOR_AUTH,
-    CREATOR_USER_ID,
     ORDINARY_USER_USER_ID,
     USER_AUTH,
 )
 from tests.test_fastapi import PROJECT_QUERY_URL
-from tests.test_import import do_test_import, create_project
+from tests.test_import import do_test_import
 from tests.test_update_prj import PROJECT_UPDATE_URL
 
 OBJECT_SET_PREDICT_URL = "/object_set/predict"

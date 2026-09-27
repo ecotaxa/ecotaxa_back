@@ -2937,7 +2937,8 @@ def predict_object_set(
     **Start a prediction** AKA automatic classification for the given object set and options.
     """
     with PredictForProject(request, filters.base()) as sce:
-        rsp = sce.run(current_user)
+        with RightsThrower():
+            rsp = sce.run(current_user)
     return rsp
 
 
