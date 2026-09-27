@@ -705,3 +705,79 @@ def test_names():
     assert DarwinCoreExport.capitalize_name("JEAN-MARC") == "Jean-Marc"
     assert DarwinCoreExport.capitalize_name("FOo--BAR") == "Foo--Bar"
     assert DarwinCoreExport.capitalize_name("FOo-- 1 BAR") == "Foo-- 1 Bar"
+
+
+@pytest.mark.parametrize(
+    "net_type,net_mesh,net_surf,expected_val,expected_id",
+    [
+        (
+            "bongo",
+            200,
+            0.25,
+            "Bongo net",
+            "http://vocab.nerc.ac.uk/collection/L22/current/NETT0176/",
+        ),
+        (
+            "wp2",
+            200,
+            0.25,
+            "WP-2 net",
+            "http://vocab.nerc.ac.uk/collection/L22/current/TOOL0979/",
+        ),
+        (
+            "wp2",
+            100,
+            0.25,
+            "WP-2-style net",
+            "http://vocab.nerc.ac.uk/collection/L22/current/TOOL0980/",
+        ),
+        (
+            "wp2",
+            200,
+            0.5,
+            "WP-2-style net",
+            "http://vocab.nerc.ac.uk/collection/L22/current/TOOL0980/",
+        ),
+        (
+            "wp2",
+            None,
+            None,
+            "WP-2-style net",
+            "http://vocab.nerc.ac.uk/collection/L22/current/TOOL0980/",
+        ),
+        (
+            "multinet",
+            200,
+            0.25,
+            "multinet",
+            "http://vocab.nerc.ac.uk/collection/L05/current/68/",
+        ),
+        ("jb", None, None, "Juday-Bogorov net", ""),
+        ("regent", None, None, "Regent net", ""),
+        ("rg", None, None, "Regent net", ""),
+        ("unknown", 200, 0.25, None, None),
+        (None, 200, 0.25, None, None),
+        ("", None, None, None, None),
+    ],
+)
+def test_instrument_from_sample_fields(
+    net_type, net_mesh, net_surf, expected_val, expected_id
+):
+    from API_operations.exports.DarwinCore import DarwinCoreExport
+    from formats.DarwinCore.MoF import SamplingInstrumentName
+
+    ins = DarwinCoreExport.instrument_from_sample_fields(
+        net_type, net_mesh, net_surf, "event_1"
+    )
+    if expected_val is None:
+        assert ins is None
+    else:
+        assert isinstance(ins, SamplingInstrumentName)
+        assert ins.eventID == "event_1"
+        assert ins.measurementValue == expected_val
+        assert ins.measurementValueID == expected_id
+        assert ins.measurementType == "Name of sampling instrument"
+        assert (
+            ins.measurementTypeID
+            == "http://vocab.nerc.ac.uk/collection/P01/current/NMSPINST/"
+        )

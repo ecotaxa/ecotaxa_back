@@ -9,18 +9,10 @@
 #      ../../DwCA/gbif-data-validator/validator-ws/run-prod coll_6512_export.zip
 # EMODnet QC source code:
 #      https://github.com/EMODnet/EMODnetBiocheck
+import BO.ProjectVarsDefault as DefaultVars
 import datetime
 import json
 import re
-from collections import OrderedDict
-from functools import lru_cache
-from typing import Dict, List, Optional, Tuple, cast, Set, Any, Iterable
-from urllib.parse import quote_plus
-
-from fastapi import HTTPException
-from sqlalchemy import bindparam
-
-import BO.ProjectVarsDefault as DefaultVars
 from API_models.exports import ExportRsp, SciExportTypeEnum
 from BO.Classification import ClassifIDT, ClassifIDListT, ClassifIDSetT
 from BO.Collection import (
@@ -56,7 +48,9 @@ from DB.User import Organization, User, UserIDT
 from DB.helpers import Session
 from DB.helpers.Direct import text
 from DB.helpers.Postgres import timestamp_to_str
+from collections import OrderedDict
 from data.Countries import countries_by_name
+from fastapi import HTTPException
 from formats.DarwinCore.Archive import DwC_Archive, DwcArchive
 from formats.DarwinCore.DatasetMeta import DatasetMetadata
 from formats.DarwinCore.MoF import (
@@ -86,11 +80,16 @@ from formats.DarwinCore.models import (
     EMLIdentifier,
     EMLAssociatedPerson,
 )
+from functools import lru_cache
 from helpers.CustomException import ValidationException
 from helpers.DateTime import now_time
 from helpers.DynamicLogs import get_logger, LogsSwitcher
 from helpers.httpexception import DETAIL_ONE_OR_MORE_PRIVATE, DETAIL_EXPORT_PREVENTED
 from providers.NERC import NERCFetcher
+from sqlalchemy import bindparam
+from typing import Dict, List, Optional, Tuple, cast, Set, Any, Iterable
+from urllib.parse import quote_plus
+
 from ..helpers.JobService import JobServiceBase, ArgsDict
 
 logger = get_logger(__name__)
@@ -253,12 +252,12 @@ class DarwinCoreExport(JobServiceBase):
                 + DETAIL_ONE_OR_MORE_PRIVATE
                 + ": "
                 + ", ".join(
-                    [
-                        prj.title + "(" + str(prj.projid) + ")"
-                        for prj in self.collection.projects
-                        if (prj.access == AccessLevelEnum.PRIVATE.value)
-                    ]
-                )
+                [
+                    prj.title + "(" + str(prj.projid) + ")"
+                    for prj in self.collection.projects
+                    if (prj.access == AccessLevelEnum.PRIVATE.value)
+                ]
+            )
             )
             raise HTTPException(status_code=422, detail=detail)
         logger.info("---------- create job -----------")
@@ -640,7 +639,7 @@ class DarwinCoreExport(JobServiceBase):
                 # TODO: ZooProcess (from projects)
             ],
             keywordThesaurus="GBIF Dataset Type Vocabulary: "
-            "http://rs.gbif.org/vocabulary/gbif/dataset_type.xml",
+                             "http://rs.gbif.org/vocabulary/gbif/dataset_type.xml",
         )
 
         now = now_time().replace(microsecond=0)
@@ -853,13 +852,6 @@ class DarwinCoreExport(JobServiceBase):
 
     nine_nine_re = re.compile("999+.0$")
 
-    # The nets in dataset but no official BODC definition
-    bodc_unknown_nets = {
-        "jb": "Juday-Bogorov net",
-        "regent": "Regent net",
-        "rg": "Regent net",
-    }
-
     # noinspection PyPep8Naming
     def add_eMoFs_about_sample(
         self, sample: Sample, arch: DwC_Archive, event_id: str
@@ -902,52 +894,64 @@ class DarwinCoreExport(JobServiceBase):
                 % (self._sample_ref_for_message(sample), str(e))
             )
         else:
-            ins = None
-            if net_type == "bongo":
-                # TODO: There could be more specific, a dozen of bongos are there:
-                #  http://vocab.nerc.ac.uk/collection/L22/current/
-                ins = SamplingInstrumentName(
-                    event_id,
-                    "Bongo net",
-                    "http://vocab.nerc.ac.uk/collection/L22/current/NETT0176/",
-                )
-            elif net_type == "wp2":
-                if net_mesh == 200 and net_surf == 0.25:  # 0.2 mm
-                    ins = SamplingInstrumentName(
-                        event_id,
-                        "WP-2 net",
-                        "http://vocab.nerc.ac.uk/collection/L22/current/TOOL0979/",
-                    )
-                else:
-                    ins = SamplingInstrumentName(
-                        event_id,
-                        "WP-2-style net",
-                        "http://vocab.nerc.ac.uk/collection/L22/current/TOOL0980/",
-                    )
-            elif net_type == "multinet":
-                ins = SamplingInstrumentName(
-                    event_id,
-                    "multinet",
-                    "http://vocab.nerc.ac.uk/collection/L05/current/68/",
-                )
-            elif net_type in self.bodc_unknown_nets:
-                # Quoting RP from VLIZ: "In case you can’t find a term in BODC, we recommend to leave
-                # the measurementValueID field empty until BODC has created that term, instead of populating it
-                # with more generic terms such as “plankton nets” in order to not mask the “issue (lack a suitable term)”.
-                # Also measurementValue would be “Regent net” and “Juday-Bogorov net” respectively
-                value = self.bodc_unknown_nets[net_type]
-                ins = SamplingInstrumentName(event_id, value, "")
-            else:
+            ins = self.instrument_from_sample_fields(net_type, net_mesh, net_surf, event_id)
+            if ins is None:
                 self.unknown_nets.setdefault(net_type, []).append(
                     self._sample_ref_for_message(sample)
                 )
-            if ins is not None:
+            else:
                 arch.emofs.add(ins)
             # Produce net traits even if no net
             arch.emofs.add(SamplingNetMeshSizeInMicrons(event_id, str(net_mesh)))
             arch.emofs.add(
                 SampleDeviceApertureAreaInSquareMeters(event_id, str(net_surf))
             )
+
+    # The nets in dataset but no official BODC definition
+    bodc_unknown_nets = {
+        "jb": "Juday-Bogorov net",
+        "regent": "Regent net",
+        "rg": "Regent net",
+    }
+
+    @staticmethod
+    def instrument_from_sample_fields(net_type: Any, net_mesh: Any, net_surf: Any,
+                                      event_id: str) -> SamplingInstrumentName | None:
+        if net_type == "bongo":
+            # TODO: There could be more specific, a dozen of bongos are there:
+            #  http://vocab.nerc.ac.uk/collection/L22/current/
+            return SamplingInstrumentName(
+                event_id,
+                "Bongo net",
+                "http://vocab.nerc.ac.uk/collection/L22/current/NETT0176/",
+            )
+        elif net_type == "wp2":
+            if net_mesh == 200 and net_surf == 0.25:  # 0.2 mm
+                return SamplingInstrumentName(
+                    event_id,
+                    "WP-2 net",
+                    "http://vocab.nerc.ac.uk/collection/L22/current/TOOL0979/",
+                )
+            else:
+                return SamplingInstrumentName(
+                    event_id,
+                    "WP-2-style net",
+                    "http://vocab.nerc.ac.uk/collection/L22/current/TOOL0980/",
+                )
+        elif net_type == "multinet":
+            return SamplingInstrumentName(
+                event_id,
+                "multinet",
+                "http://vocab.nerc.ac.uk/collection/L05/current/68/",
+            )
+        elif net_type in DarwinCoreExport.bodc_unknown_nets:
+            # Quoting RP from VLIZ: "In case you can’t find a term in BODC, we recommend to leave
+            # the measurementValueID field empty until BODC has created that term, instead of populating it
+            # with more generic terms such as “plankton nets” in order to not mask the “issue (lack a suitable term)”.
+            # Also measurementValue would be “Regent net” and “Juday-Bogorov net” respectively
+            value = DarwinCoreExport.bodc_unknown_nets[net_type]
+            return SamplingInstrumentName(event_id, value, "")
+        return None
 
     def _get_fast_count(self, project_ids: ProjectIDListT) -> int:
         # Get a fast count of the maximum of what to do
