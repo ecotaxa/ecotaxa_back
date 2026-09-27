@@ -126,7 +126,7 @@ class ImageManagerService(Service):
             logger.exception(e)
             img_file.state = ImageFileStateEnum.ERROR.value
 
-    def do_cleanup_dup_same_obj(  # TODO: Not working and not tested anyway, now to adjust with Virtual Columns
+    def do_cleanup_dup_same_obj(
         self, current_user_id: UserIDT, prj_id: ProjectIDT, max_deletes: int
     ) -> str:  #
         """
@@ -138,7 +138,7 @@ class ImageManagerService(Service):
         orig_img = aliased(Image, name="orig")
         orig_file = aliased(ImageFile, name="orig_file")
         qry = self.session.query(
-            orig_img.imgid, Image, ImageFile
+            orig_img.orig_file_name, orig_img.imgid, Image, ImageFile
         )  # Select what to delete
         qry = (
             qry.join(ObjectHeader, ObjectHeader.objid == Image.objid)
@@ -168,9 +168,8 @@ class ImageManagerService(Service):
         qry = qry.join(
             orig_file,
             and_(
-                # orig_file.path == orig_img.file_name,
-                orig_file.state
-                == ImageFileStateEnum.OK.value,
+                orig_file.imgid == orig_img.imgid,
+                orig_file.state == ImageFileStateEnum.OK.value,
             ),
         )
         # and the same value of course
@@ -198,10 +197,11 @@ class ImageManagerService(Service):
         deleted_imgids: Set[int] = set()
         for orig_file_name, orig_img_id, an_image, an_image_file in to_do:
             # The query returns multiple rows if there are more than 2 duplicates
-            if orig_img_id in deleted_imgids:
+            if orig_img_id in deleted_imgids or an_image.imgid in deleted_imgids:
                 continue
             # Even if MD5s match, be paranoid and compare files
-            orig_path = self.vault.image_path(orig_file_name)
+            orig_img_file_name = Image.img_from_id_and_orig(orig_img_id, orig_file_name)
+            orig_path = self.vault.image_path(orig_img_file_name)
             img_file_name = Image.img_from_id_and_orig(
                 an_image.imgid, an_image.orig_file_name
             )

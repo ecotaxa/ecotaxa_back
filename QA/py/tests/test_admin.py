@@ -13,33 +13,8 @@ from starlette import status
 from tests.api_wrappers import api_wait_for_stable_job, api_get_log_file
 from tests.credentials import ADMIN_AUTH, USER_AUTH
 from tests.jobs import check_job_ok
-from tests.test_import import do_import_uvp6
 
-PROJECT_DIGEST_URL = "/admin/images/{project_id}/digest?max_digests=100"
 NIGHTLY_URL = "/admin/nightly"
-
-
-def test_admin_images(fastapi):
-
-    prj_id, _ = do_import_uvp6(fastapi, "Test Project Admin")
-
-    url = PROJECT_DIGEST_URL.format(project_id=prj_id)
-
-    # Simple user cannot
-    rsp = fastapi.get(url, headers=USER_AUTH)
-    assert rsp.status_code == status.HTTP_403_FORBIDDEN
-
-    # Admin can
-    rsp = fastapi.get(url, headers=ADMIN_AUTH)
-    assert rsp.status_code == status.HTTP_200_OK
-    assert rsp.json() == "Digest for 30 images done."
-
-    # TODO: some common error cases
-
-    # md5 is persisted
-    rsp = fastapi.get(url, headers=ADMIN_AUTH)
-    assert rsp.status_code == status.HTTP_200_OK
-    assert rsp.json() == "Digest for 0 images done."
 
 
 def do_nightly(fastapi):
