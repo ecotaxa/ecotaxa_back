@@ -1,15 +1,18 @@
 # -*- coding: utf-8 -*-
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
-# Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
+# Copyright (C) 2015-2022  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-# Clients to Google API services, so far just one.
+# Client for CAPTCHA verification (Google reCAPTCHA or internal EcoTaxa service).
 #
 from typing import Optional, List
 
 import requests
 from fastapi import HTTPException
+from starlette.status import HTTP_422_UNPROCESSABLE_CONTENT, HTTP_401_UNAUTHORIZED
 
 from helpers.AppConfig import Config
+
+RECAPTCHA_API_SITEVERIFY = "https://www.google.com/recaptcha/api/siteverify"
 
 
 class HomeCaptcha(object):
@@ -19,10 +22,10 @@ class HomeCaptcha(object):
         self.secret = homecaptcha_secret
 
         config = Config()
-        self.recaptchaid = str(config.get_recaptchaid() or "")
+        self.recaptchaid = config.get_recaptchaid() or ""
         self.all_in_one = config.get_all_in_one() == "on"
         if self.recaptchaid != "":
-            recaptchasecret = str(config.get_recaptchasecret() or "")
+            recaptchasecret = config.get_recaptchasecret() or ""
             if recaptchasecret != "":
                 self.secret = recaptchasecret
         self.max_token_length = config.get_max_captcha_token_length()
@@ -44,7 +47,7 @@ class HomeCaptcha(object):
                 "secret": self.secret,
                 "remoteip": remote_ip,
             }
-            url_captcha = "https://www.google.com/recaptcha/api/siteverify"
+            url_captcha = RECAPTCHA_API_SITEVERIFY
 
         elif self.all_in_one:
             return None
@@ -53,7 +56,7 @@ class HomeCaptcha(object):
                 "r": response,
             }
 
-            url_captcha = str(Config().get_account_validation_url() or "") + str(
+            url_captcha = Config().get_account_validation_url() + str(
                 "gui/checkcaptcha"
             )
         rsp = requests.request("GET", url=url_captcha, params=params)
@@ -83,7 +86,7 @@ class HomeCaptcha(object):
                     detail = ["invalid no_bot reason 2"]
         if detail != []:
             raise HTTPException(
-                status_code=422,
+                status_code=HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=detail,
             )
         remote_ip = no_bot[0]
@@ -91,4 +94,4 @@ class HomeCaptcha(object):
 
         error = self.validate(remote_ip, response)
         if error is not None:
-            raise HTTPException(status_code=401, detail=[error])
+            raise HTTPException(status_code=HTTP_401_UNAUTHORIZED, detail=[error])
