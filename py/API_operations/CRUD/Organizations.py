@@ -14,7 +14,6 @@ from DB.Collection import CollectionUserRole
 from DB.User import Organization, OrganizationIDListT, OrganizationIDT, User, UserIDT
 from helpers.DynamicLogs import get_logger
 from helpers.httpexception import (
-    DETAIL_NOT_FOUND,
     DETAIL_ALREADY_EXISTS,
     DETAIL_CANT_CHECK_VALIDITY,
 )
@@ -80,33 +79,6 @@ class OrganizationService(Service):
             org_to_update,
             cols_to_upd=cols_to_upd,
         )
-
-    def search_by_id(
-        self, current_user_id: UserIDT, organization: OrganizationIDT
-    ) -> Optional[Organization]:
-        current_user: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
-        self._is_manager_throw(current_user)
-        # TODO: Not consistent with others e.g. project.query()
-        ret = self.ro_session.get(Organization, organization)
-        return ret
-
-    def get_full_by_id(
-        self, current_user_id: UserIDT, organization: OrganizationIDT
-    ) -> OrganizationModel:
-        current_user: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
-        self._is_manager_throw(current_user)
-        db_org = (
-            self.ro_session.query(Organization)
-            .filter(Organization.name.ilike(organization))
-            .scalar()
-        )
-        if db_org is None:
-            raise HTTPException(status_code=404, detail=DETAIL_NOT_FOUND)
-        else:
-            ret = OrganizationModel(
-                id=db_org.id, name=db_org.name, directories=db_org.directories
-            )
-        return ret
 
     def _limit_qry(self, current_user: User, qry):
         if not current_user.is_manager():

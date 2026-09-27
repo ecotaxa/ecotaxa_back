@@ -107,7 +107,7 @@ class UserFilesFolderService(Service):
 
     def create(self, source_path: str, current_user_id: UserIDT) -> str:
         """
-        Create new file or folder
+        Create a new folder.
         """
         _: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
         # Leading / implies root directory
@@ -125,7 +125,7 @@ class UserFilesFolderService(Service):
 
     def remove(self, source_path: str, current_user_id: UserIDT):
         """
-        Remove a file or folder - return True if moved in trash , False if definitly deleted
+        Remove a file or folder - return True if moved to trash, False if definitely deleted
         """
         # Leading / implies root directory
         _: User = RightsBO.get_user_throw(self.ro_session, current_user_id)

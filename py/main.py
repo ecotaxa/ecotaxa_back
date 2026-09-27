@@ -4134,13 +4134,13 @@ def remove_user_file(
 async def create_user_file(  # async due to await file store
     source_path: str = Form(
         title="Source Path",
-        description="The path of the file or directory to be created.",
+        description="The path of the directory to be created.",
         default=None,
     ),
     current_user: int = Depends(get_current_user),
 ) -> str:
     """
-    **Create a new file or directory in the current user files directory.**
+    **Create a new directory in the current user files directory.**
     The returned text will contain a server-side path which is usable for some file-related operations.
     """
     with UserFilesFolderService() as sce:

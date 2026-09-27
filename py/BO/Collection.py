@@ -21,11 +21,10 @@ from DB.Collection import (
     CollectionUserRole,
     COLLECTION_ROLE_INSTITUTION_CODE_PROVIDER,
 )
-from DB.Object import ObjectHeader
 from DB.Project import ProjectIDListT, Project
 from DB.ProjectPrivilege import ProjectPrivilege
 from DB.Sample import Sample, SampleOrigIDT
-from DB.User import GuestIDT, Organization, OrganizationIDT, Person, User, UserIDT
+from DB.User import Organization, OrganizationIDT, Person, User, UserIDT
 from DB.helpers.ORM import contains_eager, func, any_
 from helpers.DynamicLogs import get_logger
 
@@ -224,19 +223,19 @@ class CollectionBO(object):
         self.display_order = display_order
         return by_role
 
-    @staticmethod
-    def _get_annotators_from_histo(
-        session, project_ids: ProjectIDListT, status: Optional[int] = None
-    ) -> List[UserIDT]:
-        pqry = session.query(User)
-        pqry.join(User, User.id == ObjectHeader.classif_who)
-        pqry.filter(Project.projid == any_(project_ids))
-        pqry.filter(ObjectHeader.classif_who == User.id)
-        if status is not None:
-            pqry.filter(User.status == status)
-        users: List[Any] = pqry.all()
-        creator_user = [u.id for u in users]
-        return creator_user
+    # @staticmethod
+    # def _get_annotators_from_histo(
+    #     session, project_ids: ProjectIDListT, status: Optional[int] = None
+    # ) -> List[UserIDT]:
+    #     pqry = session.query(User)
+    #     pqry.join(User, User.id == ObjectHeader.classif_who)
+    #     pqry.filter(Project.projid == any_(project_ids))
+    #     pqry.filter(ObjectHeader.classif_who == User.id)
+    #     if status is not None:
+    #         pqry.filter(User.status == status)
+    #     users: List[Any] = pqry.all()
+    #     creator_user = [u.id for u in users]
+    #     return creator_user
 
     def update(
         self,
@@ -515,21 +514,21 @@ class CollectionBO(object):
             collection_ids.append(collection_id[0])
         return collection_ids
 
-    @staticmethod
-    def can_manage_guest(session: Session, user: User, guest_id: GuestIDT) -> bool:
-        """
-        check if user can update guest profile (has to be creator_users or associates_users  in a collection managed by the user)
-        """
-        if user.is_manager():
-            return True
-        collection_ids = CollectionBO.is_a_manager(session, user)
-        qry = (
-            session.query(CollectionUserRole.collection_id)
-            .filter(CollectionUserRole.collection_id.in_(collection_ids))
-            .filter(CollectionUserRole.user_id == guest_id)
-        )
-        can_manage = qry.scalar()
-        return can_manage is not None
+    # @staticmethod
+    # def can_manage_guest(session: Session, user: User, guest_id: GuestIDT) -> bool:
+    #     """
+    #     check if user can update guest profile (has to be creator_users or associates_users  in a collection managed by the user)
+    #     """
+    #     if user.is_manager():
+    #         return True
+    #     collection_ids = CollectionBO.is_a_manager(session, user)
+    #     qry = (
+    #         session.query(CollectionUserRole.collection_id)
+    #         .filter(CollectionUserRole.collection_id.in_(collection_ids))
+    #         .filter(CollectionUserRole.user_id == guest_id)
+    #     )
+    #     can_manage = qry.scalar()
+    #     return can_manage is not None
 
     @staticmethod
     def can_manage_organization(

@@ -74,7 +74,6 @@ class UserService(Service):
     Basic CRUD API_operations on User
     """
 
-    _assistance_email: str = ""
     _validation_emails: List[str] = []
 
     def __init__(self) -> None:
@@ -745,21 +744,7 @@ class UserService(Service):
         )
 
     def _get_assistance_email(self) -> str:
-        if self._assistance_email == "":
-            from_config = self.config.get_app_manager()
-            if from_config[1] is not None:
-                self._assistance_email = str(from_config[1] or None)
-            if self._assistance_email is None:
-                users_admins = self.get_users_admins()
-                if len(users_admins):
-                    u_lst = [
-                        u.email for u in users_admins if u.name.find(" - assistance")
-                    ]
-                    if len(u_lst):
-                        self._assistance_email = u_lst[0]
-                    else:
-                        self._assistance_email = users_admins[0].email
-        return self._assistance_email
+        return self.config.get_app_manager()[1]
 
     def _get_validation_emails(self) -> List[str]:
         if len(self._validation_emails) == 0:
