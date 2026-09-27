@@ -4,9 +4,12 @@
 #
 # Exhibit some not-so-intuitive behavior of /my_files and associated upload
 #
+import gzip
 import pathlib
 import shutil
 import time
+import zipfile
+import zlib
 from typing import Dict
 
 import pytest
@@ -182,15 +185,167 @@ def test_user_file_operations(fastapi):
         assert dir_name not in entries
         assert new_dir_name in entries
 
-        # 4. Remove the directory
+        # 4. Remove the directory (moves it into trash)
         rsp = api_remove_user_file(fastapi, new_dir_name, CREATOR_AUTH)
         assert rsp.status_code == status.HTTP_200_OK
 
-        # Verify it's gone
+        # Verify it's gone from root
         list_rsp = fastapi.get(MY_FILES_URL + "/", headers=CREATOR_AUTH)
         entries = [e["name"] for e in list_rsp.json()["entries"]]
         assert new_dir_name not in entries
 
+        # 5. Remove the file/dir already in trash (permanently deleted)
+        trash_dir_name = f"trash.{CREATOR_USER_ID}"
+        list_trash = fastapi.get(
+            f"{MY_FILES_URL}{trash_dir_name}", headers=CREATOR_AUTH
+        )
+        assert list_trash.status_code == status.HTTP_200_OK
+        trash_entries = [e["name"] for e in list_trash.json()["entries"]]
+        assert new_dir_name in trash_entries
+
+        # Remove the item already in trash
+        rsp = api_remove_user_file(
+            fastapi, f"{trash_dir_name}/{new_dir_name}", CREATOR_AUTH
+        )
+        assert rsp.status_code == status.HTTP_200_OK
+
+        # Verify it is permanently removed from trash
+        list_trash = fastapi.get(
+            f"{MY_FILES_URL}{trash_dir_name}", headers=CREATOR_AUTH
+        )
+        assert list_trash.status_code == status.HTTP_200_OK
+        trash_entries = [e["name"] for e in list_trash.json()["entries"]]
+        assert new_dir_name not in trash_entries
+
+        # 6. Move a directory to trash, then empty the whole trash
+        dir_to_trash = "test_dir_to_empty"
+        rsp = api_create_user_file(fastapi, dir_to_trash, CREATOR_AUTH)
+        assert rsp.status_code == status.HTTP_200_OK
+        api_create_user_file(fastapi, f"{dir_to_trash}/subfolder", CREATOR_AUTH)
+
+        # Move directory to trash
+        rsp = api_remove_user_file(fastapi, dir_to_trash, CREATOR_AUTH)
+        assert rsp.status_code == status.HTTP_200_OK
+
+        # Verify directory is in trash
+        list_trash = fastapi.get(
+            f"{MY_FILES_URL}{trash_dir_name}", headers=CREATOR_AUTH
+        )
+        assert list_trash.status_code == status.HTTP_200_OK
+        trash_entries = [e["name"] for e in list_trash.json()["entries"]]
+        assert dir_to_trash in trash_entries
+
+        # Empty trash
+        rsp = api_remove_user_file(fastapi, trash_dir_name, CREATOR_AUTH)
+        assert rsp.status_code == status.HTTP_200_OK
+
+        # Verify trash is now empty
+        list_trash = fastapi.get(
+            f"{MY_FILES_URL}{trash_dir_name}", headers=CREATOR_AUTH
+        )
+        assert list_trash.status_code == status.HTTP_200_OK
+        assert len(list_trash.json()["entries"]) == 0
+
     finally:
         if dummy_file.exists():
             dummy_file.unlink()
+
+
+def test_my_files_error_cases(fastapi, tmp_path):
+    """
+    Error cases for user files operations:
+    - Damaged archives (corrupted archive upload)
+    - Try to delete the trash directory
+    - Move to existing target (place already taken by an existing file or directory)
+    - Move file to existing dir (where target dir already contains the item)
+    """
+    # Clean user files first
+    api_remove_user_file(fastapi, "*", CREATOR_AUTH)
+
+    # 1. Damaged archives
+    # Create corrupted zip: valid zip archive truncated/damaged so zipfile.is_zipfile is True but unpack fails
+    valid_zip = tmp_path / "valid.zip"
+    with zipfile.ZipFile(valid_zip, "w") as zf:
+        zf.writestr("test1.tsv", "col1\tcol2\n1\t2\n")
+        zf.writestr("test2.tsv", "col1\tcol2\n3\t4\n")
+    zip_bytes = valid_zip.read_bytes()
+    # Corrupt data inside the zip file while preserving header/footer structure so is_zipfile is true
+    corrupted_zip = tmp_path / "corrupted.zip"
+    corrupted_zip.write_bytes(zip_bytes[:30] + b"\x00" * 20 + zip_bytes[50:])
+    with open(corrupted_zip, "rb") as fin:
+        with pytest.raises(zipfile.BadZipFile):
+            fastapi.post(
+                MY_FILES_URL,
+                headers=CREATOR_AUTH,
+                data={"path": "corrupted.zip"},
+                files={"file": fin},
+            )
+
+    # Corrupted gzip archive: valid 2-byte header \x1f\x8b so _is_gz is True, but corrupted gzip stream
+    corrupted_gz = tmp_path / "corrupted.tsv.gz"
+    corrupted_gz.write_bytes(
+        b"\x1f\x8b\x08\x00corrupted_gzip_content_not_valid_gzip_stream"
+    )
+    with open(corrupted_gz, "rb") as fin:
+        with pytest.raises((gzip.BadGzipFile, zlib.error)):
+            fastapi.post(
+                MY_FILES_URL,
+                headers=CREATOR_AUTH,
+                data={"path": "corrupted.tsv.gz"},
+                files={"file": fin},
+            )
+
+    # 2. Try to delete / move the trash directory or manipulate protected trash
+    trash_dir_name = f"trash.{CREATOR_USER_ID}"
+    # Trying to move the trash directory -> 422
+    rsp = api_move_user_file(fastapi, trash_dir_name, "renamed_trash", CREATOR_AUTH)
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+    # Trying to move into trash directory directly -> 422
+    rsp = api_move_user_file(fastapi, "file1.txt", trash_dir_name, CREATOR_AUTH)
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+    # Trying to create inside trash directory -> 422
+    rsp = api_create_user_file(fastapi, f"{trash_dir_name}/new_dir", CREATOR_AUTH)
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+    # 3. Move a file to a place already taken by an existing file
+    api_upload_file(
+        fastapi,
+        str(valid_zip),
+        "test_files/valid.zip",
+        CREATOR_AUTH,
+    )
+    # Both valid/test1.tsv and valid/test2.tsv exist as individual files
+    file1 = "test_files/valid/test1.tsv"
+    file2 = "test_files/valid/test2.tsv"
+    # Moving file1 to file2 where file2 already exists as a file -> 422
+    rsp = api_move_user_file(fastapi, file1, file2, CREATOR_AUTH)
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+    # 4. Move to existing target directory
+    # Create two directories: dir1 and dir2, and put an item inside dir2
+    dir1 = "test_dir_source"
+    dir2 = "test_dir_target"
+    api_create_user_file(fastapi, dir1, CREATOR_AUTH)
+    api_create_user_file(fastapi, dir2, CREATOR_AUTH)
+    api_create_user_file(fastapi, f"{dir2}/{dir1}", CREATOR_AUTH)
+
+    # Moving dir1 into dir2 when dir2 already contains dir1 -> 422
+    rsp = api_move_user_file(fastapi, dir1, dir2, CREATOR_AUTH)
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+    # 5. Move file to existing dir (where target dir already contains an entry with the same stem)
+    parent_dir = "test_parent_dir"
+    api_create_user_file(fastapi, parent_dir, CREATOR_AUTH)
+    # Create a subfolder inside parent_dir with name 'item1'
+    api_create_user_file(fastapi, f"{parent_dir}/item1", CREATOR_AUTH)
+    # Create a folder in root with name 'item1'
+    api_create_user_file(fastapi, "item1", CREATOR_AUTH)
+
+    # Moving 'item1' into parent_dir where parent_dir/item1 already exists -> 422
+    rsp = api_move_user_file(fastapi, "item1", parent_dir, CREATOR_AUTH)
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+    # Clean up after test
+    api_remove_user_file(fastapi, "*", CREATOR_AUTH)

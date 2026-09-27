@@ -8,7 +8,7 @@ import shutil
 import tarfile
 import zipfile
 from pathlib import Path
-from typing import Optional, List, NamedTuple, Dict, Tuple
+from typing import Optional, List, Dict, Tuple
 
 from magic_rs import from_path, CantMatchTypeError
 from starlette.datastructures import UploadFile
@@ -20,7 +20,6 @@ from helpers.CustomException import UnprocessableEntityException
 from helpers.DynamicLogs import get_logger
 from helpers.httpexception import (
     DETAIL_INVALID_ZIP_FILE,
-    DETAIL_INVALID_LARGE_ZIP_FILE,
     DETAIL_UNKNOWN_ERROR,
     DETAIL_NOTHING_DONE,
     DETAIL_FILE_PROTECTED,
@@ -30,19 +29,13 @@ logger = get_logger(__name__)
 BUFFER_SIZE = 1024 * 1024
 
 
-class DiskUsage(NamedTuple):
-    total: int
-    used: int
-    free: int
-
-
 class UserFilesDirectory(object):
     """
     Base directory for storing user files.
     """
 
     USER_DIR_PATTERN = "ecotaxa_user.%d"
-    TRASH_DIRECTORY = "trash."
+    TRASH_DIRECTORY = "trash.%d"
     COMPRESSED_PATTERN = "*"
     TSV = ".tsv"
 
@@ -53,10 +46,8 @@ class UserFilesDirectory(object):
         self.archive_extensions: List[str] = config.get_archive_extensions()
         self.user_id = user_id
         self.list_errors: Dict[str, str] = {}
-        self._root_path = Path(
-            str(users_files_dir or ""), self.USER_DIR_PATTERN % self.user_id
-        )
-        self.TRASH_DIRECTORY += str(self.user_id)
+        self._root_path = Path(users_files_dir, self.USER_DIR_PATTERN % self.user_id)
+        self.trash_directory = self.TRASH_DIRECTORY % self.user_id
         self.compressed_origin: Optional[Path] = None
 
     async def add_file(self, name: str, path: Optional[str], stream: UploadFile) -> str:
@@ -106,15 +97,13 @@ class UserFilesDirectory(object):
         return signature == b"\x1f\x8b"
 
     def _is_trash_dir_throw(self, path: str):
-        if self._root_path.joinpath(
-            path.lstrip(os.path.sep)
-        ) == self._root_path.joinpath(self.TRASH_DIRECTORY):
+        if self._is_trash_dir(path):
             raise UnprocessableEntityException(DETAIL_FILE_PROTECTED)
 
     def _is_trash_dir(self, path: str):
         return self._root_path.joinpath(
             path.lstrip(os.path.sep)
-        ) == self._root_path.joinpath(self.TRASH_DIRECTORY)
+        ) == self._root_path.joinpath(self.trash_directory)
 
     def move(self, source_name: str, dest_name: str) -> str:
         self._is_trash_dir_throw(source_name)
@@ -145,26 +134,21 @@ class UserFilesDirectory(object):
             for item in os.listdir(pathtoremove):
                 if (
                     pathtoremove.joinpath(item).is_file()
-                    or item != self.TRASH_DIRECTORY
+                    or item != self.trash_directory
                 ):
                     self.remove(path + item)
             return
         self._is_trash_dir_throw(path)
         source_path: Path = self._root_path.joinpath(path.lstrip(os.path.sep))
         # send to trash if not in trash
-        if (
-            path[0 : len(self.TRASH_DIRECTORY + os.path.sep)]
-            != self.TRASH_DIRECTORY + os.path.sep
-        ):
-            trash_path = self._root_path.joinpath(
-                self.TRASH_DIRECTORY + os.path.sep + path
-            )
+        if not path.startswith(self.trash_directory + os.path.sep):
+            trash_path = self._root_path.joinpath(self.trash_directory, path)
             if os.path.exists(trash_path):
                 # raise UnprocessableEntityException(DETAIL_SAME_NAME_IN_TRASH)
                 self._remove_definitely(trash_path)
             try:
-                self.ensure_exists(self._root_path.joinpath(self.TRASH_DIRECTORY))
-                self.move(path, self.TRASH_DIRECTORY + os.path.sep + path)
+                self.ensure_exists(self._root_path.joinpath(self.trash_directory))
+                self.move(path, self.trash_directory + os.path.sep + path)
             except Exception as e:
                 _log_exception_throw(e)
 
@@ -173,28 +157,22 @@ class UserFilesDirectory(object):
 
     @staticmethod
     def _remove_definitely(source_path: Path):
-        if source_path.is_dir():
-            try:
+        try:
+            if source_path.is_dir():
                 shutil.rmtree(source_path)
-            except Exception as e:
-                _log_exception_throw(e)
-        else:
-            try:
+            else:
                 os.remove(source_path)
-            except Exception as e:
-                _log_exception_throw(e)
+        except Exception as e:
+            _log_exception_throw(e)
 
     def create(self, path: str) -> str:
-        self._is_trash_dir_throw(path[0 : len(self.TRASH_DIRECTORY + os.path.sep)])
+        # Cannot create directly in trash
+        self._is_trash_dir_throw(path[0 : len(self.trash_directory + os.path.sep)])
         source_path: Path = self._root_path.joinpath(path.lstrip(os.path.sep))
         if source_path.exists():
             raise UnprocessableEntityException(DETAIL_NOTHING_DONE)
         self.ensure_exists(source_path)
         return str(source_path)
-
-    def disk_usage(self, path: str) -> shutil._ntuple_diskusage:
-        ospath = self._root_path.joinpath(path.lstrip(os.path.sep))
-        return shutil.disk_usage(ospath)
 
     def extract_archive(self, archive, filepath: str, path: Path):
         if hasattr(archive, "namelist"):
@@ -272,37 +250,38 @@ class UserFilesDirectory(object):
         self.list_errors.update({"Not accepted": path_error})
         return False
 
-    def unpack_zip(self, input_path: Path, path: Path):
-        compressed_file = input_path.as_posix()
+    def unpack_zip(self, input_path: Path, path: Path) -> None:
         try:
-            with zipfile.ZipFile(compressed_file, "r", allowZip64=True) as archive:
-                self.extract_archive(archive, compressed_file, path)
-            os.remove(compressed_file)
-        except (zipfile.BadZipfile, ValueError, Exception) as e:
+            with zipfile.ZipFile(input_path, "r", allowZip64=True) as archive:
+                self.extract_archive(archive, str(input_path), path)
+        except Exception as e:
             _log_exception_throw(e, self.compressed_origin)
+        finally:
+            input_path.unlink(missing_ok=True)
 
-    def unpack_tar(self, input_path: Path, path: Path):
-        compressed_file = input_path.as_posix()
+    def unpack_tar(self, input_path: Path, path: Path) -> None:
         try:
-            with tarfile.open(compressed_file, "r") as archive:
-                self.extract_archive(archive, compressed_file, path)
-            os.remove(compressed_file)
-        except (ValueError, Exception) as e:
+            with tarfile.open(input_path, "r") as archive:
+                self.extract_archive(archive, str(input_path), path)
+        except Exception as e:
             _log_exception_throw(e, self.compressed_origin)
+        finally:
+            input_path.unlink(missing_ok=True)
 
-    def unpack_gz(self, input_path: Path, path: Path):
-        compressed_file = input_path.as_posix()
-        parts = str(compressed_file).split(".")
-        decompressed_file = ".".join(parts[:-1])
+    def unpack_gz(self, input_path: Path, path: Path) -> None:
+        decompressed_path = input_path.with_suffix("")
         try:
-            with open(compressed_file, "rb") as archive:
-                with open(decompressed_file, "wb") as decompressed:
-                    decompressed.write(gzip.decompress(archive.read()))
-            name = str(decompressed_file).split(os.path.sep)[-1]
-            self.dispatch_unpack(path.joinpath(name), path)
-            os.remove(compressed_file)
-        except (ValueError, Exception) as e:
+            with gzip.open(input_path, "rb") as f_in, open(
+                decompressed_path, "wb"
+            ) as f_out:
+                shutil.copyfileobj(f_in, f_out)
+            self.dispatch_unpack(path / decompressed_path.name, path)
+        except Exception as e:
+            if decompressed_path.exists():
+                decompressed_path.unlink()
             _log_exception_throw(e, self.compressed_origin)
+        finally:
+            input_path.unlink(missing_ok=True)
 
     def dispatch_unpack(self, compressed_path: Path, path: Path):
         if zipfile.is_zipfile(compressed_path.as_posix()):
@@ -320,18 +299,8 @@ def _log_exception_throw(e: Exception, path: Optional[Path] = None):
     if isinstance(e, zipfile.BadZipFile):
         message = DETAIL_INVALID_ZIP_FILE
         code = 422
-    elif isinstance(e, zipfile.LargeZipFile):
-        # activate zip64
-        message = DETAIL_INVALID_LARGE_ZIP_FILE
-        code = 422
     else:
         message = DETAIL_UNKNOWN_ERROR
         code = 500
     logger.error(str(code) + " " + message + " " + str(path))
-    if path is not None:
-        os.remove(path)
-        parts = str(path).split(".")
-        toremove = Path(".".join(parts[:-1]))
-        if toremove.exists():
-            shutil.rmtree(toremove)
     raise
