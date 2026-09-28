@@ -185,6 +185,9 @@ class FileImport(ImportServiceBase):
         )
         if self.req.skip_loaded_files:
             import_how.compute_skipped(source_bundle, logger)
+        # Release transaction, otherwise (if idle_in_transaction_session_timeout is set) the connection could expire
+        # during the (possibly long) bundle scanning/extraction above.
+        self.session.commit()
         # A structure to collect validation result
         import_diag = ImportDiagnostic()
         if not self.req.skip_existing_objects:
@@ -397,6 +400,9 @@ class FileImport(ImportServiceBase):
         import_how.found_users = found_users
         if self.req.skip_loaded_files:
             import_how.compute_skipped(source_bundle, logger)
+        # Release transaction, otherwise (if idle_in_transaction_session_timeout is set) the connection could expire
+        # during the (possibly long) bundle scanning/extraction above.
+        self.session.commit()
         if self.req.skip_existing_objects:
             # If we must skip existing objects then do an inventory of what's in already
             with CodeTimer("run: Existing images for %d: " % self.prj_id, logger):
