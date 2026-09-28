@@ -88,11 +88,11 @@ class ProjectExport(JobServiceBase):
     # Aliases shared by all queries built for the sci-summary export (create_sci_summary),
     # so key columns line up whichever quantity (abundance/concentration/biovolume) is computed.
     SCI_SUMMARY_ID_ALIASES: Dict[str, str] = {
-        "sam.orig_id": "sampleid",
-        "acq.orig_id": "acquisid",
-        "txo.display_name": "taxonid",
-        "obh.classif_qual": "status",
-        ANNOTATION_CATEGORY_HIERARCHY_SQL: "annotation_category",
+        "sam.orig_id": "sample_id",
+        "acq.orig_id": "acq_id",
+        "txo.display_name": "annotation_category",
+        "obh.classif_qual": "annotation_status",
+        ANNOTATION_CATEGORY_HIERARCHY_SQL: "annotation_hierarchy",
     }
 
     def __init__(self, req: ExportReq, filters: ProjectFiltersDict):
@@ -1021,13 +1021,13 @@ class ProjectExport(JobServiceBase):
             .set_aliases(
                 {
                     "txo.display_name": "txo",
-                    self.ANNOTATION_CATEGORY_HIERARCHY_SQL: "annotation_category",
+                    self.ANNOTATION_CATEGORY_HIERARCHY_SQL: "annotation_hierarchy",
                 }
             )
             .set_grouping(ResultGrouping.BY_TAXO)
         )
         taxa_hierarchy: Dict[str, str] = {
-            a_row["txo"]: a_row["annotation_category"]
+            a_row["txo"]: a_row["annotation_hierarchy"]
             for a_row in txo_qry.get_row_source(self.ro_session)
         }
         return all_sampling_units, taxa_hierarchy
@@ -1063,7 +1063,7 @@ class ProjectExport(JobServiceBase):
             without_zeroes.extend(not_presents)
             without_zeroes.sort(
                 key=lambda a_row: tuple(
-                    [a_row[id_col] for id_col in out_id_cols + ["taxonid"]]
+                    [a_row[id_col] for id_col in out_id_cols + ["annotation_category"]]
                 )
             )
             row_src: IterableRowsT = without_zeroes
@@ -1090,24 +1090,24 @@ class ProjectExport(JobServiceBase):
         presents: Set[Tuple[Tuple, str]] = set()
         # Build (sampling unit, taxon) pairs from zero-less report
         for a_row in without_zeroes:
-            sampling_unit_id, taxonid = (
+            sampling_unit_id, annotation_category = (
                 tuple([a_row[id_col] for id_col in id_cols]),
-                a_row["taxonid"],
+                a_row["annotation_category"],
             )
-            presents.add((sampling_unit_id, taxonid))
+            presents.add((sampling_unit_id, annotation_category))
         # Cross-fill
         not_presents: List[Dict[str, Any]] = []
         for sampling_unit_id in all_sampling_units:
-            for taxonid in taxa:
-                if (sampling_unit_id, taxonid) not in presents:
+            for annotation_category in taxa:
+                if (sampling_unit_id, annotation_category) not in presents:
                     a_not_present = {
                         id_col: id_col_val
                         for id_col, id_col_val in zip(id_cols, sampling_unit_id)
                     }
                     a_not_present.update(
                         {
-                            "taxonid": taxonid,
-                            "annotation_category": taxa_hierarchy[taxonid],
+                            "annotation_category": annotation_category,
+                            "annotation_hierarchy": taxa_hierarchy[annotation_category],
                             zero_col: 0,
                         }
                     )
@@ -1229,7 +1229,7 @@ class ProjectExport(JobServiceBase):
         key_cols = (
             (["project_id"] if self._multi_project else [])
             + [self.SCI_SUMMARY_ID_ALIASES[a_col] for a_col in id_cols]
-            + ["taxonid", "annotation_category"]
+            + ["annotation_category", "annotation_hierarchy"]
         )
 
         formulae_by_project = {

@@ -329,7 +329,7 @@ def test_export_summary_multi_project(fastapi):
     multi = export_lines("%d,%d" % (prj_id1, prj_id2))
 
     # Single-project export: no project_id column
-    assert single1[0].split("\t")[0] == "status"
+    assert single1[0].split("\t")[0] == "annotation_status"
     # Multi-project export: project_id is a new, first, column
     header = multi[0].split("\t")
     assert header[0] == "project_id"

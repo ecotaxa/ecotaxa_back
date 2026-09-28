@@ -1,4 +1,4 @@
-sampleid	acquisid	status	taxonid	annotation_category	count
+sample_id	acq_id	annotation_status	annotation_category	annotation_hierarchy	count
 m106_mn01_n1_sml	generic_m106_mn01_n1_sml	V	Cyclopoida	Biota>Animalia>Arthropoda>Crustacea>Multicrustacea>Copepoda>Neocopepoda>Podoplea>Cyclopoida	1
 m106_mn01_n1_sml	generic_m106_mn01_n1_sml	V	Oncaeidae	Biota>Animalia>Arthropoda>Crustacea>Multicrustacea>Copepoda>Neocopepoda>Podoplea>Cyclopoida>Ergasilida>Oncaeidae	2
 m106_mn01_n1_sml	generic_m106_mn01_n1_sml	V	detritus	not-living>detritus	0

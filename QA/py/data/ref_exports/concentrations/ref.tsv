@@ -1,4 +1,4 @@
-sampleid	status	taxonid	count
+sample_id	annotation_status	annotation_category	count
 m106_mn01_n1_sml	V	Cyclopoida	1
 m106_mn01_n1_sml	V	Oncaeidae	2
 m106_mn01_n1_sml	V	other<Biota	1
