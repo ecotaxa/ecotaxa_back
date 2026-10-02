@@ -2,7 +2,7 @@
   "openapi":"3.0.2",
   "info":{
     "title":"EcoTaxa",
-    "version":"0.0.48"
+    "version":"0.0.51"
   },
   "servers":[
     {
@@ -853,6 +853,61 @@
                   "Developmental Biology Laboratory of Villefranche sur Mer - LBDV",
                   "Sea Institute of Villefranche sur Mer - IMEV"
                 ]
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/organizations/edmo_search":{
+      "get":{
+        "tags":[
+          "organizations"
+        ],
+        "summary":"Search Edmo Organizations",
+        "description":"**Search for organizations in EDMO** (European Directory of Marine Organisations), returns their EDMO code and official name.\n\nMeant for suggesting an official organization when creating a new one. Empty list if EDMO is not reachable.",
+        "operationId":"search_edmo_organizations",
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ],
+        "parameters":[
+          {
+            "name":"name",
+            "in":"query",
+            "required":true,
+            "schema":{
+              "type":"string",
+              "title":"Name",
+              "description":"Part of the name, at least 3 characters, case-insensitive.",
+              "example":"sorbonne"
+            },
+            "description":"Part of the name, at least 3 characters, case-insensitive."
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "type":"array",
+                  "items":{
+                    "$ref":"#/components/schemas/EDMOOrganizationModel"
+                  },
+                  "title":"Response Search Edmo Organizations"
+                }
               }
             }
           },
@@ -8248,7 +8303,8 @@
             "description":"Available directories to identify people and organizations in collections settings",
             "default":{
               "orcid":"https://orcid.org/",
-              "edmo":"https://edmo.seadatanet.org/"
+              "edmo":"https://edmo.seadatanet.org/",
+              "ror":"https://ror.org/"
             },
             "example":{
               "https://edmo.seadatanet.org/":"edmo",
@@ -8612,6 +8668,29 @@
           }
         },
         "description":"A path + list of entries inside. The path is relative to an implied root."
+      },
+      "EDMOOrganizationModel":{
+        "properties":{
+          "code":{
+            "type":"integer",
+            "title":"EDMO code",
+            "description":"EDMO code of the organization, stored in directories as edmo:<code>.",
+            "example":1410
+          },
+          "name":{
+            "type":"string",
+            "title":"EDMO name",
+            "description":"Official name of the organization in EDMO.",
+            "example":"Akvaplan-NIVA AS"
+          }
+        },
+        "type":"object",
+        "required":[
+          "code",
+          "name"
+        ],
+        "title":"EDMOOrganizationModel",
+        "description":"An organization in EDMO, https://edmo.seadatanet.org/"
       },
       "ExportImagesOptionsEnum":{
         "title":"ExportImagesOptionsEnum",
