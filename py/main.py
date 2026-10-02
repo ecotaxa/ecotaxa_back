@@ -45,6 +45,7 @@ from API_models.crud import (
     MinUserModel,
     GuestModel,
     OrganizationModel,
+    EDMOOrganizationModel,
     CollectionModel,
     CollectionAggregatedRsp,
     CreateCollectionReq,
@@ -203,7 +204,7 @@ api_logger = get_api_logger()
 
 app = FastAPI(
     title="EcoTaxa",
-    version="0.0.50",
+    version="0.0.51",
     # openapi URL as seen from navigator, this is included when /docs is required
     # which serves swagger-ui JS app. Stay in /api sub-path.
     openapi_url="/api/openapi.json",
@@ -687,6 +688,32 @@ def search_organizations(
     with OrganizationService() as sce:
         org_names = sce.search(name)
     return org_names
+
+
+@app.get(
+    "/organizations/edmo_search",
+    operation_id="search_edmo_organizations",
+    tags=["organizations"],
+    response_model=List[EDMOOrganizationModel],
+)
+def search_edmo_organizations(
+    name: str = Query(
+        ...,
+        title="Name",
+        description="Part of the name, at least 3 characters, case-insensitive.",
+        examples=["sorbonne"],
+    ),
+    current_user: int = Depends(get_current_user),
+) -> List[EDMOOrganizationModel]:
+    """
+    **Search for organizations in EDMO** (European Directory of Marine Organisations), returns their EDMO code and official name.
+
+    Meant for suggesting an official organization when creating a new one. Empty list if EDMO is not reachable.
+    """
+    with OrganizationService() as sce:
+        with RightsThrower():
+            found = sce.search_edmo(current_user, name)
+    return [EDMOOrganizationModel(code=org.code, name=org.name) for org in found]
 
 
 @app.get(

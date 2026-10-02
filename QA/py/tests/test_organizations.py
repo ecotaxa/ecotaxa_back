@@ -6,10 +6,18 @@ import pytest
 from starlette import status
 from tests.credentials import ADMIN_AUTH, USER_AUTH, ORDINARY_USER_USER_ID
 
+from providers.EDMO import EDMOFetcher, EDMOOrganization
+
 ORGANIZATIONS_SEARCH_URL = "/organizations/search"
 ORGANIZATIONS_LIST_URL = "/organizations"
 ORGANIZATION_CREATE_URL = "/organizations/create"
 ORGANIZATION_UPDATE_URL = "/organizations/{organization_id}"
+
+
+@pytest.fixture(autouse=True)
+def no_edmo(mocker):
+    """No access to the real EDMO, nothing found there unless a test says otherwise"""
+    return mocker.patch.object(EDMOFetcher, "_query", return_value=[])
 
 
 def test_organizations_search(fastapi):
@@ -98,3 +106,91 @@ def test_organization_create_invalid(fastapi):
     # Try to create another one with same name
     rsp = fastapi.post(ORGANIZATION_CREATE_URL, headers=ADMIN_AUTH, json=org_data)
     assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+
+def _created_org(fastapi, org_data):
+    rsp = fastapi.post(ORGANIZATION_CREATE_URL, headers=ADMIN_AUTH, json=org_data)
+    assert rsp.status_code == status.HTTP_200_OK, rsp.text
+    org_id = rsp.json()
+    rsp = fastapi.get(
+        ORGANIZATIONS_LIST_URL, headers=ADMIN_AUTH, params={"ids": str(org_id)}
+    )
+    assert rsp.status_code == status.HTTP_200_OK
+    return next(o for o in rsp.json() if o["id"] == org_id)
+
+
+def test_organization_create_found_in_edmo_by_name(fastapi, mocker):
+    found = mocker.patch.object(
+        EDMOFetcher,
+        "find_by_name",
+        return_value=[EDMOOrganization(9901, "EDMO Named Institute")],
+    )
+    org = _created_org(
+        fastapi, {"id": -1, "name": " edmo named institute ", "directories": None}
+    )
+    found.assert_called_once_with(" edmo named institute ")
+    assert org["name"] == "EDMO Named Institute"
+    assert org["directories"] == "edmo:9901"
+
+
+def test_organization_create_found_in_edmo_by_code(fastapi, mocker):
+    by_name = mocker.patch.object(EDMOFetcher, "find_by_name")
+    by_code = mocker.patch.object(
+        EDMOFetcher,
+        "get_by_code",
+        return_value=EDMOOrganization(9902, "EDMO Coded Institute"),
+    )
+    org = _created_org(
+        fastapi,
+        {"id": -1, "name": "Coded inst.", "directories": "ror:0abcdefgh, edmo:9902"},
+    )
+    by_code.assert_called_once_with(9902)
+    by_name.assert_not_called()
+    assert org["name"] == "EDMO Coded Institute"
+    assert org["directories"] == "edmo:9902,ror:0abcdefgh"
+
+
+def test_organization_create_not_decided_by_edmo(fastapi, mocker):
+    # Ambiguous name in EDMO: the organization is created as given
+    mocker.patch.object(
+        EDMOFetcher,
+        "find_by_name",
+        return_value=[
+            EDMOOrganization(9903, "Twin Institute"),
+            EDMOOrganization(9904, "TWIN INSTITUTE"),
+        ],
+    )
+    org = _created_org(
+        fastapi, {"id": -1, "name": "Twin institute", "directories": None}
+    )
+    assert org["name"] == "Twin institute"
+    assert org["directories"] is None
+    # Unknown code, or EDMO unreachable: same
+    mocker.patch.object(EDMOFetcher, "get_by_code", return_value=None)
+    org = _created_org(
+        fastapi, {"id": -1, "name": "Unknown code inst", "directories": "edmo:1"}
+    )
+    assert org["name"] == "Unknown code inst"
+    assert org["directories"] == "edmo:1"
+
+
+ORGANIZATIONS_EDMO_SEARCH_URL = "/organizations/edmo_search"
+
+
+def test_organizations_edmo_search(fastapi, mocker):
+    search = mocker.patch.object(
+        EDMOFetcher,
+        "search",
+        return_value=[EDMOOrganization(4962, "Sorbonne University")],
+    )
+    # Needs a logged user
+    rsp = fastapi.get(ORGANIZATIONS_EDMO_SEARCH_URL, params={"name": "sorbonne"})
+    assert rsp.status_code == status.HTTP_403_FORBIDDEN
+    search.assert_not_called()
+    # Any logged user
+    rsp = fastapi.get(
+        ORGANIZATIONS_EDMO_SEARCH_URL, headers=USER_AUTH, params={"name": "sorbonne"}
+    )
+    assert rsp.status_code == status.HTTP_200_OK
+    assert rsp.json() == [{"code": 4962, "name": "Sorbonne University"}]
+    search.assert_called_once_with("sorbonne")

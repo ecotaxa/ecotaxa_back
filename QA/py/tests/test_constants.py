@@ -56,6 +56,7 @@ def test_used_constants(fastapi):
     assert data["people_organization_directories"] == {
         "edmo": "https://edmo.seadatanet.org/",
         "orcid": "https://orcid.org/",
+        "ror": "https://ror.org/",
     }
     assert data["user_status"] == {
         "blocked": -1,
