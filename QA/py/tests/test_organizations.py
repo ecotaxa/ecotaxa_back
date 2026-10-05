@@ -84,6 +84,32 @@ def test_organization_create_unauthorized(fastapi):
     org_data = {"id": -1, "name": "Unauthorized Org", "directories": None}
     rsp = fastapi.post(ORGANIZATION_CREATE_URL, headers=USER_AUTH, json=org_data)
     assert rsp.status_code == status.HTTP_403_FORBIDDEN
+    # Nor unlogged user
+    rsp = fastapi.post(ORGANIZATION_CREATE_URL, json=org_data)
+    assert rsp.status_code == status.HTTP_403_FORBIDDEN
+
+
+def test_organization_create_registration_token(fastapi, monkeypatch):
+    from API_operations.helpers.UserValidation import UserValidation, ActivationType
+    from tests.test_users_with_validation import set_config_on
+
+    set_config_on(monkeypatch)
+    org_data = {"id": -1, "name": "Registering user Org", "directories": None}
+    # Bad token
+    rsp = fastapi.post(
+        ORGANIZATION_CREATE_URL, params={"token": "bogus"}, json=org_data
+    )
+    assert rsp.status_code == status.HTTP_403_FORBIDDEN
+    # Unlogged user creating an account, with the token sent by email
+    token = UserValidation()._generate_token(
+        "new@plankton.org", action=ActivationType.create.value
+    )
+    rsp = fastapi.post(ORGANIZATION_CREATE_URL, params={"token": token}, json=org_data)
+    assert rsp.status_code == status.HTTP_200_OK
+    rsp = fastapi.get(
+        ORGANIZATIONS_SEARCH_URL, params={"name": "Registering user Org"}
+    )
+    assert [org["name"] for org in rsp.json()] == ["Registering user Org"]
 
 
 def test_organization_create_invalid(fastapi):
@@ -191,6 +217,41 @@ def test_organizations_edmo_search(fastapi, mocker):
     rsp = fastapi.get(
         ORGANIZATIONS_EDMO_SEARCH_URL, headers=USER_AUTH, params={"name": "sorbonne"}
     )
+    assert rsp.status_code == status.HTTP_200_OK
+    assert rsp.json() == [{"code": 4962, "name": "Sorbonne University"}]
+    search.assert_called_once_with("sorbonne")
+
+
+def test_organizations_edmo_search_registration_token(fastapi, mocker, monkeypatch):
+    from API_operations.helpers.UserValidation import UserValidation, ActivationType
+    from tests.test_users_with_validation import set_config_on
+
+    search = mocker.patch.object(
+        EDMOFetcher,
+        "search",
+        return_value=[EDMOOrganization(4962, "Sorbonne University")],
+    )
+    params = {"name": "sorbonne", "token": "bogus"}
+    # No validation, so no registration token
+    rsp = fastapi.get(ORGANIZATIONS_EDMO_SEARCH_URL, params=params)
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    set_config_on(monkeypatch)
+    # Bad token
+    rsp = fastapi.get(ORGANIZATIONS_EDMO_SEARCH_URL, params=params)
+    assert rsp.status_code == status.HTTP_403_FORBIDDEN
+    # Token of an existing user, e.g. for modifying a profile, is not a registration one
+    validation = UserValidation()
+    params["token"] = validation._generate_token(
+        "new@plankton.org", id=ORDINARY_USER_USER_ID, action=ActivationType.update.value
+    )
+    rsp = fastapi.get(ORGANIZATIONS_EDMO_SEARCH_URL, params=params)
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    search.assert_not_called()
+    # Token sent by email for creating an account
+    params["token"] = validation._generate_token(
+        "new@plankton.org", action=ActivationType.create.value
+    )
+    rsp = fastapi.get(ORGANIZATIONS_EDMO_SEARCH_URL, params=params)
     assert rsp.status_code == status.HTTP_200_OK
     assert rsp.json() == [{"code": 4962, "name": "Sorbonne University"}]
     search.assert_called_once_with("sorbonne")

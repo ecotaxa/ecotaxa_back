@@ -27,6 +27,7 @@ from helpers.httpexception import (
 from providers.EDMO import EDMOFetcher, EDMOOrganization
 from ..helpers.Service import Service
 from ..helpers.UserValidation import ActivationType
+from .Users import UserService
 
 logger = get_logger(__name__)
 
@@ -68,12 +69,18 @@ class OrganizationService(Service):
 
     def create_organization(
         self,
-        current_user_id: UserIDT,
+        current_user_id: Optional[UserIDT],
         new_org: OrganizationModel,
+        token: Optional[str] = None,
     ) -> OrganizationIDT:
-        # Must be manager to create an account
-        current_user: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
-        self._is_manager_throw(current_user)
+        # Must be manager, or creating an account for choosing one's organization
+        if current_user_id is not None:
+            current_user: User = RightsBO.get_user_throw(
+                self.ro_session, current_user_id
+            )
+            self._is_manager_throw(current_user)
+        else:
+            self._is_registering_throw(token)
         # official name & code from EDMO, when found there
         new_org = self._with_edmo(new_org)
         # check valid org
@@ -161,13 +168,30 @@ class OrganizationService(Service):
         return [a_rec for a_rec in qry]
 
     def search_edmo(
-        self, current_user_id: UserIDT, name_part: str
+        self,
+        current_user_id: Optional[UserIDT],
+        name_part: str,
+        token: Optional[str] = None,
     ) -> List[EDMOOrganization]:
         """
         Organizations in EDMO with a name containing name_part, for suggesting official ones.
+        Needs a logged user, or the registration token of an unlogged user creating an account.
         """
-        RightsBO.get_user_throw(self.ro_session, current_user_id)
+        if current_user_id is not None:
+            RightsBO.get_user_throw(self.ro_session, current_user_id)
+        else:
+            self._is_registering_throw(token)
         return EDMOFetcher.search(name_part)
+
+    @staticmethod
+    def _is_registering_throw(token: Optional[str]) -> None:
+        """
+        check if unlogged user is creating an account, with the token received by email
+        """
+        if not token:
+            raise HTTPException(status_code=403, detail=[NOT_AUTHORIZED])
+        with UserService() as sce:
+            sce.verify_registration_token_throw(token)
 
     def list(
         self,
