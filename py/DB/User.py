@@ -256,3 +256,32 @@ class UserQuality(Model):
     check_date: Mapped[datetime] = mapped_column(
         TIMESTAMP, default=func.now(), onupdate=func.now()
     )
+
+
+class UserRefreshToken(Model):
+    """
+    Rotating refresh tokens, only their SHA-256 is stored.
+    All tokens descending from a single login share a family_id.
+    """
+
+    __tablename__ = "user_refresh_token"
+    id: Mapped[int] = mapped_column(
+        INTEGER, Sequence("seq_user_refresh_token"), primary_key=True
+    )
+    user_id: Mapped[int] = mapped_column(
+        Integer(),
+        ForeignKey(
+            "users.id", name="user_refresh_token_user_id_fkey", ondelete="CASCADE"
+        ),
+        index=True,
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    family_id: Mapped[str] = mapped_column(String(36), index=True)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP)
+    expires_at: Mapped[datetime] = mapped_column(TIMESTAMP)
+    last_used_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)
+    revoked_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)
+    replaced_by: Mapped[int | None] = mapped_column(
+        Integer(), ForeignKey("user_refresh_token.id", ondelete="SET NULL")
+    )
+    client_info: Mapped[str | None] = mapped_column(String(255))

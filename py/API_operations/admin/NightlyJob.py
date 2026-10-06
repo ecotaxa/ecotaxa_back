@@ -16,6 +16,7 @@ from typing import Tuple, Any, List, Optional
 from sqlalchemy import select, delete
 
 from API_operations.TaxoManager import CentralTaxonomyService
+from API_operations.Tokens import RefreshTokenService
 from API_operations.helpers.JobService import JobServiceBase, ArgsDict
 from BO.Job import JobBO
 from BO.Project import ProjectBO
@@ -102,6 +103,7 @@ class NightlyJobService(JobServiceBase):
         self.clean_old_jobs(76)
         self.clean_old_prediction_histo(78)
         self.clean_aborted_trainings(80)
+        self.clean_refresh_tokens(81)
         const_status = self.check_consistency(82, 92)
         self.users_files_maintenance(92, 97)
         if not const_status:
@@ -231,6 +233,12 @@ class NightlyJobService(JobServiceBase):
         if chunk:
             logger.info("Done for jobs %s", chunk)
         logger.info("Cleanup of old jobs done")
+
+    def clean_refresh_tokens(self, start: int) -> None:
+        self.update_progress(start, "Cleaning expired refresh tokens")
+        with RefreshTokenService() as sce:
+            nb_deleted = sce.purge_expired()
+        logger.info("Cleaned %d refresh tokens", nb_deleted)
 
     def clean_old_prediction_histo(self, start: int) -> None:
         """

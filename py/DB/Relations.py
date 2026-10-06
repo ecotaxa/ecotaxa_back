@@ -30,6 +30,7 @@ from .User import (
     Role,
     Organization,
     UserRole,
+    UserRefreshToken,
 )
 from .UserPreferences import UserPreferences
 from .helpers.ORM import relationship

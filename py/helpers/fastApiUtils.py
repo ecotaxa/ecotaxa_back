@@ -206,8 +206,10 @@ class BearerOrCookieAuth(OAuth2):
         )
 
         if header_scheme.lower() == "bearer":
+            request.state.auth_source = "bearer"
             return header_param
         elif session_cookie is not None:
+            request.state.auth_source = "cookie"
             return session_cookie
         else:
             if self.auto_error:
@@ -224,7 +226,7 @@ mixed_scheme = BearerOrCookieAuth(tokenUrl="/token")
 mixed_scheme_nothrow = BearerOrCookieAuth(tokenUrl="/token", auto_error=False)
 
 
-def _credentials_exception():
+def credentials_exception():
     return HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -233,49 +235,75 @@ def _credentials_exception():
 
 
 MAX_TOKEN_AGE = 2678400  # max token age, 31 days
+FLASK_SALT = b"cookie-session"  # Hardcoded in Flask
+ACCESS_SALT = b"ecotaxa-api-access"  # Short-lived access tokens, issued by /token
 
-_serializer = None
+_serializers: Dict[bytes, URLSafeTimedSerializer] = {}
 
 
-def build_serializer() -> URLSafeTimedSerializer:
-    global _serializer
-    if not _serializer:
-        secret_key = Config().secret_key()
-        # Hardcoded in Flask
-        salt = b"cookie-session"
-        _serializer = URLSafeTimedSerializer(
-            secret_key=secret_key,
+def build_serializer(salt: bytes = FLASK_SALT) -> URLSafeTimedSerializer:
+    if salt not in _serializers:
+        _serializers[salt] = URLSafeTimedSerializer(
+            secret_key=Config().secret_key(),
             salt=salt,
             signer=TimestampSigner,
             signer_kwargs={"key_derivation": "hmac"},
         )
-    return _serializer
+    return _serializers[salt]
 
 
-def _get_current_user(token) -> int:  # pragma: no cover
+def access_ttl() -> int:
+    return int(Config().get_cnf("ACCESS_TOKEN_TTL") or 3600)
+
+
+def refresh_ttl() -> int:
+    return int(Config().get_cnf("REFRESH_TOKEN_TTL") or MAX_TOKEN_AGE)
+
+
+def legacy_tokens_on() -> bool:
+    return (Config().get_cnf("LEGACY_TOKENS") or "on") == "on"
+
+
+def issue_access_token(user_id: int) -> str:
+    return build_serializer(ACCESS_SALT).dumps({"user_id": user_id})
+
+
+def _user_id_from(payload: Dict, keys: Tuple[str, ...]) -> int:
+    for poss_key in keys:
+        if poss_key in payload:
+            try:
+                return int(payload[poss_key])
+            except ValueError:
+                break
+    raise credentials_exception()
+
+
+def _get_current_user(token, source: Optional[str] = None) -> int:  # pragma: no cover
     """
     Extract current user from auth string, anything going wrong means security exception.
+    Access tokens are tried first, then legacy (/login or Flask session) ones.
     Not reasonable to test automatically, so excluded from code coverage measurement.
     """
     try:
-        payload = build_serializer().loads(token, max_age=MAX_TOKEN_AGE)
-        try:
-            for poss_key in ("_user_id", "user_id"):  # recent Flask sets _user_id
-                if poss_key in payload:
-                    ret: int = int(payload[poss_key])
-                    break
-            else:
-                raise _credentials_exception()
-        except ValueError:
-            raise _credentials_exception()
+        payload = build_serializer(ACCESS_SALT).loads(token, max_age=access_ttl())
+        ret = _user_id_from(payload, ("user_id",))
     except (SignatureExpired, BadSignature):
-        raise _credentials_exception()
+        # recent Flask sets _user_id, legacy /login sets user_id
+        keys: Tuple[str, ...] = ("_user_id", "user_id")
+        if not legacy_tokens_on() and source != "cookie":
+            keys = ("_user_id",)
+        try:
+            payload = build_serializer().loads(token, max_age=MAX_TOKEN_AGE)
+        except (SignatureExpired, BadSignature):
+            raise credentials_exception()
+        ret = _user_id_from(payload, keys)
     if ret < 0:
-        raise _credentials_exception()
+        raise credentials_exception()
     return ret
 
 
 async def get_optional_current_user(
+    request: Request,
     token: str = Depends(mixed_scheme_nothrow),
 ) -> Optional[int]:  # pragma: no cover
     """
@@ -284,16 +312,16 @@ async def get_optional_current_user(
     if token is None:
         return None
     try:
-        return _get_current_user(token)
+        return _get_current_user(token, getattr(request.state, "auth_source", None))
     except HTTPException:
         return None
 
 
-async def get_current_user(token: str = Depends(mixed_scheme)) -> int:
+async def get_current_user(request: Request, token: str = Depends(mixed_scheme)) -> int:
     """
     Just relay the call to the private def above.
     """
-    return _get_current_user(token)
+    return _get_current_user(token, getattr(request.state, "auth_source", None))
 
 
 def _forbidden_exception():
