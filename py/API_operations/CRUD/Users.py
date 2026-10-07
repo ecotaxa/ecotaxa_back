@@ -259,6 +259,12 @@ class UserService(Service):
             )
         return user_id
 
+    def verify_registration_token_throw(self, token: str) -> None:
+        """
+        Check the token sent by email to an unlogged user creating an account, which is not yet in DB.
+        """
+        self._verify_token_throw(-1, token, short=False)
+
     @staticmethod
     def _verify_and_update_password_throw(new_password: str, usr: User):
         with LoginService() as sce:

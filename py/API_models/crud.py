@@ -63,6 +63,23 @@ class _OrganizationModel(DescriptiveModel):
 OrganizationModel = combine_models(Organization, _OrganizationModel)
 
 
+class EDMOOrganizationModel(BaseModel):
+    """
+    An organization in EDMO, https://edmo.seadatanet.org/
+    """
+
+    code: int = Field(
+        title="EDMO code",
+        description="EDMO code of the organization, stored in directories as edmo:<code>.",
+        examples=[1410],
+    )
+    name: str = Field(
+        title="EDMO name",
+        description="Official name of the organization in EDMO.",
+        examples=["Akvaplan-NIVA AS"],
+    )
+
+
 # Minimal user information
 class _MinimalUserModel(DescriptiveModel):
     id: Optional[UserIDT] = Field(

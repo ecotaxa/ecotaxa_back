@@ -45,6 +45,7 @@ from API_models.crud import (
     MinUserModel,
     GuestModel,
     OrganizationModel,
+    EDMOOrganizationModel,
     CollectionModel,
     CollectionAggregatedRsp,
     CreateCollectionReq,
@@ -203,7 +204,7 @@ api_logger = get_api_logger()
 
 app = FastAPI(
     title="EcoTaxa",
-    version="0.0.50",
+    version="0.0.51",
     # openapi URL as seen from navigator, this is included when /docs is required
     # which serves swagger-ui JS app. Stay in /api sub-path.
     openapi_url="/api/openapi.json",
@@ -690,6 +691,39 @@ def search_organizations(
 
 
 @app.get(
+    "/organizations/edmo_search",
+    operation_id="search_edmo_organizations",
+    tags=["organizations"],
+    response_model=List[EDMOOrganizationModel],
+)
+def search_edmo_organizations(
+    name: str = Query(
+        ...,
+        title="Name",
+        description="Part of the name, at least 3 characters, case-insensitive.",
+        examples=["sorbonne"],
+    ),
+    token: Optional[str] = Query(
+        default=None,
+        title="Token",
+        description="token in the url to validate request",
+    ),
+    current_user: Optional[int] = Depends(get_optional_current_user),
+) -> List[EDMOOrganizationModel]:
+    """
+    **Search for organizations in EDMO** (European Directory of Marine Organisations), returns their EDMO code and official name.
+
+    Meant for suggesting an official organization when creating a new one. Empty list if EDMO is not reachable.
+
+    🔒 Any logged user, or an unlogged user creating an account, with the token received by email.
+    """
+    with OrganizationService() as sce:
+        with RightsThrower():
+            found = sce.search_edmo(current_user, name, token)
+    return [EDMOOrganizationModel(code=org.code, name=org.name) for org in found]
+
+
+@app.get(
     "/organizations",
     operation_id="get_organizations",
     tags=["organizations"],
@@ -735,6 +769,11 @@ def get_organizations(
 )
 def create_organization(
     organization: OrganizationModel = Body(...),
+    token: Optional[str] = Query(
+        default=None,
+        title="Token",
+        description="token in the url to validate request",
+    ),
     current_user: Optional[int] = Depends(get_optional_current_user),
 ) -> OrganizationIDT:
     """
@@ -743,10 +782,13 @@ def create_organization(
     🔒 Depending on logged user, different authorizations apply:
     - An administrator or user administrator or logged project manager can create an organization.
     - An ordinary logged user cannot create another organization this way.
+    - An unlogged user creating an account can, with the token received by email.
     """
     with OrganizationService() as sce:
         with ValidityThrower(), RightsThrower():
-            org: OrganizationIDT = sce.create_organization(current_user, organization)
+            org: OrganizationIDT = sce.create_organization(
+                current_user, organization, token
+            )
     return org
 
 

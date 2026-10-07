@@ -54,6 +54,7 @@ OrganizationIDListT = List[int]
 class PeopleOrganizationDirectory(str, Enum):
     orcid = "https://orcid.org/"
     edmo = "https://edmo.seadatanet.org/"
+    ror = "https://ror.org/"
 
 
 class Organization(Model):

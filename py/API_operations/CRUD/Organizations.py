@@ -11,16 +11,48 @@ from API_models.crud import OrganizationModel
 from BO.Collection import CollectionBO, CollectionIDListT
 from BO.Rights import RightsBO, NOT_AUTHORIZED, NOT_FOUND
 from DB.Collection import CollectionUserRole
-from DB.User import Organization, OrganizationIDListT, OrganizationIDT, User, UserIDT
+from DB.User import (
+    Organization,
+    OrganizationIDListT,
+    OrganizationIDT,
+    PeopleOrganizationDirectory,
+    User,
+    UserIDT,
+)
 from helpers.DynamicLogs import get_logger
 from helpers.httpexception import (
     DETAIL_ALREADY_EXISTS,
     DETAIL_CANT_CHECK_VALIDITY,
 )
+from providers.EDMO import EDMOFetcher, EDMOOrganization
 from ..helpers.Service import Service
 from ..helpers.UserValidation import ActivationType
+from .Users import UserService
 
 logger = get_logger(__name__)
+
+# Organization directories are comma-separated "<directory>:<code>", e.g. "edmo:1278"
+DIRECTORIES_SEP = ","
+EDMO_PREFIX = PeopleOrganizationDirectory.edmo.name + ":"
+
+
+def edmo_code_from_directories(directories: Optional[str]) -> Optional[int]:
+    """The EDMO code in directories, if any"""
+    for an_entry in (directories or "").split(DIRECTORIES_SEP):
+        an_entry = an_entry.strip()
+        if an_entry.startswith(EDMO_PREFIX) and an_entry[len(EDMO_PREFIX) :].isdigit():
+            return int(an_entry[len(EDMO_PREFIX) :])
+    return None
+
+
+def directories_with_edmo(directories: Optional[str], code: int) -> str:
+    """Directories with the EDMO reference replaced or added, other ones kept"""
+    entries = [
+        an_entry.strip()
+        for an_entry in (directories or "").split(DIRECTORIES_SEP)
+        if an_entry.strip() and not an_entry.strip().startswith(EDMO_PREFIX)
+    ]
+    return DIRECTORIES_SEP.join([EDMO_PREFIX + str(code)] + entries)
 
 
 class OrganizationService(Service):
@@ -37,12 +69,20 @@ class OrganizationService(Service):
 
     def create_organization(
         self,
-        current_user_id: UserIDT,
+        current_user_id: Optional[UserIDT],
         new_org: OrganizationModel,
+        token: Optional[str] = None,
     ) -> OrganizationIDT:
-        # Must be manager to create an account
-        current_user: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
-        self._is_manager_throw(current_user)
+        # Must be manager, or creating an account for choosing one's organization
+        if current_user_id is not None:
+            current_user: User = RightsBO.get_user_throw(
+                self.ro_session, current_user_id
+            )
+            self._is_manager_throw(current_user)
+        else:
+            self._is_registering_throw(token)
+        # official name & code from EDMO, when found there
+        new_org = self._with_edmo(new_org)
         # check valid org
         self._is_valid_org_throw(new_org, new_org.id)
         organization = Organization()
@@ -80,6 +120,35 @@ class OrganizationService(Service):
             cols_to_upd=cols_to_upd,
         )
 
+    @staticmethod
+    def _with_edmo(new_org: OrganizationModel) -> OrganizationModel:
+        """
+        Look the organization up in EDMO: by its code if an EDMO reference is in its directories,
+        else by its name. When found, use the official name and set the EDMO reference.
+        If not found or EDMO is not reachable, the organization is left as is.
+        """
+        code = edmo_code_from_directories(new_org.directories)
+        if code is not None:
+            found = EDMOFetcher.get_by_code(code)
+        else:
+            by_name = EDMOFetcher.find_by_name(new_org.name)
+            # Ambiguous names are left to the user
+            found = by_name[0] if len(by_name) == 1 else None
+        if found is None:
+            return new_org
+        logger.info(
+            "Organization '%s' found in EDMO: %d '%s'",
+            new_org.name,
+            found.code,
+            found.name,
+        )
+        return new_org.model_copy(
+            update={
+                "name": found.name,
+                "directories": directories_with_edmo(new_org.directories, found.code),
+            }
+        )
+
     def _limit_qry(self, current_user: User, qry):
         if not current_user.is_manager():
             collection_ids = CollectionBO.projects_managed_by(
@@ -97,6 +166,32 @@ class OrganizationService(Service):
         else:
             return []
         return [a_rec for a_rec in qry]
+
+    def search_edmo(
+        self,
+        current_user_id: Optional[UserIDT],
+        name_part: str,
+        token: Optional[str] = None,
+    ) -> List[EDMOOrganization]:
+        """
+        Organizations in EDMO with a name containing name_part, for suggesting official ones.
+        Needs a logged user, or the registration token of an unlogged user creating an account.
+        """
+        if current_user_id is not None:
+            RightsBO.get_user_throw(self.ro_session, current_user_id)
+        else:
+            self._is_registering_throw(token)
+        return EDMOFetcher.search(name_part)
+
+    @staticmethod
+    def _is_registering_throw(token: Optional[str]) -> None:
+        """
+        check if unlogged user is creating an account, with the token received by email
+        """
+        if not token:
+            raise HTTPException(status_code=403, detail=[NOT_AUTHORIZED])
+        with UserService() as sce:
+            sce.verify_registration_token_throw(token)
 
     def list(
         self,
