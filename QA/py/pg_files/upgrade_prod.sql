@@ -3273,17 +3273,33 @@ BEGIN;
 -- Two fixes vs the R script:
 --  - an empty cnn_network_id ('') is a missing one (R only saw NA as it read a CSV), so it gets a suggestion;
 --  - 'zoocam', which does not exist, is really replaced by 'zoocam_2022-04-06' (in R the fix had no effect).
+-- Then, using the networks really available (MODELSAREA) and the instrument "clear" network, i.e. the only
+-- available network whose name starts with the instrument id (case and punctuation apart):
+--  - a network chosen by the R rules but not available is not assigned: the clear network is, if any,
+--    else the project keeps its current network;
+--  - a project left without network gets the clear network, if any.
 -- Every change is logged in projects_cnn_reassign_log (kept for audit/downgrade, to drop later).
 CREATE TABLE projects_cnn_reassign_log (
     projid INTEGER NOT NULL PRIMARY KEY,
     instrument_id VARCHAR(32),
     old_cnn_network_id VARCHAR(50),
+    r_cnn_network_id VARCHAR(50),
     new_cnn_network_id VARCHAR(50),
     erase_features BOOLEAN NOT NULL
 );
 
-INSERT INTO projects_cnn_reassign_log (projid, instrument_id, old_cnn_network_id, new_cnn_network_id, erase_features)
-WITH prj AS (SELECT projid,
+INSERT INTO projects_cnn_reassign_log (projid, instrument_id, old_cnn_network_id, r_cnn_network_id,
+                                       new_cnn_network_id, erase_features)
+WITH avail(network) AS (VALUES ('UVP5HD-2024-01'), ('UVP5SD-2024-01'), ('flowcam'), ('flowcam_colour_beta_2025-04-28'), ('flowcam_macro_2024-04'), ('flowcam_no_scalebar'), ('ifcb'), ('ifcb_crop_18px'), ('isiis'), ('lisst_holo_2026-06'), ('loki_2024-04'), ('planktoscope_2022-09'), ('uvp6_beta_2022-01-26'), ('zoocam_2022-04-06'), ('zooscan')),
+     clear AS (SELECT ins.instrument_id, min(avail.network) AS network
+                 FROM instrument ins
+                 JOIN avail
+                   ON lower(regexp_replace(avail.network, '[^a-zA-Z0-9]', '', 'g'))
+                          LIKE lower(regexp_replace(ins.instrument_id, '[^a-zA-Z0-9]', '', 'g')) || '%'
+                WHERE regexp_replace(ins.instrument_id, '[^a-zA-Z0-9]', '', 'g') <> ''
+                GROUP BY ins.instrument_id
+               HAVING count(*) = 1),
+     prj AS (SELECT projid,
                     instrument_id,
                     cnn_network_id                       AS old_cnn,
                     NULLIF(btrim(cnn_network_id), '')    AS cnn
@@ -3305,20 +3321,34 @@ WITH prj AS (SELECT projid,
                         WHEN instrument_id = 'Zooscan' THEN 'zooscan'
                         END AS suggested_cnn
                FROM prj),
-     new AS (SELECT sug.*,
+     r AS (SELECT sug.*,
+                  CASE
+                      -- replace
+                      WHEN cnn IN ('uvp5ccelter_group1', 'uvp5ccelter_group2') THEN suggested_cnn
+                      WHEN cnn = 'LOKI_2022-05-17' THEN NULL
+                      WHEN cnn = 'zoocam' THEN suggested_cnn
+                      -- keep current selection when it is made
+                      WHEN cnn IS NOT NULL THEN cnn
+                      ELSE suggested_cnn
+                      END AS r_cnn
+             FROM sug),
+     new AS (SELECT r.*,
                     CASE
-                        -- replace
-                        WHEN cnn IN ('uvp5ccelter_group1', 'uvp5ccelter_group2') THEN suggested_cnn
-                        WHEN cnn = 'LOKI_2022-05-17' THEN NULL
-                        WHEN cnn = 'zoocam' THEN suggested_cnn
-                        -- keep current selection when it is made
-                        WHEN cnn IS NOT NULL THEN cnn
-                        ELSE suggested_cnn
+                        -- unchanged
+                        WHEN r_cnn = cnn THEN cnn
+                        -- R choice available
+                        WHEN r_cnn IN (SELECT network FROM avail) THEN r_cnn
+                        -- R choice not available: the clear one, else no change
+                        WHEN r_cnn IS NOT NULL THEN COALESCE(clear.network, cnn)
+                        -- no network: the clear one, if any
+                        ELSE clear.network
                         END AS new_cnn
-               FROM sug)
+               FROM r
+               LEFT JOIN clear ON clear.instrument_id = r.instrument_id)
 SELECT projid,
        instrument_id,
        old_cnn,
+       r_cnn,
        new_cnn,
        (cnn IS NOT NULL AND (new_cnn IS NULL OR new_cnn <> cnn)) AS erase_features
   FROM new
