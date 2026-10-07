@@ -2,6 +2,7 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2021  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+import re
 from pathlib import Path
 from typing import Any, List
 
@@ -44,6 +45,16 @@ class SavedModels(object):
                 dir_name = dir_name[len(self.PRFX) :]
                 ret.append(dir_name)
         return ret
+
+    @staticmethod
+    def is_for_instrument(model_name: str, instrument_id: str) -> bool:
+        """
+        Models are named after their instrument: the name starts with the instrument id,
+        case and punctuation apart, e.g. "UVP5HD-2024-01" for "UVP5HD", "lisst_holo_2026-06" for "LISST-Holo".
+        """
+        instrument = re.sub(r"[^a-z0-9]", "", instrument_id.lower())
+        model = re.sub(r"[^a-z0-9]", "", model_name.lower())
+        return instrument != "" and model.startswith(instrument)
 
     # def _prefix(self, name: str) -> str:
     #     return self.PRFX + name
