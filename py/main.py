@@ -2393,6 +2393,40 @@ def instrument_query(
         return ret
 
 
+@app.get(
+    "/instruments/cnn_networks",
+    operation_id="instrument_cnn_networks",
+    tags=["instruments"],
+    response_model=Dict[str, List[str]],
+    responses={
+        200: {
+            "content": {
+                "application/json": {
+                    "example": {
+                        "FlowCam": ["flowcam", "flowcam_macro_2024-04"],
+                        "UVP5HD": ["UVP5HD-2024-01"],
+                    }
+                }
+            }
+        }
+    },
+)
+def instrument_cnn_networks(
+    instrument: Optional[str] = Query(
+        default=None,
+        title="Instrument",
+        description="Only return the CNN networks for this instrument.",
+        examples=["UVP5HD"],
+    )
+) -> Dict[str, List[str]]:
+    """
+    Returns the CNN networks (deep feature extractors) which can be used for each instrument,
+    from the available networks whose name starts with the instrument one.
+    """
+    with InstrumentsService() as sce:
+        return sce.cnn_networks(instrument)
+
+
 # ######################## END OF INSTRUMENT
 
 

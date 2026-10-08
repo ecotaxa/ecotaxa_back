@@ -4065,6 +4065,69 @@
         }
       }
     },
+    "/instruments/cnn_networks":{
+      "get":{
+        "tags":[
+          "instruments"
+        ],
+        "summary":"Instrument Cnn Networks",
+        "description":"Returns the CNN networks (deep feature extractors) which can be used for each instrument,\nfrom the available networks whose name starts with the instrument one.",
+        "operationId":"instrument_cnn_networks",
+        "parameters":[
+          {
+            "name":"instrument",
+            "in":"query",
+            "required":false,
+            "schema":{
+              "title":"Instrument",
+              "description":"Only return the CNN networks for this instrument.",
+              "example":"UVP5HD",
+              "type":"string",
+              "nullable":true
+            },
+            "description":"Only return the CNN networks for this instrument."
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "type":"object",
+                  "additionalProperties":{
+                    "type":"array",
+                    "items":{
+                      "type":"string"
+                    }
+                  },
+                  "title":"Response Instrument Cnn Networks"
+                },
+                "example":{
+                  "FlowCam":[
+                    "flowcam",
+                    "flowcam_macro_2024-04"
+                  ],
+                  "UVP5HD":[
+                    "UVP5HD-2024-01"
+                  ]
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/process_set/update":{
       "post":{
         "tags":[
