@@ -3269,27 +3269,25 @@ BEGIN;
 
 -- Running upgrade c593af18f13a -> 6a457fe960c1
 
--- SQL port of new_cnns_for_ecotaxa.R, on the projects as they are in the DB at upgrade time.
--- Two fixes vs the R script:
---  - an empty cnn_network_id ('') is a missing one (R only saw NA as it read a CSV), so it gets a suggestion;
---  - 'zoocam', which does not exist, is really replaced by 'zoocam_2022-04-06' (in R the fix had no effect).
--- Then, using the networks really available (MODELSAREA) and the instrument "clear" network, i.e. the only
--- available network whose name starts with the instrument id (case and punctuation apart):
---  - a network chosen by the R rules but not available is not assigned: the clear network is, if any,
---    else the project keeps its current network;
---  - a project left without network gets the clear network, if any.
+-- SQL port of the "match by instrument" rules of new_cnns_for_ecotaxa.R, applied only to the projects
+-- without CNN network (NULL or blank cnn_network_id) as they are in the DB at upgrade time.
+-- Projects with a network keep it, and their CNN features, untouched.
+-- Using the networks really available (MODELSAREA) and the instrument "clear" network, i.e. the only
+-- available network whose name starts with the instrument id (case and punctuation apart), a project gets:
+--  - the network chosen by the R rules, if available;
+--  - else the clear network, if any;
+--  - else nothing, it stays without network.
 -- Every change is logged in projects_cnn_reassign_log (kept for audit/downgrade, to drop later).
 CREATE TABLE projects_cnn_reassign_log (
     projid INTEGER NOT NULL PRIMARY KEY,
     instrument_id VARCHAR(32),
     old_cnn_network_id VARCHAR(50),
     r_cnn_network_id VARCHAR(50),
-    new_cnn_network_id VARCHAR(50),
-    erase_features BOOLEAN NOT NULL
+    new_cnn_network_id VARCHAR(50)
 );
 
 INSERT INTO projects_cnn_reassign_log (projid, instrument_id, old_cnn_network_id, r_cnn_network_id,
-                                       new_cnn_network_id, erase_features)
+                                       new_cnn_network_id)
 WITH avail(network) AS (VALUES ('UVP5HD-2024-01'), ('UVP5SD-2024-01'), ('flowcam'), ('flowcam_colour_beta_2025-04-28'), ('flowcam_macro_2024-04'), ('flowcam_no_scalebar'), ('ifcb'), ('ifcb_crop_18px'), ('isiis'), ('lisst_holo_2026-06'), ('loki_2024-04'), ('planktoscope_2022-09'), ('uvp6_beta_2022-01-26'), ('zoocam_2022-04-06'), ('zooscan')),
      clear AS (SELECT ins.instrument_id, min(avail.network) AS network
                  FROM instrument ins
@@ -3301,46 +3299,28 @@ WITH avail(network) AS (VALUES ('UVP5HD-2024-01'), ('UVP5SD-2024-01'), ('flowcam
                HAVING count(*) = 1),
      prj AS (SELECT projid,
                     instrument_id,
-                    cnn_network_id                       AS old_cnn,
-                    NULLIF(btrim(cnn_network_id), '')    AS cnn
-               FROM projects),
-     sug AS (SELECT prj.*,
-                    CASE
-                        -- fix mistakes
-                        WHEN cnn = 'zoocam' THEN 'zoocam_2022-04-06'
-                        WHEN cnn = 'LOKI_2022-05-17' THEN NULL
-                        -- match by instrument
-                        WHEN instrument_id = 'FlowCam' THEN 'flowcam'
-                        WHEN instrument_id = 'IFCB' THEN 'ifcb'
-                        WHEN instrument_id = 'ISIIS' THEN 'isiis'
-                        WHEN instrument_id = 'PlanktoScope' THEN 'planktoscope_2022-09'
-                        WHEN instrument_id = 'UVP5HD' THEN 'UVP5HD-2024-01'
-                        WHEN instrument_id = 'UVP5SD' THEN 'UVP5SD-2024-01'
-                        WHEN instrument_id = 'UVP6' THEN 'uvp6_beta_2022-01-26'
-                        WHEN instrument_id = 'ZooCam' THEN 'zoocam_2022-04-06'
-                        WHEN instrument_id = 'Zooscan' THEN 'zooscan'
-                        END AS suggested_cnn
-               FROM prj),
-     r AS (SELECT sug.*,
-                  CASE
-                      -- replace
-                      WHEN cnn IN ('uvp5ccelter_group1', 'uvp5ccelter_group2') THEN suggested_cnn
-                      WHEN cnn = 'LOKI_2022-05-17' THEN NULL
-                      WHEN cnn = 'zoocam' THEN suggested_cnn
-                      -- keep current selection when it is made
-                      WHEN cnn IS NOT NULL THEN cnn
-                      ELSE suggested_cnn
+                    cnn_network_id AS old_cnn
+               FROM projects
+              WHERE NULLIF(btrim(cnn_network_id), '') IS NULL),
+     r AS (SELECT prj.*,
+                  CASE instrument_id
+                      -- match by instrument
+                      WHEN 'FlowCam' THEN 'flowcam'
+                      WHEN 'IFCB' THEN 'ifcb'
+                      WHEN 'ISIIS' THEN 'isiis'
+                      WHEN 'PlanktoScope' THEN 'planktoscope_2022-09'
+                      WHEN 'UVP5HD' THEN 'UVP5HD-2024-01'
+                      WHEN 'UVP5SD' THEN 'UVP5SD-2024-01'
+                      WHEN 'UVP6' THEN 'uvp6_beta_2022-01-26'
+                      WHEN 'ZooCam' THEN 'zoocam_2022-04-06'
+                      WHEN 'Zooscan' THEN 'zooscan'
                       END AS r_cnn
-             FROM sug),
+             FROM prj),
      new AS (SELECT r.*,
                     CASE
-                        -- unchanged
-                        WHEN r_cnn = cnn THEN cnn
                         -- R choice available
                         WHEN r_cnn IN (SELECT network FROM avail) THEN r_cnn
-                        -- R choice not available: the clear one, else no change
-                        WHEN r_cnn IS NOT NULL THEN COALESCE(clear.network, cnn)
-                        -- no network: the clear one, if any
+                        -- else the clear one, if any
                         ELSE clear.network
                         END AS new_cnn
                FROM r
@@ -3349,24 +3329,9 @@ SELECT projid,
        instrument_id,
        old_cnn,
        r_cnn,
-       new_cnn,
-       (cnn IS NOT NULL AND (new_cnn IS NULL OR new_cnn <> cnn)) AS erase_features
+       new_cnn
   FROM new
- WHERE new_cnn IS DISTINCT FROM cnn;
-
--- CNN features depend on the CNN network: delete them where it changes, as the app does
--- (BO.Prediction.DeepFeatures.delete_all). They are recomputed by the next prediction using deep features.
-DO
-$$
-    DECLARE
-        prj RECORD;
-    BEGIN
-        FOR prj IN SELECT projid FROM projects_cnn_reassign_log WHERE erase_features ORDER BY projid
-            LOOP
-                DELETE FROM obj_cnn_features_vector WHERE objcnnid <@ obj_in_prj(prj.projid);
-            END LOOP;
-    END
-$$;
+ WHERE new_cnn IS NOT NULL;
 
 UPDATE projects prj
    SET cnn_network_id = log.new_cnn_network_id
