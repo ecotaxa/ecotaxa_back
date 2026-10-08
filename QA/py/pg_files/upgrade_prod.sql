@@ -3184,7 +3184,7 @@ COMMIT;
 
 BEGIN;
 
--- Running upgrade c593af18f13a -> e68bf28d2613
+-- Running upgrade 5d49f4994e0c -> e68bf28d2613
 
 ALTER TABLE projects RENAME formulae TO formulae_old;
 

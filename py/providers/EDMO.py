@@ -30,7 +30,8 @@ class EDMOFetcher(object):
     USER_AGENT = "EcoTaxa"
     TIMEOUT = 5
     MAX_RESULTS = 10
-    MAX_SEARCH_RESULTS = 20
+    # EDMO returns its matches in no particular order, enough of them so that the wanted one is among them
+    MAX_SEARCH_RESULTS = 200
     MIN_SEARCH_LEN = 3
     the_session = None
 
@@ -58,13 +59,16 @@ PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
         name_part = name_part.strip()
         if len(name_part) < cls.MIN_SEARCH_LEN:
             return []
+        # No ORDER BY in the query, EDMO firewall blocks it as an attack, so sorted here
         sparql = cls.PREFIXES + (
             "SELECT ?code ?name WHERE {"
             " ?org a org:Organization ; org:name ?name ; skos:notation ?code ."
-            " FILTER(contains(lcase(str(?name)), lcase(%s))) } ORDER BY ?name LIMIT %d"
+            " FILTER(contains(lcase(str(?name)), lcase(%s))) } LIMIT %d"
             % (cls._literal(name_part), cls.MAX_SEARCH_RESULTS)
         )
-        return cls._organizations(cls._query(sparql))
+        return sorted(
+            cls._organizations(cls._query(sparql)), key=lambda org: org.name.lower()
+        )
 
     @classmethod
     def get_by_code(cls, code: int) -> Optional[EDMOOrganization]:

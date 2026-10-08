@@ -73,12 +73,9 @@ class OrganizationService(Service):
         new_org: OrganizationModel,
         token: Optional[str] = None,
     ) -> OrganizationIDT:
-        # Must be manager, or creating an account for choosing one's organization
+        # Must be a valid user, e.g. choosing one's organization in one's profile, or creating an account
         if current_user_id is not None:
-            current_user: User = RightsBO.get_user_throw(
-                self.ro_session, current_user_id
-            )
-            self._is_manager_throw(current_user)
+            RightsBO.get_user_throw(self.ro_session, current_user_id)
         else:
             self._is_registering_throw(token)
         # official name & code from EDMO, when found there

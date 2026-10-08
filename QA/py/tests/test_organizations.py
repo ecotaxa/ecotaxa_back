@@ -80,13 +80,17 @@ def test_organization_crud(fastapi):
 
 
 def test_organization_create_unauthorized(fastapi):
-    # Ordinary user cannot create organization
+    # Unlogged user without registration token cannot create organization
     org_data = {"id": -1, "name": "Unauthorized Org", "directories": None}
-    rsp = fastapi.post(ORGANIZATION_CREATE_URL, headers=USER_AUTH, json=org_data)
-    assert rsp.status_code == status.HTTP_403_FORBIDDEN
-    # Nor unlogged user
     rsp = fastapi.post(ORGANIZATION_CREATE_URL, json=org_data)
     assert rsp.status_code == status.HTTP_403_FORBIDDEN
+
+
+def test_organization_create_ordinary_user(fastapi):
+    # Ordinary user can create organization, e.g. choosing one's organization in one's profile
+    org_data = {"id": -1, "name": "Ordinary User Org", "directories": None}
+    rsp = fastapi.post(ORGANIZATION_CREATE_URL, headers=USER_AUTH, json=org_data)
+    assert rsp.status_code == status.HTTP_200_OK
 
 
 def test_organization_create_registration_token(fastapi, monkeypatch):
