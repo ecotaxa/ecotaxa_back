@@ -29,6 +29,7 @@ from fastapi import (
     Path,
 )
 from fastapi.exceptions import RequestValidationError
+from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.logger import logger as fastapi_logger
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.templating import Jinja2Templates
@@ -75,7 +76,7 @@ from API_models.filesystem import DirectoryModel
 from API_models.filters import Optional, ProjectFilters, ProjectFiltersDict
 from API_models.helpers.Introspect import plain_columns
 from API_models.imports import ImportReq, SimpleImportRsp, SimpleImportReq, ImportRsp
-from API_models.login import LoginReq
+from API_models.login import LoginReq, TokenRsp, RefreshReq
 from API_models.merge import MergeRsp
 from API_models.misc import MigratedIDsRsp
 from API_models.objects import (
@@ -112,6 +113,7 @@ from API_models.taxonomy import (
     TaxonomyRecastReq,
 )
 from API_operations.BigFiles import create_big_files_router
+from API_operations.Tokens import RefreshTokenService
 from API_operations.CRUD.Collections import CollectionsService
 from API_operations.CRUD.Constants import ConstantsService
 from API_operations.CRUD.Guests import GuestService
@@ -204,7 +206,7 @@ api_logger = get_api_logger()
 
 app = FastAPI(
     title="EcoTaxa",
-    version="0.0.51",
+    version="0.0.52",
     # openapi URL as seen from navigator, this is included when /docs is required
     # which serves swagger-ui JS app. Stay in /api sub-path.
     openapi_url="/api/openapi.json",
@@ -272,6 +274,7 @@ app.mount("/api", app)
     "/login",
     operation_id="login",
     tags=["authentification"],
+    deprecated=True,
     responses={
         200: {
             "content": {
@@ -289,11 +292,69 @@ def login(params: LoginReq = Body(...)) -> str:
 
     If successful, the login will return a **JWT** which will have to be used
     in bearer authentication scheme for subsequent calls.
+
+    *Deprecated*, use **/token** which returns a short-lived access token and a refresh token.
     """
     with LoginService() as sce:
         with RightsThrower():
             ret = sce.validate_login(params.username, params.password)
     return str(ret)
+
+
+@app.post(
+    "/token",
+    operation_id="token",
+    tags=["authentification"],
+    response_model=TokenRsp,
+)
+def token(request: Request, form: OAuth2PasswordRequestForm = Depends()) -> TokenRsp:
+    """
+    **Login barrier, OAuth2 password flow.**
+
+    Returns a short-lived **access_token**, to use in bearer authentication scheme,
+    and a **refresh_token** to obtain a new pair from **/token/refresh** when it expires.
+
+    Scripts should call this once, then **store the refresh_token and reuse it** with
+    /token/refresh on later runs, instead of logging in on every run.
+    Only the most recent logins of a user stay valid, older sessions are revoked.
+    """
+    with LoginService() as sce:
+        with RightsThrower():
+            user = sce.authenticate(form.username, form.password)
+    with RefreshTokenService() as rts:
+        return rts.issue(user.id, request.headers.get("user-agent"))
+
+
+@app.post(
+    "/token/refresh",
+    operation_id="refresh_token",
+    tags=["authentification"],
+    response_model=TokenRsp,
+)
+def refresh_token(request: Request, params: RefreshReq = Body(...)) -> TokenRsp:
+    """
+    **Exchange a refresh token for a new access + refresh pair.**
+
+    The presented refresh token becomes invalid. Presenting it again revokes the whole session.
+    So **persist the new refresh_token each time**, replacing the previous one.
+    """
+    with RefreshTokenService() as rts:
+        return rts.rotate(params.refresh_token, request.headers.get("user-agent"))
+
+
+@app.post(
+    "/token/revoke",
+    operation_id="revoke_token",
+    tags=["authentification"],
+)
+def revoke_token(params: RefreshReq = Body(...)) -> None:
+    """
+    **Logout: revoke a refresh token and all its predecessors/successors.**
+
+    Always succeeds, whatever the token.
+    """
+    with RefreshTokenService() as rts:
+        rts.revoke(params.refresh_token)
 
 
 @app.get(

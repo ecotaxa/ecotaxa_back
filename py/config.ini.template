@@ -49,6 +49,14 @@ SECRET_KEY = THIS KEY MUST BE CHANGED
 SECURITY_PASSWORD_HASH = sha512_crypt
 SECURITY_PASSWORD_SALT = zzzzzz
 
+# API tokens from /token: access token and refresh token lifetimes, in seconds
+#ACCESS_TOKEN_TTL = 3600
+#REFRESH_TOKEN_TTL = 2678400
+# Max number of logins (refresh token families) kept valid per user, older ones are revoked
+#MAX_REFRESH_FAMILIES = 10
+# "off" rejects /login tokens in Authorization header, the Flask session cookie is still accepted
+#LEGACY_TOKENS = on
+
 # key can be shared with the front
 MAILSERVICE_SECRET_KEY = THIS KEY MUST BE CHANGED ANS IS ONLY FOR TOKENS SENT BY MAIL
 MAILSERVICE_SALT = "saltservicemail_salt"

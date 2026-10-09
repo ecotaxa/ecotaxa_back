@@ -26,10 +26,10 @@ def fastapi(config, database, tstlogs, request) -> Generator[TestClient, Any, No
     from helpers import fastApiUtils
     import main
 
-    fastApiUtils.build_serializer()
+    serializer = fastApiUtils.build_serializer()
     main.logger.setLevel(logging.CRITICAL)
-    sav_loads = fastApiUtils._serializer.loads
-    fastApiUtils._serializer.loads = lambda s, max_age: {"user_id": s}
+    sav_loads = serializer.loads
+    serializer.loads = lambda s, max_age: {"user_id": s}
 
     client = TestClient(main.app)
     main.JOB_INTERVAL = 0.01
@@ -44,7 +44,7 @@ def fastapi(config, database, tstlogs, request) -> Generator[TestClient, Any, No
         sce_check_consistency("fastapi fx")
     except AssertionError as e:
         consistency_exception = e
-    fastApiUtils._serializer.loads = sav_loads
+    serializer.loads = sav_loads
     JobScheduler.shutdown()
     if consistency_exception is not None:
         clear_all_jobs()  # Don't leak failed/unfinished jobs to next tests

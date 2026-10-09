@@ -45,6 +45,11 @@ class LoginService(Service):
         self.password_hash = None
 
     def validate_login(self, username: str, password: str) -> Union[str, bytes]:
+        """Legacy /login: a long-lived token, signed with the Flask salt."""
+        the_user = self.authenticate(username, password)
+        return build_serializer().dumps({"user_id": the_user.id})
+
+    def authenticate(self, username: str, password: str) -> User:
         # Fetch the one and only user
         # username is an email - check before
         assert username is not None, NOT_AUTHORIZED
@@ -78,9 +83,7 @@ class LoginService(Service):
         self.session.commit()
         # throw exception if the user is not active
         self.verify_status_throw(the_user, account_validation)
-        # Sign with the verifying serializer, the salt is Flask's one
-        token = build_serializer().dumps({"user_id": the_user.id})
-        return token
+        return the_user
 
     #
     # Copy/paste/adapt from flask-security

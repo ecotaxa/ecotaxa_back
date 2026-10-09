@@ -16,6 +16,8 @@ from API_models.crud import (
     ResetPasswordReq,
     UserActivateReq,
 )
+
+from API_operations.Tokens import RefreshTokenService
 from BO.Classification import ClassifIDListT
 from BO.Preferences import Preferences
 from BO.Rights import RightsBO, NOT_AUTHORIZED, NOT_FOUND
@@ -553,6 +555,15 @@ class UserService(Service):
         self._validate_user_throw(
             update_src, user_to_update, (User.password in cols_to_upd)
         )
+        # A new password or a lost active status kills all refresh tokens
+        revoke_tokens = user_to_update.id is not None and (
+            (User.password in cols_to_upd and update_src.password not in ("", None))
+            or (
+                User.status in cols_to_upd
+                and update_src.status != user_to_update.status
+                and update_src.status != UserStatus.active.value
+            )
+        )
         # change status_date and mail_status_date if values were modified
         now = DateTime.now_time()
         if update_src.status != user_to_update.status:
@@ -591,6 +602,8 @@ class UserService(Service):
             # Set roles so that requested actions will be possible
             all_roles = {a_role.name: a_role for a_role in self.session.query(Role)}
             RightsBO.set_allowed_actions(user_to_update, actions, all_roles)
+        if revoke_tokens:
+            RefreshTokenService.revoke_all_for_user(self.session, user_to_update.id)
         self.session.commit()
         return None
 
