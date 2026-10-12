@@ -6,10 +6,23 @@ from urllib.parse import urlencode
 
 import pytest
 from API_operations.CRUD.Users import UserService
+from helpers import fastApiUtils
 from helpers.httpexception import DETAIL_EMAIL_OWNED_BY_OTHER
 
+from starlette import status
+
+from tests.credentials import ORDINARY_USER_USER_ID
 from tests.test_import import ADMIN_USER_ID, create_project
+from tests.test_login import client  # noqa: F401 (fixture)
+from tests.test_fastapi import USER_ME_URL
 from tests.test_user_admin import USER_CREATE_URL
+
+# Ordinary user from data_load.sql, also used by front QA/test_refresh_token.sh
+ORDINARY_USER_CREDS = {"username": "user", "password": "zero6"}
+# Not imported from test_tokens, which imports this module
+TOKEN_URL = "/token"
+REFRESH_URL = "/token/refresh"
+REVOKE_URL = "/token/revoke"
 
 
 def config_captcha(monkeypatch):
@@ -130,3 +143,54 @@ def test_orcid_check_digit():
     assert UserService.generate_check_digit("000000021825009") == "7"
     assert UserService.generate_check_digit("000000015109370") == "0"
     assert UserService.generate_check_digit("000000021694233") == "X"
+
+
+def _pair(client):
+    rsp = client.post(TOKEN_URL, data=ORDINARY_USER_CREDS)
+    assert rsp.status_code == status.HTTP_200_OK, rsp.text
+    return rsp.json()
+
+
+def _me(client, access_token):
+    return client.get(USER_ME_URL, headers={"Authorization": "Bearer " + access_token})
+
+
+def _refresh(client, refresh_token):
+    return client.post(REFRESH_URL, json={"refresh_token": refresh_token})
+
+
+def test_ordinary_user_refresh_token(database, client, monkeypatch):
+    """Same scenario as front QA/test_refresh_token.sh, for an ordinary user"""
+    # Login
+    pair = _pair(client)
+    rsp = _me(client, pair["access_token"])
+    assert rsp.status_code == status.HTTP_200_OK
+    assert rsp.json()["id"] == ORDINARY_USER_USER_ID
+    assert _me(client, "not-a-token").status_code == status.HTTP_401_UNAUTHORIZED
+    # Rotation
+    rsp = _refresh(client, pair["refresh_token"])
+    assert rsp.status_code == status.HTTP_200_OK
+    pair2 = rsp.json()
+    assert pair2["refresh_token"] != pair["refresh_token"]
+    assert _me(client, pair2["access_token"]).status_code == status.HTTP_200_OK
+    # Replay of the rotated token revokes the whole session
+    rsp = _refresh(client, pair["refresh_token"])
+    assert rsp.status_code == status.HTTP_401_UNAUTHORIZED
+    rsp = _refresh(client, pair2["refresh_token"])
+    assert rsp.status_code == status.HTTP_401_UNAUTHORIZED
+    # Logout
+    pair3 = _pair(client)
+    rsp = client.post(REVOKE_URL, json={"refresh_token": pair3["refresh_token"]})
+    assert rsp.status_code == status.HTTP_200_OK
+    rsp = _refresh(client, pair3["refresh_token"])
+    assert rsp.status_code == status.HTTP_401_UNAUTHORIZED
+    rsp = client.post(REVOKE_URL, json={"refresh_token": "not-a-token"})
+    assert rsp.status_code == status.HTTP_200_OK
+    # Deprecated /login, LEGACY_TOKENS on by default.
+    # The module fastapi fixture patches the legacy token serializer: real one during this test.
+    serializer = fastApiUtils.build_serializer()
+    if "loads" in vars(serializer):
+        monkeypatch.delattr(serializer, "loads")
+    rsp = client.post("/login", json=ORDINARY_USER_CREDS)
+    assert rsp.status_code == status.HTTP_200_OK
+    assert _me(client, rsp.json()).status_code == status.HTTP_200_OK
