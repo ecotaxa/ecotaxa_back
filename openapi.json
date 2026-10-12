@@ -2,7 +2,7 @@
   "openapi":"3.0.2",
   "info":{
     "title":"EcoTaxa",
-    "version":"0.0.51"
+    "version":"0.0.52"
   },
   "servers":[
     {
@@ -81,7 +81,7 @@
           "authentification"
         ],
         "summary":"Login",
-        "description":"**Login barrier,**\n\nIf successful, the login will return a **JWT** which will have to be used\nin bearer authentication scheme for subsequent calls.",
+        "description":"**Login barrier,**\n\nIf successful, the login will return a **JWT** which will have to be used\nin bearer authentication scheme for subsequent calls.\n\n*Deprecated*, use **/token** which returns a short-lived access token and a refresh token.",
         "operationId":"login",
         "requestBody":{
           "content":{
@@ -103,6 +103,131 @@
                   "title":"Response Login"
                 },
                 "example":"eyJ1c2VyX2lkIjo5OTN9.YUmHHw.-X4tsLsYbwldKL6vDgO3o4-aAxE"
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "deprecated":true
+      }
+    },
+    "/token":{
+      "post":{
+        "tags":[
+          "authentification"
+        ],
+        "summary":"Token",
+        "description":"**Login barrier, OAuth2 password flow.**\n\nReturns a short-lived **access_token**, to use in bearer authentication scheme,\nand a **refresh_token** to obtain a new pair from **/token/refresh** when it expires.\n\nScripts should call this once, then **store the refresh_token and reuse it** with\n/token/refresh on later runs, instead of logging in on every run.\nOnly the most recent logins of a user stay valid, older sessions are revoked.",
+        "operationId":"token",
+        "requestBody":{
+          "content":{
+            "application/x-www-form-urlencoded":{
+              "schema":{
+                "$ref":"#/components/schemas/Body_token"
+              }
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/TokenRsp"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/token/refresh":{
+      "post":{
+        "tags":[
+          "authentification"
+        ],
+        "summary":"Refresh Token",
+        "description":"**Exchange a refresh token for a new access + refresh pair.**\n\nThe presented refresh token becomes invalid. Presenting it again revokes the whole session.\nSo **persist the new refresh_token each time**, replacing the previous one.",
+        "operationId":"refresh_token",
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "$ref":"#/components/schemas/RefreshReq"
+              }
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/TokenRsp"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/token/revoke":{
+      "post":{
+        "tags":[
+          "authentification"
+        ],
+        "summary":"Revoke Token",
+        "description":"**Logout: revoke a refresh token and all its predecessors/successors.**\n\nAlways succeeds, whatever the token.",
+        "operationId":"revoke_token",
+        "requestBody":{
+          "content":{
+            "application/json":{
+              "schema":{
+                "$ref":"#/components/schemas/RefreshReq"
+              }
+            }
+          },
+          "required":true
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{}
               }
             }
           },
@@ -7679,6 +7804,47 @@
         "type":"object",
         "title":"Body_remove_user_file"
       },
+      "Body_token":{
+        "properties":{
+          "grant_type":{
+            "title":"Grant Type",
+            "type":"string",
+            "pattern":"^password$",
+            "nullable":true
+          },
+          "username":{
+            "type":"string",
+            "title":"Username"
+          },
+          "password":{
+            "type":"string",
+            "format":"password",
+            "title":"Password"
+          },
+          "scope":{
+            "type":"string",
+            "title":"Scope",
+            "default":""
+          },
+          "client_id":{
+            "title":"Client Id",
+            "type":"string",
+            "nullable":true
+          },
+          "client_secret":{
+            "format":"password",
+            "title":"Client Secret",
+            "type":"string",
+            "nullable":true
+          }
+        },
+        "type":"object",
+        "required":[
+          "username",
+          "password"
+        ],
+        "title":"Body_token"
+      },
       "BulkUpdateReq":{
         "properties":{
           "target_ids":{
@@ -11483,6 +11649,20 @@
         ],
         "title":"RecastOperation"
       },
+      "RefreshReq":{
+        "properties":{
+          "refresh_token":{
+            "type":"string",
+            "title":"Refresh token",
+            "description":"A refresh token from /token or /token/refresh."
+          }
+        },
+        "type":"object",
+        "required":[
+          "refresh_token"
+        ],
+        "title":"Refresh request Model"
+      },
       "ResetPasswordReq":{
         "properties":{
           "id":{
@@ -12456,6 +12636,44 @@
         },
         "type":"object",
         "title":"TaxonomyTreeStatus"
+      },
+      "TokenRsp":{
+        "properties":{
+          "access_token":{
+            "type":"string",
+            "title":"Access token",
+            "description":"Bearer token for API calls."
+          },
+          "token_type":{
+            "type":"string",
+            "title":"Token type",
+            "description":"Always 'bearer'.",
+            "default":"bearer"
+          },
+          "expires_in":{
+            "type":"integer",
+            "title":"Expires in",
+            "description":"Access token lifetime, in seconds."
+          },
+          "refresh_token":{
+            "type":"string",
+            "title":"Refresh token",
+            "description":"Single-use token for /token/refresh, rotated on each use."
+          },
+          "refresh_expires_in":{
+            "type":"integer",
+            "title":"Refresh expires in",
+            "description":"Refresh token lifetime, in seconds."
+          }
+        },
+        "type":"object",
+        "required":[
+          "access_token",
+          "expires_in",
+          "refresh_token",
+          "refresh_expires_in"
+        ],
+        "title":"Token response Model"
       },
       "UserActivateReq":{
         "properties":{
