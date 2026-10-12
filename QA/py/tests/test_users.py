@@ -161,6 +161,15 @@ def _refresh(client, refresh_token):
 
 def test_ordinary_user_refresh_token(database, client, monkeypatch):
     """Same scenario as front QA/test_refresh_token.sh, for an ordinary user"""
+    # test_user_admin changes this user's password, restore the data_load.sql one
+    with UserService() as sce:
+        from DB.User import User
+        from helpers.login import LoginService
+
+        with LoginService() as lsce:
+            usr = sce.session.get(User, ORDINARY_USER_USER_ID)
+            usr.password = lsce.hash_password(ORDINARY_USER_CREDS["password"])
+            sce.session.commit()
     # Login
     pair = _pair(client)
     rsp = _me(client, pair["access_token"])
