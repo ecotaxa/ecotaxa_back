@@ -136,6 +136,17 @@ def test_collection_lifecycle(fastapi, who):
     rsp = fastapi.put(url, headers=who, json=the_coll)
     assert rsp.status_code == status.HTTP_200_OK
 
+    # Once the DOI is set, title and short_title cannot be modified
+    if who == CREATOR_AUTH:
+        renamed = dict(the_coll, title="Renamed", short_title="renamed")
+        rsp = fastapi.put(url, headers=who, json=renamed)
+        assert rsp.status_code == status.HTTP_200_OK
+        rsp = fastapi.get(
+            COLLECTION_QUERY_URL.format(collection_id=coll_id), headers=who
+        )
+        assert rsp.json()["title"] == "Test collection"
+        assert rsp.json()["short_title"] == "my-tiny-title"
+
     # Fail updating the project list
     the_coll = {"project_ids": [prj_id, 1236]}
     # with pytest.raises(Exception):

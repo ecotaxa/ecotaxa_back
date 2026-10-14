@@ -59,8 +59,8 @@ class CollectionBO(object):
     A Collection business object, i.e. as seen from users.
     """
 
-    modif = ["title", "citation", "abstract", "description", "license", "external_id"]
-    no_modif = ["short_title"]
+    modif = ["citation", "abstract", "description", "license", "external_id"]
+    no_modif = ["title", "short_title"]
 
     def __init__(self, collection: Collection):
         self._collection: Collection = collection
@@ -247,6 +247,7 @@ class CollectionBO(object):
             self._collection.short_title != ""
             and self._collection.short_title is not None
         )
+        has_doi = self._collection.external_id not in (None, "", "?")
         for key, value in collection_update.items():
             if key == "project_ids":
                 value.sort()
@@ -261,8 +262,8 @@ class CollectionBO(object):
             if key in self.modif:
                 setattr(self._collection, key, value)
             elif key in self.no_modif:
-                # short_title cannot be modified
-                if not published:
+                # title and short_title cannot be modified once the DOI is set, short_title once set
+                if not has_doi and (key == "title" or not published):
                     setattr(self._collection, key, value)
             elif key in ["provider_user", "contact_user"] and value is not None:
                 # Copy provider user id contact user id
