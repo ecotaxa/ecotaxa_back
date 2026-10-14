@@ -638,6 +638,28 @@ class UserService(Service):
                 detail=detail,
             )
 
+    def _pending_email(
+        self,
+        update_src: UserModelWithRights,
+        user_to_update: User,
+        current_user: Optional[User],
+    ) -> Optional[str]:
+        """
+        The new email of an active user changing their own email, when emails are verified.
+        It replaces the current one only once confirmed, so a typo does not lock the account.
+        """
+        if (
+            self.verify_email is not True
+            or self._uservalidation is None
+            or current_user is None
+            or current_user.id != user_to_update.id
+            or user_to_update.status != UserStatus.active.value
+            or str(update_src.email or "").lower()
+            == str(user_to_update.email or "").lower()
+        ):
+            return None
+        return update_src.email
+
     def _mail_status_on(
         self, update_src: UserModelWithRights, user_to_update: User
     ) -> bool:
@@ -707,6 +729,8 @@ class UserService(Service):
         is_admin = current_user is not None and self._current_is_admin(current_user)
         # check if the account needs validation or re-validation
         ask_activate = None
+        # new email of the user, written only once confirmed
+        pending_email: Optional[str] = None
         if is_admin:
             # only update actions from admin - not from profile
             if current_user is not None and current_user.id != user_to_update.id:
@@ -718,8 +742,13 @@ class UserService(Service):
             if update_src.status_admin_comment != user_to_update.status_admin_comment:
                 cols_to_upd.append(User.status_admin_comment)
             ask_activate = False
-
-        elif self._is_major_data_change(update_src, user_to_update):
+        else:
+            pending_email = self._pending_email(update_src, user_to_update, current_user)
+            if pending_email is not None:
+                # the current email stays valid until the new one is confirmed
+                update_src.email = user_to_update.email
+                cols_to_upd[:] = [col for col in cols_to_upd if col is not User.email]
+        if not is_admin and self._is_major_data_change(update_src, user_to_update):
             # validate and throw error if needed
             self._validate_user_throw(update_src, user_to_update)
             # condition for mail_status==True
@@ -753,6 +782,18 @@ class UserService(Service):
             actions=actions,
         )
         logger.info("User %s :  '%s'" % (action_type.name, user_to_update.email))
+        if pending_email is not None and self._uservalidation is not None:
+            # the user is disconnected until the new email is confirmed or logs in again with the previous one
+            RefreshTokenService.revoke_all_for_user(self.session, user_to_update.id)
+            self.session.commit()
+            # the token carries the new email, the previous one is informed
+            self._uservalidation.request_email_verification(
+                pending_email,
+                self._get_assistance_email(),
+                action=ActivationType.update,
+                id=user_to_update.id,
+                previous_email=user_to_update.email,
+            )
         # condition send validation request email only if not is_admin and account_validation is "on"
         self._conditional_email_verification(update_src, user_to_update, action_type)
         self._conditional_validation(
@@ -1052,6 +1093,48 @@ class UserService(Service):
         )
         return update_src, add_cols
 
+    def _pending_email_from_token(
+        self, user: User, token: Optional[str]
+    ) -> Optional[str]:
+        """
+        The new email requested by the user, when the token was sent to confirm an email change.
+        """
+        if not token or self.verify_email is not True or self._uservalidation is None:
+            return None
+        email = self._uservalidation.get_email_from_token(token)
+        user_id = self._uservalidation.get_id_from_token(token)
+        if (
+            email is None
+            or user_id != user.id
+            or email.lower() == str(user.email or "").lower()
+        ):
+            return None
+        return email
+
+    def _confirm_pending_email_throw(
+        self,
+        user: User,
+        update_src: UserModelWithRights,
+        pending_email: str,
+        password: Optional[str],
+    ) -> Tuple[UserModelWithRights, List]:
+        """
+        The user confirmed the new email: it replaces the current one.
+        With account validation, the account then waits for the users admins validation.
+        """
+        # the link alone must not move the account to another email
+        self._verify_and_update_password_throw(str(password), user)
+        # the email may have been taken since the request
+        self._has_identical_user_throw({"email": pending_email}, False, user.id)
+        update_src.email = pending_email
+        update_src.mail_status = True
+        update_src.mail_status_date = DateTime.now_time()
+        cols = [User.email, User.mail_status, User.mail_status_date]
+        if self.account_validation is True:
+            update_src.status = UserStatus.inactive.value
+            cols.append(User.status)
+        return update_src, cols
+
     def _refresh_any_status(
         self,
         user_id: UserIDT,
@@ -1088,7 +1171,13 @@ class UserService(Service):
                 status_code=422,
                 detail=[DETAIL_NOTHING_DONE],
             )
-        if self.verify_email is True and user.mail_status is not True and token:
+        pending_email = self._pending_email_from_token(user, token)
+        if pending_email is not None:
+            update_src, add_cols = self._confirm_pending_email_throw(
+                user, update_src, pending_email, password
+            )
+            cols_to_upd.extend(add_cols)
+        elif self.verify_email is True and user.mail_status is not True and token:
             update_src, add_cols = self._refresh_mail_status_throw(
                 user, update_src, token, password
             )
@@ -1122,6 +1211,14 @@ class UserService(Service):
                 user,
                 update_src,
                 cols_to_upd=cols_to_upd,
+            )
+        if pending_email is not None and self.account_validation is True:
+            # send activation request to users administrators
+            self._conditional_validation(
+                user,
+                ask_activate=True,
+                inform_about_status=False,
+                action_type=ActivationType.update,
             )
 
     def _current_is_admin(

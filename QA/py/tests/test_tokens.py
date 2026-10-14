@@ -16,7 +16,8 @@ from helpers import fastApiUtils
 from tests.credentials import ADMIN_USER_ID
 from tests.test_fastapi import USER_ME_URL
 from tests.test_login import client  # noqa: F401 (fixture)
-from tests.test_users_with_validation import create_db_user
+from tests.test_user_admin import USER_UPDATE_URL
+from tests.test_users_with_validation import create_db_user, set_config_on
 
 TOKEN_URL = "/token"
 REFRESH_URL = "/token/refresh"
@@ -144,6 +145,31 @@ def test_revoked_on_password_change_and_block(database, client):
         )
     assert nb_live == 0
     assert _refresh(client, pair["refresh_token"]).status_code == 401
+
+
+def test_revoked_on_email_change_request(database, client, monkeypatch):
+    # with email verification, the user is disconnected until the new email is confirmed
+    set_config_on(monkeypatch, "off")
+    email = "refresh_email_change@test.org"
+    user_id = create_db_user(email=email, password="Password123!")
+    creds = {"username": email, "password": "Password123!"}
+    pair = _pair(client, **creds)
+    rsp = client.put(
+        USER_UPDATE_URL.format(user_id=user_id),
+        headers={"Authorization": "Bearer " + pair["access_token"]},
+        json={
+            "id": user_id,
+            "email": "refresh_email_changed@mailtestprovider1.net",
+            "name": "Test DB User",
+            "organisation": "Test Org",
+            "country": "France",
+            "usercreationreason": "Test reason",
+        },
+    )
+    assert rsp.status_code == 200, rsp.text
+    assert _refresh(client, pair["refresh_token"]).status_code == 401
+    # the previous email is still the login one
+    _pair(client, **creds)
 
 
 def test_legacy_tokens(database, client, monkeypatch):

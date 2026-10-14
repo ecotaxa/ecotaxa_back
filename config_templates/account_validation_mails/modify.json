@@ -17,10 +17,10 @@
       "body": "Some of the information provided in your profile need to be modified :<br> {reason}.<br>Please click the following link to modify your profile information: {link}<br>{assistance}"
     },
     "inform": {
-      "subject": "EcoTaxa account information - Email modified.",
+      "subject": "EcoTaxa account information - Email modification requested.",
       "email": "<a href=\"mailto:{email}\">{email}</a>",
       "assistance": "If it is an error or you need additional support,  email {email}",
-      "body": "<p>Your email has been replaced in your profile by {data} <br>{assistance}"
+      "body": "<p>A modification of the email of your profile to {data} has been requested.<br>Your current email remains valid to log in until the new one is confirmed with the link sent to it.<br>{assistance}"
     }
   }
 }
