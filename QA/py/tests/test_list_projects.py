@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 from starlette import status
 
-from tests.credentials import ADMIN_AUTH, USER_AUTH
+from tests.credentials import ADMIN_AUTH, USER_AUTH, ADMIN_USER_ID
+from tests.test_import import create_project
 
 PROJECTS_URL = "/projects"
 PROJECTS_SEARCH_URL = "/projects/search"
@@ -43,6 +44,34 @@ def test_search_projects_public(fastapi):
     assert rsp.status_code == status.HTTP_200_OK
     results = rsp.json()
     assert isinstance(results, list)
+
+
+def test_search_projects_public_fields(fastapi):
+    # Anonymous search returns identification, instrument and counts fields, but no members
+    prj_id = create_project(
+        ADMIN_USER_ID, "Anonymously visible project", instrument="UVP6"
+    )
+    rsp = fastapi.get(
+        PROJECTS_SEARCH_URL, params={"title_filter": "Anonymously visible"}
+    )
+    assert rsp.status_code == status.HTTP_200_OK
+    results = rsp.json()
+    assert len(results) == 1
+    project = results[0]
+    assert project["projid"] == prj_id
+    assert project["title"] == "Anonymously visible project"
+    for field in (
+        "access",
+        "status",
+        "instrument",
+        "instrument_url",
+        "objcount",
+        "pctvalidated",
+        "pctclassified",
+    ):
+        assert field in project, field
+    for field in ("managers", "annotators", "viewers", "contact"):
+        assert field not in project, field
 
 
 def test_list_projects_filtering(fastapi):

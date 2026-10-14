@@ -158,6 +158,12 @@ def test_collection_lifecycle(fastapi, who):
     url = COLLECTION_SEARCH_URL.format(title="%coll%")
     rsp = fastapi.get(url, headers=who)
     assert rsp.status_code == status.HTTP_200_OK
+    # Other tests may have left collections matching the search, keep only this one
+    found = [a_coll for a_coll in rsp.json() if a_coll["id"] == coll_id]
+    assert len(found) == 1
+    # Organisations were created by name in the update above, their ids depend on other tests
+    creator_org_id = found[0]["creator_organisations"][0]["id"]
+    associate_org_id = found[0]["associate_organisations"][0]["id"]
     if who == CREATOR_AUTH:
         short_title = "my-tiny-title"
         external_id = "doi1234"
@@ -168,7 +174,9 @@ def test_collection_lifecycle(fastapi, who):
         "abstract": """   
     A bit less abstract...
     """,
-        "associate_organisations": [{"id": 8, "name": "An org", "directories": None}],
+        "associate_organisations": [
+            {"id": associate_org_id, "name": "An org", "directories": None}
+        ],
         "associate_users": [],
         "external_id": external_id,
         "external_id_system": "?",
@@ -180,7 +188,7 @@ def test_collection_lifecycle(fastapi, who):
             "organisation": "Double Dash - Institute - DDORG",
         },
         "creator_organisations": [
-            {"id": 7, "name": "At least one (ONE)", "directories": None}
+            {"id": creator_org_id, "name": "At least one (ONE)", "directories": None}
         ],
         "creator_users": [],
         "description": None,
@@ -195,10 +203,13 @@ def test_collection_lifecycle(fastapi, who):
         },
         "title": "Test collection",
         "short_title": short_title,
-        "display_order": {"creators": ["7_o"], "associates": ["8_o"]},
+        "display_order": {
+            "creators": ["%d_o" % creator_org_id],
+            "associates": ["%d_o" % associate_org_id],
+        },
         "is_private": False,
     }
-    assert rsp.json() == [expected_collection_data]
+    assert found == [expected_collection_data]
 
     # List collections (GET /collections)
     # Unauthenticated

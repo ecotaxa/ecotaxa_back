@@ -63,7 +63,7 @@ from DB.Project import (
 from DB.ProjectPrivilege import ProjectPrivilege
 from DB.ProjectVariables import KNOWN_PROJECT_VARS
 from DB.Sample import Sample
-from DB.User import Role, User, UserStatus
+from DB.User import Role, User, UserStatus, Organization
 from DB.User import UserIDT, UserIDListT
 from DB.helpers import Session, Result
 from DB.helpers.Bean import Bean
@@ -188,6 +188,14 @@ class FieldsList(object):
         return ["objcount", "pctvalidated", "pctclassified"]
 
     @staticmethod
+    def public() -> List[str]:
+        # The only fields returned to anonymous calls
+        public: List[str] = (
+            FieldsList.required() + FieldsList.instrument() + FieldsList.counts()
+        )
+        return public
+
+    @staticmethod
     def project() -> List[str]:
         return [
             "status",
@@ -266,6 +274,15 @@ class FieldsList(object):
         projectbovars = [v for v in list(ProjectBO.__slots__) if v[0:1] != "_"]
         return dict({"project": projectvars, "projectbo": projectbovars})
 
+
+# DB column needed to compute each derived (enriched) field
+DERIVED_FIELDS_COLUMNS: Dict[str, str] = {
+    "obj_free_cols": "mappingobj",
+    "sample_free_cols": "mappingsample",
+    "acquisition_free_cols": "mappingacq",
+    "process_free_cols": "mappingprocess",
+    "init_classif_list": "initclassiflist",
+}
 
 key_rights: Dict[str, str] = {
     "managers": ProjectPrivilegeBO.MANAGE,
@@ -376,13 +393,12 @@ class ProjectBO(object):
                 continue
             if a_priv.user.status != UserStatus.active.value:
                 continue
-            org = a_priv.user.organization
             priv_user = ContactUserBO(
                 id=a_priv.user.id,
                 name=a_priv.user.name,
                 email=a_priv.user.email,
                 orcid=a_priv.user.orcid,
-                organisation=org.name,
+                organisation=a_priv.user.organisation,
             )
             if privname in fields:
                 by_right_fct[privname].append(priv_user)
@@ -457,14 +473,6 @@ class ProjectBO(object):
             return []
         return [int(cl_id) for cl_id in init_list.split(",")]
 
-    def public_enrich(self, listfields: List[str]) -> "ProjectBO":
-        """
-        Enrichment with fields we can expose to public unauthenticated calls.
-        """
-        if "instrument_url" in listfields:
-            self.instrument_url = self._project.instrument.bodc_url
-        return self
-
     @property
     def formulae(self) -> Optional[str]:
         """Serve the jsonb-stored formulae as a JSON string, for API back-compat."""
@@ -482,50 +490,9 @@ class ProjectBO(object):
 
     def enrich(self) -> "ProjectBO":
         """
-        Add DB fields and relations as (hopefully more) meaningful attributes
+        Add all derived fields (mappings, classification list, members, instrument), same logic as ProjectBOSet
         """
-        # Decode mappings to avoid exposing internal field
-        mappings = ProjectMapping().load_from_project(self._project)
-        self.obj_free_cols = mappings.object_mappings.tsv_cols_to_real
-        self.sample_free_cols = mappings.sample_mappings.tsv_cols_to_real
-        self.acquisition_free_cols = mappings.acquisition_mappings.tsv_cols_to_real
-        self.process_free_cols = mappings.process_mappings.tsv_cols_to_real
-        # Decode text list into numerical
-        db_list = self._project.initclassiflist
-        db_list = db_list if db_list else ""
-        self.init_classif_list = [int(x) for x in db_list.split(",") if x.isdigit()]
-
-        # Dispatch members by right
-        by_right_fct = {
-            ProjectPrivilegeBO.MANAGE: self.managers,
-            ProjectPrivilegeBO.ANNOTATE: self.annotators,
-            ProjectPrivilegeBO.VIEW: self.viewers,
-        }
-        a_priv: ProjectPrivilege
-        # noinspection PyTypeChecker
-        for (
-            a_priv
-        ) in self._project.privs_for_members:  # Use ORM to navigate in relationship
-            # priv_user= a_priv.user
-            org = a_priv.user.organization
-            priv_user = ContactUserBO(
-                id=a_priv.user.id,
-                name=a_priv.user.name,
-                email=a_priv.user.email,
-                orcid=a_priv.user.orcid,
-                organisation=org.name,
-            )
-
-            if priv_user is None:  # TODO: There is a line with NULL somewhere in DB
-                continue
-            if a_priv.user.status != UserStatus.active.value:
-                continue
-            assert a_priv.privilege is not None
-            by_right_fct[a_priv.privilege].append(priv_user)
-            if "C" == a_priv.extra:
-                self.contact = priv_user
-        self.instrument_url = self._project.instrument.bodc_url
-        return self
+        return self.base_enrich(FieldsList.all(), self._project)
 
     def update(
         self,
@@ -1395,8 +1362,8 @@ class ProjectBOSet(object):
             allattributes.extend(value)
         wanted_fields = ProjectBO.build_attr(listfields, allattributes)
         if public:
-            # Anonymous access only ever gets instrument-related computed fields
-            wanted_fields = list(set(wanted_fields) & set(FieldsList.instrument()))
+            # Anonymous access: restrict (intersection) to the public fields, never members
+            wanted_fields = list(set(wanted_fields) & set(FieldsList.public()))
         needs_privileges = bool(set(wanted_fields) & set(FieldsList.privileges()))
         needs_instrument = bool(set(wanted_fields) & set(FieldsList.instrument()))
         # keep only project DB object
@@ -1404,6 +1371,10 @@ class ProjectBOSet(object):
         if "instrument" in projectfields:
             projectfields.remove("instrument")
             projectfields.extend(["instrument_id"])
+        # derived fields computed from DB columns of other names, which load_only would defer
+        for fld in wanted_fields:
+            if fld in DERIVED_FIELDS_COLUMNS:
+                projectfields.append(DERIVED_FIELDS_COLUMNS[fld])
         selectfields = [getattr(Project, fld) for fld in projectfields]
         options = []
         if selectfields:
@@ -1426,6 +1397,8 @@ class ProjectBOSet(object):
                     User.orcid,
                     User.organization_id,
                 )
+                .joinedload(User.organization)
+                .load_only(Organization.name)
             )
         if needs_instrument:
             options.append(joinedload(Project.instrument))
@@ -1471,7 +1444,8 @@ class CollectionProjectBOSet(ProjectBOSet):
         session: Session,
         prj_ids: ProjectIDListT,
         public: bool = False,
-        fields: Optional[str] = FieldListType.default,
+        # *all: aggregation reads classif, cnn network and mapping columns, not in *default
+        fields: Optional[str] = FieldListType.all,
     ):
         super().__init__(session=session, prj_ids=prj_ids, public=public, fields=fields)
 
