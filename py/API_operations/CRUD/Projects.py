@@ -328,10 +328,14 @@ class ProjectsService(Service):
         """
         Read user statistics for these projects.
         """
-        # Security barrier
+        # Security barrier. Stats are not an access to each project: keep recent projects.
         [
             RightsBO.user_wants(
-                self.session, current_user_id, Action.ADMINISTRATE, prj_id
+                self.session,
+                current_user_id,
+                Action.ADMINISTRATE,
+                prj_id,
+                update_preference=False,
             )
             for prj_id in prj_ids
         ]

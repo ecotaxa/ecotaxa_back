@@ -120,9 +120,14 @@ class SamplesService(Service):
                 for project_id in project_ids
             ]
         else:
+            # Stats are not an access to each project: keep recent projects
             [
                 RightsBO.user_wants(
-                    self.session, current_user_id, Action.READ, project_id
+                    self.session,
+                    current_user_id,
+                    Action.READ,
+                    project_id,
+                    update_preference=False,
                 )
                 for project_id in project_ids
             ]
