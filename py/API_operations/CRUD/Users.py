@@ -1129,7 +1129,7 @@ class UserService(Service):
         update_src.email = pending_email
         update_src.mail_status = True
         update_src.mail_status_date = DateTime.now_time()
-        cols = [User.email, User.mail_status, User.mail_status_date]
+        cols: List[Any] = [User.email, User.mail_status, User.mail_status_date]
         if self.account_validation is True:
             update_src.status = UserStatus.inactive.value
             cols.append(User.status)
