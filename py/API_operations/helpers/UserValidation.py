@@ -40,7 +40,7 @@ class UserValidation(object):
         # email verification
         config = Config()
         # unset status field "active" value if major modification is done by anyone except users admin
-        # 0 email - 1 pwd - 2 - dns - 3 port
+        # SENDER_ACCOUNT CSV: 0: sender email, 1: password (optional for plain SMTP), 2: host, [3: smtp port, 4: imap port, 5: login user]
         self.sender_account = str(config.get_sender_account() or "").split(",")
         self._mailservice_salt = config.get_mailservice_salt()
         self._mail_provider = MailProvider(

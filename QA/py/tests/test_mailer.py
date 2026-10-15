@@ -81,6 +81,74 @@ def test_send_mail_success_sends_and_quits(mocker):
     mock_smtp.quit.assert_called_once()
 
 
+def test_send_mail_plain_smtp_with_login(mocker):
+    # Arrange
+    plain_sender_account = [
+        "sender@example.com",
+        "secret_pwd",
+        "smtp.example.com",
+        "25",
+    ]
+    provider = MailProvider(plain_sender_account, dir_mail_templates="/tmp")
+
+    smtp_ssl_cls = mocker.patch("smtplib.SMTP_SSL")
+    smtp_cls = mocker.patch("smtplib.SMTP")
+    mock_smtp = mocker.Mock()
+    smtp_cls.return_value.__enter__.return_value = mock_smtp
+
+    msg = EmailMessage()
+    msg["Subject"] = "Hello Plain"
+    msg.set_content("Hi there plain")
+
+    recipients = ["to@example.com"]
+
+    # Act
+    provider.send_mail(recipients, msg)
+
+    # Assert
+    smtp_ssl_cls.assert_not_called()
+    smtp_cls.assert_called_once_with("smtp.example.com", 25)
+    mock_smtp.login.assert_called_once_with("sender@example.com", "secret_pwd")
+    mock_smtp.sendmail.assert_called_once_with(
+        "sender@example.com", recipients, msg.as_string()
+    )
+    mock_smtp.quit.assert_called_once()
+
+
+def test_send_mail_plain_smtp_without_password_skips_login(mocker):
+    # Arrange
+    plain_sender_account = [
+        "sender@example.com",
+        "",
+        "smtp.example.com",
+        "25",
+    ]
+    provider = MailProvider(plain_sender_account, dir_mail_templates="/tmp")
+
+    smtp_ssl_cls = mocker.patch("smtplib.SMTP_SSL")
+    smtp_cls = mocker.patch("smtplib.SMTP")
+    mock_smtp = mocker.Mock()
+    smtp_cls.return_value.__enter__.return_value = mock_smtp
+
+    msg = EmailMessage()
+    msg["Subject"] = "Hello Plain No Auth"
+    msg.set_content("Hi there plain no auth")
+
+    recipients = ["to@example.com"]
+
+    # Act
+    provider.send_mail(recipients, msg)
+
+    # Assert
+    smtp_ssl_cls.assert_not_called()
+    smtp_cls.assert_called_once_with("smtp.example.com", 25)
+    mock_smtp.login.assert_not_called()
+    mock_smtp.sendmail.assert_called_once_with(
+        "sender@example.com", recipients, msg.as_string()
+    )
+    mock_smtp.quit.assert_called_once()
+
+
 @pytest.mark.parametrize(
     "smtp_exception, expected_code, expected_detail",
     [
@@ -230,3 +298,144 @@ def test_get_ticket_imap_weirdness_logs_and_returns_none(mocker):
     # Assert
     assert ticket is None
     # Verify that it didn't crash and returned None as expected in except block
+
+
+@pytest.mark.parametrize(
+    "raw_account, expected_extracted",
+    [
+        (
+            ["sender@example.com", "pwd", "smtp.example.com"],
+            (
+                "sender@example.com",
+                "pwd",
+                "smtp.example.com",
+                465,
+                993,
+                "sender@example.com",
+            ),
+        ),
+        (
+            ["sender@example.com", "pwd", "smtp.example.com", "25"],
+            (
+                "sender@example.com",
+                "pwd",
+                "smtp.example.com",
+                25,
+                993,
+                "sender@example.com",
+            ),
+        ),
+        (
+            ["sender@example.com", "pwd", "smtp.example.com", "587", "143"],
+            (
+                "sender@example.com",
+                "pwd",
+                "smtp.example.com",
+                587,
+                143,
+                "sender@example.com",
+            ),
+        ),
+        (
+            ["sender@example.com", "pwd", "smtp.example.com", "587", "143", ""],
+            (
+                "sender@example.com",
+                "pwd",
+                "smtp.example.com",
+                587,
+                143,
+                "sender@example.com",
+            ),
+        ),
+        (
+            ["sender@example.com", "pwd", "smtp.example.com", "587", "143", "   "],
+            (
+                "sender@example.com",
+                "pwd",
+                "smtp.example.com",
+                587,
+                143,
+                "sender@example.com",
+            ),
+        ),
+        (
+            [
+                "sender@example.com",
+                "pwd",
+                "smtp.example.com",
+                "587",
+                "143",
+                "custom_user",
+            ],
+            ("sender@example.com", "pwd", "smtp.example.com", 587, 143, "custom_user"),
+        ),
+    ],
+)
+def test_extract_sender_account(raw_account, expected_extracted):
+    extracted = MailProvider._extract_sender_account(raw_account[:])
+    assert extracted == expected_extracted
+
+
+def test_send_mail_with_different_login_account(mocker):
+    # Arrange
+    different_account = [
+        "sender@example.com",
+        "secret_pwd",
+        "smtp.example.com",
+        "465",
+        "993",
+        "login_account_user",
+    ]
+    provider = MailProvider(different_account, dir_mail_templates="/tmp")
+
+    smtp_cls = mocker.patch("smtplib.SMTP_SSL")
+    mock_smtp = mocker.Mock()
+    smtp_cls.return_value.__enter__.return_value = mock_smtp
+
+    msg = EmailMessage()
+    msg["Subject"] = "Different Account"
+    msg.set_content("Testing different login user")
+
+    recipients = ["to@example.com"]
+
+    # Act
+    provider.send_mail(recipients, msg)
+
+    # Assert: SMTP login connects with custom login account, but sender is sender email
+    mock_smtp.login.assert_called_once_with("login_account_user", "secret_pwd")
+    mock_smtp.sendmail.assert_called_once_with(
+        "sender@example.com", recipients, msg.as_string()
+    )
+    assert msg["From"] == "sender@example.com"
+    mock_smtp.quit.assert_called_once()
+
+
+def test_get_ticket_with_different_login_account(mocker):
+    # Arrange
+    different_account = [
+        "sender@example.com",
+        "secret_pwd",
+        "smtp.example.com",
+        "465",
+        "993",
+        "imap_login_user",
+    ]
+    provider = MailProvider(different_account, dir_mail_templates="/tmp")
+    provider.ADD_TICKET = "support@example.com"
+    provider.TICKET_MATCH = r"\[Ticket#\d+\]"
+
+    mock_imap = mocker.Mock()
+    mocker.patch("imaplib.IMAP4_SSL", return_value=mock_imap)
+
+    mock_imap.uid.side_effect = [
+        ("OK", [b"42"]),
+        ("OK", [[None, b"Subject: [Ticket#1234]\r\n\r\nBody"]]),
+    ]
+
+    # Act
+    ticket = provider._get_ticket("user@example.com", 123)
+
+    # Assert: IMAP login connects with custom login account
+    assert ticket == "[Ticket#1234]"
+    mock_imap.login.assert_called_once_with("imap_login_user", "secret_pwd")
+    mock_imap.logout.assert_called_once()
