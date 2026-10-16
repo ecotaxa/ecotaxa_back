@@ -1,4 +1,5 @@
 import os
+import re
 import time
 
 import pytest
@@ -164,7 +165,9 @@ def test_job_kill(fastapi, jobs_as_process):
             # Check if PID is already in the log file (required for kill_process)
             try:
                 log_lines = api_get_log_file(fastapi, job_id)
-                if any("Running in PID" in line for line in log_lines):
+                if any(
+                    re.search(r"Running job \d+ in PID \d+", line) for line in log_lines
+                ):
                     break
             except Exception:
                 pass

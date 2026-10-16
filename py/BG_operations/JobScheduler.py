@@ -47,7 +47,7 @@ class BaseJobRunner:
         try:
             sce = JobScheduler.instantiate(self.sce_class, self.db_job)
             with LogsSwitcher(sce):
-                logger.info("Running in %s", msg)
+                logger.info("Running job %d in %s", self.db_job.id, msg)
         except Exception as te:
             logger.error(f"Error instantiating job {self.db_job.id}: {te}")
             self.tech_error(self.db_job.id, te)

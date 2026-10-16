@@ -3,6 +3,7 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 import os
+import re
 import signal
 import time
 from pathlib import Path
@@ -176,7 +177,7 @@ class JobCRUDService(Service):
 
     def kill_process(self, current_user_id: UserIDT, job_id: JobIDT) -> None:
         """
-        Actually kill the background process, using the PID in log file, and log who did it.
+        Actually kill the background process, using the PID in the log file, and log who did it.
         """
         log_path = self.get_log_path(current_user_id, job_id)
         if not log_path.exists():
@@ -185,12 +186,10 @@ class JobCRUDService(Service):
         last_pid: Optional[int] = None
         with open(log_path, "r") as f:
             for line in f:
-                if "Running in PID" in line:
-                    try:
-                        pid_str = line.split("in PID")[-1].strip()
-                        last_pid = int(pid_str)
-                    except (ValueError, IndexError):
-                        pass
+                if "Running" in line and (  # fast filter out
+                    match := re.search(r"Running job \d+ in PID (\d+)", line)
+                ):
+                    last_pid = int(match.group(1))
 
         if last_pid is not None:
             try:
