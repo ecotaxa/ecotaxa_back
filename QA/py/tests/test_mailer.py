@@ -326,6 +326,17 @@ def test_get_ticket_imap_weirdness_logs_and_returns_none(mocker):
             ),
         ),
         (
+            ["sender@example.com", "", "smtp.example.com", "25"],
+            (
+                "sender@example.com",
+                "",
+                "smtp.example.com",
+                25,
+                993,
+                "sender@example.com",
+            ),
+        ),
+        (
             ["sender@example.com", "pwd", "smtp.example.com", "587", "143"],
             (
                 "sender@example.com",

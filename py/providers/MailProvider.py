@@ -128,13 +128,6 @@ class MailProvider(object):
                 )
         import email.utils as utils
 
-        # starttls and 587  - with ssl 465
-        # sender_account = self.SENDER_ACCOUNT
-        # sender_email = sender_account[0].strip()
-        # sender_pwd = sender_account[1].strip()
-        # sender_dns = sender_account[2].strip()
-        # sender_port = int(sender_account[3].strip())
-        # imap_port = int(sender_account[4].strip())
         (
             sender_email,
             sender_pwd,
@@ -142,7 +135,7 @@ class MailProvider(object):
             sender_port,
             _,
             sender_user,
-        ) = self._extract_sender_account(self.SENDER_ACCOUNT)
+        ) = self._extract_sender_config(self.SENDER_ACCOUNT)
         msg["From"] = sender_email
         msg["To"] = ", ".join(recipients)
         domain = sender_email.split("@")
@@ -433,7 +426,7 @@ class MailProvider(object):
         return mail_msg
 
     @staticmethod
-    def _extract_sender_account(sender_account: list) -> tuple:
+    def _extract_sender_config(sender_account: list) -> tuple:
         # add default ports SMTPS and IMAP if not present
         if len(sender_account) == 3:
             sender_account.append("465")
@@ -477,7 +470,7 @@ class MailProvider(object):
             _,
             imap_port,
             sender_user,
-        ) = self._extract_sender_account(self.SENDER_ACCOUNT)
+        ) = self._extract_sender_config(self.SENDER_ACCOUNT)
         ticket = None
         try:
             # set connection
