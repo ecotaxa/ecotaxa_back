@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2026  Picheral, Colin, Irisson (UPMC-CNRS)
-
+import asyncio
+import contextlib
 import os
 import shutil
 from pathlib import Path
@@ -9,6 +10,9 @@ from typing import Callable, Dict, Any
 
 from fastapi import Depends, Request
 from tuspyserver import create_tus_router
+from tuspyserver.file import _validate_uid_within_dir
+from tuspyserver.lock import acquire_upload_lock
+from tuspyserver.storage.local import LocalFileStorage
 
 from FS.UserFilesDir import UserFilesDirectory
 from helpers.AppConfig import Config
@@ -142,13 +146,52 @@ async def get_on_complete_handler(
     )
 
 
+class SplitLocalFileStorage(LocalFileStorage):
+    """
+    Hybrid TUS Storage implementing tuspyserver.storage.TusStorage interface.
+    - Metadata (.info) and locks -> Local /tmp directory (OverlayFS)
+    - Heavy payload data files   -> GPFS / NFS mount
+    """
+
+    def __init__(self, files_dir: str, info_dir: str):
+        super().__init__(files_dir)
+        self.info_dir = info_dir
+        Path(info_dir).mkdir(parents=True, exist_ok=True)
+        self.locks_dir = os.path.join(self.info_dir, ".locks")
+        Path(self.locks_dir).mkdir(parents=True, exist_ok=True)
+
+    def _info_path(self, uid: str) -> str:
+        """Redirects .info metadata files to the local container filesystem."""
+        _validate_uid_within_dir(self.info_dir, uid)
+        return os.path.join(self.info_dir, f"{uid}.info")
+
+    @contextlib.asynccontextmanager
+    async def lock(self, uid: str):  # type: ignore
+        """Advisory file lock, shared with any other process using this dir."""
+        path = self._path(uid)
+        cm = await asyncio.to_thread(
+            lambda: acquire_upload_lock(path, locks_dir=self.locks_dir, blocking=True)
+        )
+        await asyncio.to_thread(cm.__enter__)
+        try:
+            yield
+        finally:
+            await asyncio.to_thread(cm.__exit__, None, None, None)
+
+
+hybrid_storage = SplitLocalFileStorage(
+    files_dir=get_tus_files_dir(),
+    info_dir="/tmp/tus_info_scratch",
+)
+
+
 def create_big_files_router():
     """
     Create the TUS router for big files.
     """
     return create_tus_router(
         prefix="/user_files/upload",
-        files_dir=get_tus_files_dir(),
+        storage=hybrid_storage,
         max_size=Config().get_max_upload_size(),  # Same as client
         auth=tus_auth,
         upload_complete_dep=get_on_complete_handler,
