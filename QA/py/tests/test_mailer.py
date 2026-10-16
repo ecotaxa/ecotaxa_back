@@ -383,7 +383,7 @@ def test_get_ticket_imap_weirdness_logs_and_returns_none(mocker):
     ],
 )
 def test_extract_sender_account(raw_account, expected_extracted):
-    extracted = MailProvider._extract_sender_account(raw_account[:])
+    extracted = MailProvider._extract_sender_config(raw_account[:])
     assert extracted == expected_extracted
 
 
