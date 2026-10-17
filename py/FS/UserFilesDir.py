@@ -27,6 +27,7 @@ from helpers.httpexception import (
 
 logger = get_logger(__name__)
 BUFFER_SIZE = 1024 * 1024
+PROGRESS_PREFIX = "⌛"
 
 
 class UserFilesDirectory(object):
@@ -174,40 +175,72 @@ class UserFilesDirectory(object):
         self.ensure_exists(source_path)
         return str(source_path)
 
-    def extract_archive(self, archive, filepath: str, path: Path):
+    def extract_archive(
+        self, archive: zipfile.ZipFile | tarfile.TarFile, filepath: str, path: Path
+    ) -> str:
+        """
+        Extract contents from an archive (zip or tar) into the target directory,
+        handling subfolder placement, recursive decompression of nested archives,
+        and filtering out unaccepted file formats.
+
+        :param archive: An open ZipFile or TarFile archive instance.
+        :param filepath: Full path of the archive file (may contain progress prefixes).
+        :param path: Target directory Path where archive contents are to be extracted.
+        :return: Relative subfolder path derived from the archive file name.
+        """
+        # Retrieve member file names based on archive type
         if hasattr(archive, "namelist"):
             filenames = archive.namelist()
         else:
-            # tarfile
+            # Archive is a TarFile
             filenames = archive.getnames()
         extracted = []
+
+        # Derive the destination subfolder name from the archive filename
+        # by stripping the base directory prefix and file extension(s)
         sub_path = filepath[len(str(path)) :]
         sub_path = ".".join(sub_path[1:].split(".")[:-1]) + os.path.sep
+
+        # If archive entries are not already encapsulated in a root folder
+        # matching sub_path (and not temporary), create and extract into that subfolder
         if sub_path != "temp/" and (filenames[0][0 : len(sub_path)] != sub_path):
             path = path.joinpath(sub_path[:-1])
+
+        # Extract all files and directories into the target path
         archive.extractall(path.as_posix())
+
+        # Additional accepted tabular/text formats that might not match standard MIME filters
         more_mime = {
             "csv": "text/csv",
             "txt": "text/plain",
             "tsv": "text/tab-separated-values",
         }
+
+        # Validate extracted files, unpack nested archives, and purge unaccepted formats
         for filename in filenames:
             file_ext, compressed_path, mime_type = self._get_file_info(filename, path)
+
+            # Check if file matches configured accepted MIME types
             if mime_type in self.accepted_mime_types:
                 extracted.append(filename)
+                # Recursively unpack nested archives (e.g., zip inside tar)
                 if (
                     file_ext in self.archive_extensions
                     and not compressed_path.is_dir()
                     and not self._is_trash_dir(str(path))
                 ):
                     self.dispatch_unpack(compressed_path, path)
+            # Accept text/tabular data files based on extension fallback
             elif file_ext in more_mime.keys():
                 extracted.append(filename)
+            # Preserve directory hierarchy
             elif os.path.isdir(compressed_path):
                 continue
+            # Remove unsupported or unaccepted files to prevent clutter and security risks
             else:
                 os.remove(compressed_path)
                 logger.info("NOT EXTRACTED '%s' ", str(compressed_path))
+
         return sub_path
 
     @staticmethod
@@ -269,6 +302,7 @@ class UserFilesDirectory(object):
             input_path.unlink(missing_ok=True)
 
     def unpack_gz(self, input_path: Path, path: Path) -> None:
+        # TODO: Works for e.g. .tar.gz but NOT for .tgz which is a common extension
         decompressed_path = input_path.with_suffix("")
         try:
             with gzip.open(input_path, "rb") as f_in, open(
@@ -283,14 +317,22 @@ class UserFilesDirectory(object):
         finally:
             input_path.unlink(missing_ok=True)
 
-    def dispatch_unpack(self, compressed_path: Path, path: Path):
+    @staticmethod
+    def _mark_in_progress(path: Path) -> Path:
+        """Rename the file being extracted so that the user has feedback
+        on the extraction in progress"""
+        in_progress_path = path.parent / f"{PROGRESS_PREFIX}{path.name}"
+        path.rename(in_progress_path)
+        return in_progress_path
+
+    def dispatch_unpack(self, compressed_path: Path, to_path: Path):
         if zipfile.is_zipfile(compressed_path.as_posix()):
-            self.unpack_zip(compressed_path, path)
+            self.unpack_zip(self._mark_in_progress(compressed_path), to_path)
         elif tarfile.is_tarfile(compressed_path.as_posix()):
-            self.unpack_tar(compressed_path, path)
+            self.unpack_tar(self._mark_in_progress(compressed_path), to_path)
         elif self._is_gz(compressed_path.as_posix()):
-            self.unpack_gz(compressed_path, path)
-        elif not self._has_accepted_format(path, str(compressed_path)):
+            self.unpack_gz(self._mark_in_progress(compressed_path), to_path)
+        elif not self._has_accepted_format(to_path, str(compressed_path)):
             os.remove(compressed_path)
             self.list_errors.update({"Not accepted": str(compressed_path)})
 

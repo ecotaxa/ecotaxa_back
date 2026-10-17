@@ -4,9 +4,8 @@
 import asyncio
 import contextlib
 import os
-import shutil
 from pathlib import Path
-from typing import Callable, Dict, Any
+from typing import Callable, Dict, Any, Set
 
 from fastapi import Depends, Request
 from tuspyserver import create_tus_router
@@ -20,6 +19,19 @@ from helpers.DynamicLogs import get_logger
 from helpers.fastApiUtils import get_current_user
 
 logger = get_logger(__name__)
+
+background_tasks: Set[asyncio.Task[Any]] = set()
+
+
+async def _background_unpack(
+    user_dir: UserFilesDirectory, file_path: Path, dest_dir: Path
+) -> None:
+    try:
+        await asyncio.to_thread(user_dir.dispatch_unpack, file_path, dest_dir)
+    except Exception as e:
+        logger.error(
+            "Error unpacking %s in background: %s", file_path, str(e), exc_info=True
+        )
 
 
 def get_tus_files_dir() -> str:
@@ -45,9 +57,9 @@ async def tus_auth(
     return None
 
 
-def on_tus_upload_complete(
+async def on_tus_upload_complete(
     file_path: str, metadata: Dict[str, Any], current_user_id: int
-):
+) -> None:
     """
     Move the uploaded file to the user's files directory.
     """
@@ -103,8 +115,8 @@ def on_tus_upload_complete(
                 # If it's a file, we overwrite it (existing behavior of shutil.move)
                 logger.info("Destination %s already exists, overwriting", dest_path)
 
-        shutil.move(file_path, str(dest_path))
-        logger.info("TUS upload complete: moved %s to %s", file_path, dest_path)
+        # shutil.move(file_path, str(dest_path))
+        # logger.info("TUS upload complete: moved %s to %s", file_path, dest_path)
 
         # Trigger unpacking if it's an archive, similar to UserFilesDirectory.add_file
         # TODO: UserFilesDirectory should probably have a method to handle a local file
@@ -118,8 +130,11 @@ def on_tus_upload_complete(
             mime_type,
             compressed_path,
         )
-        user_dir.compressed_origin = compressed_path
-        user_dir.dispatch_unpack(compressed_path, dest_dir.absolute())
+        task = asyncio.create_task(
+            _background_unpack(user_dir, Path(file_path), dest_dir.absolute())
+        )
+        background_tasks.add(task)
+        task.add_done_callback(background_tasks.discard)
     except Exception as e:
         logger.error("Error in on_tus_upload_complete: %s", str(e))
         # Depending on tuspyserver, raising here might or might not be handled.
@@ -128,7 +143,7 @@ def on_tus_upload_complete(
 
 async def get_on_complete_handler(
     request: Request,
-) -> Callable[[str, Dict[str, Any]], None]:
+) -> Callable[[str, Dict[str, Any]], Any]:
     """
     Dependency that returns the completion handler with the current user id.
     """
@@ -150,7 +165,7 @@ class SplitLocalFileStorage(LocalFileStorage):
     """
     Hybrid TUS Storage implementing tuspyserver.storage.TusStorage interface.
     - Metadata (.info) and locks -> Local /tmp directory (OverlayFS)
-    - Heavy payload data files   -> GPFS / NFS mount
+    - Heavy payload data files   -> GPFS / NFS mount / ordinary FS
     """
 
     def __init__(self, files_dir: str, info_dir: str):
