@@ -44,8 +44,7 @@ def test_tus_upload_protocol(fastapi):
     # 2. POST to initiate upload using UVP6_example.zip
     zip_bytes = (SHARED_DIR / V6_FILE).read_bytes()
     archive_name = V6_FILE.name
-    # extracted_folder = V6_FILE.stem # Enclosing zip is discarded
-    extracted_folder = "b_da_19_Images"
+    extracted_folder = V6_FILE.stem
     metadata_str = _encode_metadata(
         {
             "filename": archive_name,

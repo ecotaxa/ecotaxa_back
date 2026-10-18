@@ -74,9 +74,8 @@ async def on_tus_upload_complete(
         metadata,
     )
     try:
-        tus_path = Path(
-            file_path
-        )  # e.g. /mnt/user_ecotaxa_files/tus_uploads/fd8d989adda14069ba8495a71af1d6b8
+        # e.g. /mnt/tus_uploads/fd8d989adda14069ba8495a71af1d6b8
+        tus_path = Path(file_path)
 
         # metadata contains 'filename' if provided by client (Upload-Metadata header)
         original_name = metadata.get("filename")
@@ -88,11 +87,12 @@ async def on_tus_upload_complete(
 
         user_dir = UserFilesDirectory(current_user_id)
         dest_dir = destination_directory(user_dir, metadata.get("path"))
+        dest_path = dest_dir / original_name
 
         if user_dir.is_compressed(tus_path):
-            # Uncompress (recursively) from temp TUS file, no need to copy before
+            tus_path = tus_path.rename(dest_path)
             task = asyncio.create_task(
-                _background_unpack(user_dir, Path(file_path), dest_dir.absolute()),
+                _background_unpack(user_dir, tus_path, dest_dir.absolute()),
                 name=f"unpack_{original_name}",
             )
             background_tasks.add(task)
@@ -106,21 +106,21 @@ async def on_tus_upload_complete(
                 logger.info("TUS file upload unpack CONTINUES into %s ", dest_dir)
         else:
             # Plain uncompressed file case, should not happen with EcoTaxa client which always sends a zip
-            dest_path = dest_dir / original_name
-            # Handle existing files
-            if dest_path.exists():
-                # If it's a directory, we can't overwrite it with a file
-                if dest_path.is_dir():
-                    logger.warning(
-                        "Destination %s is a directory, cannot move TUS upload",
-                        dest_path,
-                    )
-                    # Append a suffix to the filename
-                    original_name = f"{original_name}_1"
-                    dest_path = dest_dir / original_name
-                else:
-                    # If it's a file, we overwrite it (existing behavior of shutil.move)
-                    logger.info("Destination %s already exists, overwriting", dest_path)
+            stem = Path(original_name).stem
+            suffix = Path(original_name).suffix
+            counter = 1
+            while dest_path.is_dir():
+                logger.warning(
+                    "Destination %s is a directory, appending suffix to filename",
+                    dest_path,
+                )
+                new_name = f"{stem}_{counter}{suffix}"
+                dest_path = dest_dir / new_name
+                counter += 1
+            if dest_path.exists():  # Always a file due to above
+                logger.info(
+                    "Destination file %s already exists, overwriting", dest_path
+                )
             shutil.move(tus_path, str(dest_path))
             # Keep policy to exclude unwanted files.
             user_dir.dispatch_unpack(tus_path, dest_path)
