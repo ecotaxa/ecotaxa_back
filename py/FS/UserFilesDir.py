@@ -50,6 +50,16 @@ class UserFilesDirectory(object):
         self._root_path = Path(users_files_dir, self.USER_DIR_PATTERN % self.user_id)
         self.trash_directory = self.TRASH_DIRECTORY % self.user_id
         self.compressed_origin: Optional[Path] = None
+        self.mark_progress = lambda compressed_path: compressed_path
+        self.unmark_progress = lambda to_path: None
+
+    def switch_to_progress_marking(self):
+        """Future unpacking operations are considered potentially long
+        so give feedback to users in the file names"""
+        self.mark_progress = lambda compressed_path: self._mark_in_progress(
+            compressed_path
+        )
+        self.unmark_progress = lambda to_path: self._unmark_directories(to_path)
 
     async def add_file(self, name: str, path: Optional[str], stream: UploadFile) -> str:
         """
@@ -71,7 +81,7 @@ class UserFilesDirectory(object):
             while len(buff) != 0:
                 file.write(buff)  # type: ignore # Mypy is unaware of async read result
                 buff = await stream.read(BUFFER_SIZE)
-        file_ext, compressed_path, mime_type = self._get_file_info(
+        _, compressed_path, _ = self._get_file_info(
             name.lstrip(os.path.sep), base_path.absolute()
         )
         self.compressed_origin = compressed_path
@@ -189,10 +199,9 @@ class UserFilesDirectory(object):
         :return: Relative subfolder path derived from the archive file name.
         """
         # Retrieve member file names based on archive type
-        if hasattr(archive, "namelist"):
+        if isinstance(archive, zipfile.ZipFile):
             filenames = archive.namelist()
         else:
-            # Archive is a TarFile
             filenames = archive.getnames()
         extracted = []
 
@@ -325,13 +334,45 @@ class UserFilesDirectory(object):
         path.rename(in_progress_path)
         return in_progress_path
 
+    @staticmethod
+    def _unmark_directories(path: Path) -> None:
+        """
+        Remove PROGRESS_PREFIX from any directory or subdir starting with it.
+        """
+        path = Path(path)
+        if not path.exists() or not path.is_dir():
+            return
+
+        for root, dirs, _ in os.walk(path, topdown=False):
+            for d in dirs:
+                if d.startswith(PROGRESS_PREFIX):
+                    old_path = Path(root) / d
+                    new_path = Path(root) / d.removeprefix(PROGRESS_PREFIX)
+                    old_path.rename(new_path)
+
+        if path.name.startswith(PROGRESS_PREFIX):
+            new_path = path.parent / path.name.removeprefix(PROGRESS_PREFIX)
+            path.rename(new_path)
+
+    @staticmethod
+    def is_compressed(path: Path) -> bool:
+        posix_path = path.as_posix()
+        return (
+            zipfile.is_zipfile(posix_path)
+            or tarfile.is_tarfile(posix_path)
+            or UserFilesDirectory._is_gz(posix_path)
+        )
+
     def dispatch_unpack(self, compressed_path: Path, to_path: Path):
         if zipfile.is_zipfile(compressed_path.as_posix()):
-            self.unpack_zip(self._mark_in_progress(compressed_path), to_path)
+            self.unpack_zip(self.mark_progress(compressed_path), to_path)
+            self.unmark_progress(to_path)
         elif tarfile.is_tarfile(compressed_path.as_posix()):
-            self.unpack_tar(self._mark_in_progress(compressed_path), to_path)
+            self.unpack_tar(self.mark_progress(compressed_path), to_path)
+            self.unmark_progress(to_path)
         elif self._is_gz(compressed_path.as_posix()):
-            self.unpack_gz(self._mark_in_progress(compressed_path), to_path)
+            self.unpack_gz(self.mark_progress(compressed_path), to_path)
+            self.unmark_progress(to_path)
         elif not self._has_accepted_format(to_path, str(compressed_path)):
             os.remove(compressed_path)
             self.list_errors.update({"Not accepted": str(compressed_path)})

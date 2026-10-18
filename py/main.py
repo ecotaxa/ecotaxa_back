@@ -29,9 +29,9 @@ from fastapi import (
     Path,
 )
 from fastapi.exceptions import RequestValidationError
-from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.logger import logger as fastapi_logger
 from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
@@ -113,7 +113,6 @@ from API_models.taxonomy import (
     TaxonomyRecastReq,
 )
 from API_operations.BigFiles import create_big_files_router
-from API_operations.Tokens import RefreshTokenService
 from API_operations.CRUD.Collections import CollectionsService
 from API_operations.CRUD.Constants import ConstantsService
 from API_operations.CRUD.Guests import GuestService
@@ -144,6 +143,7 @@ from API_operations.Status import StatusService
 from API_operations.Subset import SubsetServiceOnProject
 from API_operations.TaxoManager import CentralTaxonomyService
 from API_operations.TaxonomyService import TaxonomyService
+from API_operations.Tokens import RefreshTokenService
 from API_operations.UserFilesFolder import UserFilesFolderService
 from API_operations.admin.Database import DatabaseService
 from API_operations.admin.ImageManager import ImageManagerService
@@ -4179,6 +4179,11 @@ async def put_user_file(  # async due to await file store
     **Upload a file for the current user files directory.**
 
     The returned text will contain a server-side path which is usable for some file-related operations.
+
+    Note: Any archive (zip, tar, tar.gz) will be automatically and recursively extracted.
+    ⚠️ For very big files, this can lead to timeouts and failed extraction ⚠️
+    Using chunks in upload (via TUS protocol, /users_files/upload/*) is a better option in this case,
+    as decompression will continue in background if too long.
 
     *e.g. import.*
     """
