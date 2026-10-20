@@ -187,7 +187,7 @@ class UserFilesDirectory(object):
 
     def extract_archive(
         self, archive: zipfile.ZipFile | tarfile.TarFile, filepath: str, path: Path
-    ) -> str:
+    ) -> None:
         """
         Extract contents from an archive (zip or tar) into the target directory,
         handling subfolder placement, recursive decompression of nested archives,
@@ -212,8 +212,14 @@ class UserFilesDirectory(object):
 
         # If archive entries are not already encapsulated in a root folder
         # matching sub_path (and not temporary), create and extract into that subfolder
-        if sub_path != "temp/" and (filenames[0][0 : len(sub_path)] != sub_path):
-            path = path.joinpath(sub_path[:-1])
+        sub_path = sub_path[1:] if sub_path.startswith(PROGRESS_PREFIX) else sub_path
+        if sub_path == "temp/":
+            pass  # Zipfile sent by client and its derivative starting with PROGRESS_PREFIX
+        elif filenames[0][0 : len(sub_path)] != sub_path:
+            path = path.joinpath(
+                sub_path[:-1]
+            )  # A single directory with the same name. Extract into it.
+            # TODO: Buggy, there could be multiple directories, filenames[0] is inaccurate
 
         # Extract all files and directories into the target path
         archive.extractall(path.as_posix())
@@ -249,8 +255,6 @@ class UserFilesDirectory(object):
             else:
                 os.remove(compressed_path)
                 logger.info("NOT EXTRACTED '%s' ", str(compressed_path))
-
-        return sub_path
 
     @staticmethod
     def _get_file_info(filename: str, path: Path) -> Tuple[str, Path, Optional[str]]:
