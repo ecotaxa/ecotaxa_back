@@ -60,7 +60,8 @@ SECURITY_PASSWORD_SALT = zzzzzz
 # key can be shared with the front
 MAILSERVICE_SECRET_KEY = THIS KEY MUST BE CHANGED ANS IS ONLY FOR TOKENS SENT BY MAIL
 MAILSERVICE_SALT = "saltservicemail_salt"
-# email address used in account management : mandatory - 0 email - 1 pwd - 2 - dns - [...3 smtp port - 4 imap port]
+# Email settings for account management (CSV):
+# 0: sender email, 1: password (optional for plain SMTP), 2: host, [3: smtp port (default 465), 4: imap port (default 993), 5: login user (default sender email)]
 SENDER_ACCOUNT = senderaccountmail@testmail.com, senderpwd, senderdns, 465
 
 # EcoTaxa instance id

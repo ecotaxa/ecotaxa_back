@@ -128,20 +128,14 @@ class MailProvider(object):
                 )
         import email.utils as utils
 
-        # starttls and 587  - with ssl 465
-        # sender_account = self.SENDER_ACCOUNT
-        # sender_email = sender_account[0].strip()
-        # sender_pwd = sender_account[1].strip()
-        # sender_dns = sender_account[2].strip()
-        # sender_port = int(sender_account[3].strip())
-        # imap_port = int(sender_account[4].strip())
         (
             sender_email,
             sender_pwd,
             sender_dns,
             sender_port,
             _,
-        ) = self._extract_sender_account(self.SENDER_ACCOUNT)
+            sender_user,
+        ) = self._extract_sender_config(self.SENDER_ACCOUNT)
         msg["From"] = sender_email
         msg["To"] = ", ".join(recipients)
         domain = sender_email.split("@")
@@ -152,9 +146,11 @@ class MailProvider(object):
         else:
             msg["Reply-To"] = str(reply_to)
         code = 0
-        with smtplib.SMTP_SSL(sender_dns, sender_port) as smtp:
+        smtp_cls = smtplib.SMTP_SSL if sender_port == 465 else smtplib.SMTP
+        with smtp_cls(sender_dns, sender_port) as smtp:
             try:
-                smtp.login(sender_email, sender_pwd)
+                if sender_pwd:
+                    smtp.login(sender_user, sender_pwd)
                 # message as plain text
                 smtp.sendmail(sender_email, recipients, msg.as_string())
                 logger.info(
@@ -430,18 +426,29 @@ class MailProvider(object):
         return mail_msg
 
     @staticmethod
-    def _extract_sender_account(sender_account: list) -> tuple:
-        # add default ports smtp and imap if not present
+    def _extract_sender_config(sender_account: list) -> tuple:
+        # add default ports SMTPS and IMAP if not present
         if len(sender_account) == 3:
             sender_account.append("465")
         if len(sender_account) == 4:
             sender_account.append("993")
+        sender_email = sender_account[0].strip()
+        sender_pwd = sender_account[1].strip()
+        sender_dns = sender_account[2].strip()
+        smtp_port = int(sender_account[3].strip())
+        imap_port = int(sender_account[4].strip())
+        sender_user = (
+            sender_account[5].strip()
+            if len(sender_account) > 5 and sender_account[5].strip()
+            else sender_email
+        )
         return (
-            sender_account[0].strip(),
-            sender_account[1].strip(),
-            sender_account[2].strip(),
-            int(sender_account[3].strip()),
-            int(sender_account[4].strip()),
+            sender_email,
+            sender_pwd,
+            sender_dns,
+            smtp_port,
+            imap_port,
+            sender_user,
         )
 
     def _get_ticket(
@@ -462,13 +469,14 @@ class MailProvider(object):
             sender_dns,
             _,
             imap_port,
-        ) = self._extract_sender_account(self.SENDER_ACCOUNT)
+            sender_user,
+        ) = self._extract_sender_config(self.SENDER_ACCOUNT)
         ticket = None
         try:
             # set connection
             mail = imaplib.IMAP4_SSL(sender_dns, imap_port)
             # login
-            mail.login(sender_email, sender_pwd)
+            mail.login(sender_user, sender_pwd)
             # select inbox
             mail.select("INBOX")
             criteria = {

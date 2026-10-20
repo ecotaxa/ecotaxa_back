@@ -120,7 +120,7 @@ class Config(object):
         return self._get("MAILSERVICE_SALT")
 
     def get_sender_account(self) -> Optional[str]:
-        # email address used in account management - 0 email - 1 pwd - 2 - dns - 3 port
+        # Email settings for account management (CSV: 0: sender email, 1: password (optional for plain SMTP), 2: host, [3: smtp port, 4: imap port, 5: login user])
         return self._get("SENDER_ACCOUNT")
 
     def get_add_ticket(self) -> str:
