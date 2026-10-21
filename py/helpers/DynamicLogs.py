@@ -97,7 +97,7 @@ def rewire_loggers_after_fork():
         if isinstance(a_logger, Logger):
             a_logger.handlers.clear()
             a_logger.addHandler(_the_handler)
-            # a_logger.propagate = False
+            # a_logger.propagate = False # Leave root handlers emit, in case the subprocess is remoted one day
         elif isinstance(a_logger, logging.PlaceHolder):
             a_logger.loggerMap.clear()
 
@@ -107,7 +107,7 @@ def get_logger(name) -> logging.Logger:
     if _the_handler not in ret.handlers:
         ret.addHandler(_the_handler)
     ret.setLevel(logging.INFO)
-    ret.propagate = False
+    ret.propagate = False  # Prevent propagation to gunicorn if present
     return ret
 
 

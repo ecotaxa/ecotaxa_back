@@ -15,6 +15,7 @@ from helpers.httpexception import (
     DETAIL_SMTP_CONNECT_ERROR,
     DETAIL_SMTP_RESPONSE_ERROR,
 )
+import providers.MailProvider
 from providers.MailProvider import MailProvider
 
 VALID_SENDER_ACCOUNT = [
@@ -177,6 +178,7 @@ def test_send_mail_raises_http_exception_on_smtp_exception(
 ):
     # Arrange
     provider = make_provider()
+    mocker.patch.object(providers.MailProvider.logger, "propagate", True)
 
     smtp_cls = mocker.patch("smtplib.SMTP_SSL")
     mock_smtp = mocker.Mock()
