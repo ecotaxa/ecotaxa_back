@@ -4,6 +4,7 @@
 #
 import abc
 import logging
+import os
 import sys
 import time
 from abc import ABC
@@ -11,10 +12,20 @@ from logging import Logger, Handler, LogRecord
 from threading import get_ident
 from typing import Dict
 
+# Format without %(asctime)s if NO_TIME_LOG environment variable is set
+_NO_TIME_LOG = os.getenv("NO_TIME_LOG", "").strip().lower() in (
+    "1",
+    "true",
+    "yes",
+    "on",
+)
+ASCTIME_FORMAT = "" if _NO_TIME_LOG else "%(asctime)s|"
 # General format for Web workers
-LOGGING_FORMAT = "%(process)d|%(threadName)s|%(asctime)s|%(levelname).4s %(message)s"
+LOGGING_FORMAT = (
+    f"%(process)d|%(threadName)s|{ASCTIME_FORMAT}%(levelname).4s %(message)s"
+)
 # Short format for background tasks, single process single thread
-ALT_LOGGING_FORMAT = "%(asctime)s|%(name)s|%(levelname)s %(message)s"
+ALT_LOGGING_FORMAT = f"{ASCTIME_FORMAT}%(name)s|%(levelname)s %(message)s"
 LOG_FILE_TEMPLATE = "ecotaxa_back_%d.log"
 LOG_FILE = LOG_FILE_TEMPLATE % 0  # os.getpid()
 
