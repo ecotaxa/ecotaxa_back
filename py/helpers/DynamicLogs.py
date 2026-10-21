@@ -4,24 +4,45 @@
 #
 import abc
 import logging
+import sys
 import time
 from abc import ABC
-from logging import Logger, Handler
+from logging import Logger, Handler, LogRecord
 from threading import get_ident
 from typing import Dict
 
-LOGGING_FORMAT = (
-    "%(process)d:%(threadName)s:%(asctime)s:%(name)s:%(levelname)s %(message)s"
-)
-ALT_LOGGING_FORMAT = "%(asctime)s:%(name)s:%(levelname)s %(message)s"
+# General format for Web workers
+LOGGING_FORMAT = "%(process)d|%(threadName)s|%(asctime)s|%(levelname).4s %(message)s"
+# Short format for background tasks, single process single thread
+ALT_LOGGING_FORMAT = "%(asctime)s|%(name)s|%(levelname)s %(message)s"
 LOG_FILE_TEMPLATE = "ecotaxa_back_%d.log"
 LOG_FILE = LOG_FILE_TEMPLATE % 0  # os.getpid()
 
 
-class UTCFormatter(logging.Formatter):
+class LogFormatter(logging.Formatter):
     @staticmethod
     def converter(timestamp: float | None = None) -> time.struct_time:
         return time.gmtime(timestamp)
+
+    def formatTime(self, record, datefmt=None):
+        return time.strftime("%y-%m-%d %H:%M:%S", self.converter(record.created))
+
+    @staticmethod
+    def _abbreviate_logger_name(name: str) -> str:
+        """
+        Transforms 'API_operations.exports.ForProject' -> 'A.e.ForProject'
+        """
+        parts = name.split(".")
+        if len(parts) <= 1:
+            return name
+        return ".".join([p[0] for p in parts[:-1]] + [parts[-1]])
+
+    def format(self, record: LogRecord) -> str:
+        """
+        Shorten logger name a bit Java-style
+        """
+        record.name = self._abbreviate_logger_name(record.name)
+        return super().format(record)
 
 
 class PerThreadHandler(Handler):
@@ -46,7 +67,7 @@ class PerThreadHandler(Handler):
     def switch_to(self, new_filename_or_stream):
         alt_handler = logging.FileHandler(new_filename_or_stream)
         alt_handler.setLevel(self.level)
-        alt_handler.setFormatter(UTCFormatter(ALT_LOGGING_FORMAT))
+        alt_handler.setFormatter(LogFormatter(ALT_LOGGING_FORMAT))
         self.alt_handlers[get_ident()] = alt_handler
 
     def stop_switch(self):
@@ -56,31 +77,37 @@ class PerThreadHandler(Handler):
             del self.alt_handlers[get_ident()]
 
 
+def _create_the_handler():
+    # _the_handler = PerThreadHandler(logging.FileHandler(LOG_FILE))
+    single_handler = PerThreadHandler(logging.StreamHandler(sys.stdout))
+    single_handler.handler.setFormatter(LogFormatter(LOGGING_FORMAT))
+    return single_handler
+
+
 # Singleton handler per process
-_the_handler = PerThreadHandler(logging.FileHandler(LOG_FILE))
-_the_handler.handler.setFormatter(UTCFormatter(LOGGING_FORMAT))
+_the_handler = _create_the_handler()
 
 
-def logger_nullify_after_fork():
-    """Remove log handlers after a fork.
-    We could replace them with more fresh handler but this is enough
-    to prevent artificial sync b/w forked processes"""
+def rewire_loggers_after_fork():
+    """Re-wire log handlers after a fork."""
+    global _the_handler
     Logger.manager.root.handlers.clear()
+    _the_handler = _create_the_handler()
     for _name, a_logger in Logger.manager.loggerDict.items():
         if isinstance(a_logger, Logger):
-            if len(a_logger.handlers) > 0:
-                a_logger.handlers.clear()
+            a_logger.handlers.clear()
+            a_logger.addHandler(_the_handler)
+            # a_logger.propagate = False
         elif isinstance(a_logger, logging.PlaceHolder):
             a_logger.loggerMap.clear()
-    global _the_handler
-    _the_handler = PerThreadHandler(logging.FileHandler(LOG_FILE))
-    _the_handler.handler.setFormatter(UTCFormatter(LOGGING_FORMAT))
 
 
 def get_logger(name) -> logging.Logger:
     ret = logging.getLogger(name)
-    ret.addHandler(_the_handler)
+    if _the_handler not in ret.handlers:
+        ret.addHandler(_the_handler)
     ret.setLevel(logging.INFO)
+    ret.propagate = False
     return ret
 
 
@@ -130,6 +157,6 @@ def get_api_logger():
     api_logger.setLevel(logging.INFO)
     api_file_handler = logging.FileHandler(MONITOR_LOG_PATH)
     api_file_handler.setLevel(logging.INFO)
-    api_file_handler.setFormatter(UTCFormatter("%(message)s #AT %(asctime)-15s"))
+    api_file_handler.setFormatter(LogFormatter("%(message)s #AT %(asctime)-15s"))
     api_logger.addHandler(api_file_handler)
     return api_logger

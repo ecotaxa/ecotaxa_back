@@ -6,7 +6,6 @@
 #
 import os
 import re
-import sys
 import time
 from contextlib import asynccontextmanager
 from dataclasses import asdict
@@ -29,9 +28,9 @@ from fastapi import (
     Path,
 )
 from fastapi.exceptions import RequestValidationError
-from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.logger import logger as fastapi_logger
 from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
@@ -113,7 +112,6 @@ from API_models.taxonomy import (
     TaxonomyRecastReq,
 )
 from API_operations.BigFiles import create_big_files_router
-from API_operations.Tokens import RefreshTokenService
 from API_operations.CRUD.Collections import CollectionsService
 from API_operations.CRUD.Constants import ConstantsService
 from API_operations.CRUD.Guests import GuestService
@@ -144,6 +142,7 @@ from API_operations.Status import StatusService
 from API_operations.Subset import SubsetServiceOnProject
 from API_operations.TaxoManager import CentralTaxonomyService
 from API_operations.TaxonomyService import TaxonomyService
+from API_operations.Tokens import RefreshTokenService
 from API_operations.UserFilesFolder import UserFilesFolderService
 from API_operations.admin.Database import DatabaseService
 from API_operations.admin.ImageManager import ImageManagerService
@@ -4508,7 +4507,15 @@ async def timing_middleware(request: Request, call_next):
         if endpoint and hasattr(endpoint, "__name__")
         else request.url.path
     )
-    logger.info(f"TIMING: Wall: {wall_ms:7.1f}ms | CPU: {cpu_ms:7.1f}ms | {func_name}")
+    logger.info(
+        "%s %s %d | W:%.1fms C:%.1fms | %s ",
+        request.method,
+        request.url.path,
+        response.status_code,
+        wall_ms,
+        cpu_ms,
+        func_name,
+    )
     return response
 
 
@@ -4529,8 +4536,12 @@ def register_exception(app: FastAPI):
         request: Request, exc: RequestValidationError
     ):
         exc_str = f"{exc}".replace("\n", " ").replace("   ", " ")
-        # or logger.error(f'{exc}')
-        print(request.url, exc_str, file=sys.stderr)
+        logger.error(
+            "422 %s %s | Validation error: %s",
+            request.method,
+            request.url.path,
+            exc_str,
+        )
         content = {"status_code": 10422, "message": exc_str, "data": None}
         return JSONResponse(
             content=content, status_code=status.HTTP_422_UNPROCESSABLE_CONTENT
