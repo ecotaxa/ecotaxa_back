@@ -20,7 +20,6 @@ from helpers.CustomException import UnprocessableEntityException
 from helpers.DynamicLogs import get_logger
 from helpers.httpexception import (
     DETAIL_INVALID_ZIP_FILE,
-    DETAIL_UNKNOWN_ERROR,
     DETAIL_NOTHING_DONE,
     DETAIL_FILE_PROTECTED,
 )
@@ -131,7 +130,7 @@ class UserFilesDirectory(object):
         try:
             shutil.move(str(source_path), dest_path)
         except Exception as e:
-            _log_exception_throw(e)
+            _log_exception_throw(e, f"moving {source_path} to {dest_path}")
         return str(dest_path)
 
     def remove(self, path: str):
@@ -161,7 +160,7 @@ class UserFilesDirectory(object):
                 self.ensure_exists(self._root_path.joinpath(self.trash_directory))
                 self.move(path, self.trash_directory + os.path.sep + path)
             except Exception as e:
-                _log_exception_throw(e)
+                _log_exception_throw(e, f"trashing {path}")
 
         else:
             self._remove_definitely(source_path)
@@ -174,7 +173,7 @@ class UserFilesDirectory(object):
             else:
                 os.remove(source_path)
         except Exception as e:
-            _log_exception_throw(e)
+            _log_exception_throw(e, f"removing definitely {source_path}")
 
     def create(self, path: str) -> str:
         # Cannot create directly in trash
@@ -301,7 +300,7 @@ class UserFilesDirectory(object):
             with zipfile.ZipFile(input_path, "r", allowZip64=True) as archive:
                 self.extract_archive(archive, str(input_path), path)
         except Exception as e:
-            _log_exception_throw(e, self.compressed_origin)
+            _log_exception_throw(e, str(self.compressed_origin))
         finally:
             input_path.unlink(missing_ok=True)
 
@@ -310,7 +309,7 @@ class UserFilesDirectory(object):
             with tarfile.open(input_path, "r") as archive:
                 self.extract_archive(archive, str(input_path), path)
         except Exception as e:
-            _log_exception_throw(e, self.compressed_origin)
+            _log_exception_throw(e, str(self.compressed_origin))
         finally:
             input_path.unlink(missing_ok=True)
 
@@ -326,7 +325,7 @@ class UserFilesDirectory(object):
         except Exception as e:
             if decompressed_path.exists():
                 decompressed_path.unlink()
-            _log_exception_throw(e, self.compressed_origin)
+            _log_exception_throw(e, str(self.compressed_origin))
         finally:
             input_path.unlink(missing_ok=True)
 
@@ -380,14 +379,16 @@ class UserFilesDirectory(object):
         elif not self._has_accepted_format(to_path, str(compressed_path)):
             os.remove(compressed_path)
             self.list_errors.update({"Not accepted": str(compressed_path)})
+        logger.info(f"Unpack done for {compressed_path}->{to_path}")
 
 
-def _log_exception_throw(e: Exception, path: Optional[Path] = None):
+def _log_exception_throw(e: Exception, context: Optional[str] = None):
     if isinstance(e, zipfile.BadZipFile):
         message = DETAIL_INVALID_ZIP_FILE
         code = 422
     else:
-        message = DETAIL_UNKNOWN_ERROR
+        error_detail = str(e) if str(e) else repr(e)
+        message = f"[{e.__class__.__name__}] {error_detail}"
         code = 500
-    logger.error(str(code) + " " + message + " " + str(path))
+    logger.error(str(code) + " " + message + " " + str(context))
     raise

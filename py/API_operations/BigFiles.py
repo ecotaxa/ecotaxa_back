@@ -55,10 +55,12 @@ async def _background_unpack(
         await asyncio.to_thread(
             user_dir.dispatch_unpack, compressed_path=file_path, to_path=dest_dir
         )
+        logger.info("Done unpacking %s in background", file_path)
     except Exception as e:
         logger.error(
             "Error unpacking %s in background: %s", file_path, str(e), exc_info=True
         )
+        raise
 
 
 async def on_tus_upload_complete(
