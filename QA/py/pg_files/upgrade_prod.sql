@@ -3999,6 +3999,31 @@ UPDATE alembic_version SET version_num='ffe643791883' WHERE alembic_version.vers
 
 COMMIT;
 
+BEGIN;
+
+-- Running upgrade ffe643791883 -> 1f4c9b7e2a10
+
+CREATE SEQUENCE seq_users_oidc;
+
+CREATE TABLE users_oidc (
+    id INTEGER NOT NULL DEFAULT nextval('seq_users_oidc'),
+    user_id INTEGER NOT NULL,
+    issuer VARCHAR(255) NOT NULL,
+    subject VARCHAR(255) NOT NULL,
+    created_on TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT now(),
+    last_login TIMESTAMP WITHOUT TIME ZONE,
+    PRIMARY KEY (id),
+    CONSTRAINT users_oidc_user_id_fkey FOREIGN KEY(user_id) REFERENCES users (id) ON DELETE CASCADE
+);
+
+CREATE INDEX ix_users_oidc_user_id ON users_oidc (user_id);
+
+CREATE UNIQUE INDEX ix_users_oidc_issuer_subject ON users_oidc (issuer, subject);
+
+UPDATE alembic_version SET version_num='1f4c9b7e2a10' WHERE alembic_version.version_num = 'ffe643791883';
+
+COMMIT;
+
 ------- Leave on tail
 
 ALTER TABLE alembic_version REPLICA IDENTITY FULL;

@@ -29,9 +29,9 @@ from fastapi import (
     Path,
 )
 from fastapi.exceptions import RequestValidationError
-from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.logger import logger as fastapi_logger
 from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
@@ -113,7 +113,6 @@ from API_models.taxonomy import (
     TaxonomyRecastReq,
 )
 from API_operations.BigFiles import create_big_files_router
-from API_operations.Tokens import RefreshTokenService
 from API_operations.CRUD.Collections import CollectionsService
 from API_operations.CRUD.Constants import ConstantsService
 from API_operations.CRUD.Guests import GuestService
@@ -144,6 +143,7 @@ from API_operations.Status import StatusService
 from API_operations.Subset import SubsetServiceOnProject
 from API_operations.TaxoManager import CentralTaxonomyService
 from API_operations.TaxonomyService import TaxonomyService
+from API_operations.Tokens import RefreshTokenService
 from API_operations.UserFilesFolder import UserFilesFolderService
 from API_operations.admin.Database import DatabaseService
 from API_operations.admin.ImageManager import ImageManagerService
@@ -227,7 +227,10 @@ app.add_middleware(
     session_cookie="oid_session",
     secret_key=Config().secret_key(),
     same_site="lax",
-    https_only=False,
+    # The cookie only carries transient OIDC state (state/nonce), the browser
+    # talks to the front over HTTPS when that URL is HTTPS.
+    https_only=Config().get_account_validation_url().startswith("https://"),
+    max_age=3600,
 )
 
 # 'Client disconnect kills running job' problem workaround. _Must_ be the _last_ added middleware in chain.

@@ -93,3 +93,6 @@ ARCHIVE_EXTENSIONS = zip,tar,gzip,tar.gz,tar.bz2,tar.xz,gz
 OPENID_CLIENT_ID =
 OPENID_CLIENT_SECRET =
 OPENID_METADATA_URL =
+# An OpenID login is only accepted when the provider marked the email as verified.
+# Set to off only if the provider cannot supply this claim (not recommended).
+#OPENID_REQUIRE_VERIFIED_EMAIL = on

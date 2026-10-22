@@ -41,3 +41,24 @@ DETAIL_SAME_NAME_IN_TRASH = (
 DETAIL_ALREADY_EXISTS = "Already exists"
 DETAIL_OPENID_NOT_CONFIGURED = "OpenID provider not configured"
 DETAIL_OPENID_PROVIDER_ERROR = "OpenID provider error"
+DETAIL_OPENID_NO_USER_INFO = "OpenID provider returned no usable user information"
+DETAIL_OPENID_EMAIL_NOT_VERIFIED = "The OpenID provider did not verify this email"
+DETAIL_OPENID_ACCOUNT_NOT_ACTIVE = "This account is not active"
+DETAIL_OPENID_ACCOUNT_INACTIVE = (
+    "This account is not active yet. "
+    "An administrator must validate it before you can log in."
+)
+DETAIL_OPENID_ACCOUNT_PENDING = (
+    "This account is pending validation. "
+    "Please follow the instructions sent by an administrator."
+)
+DETAIL_OPENID_ACCOUNT_BLOCKED = (
+    "This account has been blocked. Please contact an administrator."
+)
+DETAIL_OPENID_LINK_REQUIRED = (
+    "An account already exists with this email, it must be linked explicitly"
+)
+DETAIL_OPENID_AMBIGUOUS_EMAIL = "Several accounts exist with this email"
+DETAIL_OPENID_IDENTITY_CONFLICT = (
+    "This account is already linked to another OpenID identity"
+)

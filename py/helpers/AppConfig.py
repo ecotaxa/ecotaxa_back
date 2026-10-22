@@ -172,6 +172,15 @@ class Config(object):
         url = self._get("TAXOSERVER_URL", mandatory=True).strip()
         return url + ("/" if url[-1] != "/" else "")
 
+    def get_openid_require_verified_email(self) -> bool:
+        """
+        Whether an OpenID login is refused when the provider did not mark the
+        email as verified. Defaults to on, as an unverified email must not be
+        used to attach an external identity to a local account.
+        """
+        val = self._get("OPENID_REQUIRE_VERIFIED_EMAIL", "on")
+        return (val or "on").strip().lower() in ("on", "true", "1", "yes")
+
     def get_openid_config(self) -> Tuple[Optional[str], Optional[str], Optional[str]]:
         """
         Return (client_id, client_secret, metadata_url) if all are present,
@@ -256,5 +265,6 @@ class Config(object):
         self.get_max_upload_size()
         self.get_taxoserver_url()
         self.get_openid_config()
+        self.get_openid_require_verified_email()
         self.get_accepted_mime_types()
         self.get_archive_extensions()

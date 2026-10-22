@@ -7,7 +7,8 @@ from typing import Optional, List, Any, Tuple
 from uuid import uuid4
 
 from fastapi import HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import InstrumentedAttribute
 
 from API_models.crud import (
@@ -35,6 +36,7 @@ from DB.User import (
     User,
     UserIDListT,
     UserIDT,
+    UserOIDC,
     UserRole,
     UserStatus,
     UserType,
@@ -52,6 +54,13 @@ from helpers.httpexception import (
     DETAIL_EMAIL_OWNED_BY_OTHER,
     DETAIL_NOTHING_DONE,
     DETAIL_NOT_FOUND,
+    DETAIL_OPENID_AMBIGUOUS_EMAIL,
+    DETAIL_OPENID_IDENTITY_CONFLICT,
+    DETAIL_OPENID_LINK_REQUIRED,
+    DETAIL_OPENID_ACCOUNT_INACTIVE,
+    DETAIL_OPENID_ACCOUNT_PENDING,
+    DETAIL_OPENID_ACCOUNT_BLOCKED,
+    DETAIL_OPENID_ACCOUNT_NOT_ACTIVE,
 )
 from helpers.login import LoginService
 from helpers.pydantic import BaseModel, Field
@@ -69,6 +78,19 @@ class TempPasswordModel(BaseModel):
     temp_password: str = Field(
         title="Temporary password",
     )
+
+
+class OpenIDAccountConflict(Exception):
+    """
+    Raised when an OpenID identity cannot be safely paired with a local account.
+    The detail is meant to be returned to the caller. A non-active local account
+    is reported as 403, an ownership conflict as 409.
+    """
+
+    def __init__(self, detail: str, status_code: int = 409) -> None:
+        super().__init__(detail)
+        self.detail = detail
+        self.status_code = status_code
 
 
 class UserService(Service):
@@ -101,24 +123,109 @@ class UserService(Service):
 
     # check context to know if the email has to be verified
 
-    def add_openid_user(self, new_user: UserModelWithRights) -> UserIDT:
+    def find_by_oidc(self, issuer: str, subject: str) -> Optional[User]:
         """
-        Add or convert a user from OpenID information.
+        Find the local account linked to an external (issuer, subject) identity.
         """
-        # Search for existing user or guest
-        existing_person: Optional[Person] = (
-            self.session.query(Person)
-            .filter(Person.email.ilike(new_user.email))
-            .one_or_none()
+        link: Optional[UserOIDC] = self.session.scalars(
+            select(UserOIDC).where(
+                UserOIDC.issuer == issuer,
+                UserOIDC.subject == subject,
+            )
+        ).one_or_none()
+        if link is None:
+            return None
+        return self.session.get(User, link.user_id)
+
+    def _has_oidc_link(self, user_id: UserIDT) -> bool:
+        return (
+            self.session.scalars(
+                select(UserOIDC.id).where(UserOIDC.user_id == user_id).limit(1)
+            ).first()
+            is not None
         )
 
-        if existing_person is None:
-            # Create a new user
-            usr = User()
-            self.session.add(usr)
-            action_type = ActivationType.create
-        elif isinstance(existing_person, Guest):
-            # Convert guest to user
+    def _person_by_email(self, email: str) -> Optional[Person]:
+        """
+        Exact, case-insensitive lookup of a person (user or guest) by email.
+        Unlike with ilike(), '%' and '_' are not interpreted as wildcards.
+        """
+        matches = self.session.scalars(
+            select(Person)
+            .where(func.lower(Person.email) == email.strip().lower())
+            .limit(2)
+        ).all()
+        if len(matches) > 1:
+            raise OpenIDAccountConflict(DETAIL_OPENID_AMBIGUOUS_EMAIL)
+        return matches[0] if matches else None
+
+    def _link_oidc(self, user_id: UserIDT, issuer: str, subject: str) -> None:
+        now = DateTime.now_time()
+        self.session.add(
+            UserOIDC(
+                user_id=user_id,
+                issuer=issuer,
+                subject=subject,
+                created_on=now,
+                last_login=now,
+            )
+        )
+        self.session.flush()
+
+    def _mark_oidc_login(self, issuer: str, subject: str) -> None:
+        self.session.execute(
+            update(UserOIDC)
+            .where(
+                UserOIDC.issuer == issuer,
+                UserOIDC.subject == subject,
+            )
+            .values(last_login=DateTime.now_time())
+        )
+        self.session.commit()
+
+    @staticmethod
+    def openid_account_status_detail(status: Optional[int]) -> str:
+        """User-facing explanation for a local account which is not active."""
+        if status is None:
+            return DETAIL_OPENID_ACCOUNT_NOT_ACTIVE
+        return {
+            UserStatus.inactive.value: DETAIL_OPENID_ACCOUNT_INACTIVE,
+            UserStatus.pending.value: DETAIL_OPENID_ACCOUNT_PENDING,
+            UserStatus.blocked.value: DETAIL_OPENID_ACCOUNT_BLOCKED,
+        }.get(status, DETAIL_OPENID_ACCOUNT_NOT_ACTIVE)
+
+    def _resolve_or_create_openid_user(
+        self, new_user: UserModelWithRights
+    ) -> Tuple[User, Optional[ActivationType]]:
+        """
+        Map an OpenID identity to a local account: adopt a guest or a passwordless
+        account with the same email, or create a new user.
+
+        The returned action is None when an existing account is adopted, otherwise
+        it tells which kind of account creation happened, so that the caller can
+        start the normal administrator-validation workflow.
+        """
+        existing_person = self._person_by_email(new_user.email)
+        if isinstance(existing_person, User):
+            # Only passwordless accounts, e.g. created by a previous OpenID login
+            # before identities were persisted, can be adopted. An account with a
+            # password must be linked by its owner: an email at the provider does
+            # not prove ownership of the local account.
+            if existing_person.password:
+                if existing_person.status != UserStatus.active.value:
+                    # Approval is an account state, not an authentication method.
+                    # Do not hide it behind a "link required" conflict.
+                    raise OpenIDAccountConflict(
+                        self.openid_account_status_detail(existing_person.status),
+                        status_code=403,
+                    )
+                raise OpenIDAccountConflict(DETAIL_OPENID_LINK_REQUIRED)
+            if self._has_oidc_link(existing_person.id):
+                raise OpenIDAccountConflict(DETAIL_OPENID_IDENTITY_CONFLICT)
+            logger.info("OpenID: adopting passwordless user %d", existing_person.id)
+            return existing_person, None
+
+        if isinstance(existing_person, Guest):
             usr = existing_person.to_user()
             self.session.delete(existing_person)
             self.session.flush()
@@ -126,13 +233,23 @@ class UserService(Service):
             new_user.id = usr.id
             action_type = ActivationType.convert
         else:
-            # Existing user: just return the ID, no update
-            logger.info("OpenID User already exists : '%s'" % existing_person.email)
-            return existing_person.id
+            usr = User()
+            self.session.add(usr)
+            action_type = ActivationType.create
+
+        # OpenID users follow the same validation policy as registered ones.
+        new_user.status = (
+            UserStatus.inactive.value
+            if self.account_validation
+            else UserStatus.active.value
+        )
+        # OpenID users are considered to have a verified email.
+        new_user.mail_status = True
 
         cols_to_upd: List = [
             User.email,
             User.mail_status,
+            User.status,
             User.name,
             User.organisation,
             User.country,
@@ -140,18 +257,61 @@ class UserService(Service):
             User.usercreationreason,
             User.usercreationdate,
         ]
+        self._model_to_db(usr, new_user, cols_to_upd=cols_to_upd)
+        logger.info("OpenID user %s: %d", action_type.name, usr.id)
+        return usr, action_type
 
-        # OpenID users are considered to have a verified email
-        new_user.mail_status = True
+    def add_openid_user(
+        self, new_user: UserModelWithRights, issuer: str, subject: str
+    ) -> User:
+        """
+        Resolve the local account for a verified OpenID identity, creating it when
+        needed. (issuer, subject) is the identity; the email is only used on first
+        login, to eventually adopt a passwordless account or a guest.
 
-        self._model_to_db(
-            usr,
-            new_user,
-            cols_to_upd=cols_to_upd,
-        )
-
-        logger.info("OpenID User %s : '%s'" % (action_type.name, usr.email))
-        return usr.id
+        :raises OpenIDAccountConflict: When the email already belongs to an account
+                which cannot be safely adopted.
+        """
+        db_user = self.find_by_oidc(issuer, subject)
+        if db_user is not None:
+            self._mark_oidc_login(issuer, subject)
+            return db_user
+        try:
+            db_user, creation_action = self._resolve_or_create_openid_user(new_user)
+            self._link_oidc(db_user.id, issuer, subject)
+            self.session.commit()
+            if db_user.status == UserStatus.inactive.value:
+                # Same administrator-validation pipeline as an ordinary
+                # registration, otherwise an OpenID account would wait forever.
+                try:
+                    self._conditional_validation(
+                        db_user,
+                        ask_activate=True,
+                        inform_about_status=False,
+                        action_type=creation_action or ActivationType.update,
+                    )
+                except Exception:
+                    logger.exception(
+                        "OpenID: could not request validation for user %d",
+                        db_user.id,
+                    )
+            return db_user
+        except IntegrityError:
+            # Another callback created the same account/identity in between.
+            self.session.rollback()
+            db_user = self.find_by_oidc(issuer, subject)
+            if db_user is not None:
+                return db_user
+            existing_person = self._person_by_email(new_user.email)
+            if isinstance(existing_person, User):
+                # Never return an unlinked account here: the caller would issue
+                # a token without proof that this identity owns the account.
+                raise OpenIDAccountConflict(
+                    DETAIL_OPENID_LINK_REQUIRED
+                    if existing_person.password
+                    else DETAIL_OPENID_IDENTITY_CONFLICT
+                )
+            raise
 
     def create_user(
         self,
@@ -743,7 +903,9 @@ class UserService(Service):
                 cols_to_upd.append(User.status_admin_comment)
             ask_activate = False
         else:
-            pending_email = self._pending_email(update_src, user_to_update, current_user)
+            pending_email = self._pending_email(
+                update_src, user_to_update, current_user
+            )
             if pending_email is not None:
                 # the current email stays valid until the new one is confirmed
                 update_src.email = user_to_update.email
