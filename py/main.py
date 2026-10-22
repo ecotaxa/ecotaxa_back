@@ -246,6 +246,12 @@ class FixLocationMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         location = response.headers.get("location")
         if location:
+            tus_match = re.match(
+                r"^https?://[^/]+((?:/api)?/user_files/upload(?:/.*|$))", location
+            )
+            if tus_match:
+                response.headers["location"] = tus_match.group(1)
+                return response
             match = re.match(r"^http://[^/]+(/.*|$)", location)
             if match:
                 path = match.group(1) or "/"

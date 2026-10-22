@@ -39,6 +39,15 @@ def test_app():
             status_code=302, headers={"Location": "https://localhost:8000/some-path"}
         )
 
+    @main.app.post("/test-redirect-tus")
+    async def test_redirect_tus():
+        return Response(
+            status_code=201,
+            headers={
+                "Location": "https://localhost:8000/api/user_files/upload/upload-id"
+            },
+        )
+
     @main.app.get("/test-redirect-no-slash")
     async def test_redirect_no_slash():
         # Test the match.group(1) or "/" logic
@@ -72,6 +81,10 @@ def test_fix_location_middleware(config, test_app):
     response = client.get("/test-redirect-https", follow_redirects=False)
     assert response.status_code == 302
     assert response.headers["location"] == "https://localhost:8000/some-path"
+
+    response = client.post("/test-redirect-tus", follow_redirects=False)
+    assert response.status_code == 201
+    assert response.headers["location"] == "/api/user_files/upload/upload-id"
 
     # Test redirect with no path after host
     response = client.get("/test-redirect-no-slash", follow_redirects=False)
