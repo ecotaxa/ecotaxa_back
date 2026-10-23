@@ -9,7 +9,7 @@ psycopg[binary]==3.3.4
 # pgvector for similarity search
 pgvector==0.4.2
 # mac: brew install libjpeg
-Pillow==12.2.0
+Pillow==13.0.0
 # astral needs pytz
 astral==3.2
 pytz==2026.2
