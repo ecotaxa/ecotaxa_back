@@ -226,7 +226,10 @@ app.add_middleware(
     session_cookie="oid_session",
     secret_key=Config().secret_key(),
     same_site="lax",
-    https_only=False,
+    # The cookie only carries transient OIDC state (state/nonce), the browser
+    # talks to the front over HTTPS when that URL is HTTPS.
+    https_only=Config().get_account_validation_url().startswith("https://"),
+    max_age=3600,
 )
 
 # 'Client disconnect kills running job' problem workaround. _Must_ be the _last_ added middleware in chain.

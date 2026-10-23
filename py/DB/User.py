@@ -12,6 +12,7 @@ from data.Countries import countries_by_name
 from .helpers.DDL import (
     Boolean,
     ForeignKey,
+    Index,
     Integer,
     Sequence,
     String,
@@ -285,3 +286,30 @@ class UserRefreshToken(Model):
         Integer(), ForeignKey("user_refresh_token.id", ondelete="SET NULL")
     )
     client_info: Mapped[str | None] = mapped_column(String(255))
+
+
+class UserOIDC(Model):
+    """
+    Link between a local account and an external OpenID Connect identity.
+
+    (issuer, subject) is the stable identity supplied by the provider: it does not
+    change when the user's email or name changes. The email is only used on first
+    login, to eventually adopt a passwordless account or a guest.
+    """
+
+    __tablename__ = "users_oidc"
+    id: Mapped[int] = mapped_column(
+        Integer, Sequence("seq_users_oidc"), primary_key=True
+    )
+    user_id: Mapped[int] = mapped_column(
+        Integer(),
+        ForeignKey("users.id", name="users_oidc_user_id_fkey", ondelete="CASCADE"),
+        index=True,
+    )
+    issuer: Mapped[str] = mapped_column(String(255))
+    subject: Mapped[str] = mapped_column(String(255))
+    created_on: Mapped[datetime] = mapped_column(TIMESTAMP, default=func.now())
+    last_login: Mapped[datetime | None] = mapped_column(TIMESTAMP)
+    __table_args__ = (
+        Index("ix_users_oidc_issuer_subject", "issuer", "subject", unique=True),
+    )
