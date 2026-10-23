@@ -7,7 +7,7 @@ from random import random
 import pytest
 from API_operations.helpers.JobService import JobServiceBase, ArgsDict
 from BG_operations.JobScheduler import JobScheduler
-from helpers.DynamicLogs import get_logger, LogsSwitcher, logger_nullify_after_fork
+from helpers.DynamicLogs import get_logger, LogsSwitcher, rewire_loggers_after_fork
 
 from tests.credentials import ADMIN_USER_ID
 from tests.api_wrappers import api_wait_for_stable_job
@@ -38,10 +38,7 @@ class FakeRandomJob(JobServiceBase):
 
 def launchSchedulerSubProcess():
     # Release DB-related resources, which cannot be shared with other process
-    from API_operations.helpers.Service import Service
-
-    Service.re_init_after_fork()
-    logger_nullify_after_fork()
+    rewire_loggers_after_fork()
     JobScheduler.launch_at_interval(0.01)
     while True:
         time.sleep(10)

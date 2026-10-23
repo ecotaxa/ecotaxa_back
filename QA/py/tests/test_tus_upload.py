@@ -65,9 +65,8 @@ def test_tus_upload_protocol(fastapi):
 
     location = res_post.headers.get("Location")
     assert location is not None
-    upload_url = (
-        location if location.startswith("/") else "/" + location.split("/", 3)[-1]
-    )
+    assert location.startswith("/")
+    upload_url = location
 
     # 3. HEAD to verify initial offset is 0
     res_head = fastapi.head(

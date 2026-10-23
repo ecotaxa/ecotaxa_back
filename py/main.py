@@ -6,7 +6,6 @@
 #
 import os
 import re
-import sys
 import time
 from contextlib import asynccontextmanager
 from dataclasses import asdict
@@ -112,7 +111,7 @@ from API_models.taxonomy import (
     TaxoRecastSearchRsp,
     TaxonomyRecastReq,
 )
-from API_operations.BigFiles import create_big_files_router
+from API_operations.BigFiles import create_big_files_router, TUS_PREFIX
 from API_operations.CRUD.Collections import CollectionsService
 from API_operations.CRUD.Constants import ConstantsService
 from API_operations.CRUD.Guests import GuestService
@@ -248,10 +247,11 @@ class FixLocationMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
         location = response.headers.get("location")
-        if location:
-            match = re.match(r"^http://[^/]+(/.*|$)", location)
-            if match:
-                path = match.group(1) or "/"
+        if location and (match := re.match(r"^(https?)://[^/]+(/.*|$)", location)):
+            scheme, path = match.group(1), match.group(2) or "/"
+            if TUS_PREFIX in path:
+                response.headers["location"] = path
+            elif scheme == "http":
                 response.headers["location"] = f"{self.FRONT_URL}{path[1:]}"
         return response
 
@@ -4183,6 +4183,11 @@ async def put_user_file(  # async due to await file store
 
     The returned text will contain a server-side path which is usable for some file-related operations.
 
+    Note: Any archive (zip, tar, tar.gz) will be automatically and recursively extracted.
+    ⚠️ For very big files, this can lead to timeouts and failed extraction ⚠️
+    Using chunks in upload (via TUS protocol, /users_files/upload/*) is a better option in this case,
+    as decompression will continue in background if too long.
+
     *e.g. import.*
     """
     with UserFilesFolderService() as sce:
@@ -4511,7 +4516,15 @@ async def timing_middleware(request: Request, call_next):
         if endpoint and hasattr(endpoint, "__name__")
         else request.url.path
     )
-    logger.info(f"TIMING: Wall: {wall_ms:7.1f}ms | CPU: {cpu_ms:7.1f}ms | {func_name}")
+    logger.info(
+        "%s %s %d | W:%.1fms C:%.1fms | %s ",
+        request.method,
+        request.url.path,
+        response.status_code,
+        wall_ms,
+        cpu_ms,
+        func_name,
+    )
     return response
 
 
@@ -4532,8 +4545,12 @@ def register_exception(app: FastAPI):
         request: Request, exc: RequestValidationError
     ):
         exc_str = f"{exc}".replace("\n", " ").replace("   ", " ")
-        # or logger.error(f'{exc}')
-        print(request.url, exc_str, file=sys.stderr)
+        logger.error(
+            "422 %s %s | Validation error: %s",
+            request.method,
+            request.url.path,
+            exc_str,
+        )
         content = {"status_code": 10422, "message": exc_str, "data": None}
         return JSONResponse(
             content=content, status_code=status.HTTP_422_UNPROCESSABLE_CONTENT

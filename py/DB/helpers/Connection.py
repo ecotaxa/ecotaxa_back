@@ -67,9 +67,9 @@ class TimeEvictedQueuePool(QueuePool):
     ):
         super().__init__(creator, pool_size, max_overflow, timeout, use_lifo, **kw)
         # A logger is created somewhere in inheritance chain, it gets the invalidation INFO messages, we don't want them
-        q_logger = logging.getLogger()
-        q_logger.disabled = True
-        setattr(self, "logger", q_logger)
+        logging.getLogger("DB.helpers.Connection.TimeEvictedQueuePool").setLevel(
+            logging.WARNING
+        )
 
     # Uncomment for debug
     # def _do_get(self):
