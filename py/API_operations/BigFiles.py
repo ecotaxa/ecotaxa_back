@@ -19,6 +19,9 @@ from helpers.AppConfig import Config
 from helpers.DynamicLogs import get_logger
 from helpers.fastApiUtils import get_current_user
 
+TUS_PREFIX = "/user_files/upload"
+
+
 logger = get_logger(__name__)
 
 background_tasks: Set[asyncio.Task[Any]] = set()
@@ -222,7 +225,7 @@ def create_big_files_router():
     Create the TUS router for big files.
     """
     return create_tus_router(
-        prefix="/user_files/upload",
+        prefix=TUS_PREFIX,
         storage=hybrid_storage,
         max_size=Config().get_max_upload_size(),  # Same as client
         auth=tus_auth,

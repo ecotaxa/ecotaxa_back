@@ -112,7 +112,7 @@ from API_models.taxonomy import (
     TaxoRecastSearchRsp,
     TaxonomyRecastReq,
 )
-from API_operations.BigFiles import create_big_files_router
+from API_operations.BigFiles import create_big_files_router, TUS_PREFIX
 from API_operations.CRUD.Collections import CollectionsService
 from API_operations.CRUD.Constants import ConstantsService
 from API_operations.CRUD.Guests import GuestService
@@ -245,10 +245,11 @@ class FixLocationMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
         location = response.headers.get("location")
-        if location:
-            match = re.match(r"^http://[^/]+(/.*|$)", location)
-            if match:
-                path = match.group(1) or "/"
+        if location and (match := re.match(r"^(https?)://[^/]+(/.*|$)", location)):
+            scheme, path = match.group(1), match.group(2) or "/"
+            if TUS_PREFIX in path:
+                response.headers["location"] = path
+            elif scheme == "http":
                 response.headers["location"] = f"{self.FRONT_URL}{path[1:]}"
         return response
 

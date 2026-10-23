@@ -44,6 +44,20 @@ def test_app():
         # Test the match.group(1) or "/" logic
         return Response(status_code=302, headers={"Location": "http://localhost:8000"})
 
+    @main.app.get("/test-tus-location-http")
+    async def test_tus_location_http():
+        return Response(
+            status_code=201,
+            headers={"Location": "http://localhost:8000/user_files/upload/test-uuid-123"},
+        )
+
+    @main.app.get("/test-tus-location-https")
+    async def test_tus_location_https():
+        return Response(
+            status_code=201,
+            headers={"Location": "https://ecotaxa.obs-vlfr.fr/user_files/upload/test-uuid-456"},
+        )
+
     yield main.app
 
 
@@ -77,3 +91,12 @@ def test_fix_location_middleware(config, test_app):
     response = client.get("/test-redirect-no-slash", follow_redirects=False)
     assert response.status_code == 302
     assert response.headers["location"] == front_url
+
+    # Test TUS locations are made self-relative
+    response = client.get("/test-tus-location-http", follow_redirects=False)
+    assert response.status_code == 201
+    assert response.headers["location"] == "/user_files/upload/test-uuid-123"
+
+    response = client.get("/test-tus-location-https", follow_redirects=False)
+    assert response.status_code == 201
+    assert response.headers["location"] == "/user_files/upload/test-uuid-456"
