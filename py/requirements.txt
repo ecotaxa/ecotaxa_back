@@ -39,7 +39,7 @@ types-requests==2.33.0.20260518
 
 python-multipart==0.0.32
 # Big files import lib
-tuspyserver==4.2.5
+tuspyserver==4.4.2
 # mime type for import
 magic-rs==0.3.0
 # Auth validation

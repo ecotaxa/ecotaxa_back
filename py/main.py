@@ -111,7 +111,7 @@ from API_models.taxonomy import (
     TaxoRecastSearchRsp,
     TaxonomyRecastReq,
 )
-from API_operations.BigFiles import create_big_files_router
+from API_operations.BigFiles import create_big_files_router, TUS_PREFIX
 from API_operations.CRUD.Collections import CollectionsService
 from API_operations.CRUD.Constants import ConstantsService
 from API_operations.CRUD.Guests import GuestService
@@ -244,10 +244,11 @@ class FixLocationMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
         location = response.headers.get("location")
-        if location:
-            match = re.match(r"^http://[^/]+(/.*|$)", location)
-            if match:
-                path = match.group(1) or "/"
+        if location and (match := re.match(r"^(https?)://[^/]+(/.*|$)", location)):
+            scheme, path = match.group(1), match.group(2) or "/"
+            if TUS_PREFIX in path:
+                response.headers["location"] = path
+            elif scheme == "http":
                 response.headers["location"] = f"{self.FRONT_URL}{path[1:]}"
         return response
 
@@ -4178,6 +4179,11 @@ async def put_user_file(  # async due to await file store
     **Upload a file for the current user files directory.**
 
     The returned text will contain a server-side path which is usable for some file-related operations.
+
+    Note: Any archive (zip, tar, tar.gz) will be automatically and recursively extracted.
+    ⚠️ For very big files, this can lead to timeouts and failed extraction ⚠️
+    Using chunks in upload (via TUS protocol, /users_files/upload/*) is a better option in this case,
+    as decompression will continue in background if too long.
 
     *e.g. import.*
     """
