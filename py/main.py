@@ -6,7 +6,6 @@
 #
 import os
 import re
-import sys
 import time
 from contextlib import asynccontextmanager
 from dataclasses import asdict
@@ -4514,7 +4513,15 @@ async def timing_middleware(request: Request, call_next):
         if endpoint and hasattr(endpoint, "__name__")
         else request.url.path
     )
-    logger.info(f"TIMING: Wall: {wall_ms:7.1f}ms | CPU: {cpu_ms:7.1f}ms | {func_name}")
+    logger.info(
+        "%s %s %d | W:%.1fms C:%.1fms | %s ",
+        request.method,
+        request.url.path,
+        response.status_code,
+        wall_ms,
+        cpu_ms,
+        func_name,
+    )
     return response
 
 
@@ -4535,8 +4542,12 @@ def register_exception(app: FastAPI):
         request: Request, exc: RequestValidationError
     ):
         exc_str = f"{exc}".replace("\n", " ").replace("   ", " ")
-        # or logger.error(f'{exc}')
-        print(request.url, exc_str, file=sys.stderr)
+        logger.error(
+            "422 %s %s | Validation error: %s",
+            request.method,
+            request.url.path,
+            exc_str,
+        )
         content = {"status_code": 10422, "message": exc_str, "data": None}
         return JSONResponse(
             content=content, status_code=status.HTTP_422_UNPROCESSABLE_CONTENT

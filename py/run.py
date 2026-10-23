@@ -31,7 +31,24 @@ def run_uvicorn() -> None:
     # Otherwise, several (multiprocess) processes are forked
     # Note that, unlike Gunicorn below, it's a fresh process from 0 which is created
     # uvicorn.run(THE_APP, workers=4, log_level=INFO )
-    uvicorn.run(THE_APP, log_level=INFO, port=int(APP_PORT), reload=True)
+    uvicorn.run(
+        THE_APP,
+        log_level=INFO,
+        port=int(APP_PORT),
+        reload=True,
+        access_log=False,  # No reporting of HTTP requests and status
+    )
+
+
+# custom_worker.py
+from uvicorn.workers import UvicornWorker
+
+
+class StandaloneUvicornWorker(UvicornWorker):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.cfg.set("logconfig_dict", {})
+        self.CONFIG_KWARGS["log_config"] = None
 
 
 def run_gunicorn() -> None:
@@ -51,7 +68,7 @@ def run_gunicorn() -> None:
         def __init__(self) -> None:
             self.options = {
                 # Refers to site-packages/uvicorn/workers.py
-                "worker_class": "uvicorn.workers.UvicornWorker",
+                "worker_class": "run.StandaloneUvicornWorker",
                 "bind": "%s:%s" % ("0.0.0.0", APP_PORT),
                 # Use WEB_CONCURRENCY env. var
                 # 'workers': 16,
@@ -74,6 +91,8 @@ def run_gunicorn() -> None:
                 # as we run under this account on prod'.
                 # I guess it's $HOME from /etc/passwd for the guest. Whatever.
                 "control_socket_disable": True,
+                # Keep uvicorn loggers
+                "disable_existing_loggers": False,
             }
             self.application = app
             super().__init__()

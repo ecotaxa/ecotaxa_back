@@ -15,6 +15,7 @@ from API_operations.helpers.Service import Service
 from BO.Job import JobBO
 from DB.Job import Job, DBJobStateEnum, JobIDT
 from DB.helpers.ORM import clone_of
+from helpers import DynamicLogs
 from helpers.DynamicLogs import (
     get_logger,
     LogsSwitcher,
@@ -111,6 +112,9 @@ class ProcessJobRunner(Process, BaseJobRunner):
         pid = os.fork()
         if pid > 0:
             os._exit(0)
+        else:
+            # spawned process
+            DynamicLogs.rewire_loggers_after_fork()
         # Launch the job
         self.common_run(f"PID {os.getpid()}")
 
