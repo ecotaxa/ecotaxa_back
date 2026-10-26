@@ -6,6 +6,7 @@ import logging
 
 from starlette import status
 
+from API_models.filters import ObjectSetQueryFilters
 from tests.credentials import CREATOR_AUTH
 from tests.test_import import do_test_import, do_import_a_bit_more_skipping
 
@@ -217,3 +218,76 @@ def test_free_columns(fastapi):
         freetxt="ot01",
         freetxtval="False",
     )
+
+
+def test_fields_in_body(fastapi):
+    prj_id = do_test_import(fastapi, "Queries fields in body test project")
+    url = OBJECT_SET_QUERY_URL.format(project_id=prj_id)
+    some_fields = "obj.orig_id,img.file_name"
+    in_qry, details_qry = _prj_query(
+        fastapi, CREATOR_AUTH, prj_id, order="obj.objid", fields=some_fields
+    )
+    assert len(details_qry) > 0
+    assert all(len(a_det) == 2 for a_det in details_qry)
+    # Same fields in body, no query param
+    rsp = fastapi.post(
+        url + "?order_field=obj.objid",
+        headers=CREATOR_AUTH,
+        json={"fields": some_fields},
+    )
+    assert rsp.status_code == status.HTTP_200_OK
+    assert rsp.json()["object_ids"] == in_qry
+    assert rsp.json()["details"] == details_qry
+    # Body wins over query param
+    rsp = fastapi.post(
+        url + "?order_field=obj.objid&fields=obj.objid",
+        headers=CREATOR_AUTH,
+        json={"fields": some_fields},
+    )
+    assert rsp.status_code == status.HTTP_200_OK
+    assert rsp.json()["details"] == details_qry
+    # Body fields alongside real filters, which still apply
+    for a_status in ("V", "P"):
+        flt_qry, _ = _prj_query(
+            fastapi,
+            CREATOR_AUTH,
+            prj_id,
+            order="obj.objid",
+            fields="obj.objid",
+            statusfilter=a_status,
+        )
+        rsp = fastapi.post(
+            url + "?order_field=obj.objid",
+            headers=CREATOR_AUTH,
+            json={"fields": "obj.objid", "statusfilter": a_status},
+        )
+        assert rsp.status_code == status.HTTP_200_OK
+        assert rsp.json()["object_ids"] == flt_qry
+
+
+def test_fields_not_a_filter():
+    # Dict and list (sent by frontend) forms
+    for body in (
+        {"taxo": "1", "fields": "obj.orig_id,fre.area"},
+        [["taxo", "1"], ["fields", "obj.orig_id,fre.area"]],
+    ):
+        flt = ObjectSetQueryFilters.model_validate(body)
+        assert flt.fields == "obj.orig_id,fre.area"
+        assert "fields" not in flt.base()
+        assert flt.base()["taxo"] == "1"
+        assert flt.min_base() == {"taxo": "1"}
+    assert ObjectSetQueryFilters.model_validate({}).fields is None
+
+
+def test_fields_in_list_body(fastapi):
+    prj_id = do_test_import(fastapi, "Queries fields in list body test project")
+    url = OBJECT_SET_QUERY_URL.format(project_id=prj_id) + "?order_field=obj.objid"
+    ref, ref_details = _prj_query(
+        fastapi, CREATOR_AUTH, prj_id, order="obj.objid", fields="obj.orig_id"
+    )
+    rsp = fastapi.post(
+        url, headers=CREATOR_AUTH, json=[["fields", "obj.orig_id"]]
+    )
+    assert rsp.status_code == status.HTTP_200_OK
+    assert rsp.json()["object_ids"] == ref
+    assert rsp.json()["details"] == ref_details

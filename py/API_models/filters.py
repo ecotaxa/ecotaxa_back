@@ -282,3 +282,20 @@ class ProjectFilters(ProjectFiltersModel):
     def min_base(self) -> Dict:
         # Only dump (few) valuated filters
         return {k: v for k, v in self.base().items() if v}
+
+
+class ObjectSetQueryFilters(ProjectFilters):
+    """ProjectFilters plus optional returned fields, for clients hitting URL length limits."""
+
+    fields: Optional[str] = Field(
+        default=None,
+        title="Fields",
+        description="Same as the 'fields' query parameter, which it overrides. "
+        "Use it when the field list makes the URL too long.",
+        examples=["obj.longitude,fre.feret"],
+    )
+
+    def base(self) -> ProjectFiltersDict:
+        ret = super().base()
+        ret.pop("fields", None)  # type: ignore[typeddict-item]
+        return ret

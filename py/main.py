@@ -72,7 +72,12 @@ from API_models.exports import (
     BackupExportReq,
 )
 from API_models.filesystem import DirectoryModel
-from API_models.filters import Optional, ProjectFilters, ProjectFiltersDict
+from API_models.filters import (
+    Optional,
+    ProjectFilters,
+    ProjectFiltersDict,
+    ObjectSetQueryFilters,
+)
 from API_models.helpers.Introspect import plain_columns
 from API_models.imports import ImportReq, SimpleImportRsp, SimpleImportReq, ImportRsp
 from API_models.login import LoginReq, TokenRsp, RefreshReq
@@ -2561,12 +2566,14 @@ async def get_object_set(
     project_id: int = Path(
         ..., description="Internal, numeric id of the project.", examples=[1]
     ),
-    filters: ProjectFilters = Body(...),
+    filters: ObjectSetQueryFilters = Body(...),
     fields: Optional[str] = Query(
         title="Fields",
         description="""
 
 Specify the needed object (and ancillary entities) fields.
+
+May also be sent as `fields` in the body, which takes precedence (useful for long lists).
 
 It follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.
 
@@ -2627,6 +2634,8 @@ If no **unique order** is specified, the result can vary for same call and condi
     """
     Returns **filtered object Ids** for the given project.
     """
+    if filters.fields is not None:
+        fields = filters.fields
     return_fields = None
     if fields is not None:
         return_fields = fields.split(",")

@@ -4385,12 +4385,12 @@
             "required":false,
             "schema":{
               "title":"Fields",
-              "description":"\n\nSpecify the needed object (and ancillary entities) fields.\n\nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.\n\nMore help :\n\nYou can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.\n\n**Note that the following fields must be prefixed with the header \"obj.\"** (for example → obj.orig_id):\n\nacquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id,\nclassif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,\nlatitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.\n\n**Note that the following fields must be prefixed with the header \"img.\"** (for example → img.file_name):\n\nfile_name, height, imgid, imgrank, file_name, objid, orig_file_name, thumb_file_name, thumb_height, thumb_width, width.\n\n**Note that the following fields must be prefixed with the header \"txo.\"** (for example → txo.display_name):\n\ncreation_datetime, creator_email, display_name, id, id_instance,aphia_id, lastupdate_datetime,\nname, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostatus, taxotype.\n\n**All other fields must be prefixed by the header \"fre.\"** (for example → fre.circ.).\n                   ",
+              "description":"\n\nSpecify the needed object (and ancillary entities) fields.\n\nMay also be sent as `fields` in the body, which takes precedence (useful for long lists).\n\nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.\n\nMore help :\n\nYou can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.\n\n**Note that the following fields must be prefixed with the header \"obj.\"** (for example → obj.orig_id):\n\nacquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id,\nclassif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,\nlatitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.\n\n**Note that the following fields must be prefixed with the header \"img.\"** (for example → img.file_name):\n\nfile_name, height, imgid, imgrank, file_name, objid, orig_file_name, thumb_file_name, thumb_height, thumb_width, width.\n\n**Note that the following fields must be prefixed with the header \"txo.\"** (for example → txo.display_name):\n\ncreation_datetime, creator_email, display_name, id, id_instance,aphia_id, lastupdate_datetime,\nname, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostatus, taxotype.\n\n**All other fields must be prefixed by the header \"fre.\"** (for example → fre.circ.).\n                   ",
               "example":"obj.longitude,fre.feret",
               "type":"string",
               "nullable":true
             },
-            "description":"\n\nSpecify the needed object (and ancillary entities) fields.\n\nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.\n\nMore help :\n\nYou can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.\n\n**Note that the following fields must be prefixed with the header \"obj.\"** (for example → obj.orig_id):\n\nacquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id,\nclassif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,\nlatitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.\n\n**Note that the following fields must be prefixed with the header \"img.\"** (for example → img.file_name):\n\nfile_name, height, imgid, imgrank, file_name, objid, orig_file_name, thumb_file_name, thumb_height, thumb_width, width.\n\n**Note that the following fields must be prefixed with the header \"txo.\"** (for example → txo.display_name):\n\ncreation_datetime, creator_email, display_name, id, id_instance,aphia_id, lastupdate_datetime,\nname, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostatus, taxotype.\n\n**All other fields must be prefixed by the header \"fre.\"** (for example → fre.circ.).\n                   "
+            "description":"\n\nSpecify the needed object (and ancillary entities) fields.\n\nMay also be sent as `fields` in the body, which takes precedence (useful for long lists).\n\nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.\n\nMore help :\n\nYou can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.\n\n**Note that the following fields must be prefixed with the header \"obj.\"** (for example → obj.orig_id):\n\nacquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id,\nclassif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,\nlatitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.\n\n**Note that the following fields must be prefixed with the header \"img.\"** (for example → img.file_name):\n\nfile_name, height, imgid, imgrank, file_name, objid, orig_file_name, thumb_file_name, thumb_height, thumb_width, width.\n\n**Note that the following fields must be prefixed with the header \"txo.\"** (for example → txo.display_name):\n\ncreation_datetime, creator_email, display_name, id, id_instance,aphia_id, lastupdate_datetime,\nname, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostatus, taxotype.\n\n**All other fields must be prefixed by the header \"fre.\"** (for example → fre.circ.).\n                   "
           },
           {
             "name":"order_field",
@@ -4437,7 +4437,7 @@
           "content":{
             "application/json":{
               "schema":{
-                "$ref":"#/components/schemas/ProjectFilters"
+                "$ref":"#/components/schemas/ObjectSetQueryFilters"
               }
             }
           }
@@ -7148,7 +7148,7 @@
           "MyFiles"
         ],
         "summary":"Put User File",
-        "description":"**Upload a file for the current user files directory.**\n\nThe returned text will contain a server-side path which is usable for some file-related operations.\n\n*e.g. import.*",
+        "description":"**Upload a file for the current user files directory.**\n\nThe returned text will contain a server-side path which is usable for some file-related operations.\n\nNote: Any archive (zip, tar, tar.gz) will be automatically and recursively extracted.\n⚠️ For very big files, this can lead to timeouts and failed extraction ⚠️\nUsing chunks in upload (via TUS protocol, /users_files/upload/*) is a better option in this case,\nas decompression will continue in background if too long.\n\n*e.g. import.*",
         "operationId":"post_user_file",
         "requestBody":{
           "content":{
@@ -10391,6 +10391,211 @@
           "random_value"
         ],
         "title":"ObjectModel"
+      },
+      "ObjectSetQueryFilters":{
+        "properties":{
+          "taxo":{
+            "title":"Taxo",
+            "description":"Coma-separated list of numeric taxonomy/category ids. Only include objects classified with one of them.",
+            "example":"12,7654,5409",
+            "type":"string",
+            "nullable":true
+          },
+          "taxochild":{
+            "title":"Taxo child",
+            "description":"If 'Y' and taxo is set, also include children of each member of 'taxo' list in taxonomy tree.",
+            "example":"Y",
+            "type":"string",
+            "nullable":true
+          },
+          "statusfilter":{
+            "title":"",
+            "description":"Include objects with given status:\n            'NV': Not validated \n            'PV': Predicted or Validated \n            'PVD': Predicted or Validated or Dubious\n            'NVM': Validated, but not by me \n            'VM': Validated by me \n            'U': Not classified\n            other: direct equality comparison with DB value \n        ",
+            "example":"NV",
+            "type":"string",
+            "nullable":true
+          },
+          "MapN":{
+            "title":"Map North",
+            "description":"If all 4 are set (MapN, MapW, MapE, MapS), include objects inside the defined bounding rectangle.",
+            "example":44.34,
+            "type":"string",
+            "nullable":true
+          },
+          "MapW":{
+            "title":"Map West",
+            "description":"If all 4 are set (MapN, MapW, MapE, MapS), include objects inside the defined bounding rectangle.",
+            "example":3.88,
+            "type":"string",
+            "nullable":true
+          },
+          "MapE":{
+            "title":"Map East",
+            "description":"If all 4 are set (MapN, MapW, MapE, MapS), include objects inside the defined bounding rectangle.",
+            "example":7.94,
+            "type":"string",
+            "nullable":true
+          },
+          "MapS":{
+            "title":"Map South",
+            "description":"If all 4 are set (MapN, MapW, MapE, MapS), include objects inside the defined bounding rectangle.",
+            "example":42.42,
+            "type":"string",
+            "nullable":true
+          },
+          "depthmin":{
+            "title":"Depthmin",
+            "description":"Positive values. If both are set (depthmin, depthmax), include objects for which both depths (min and max) are inside the range.",
+            "example":"10",
+            "type":"string",
+            "nullable":true
+          },
+          "depthmax":{
+            "title":"Depthmax",
+            "description":"Positive values. If both are set (depthmin, depthmax), include objects for which both depths (min and max) are inside the range.",
+            "example":"110",
+            "type":"string",
+            "nullable":true
+          },
+          "samples":{
+            "title":"Samples",
+            "description":"Coma-separated list of sample IDs, include only objects for these samples.",
+            "example":"10987,3456,987,38",
+            "type":"string",
+            "nullable":true
+          },
+          "instrum":{
+            "title":"Instrument",
+            "description":"Instrument name, include objects for which sampling was done using this instrument.",
+            "example":"uvp5",
+            "type":"string",
+            "nullable":true
+          },
+          "daytime":{
+            "title":"Day time",
+            "description":"Coma-separated list of sun position values: D for Day, U for Dusk, N for Night, A for Dawn (Aube in French).",
+            "example":"N,A",
+            "type":"string",
+            "nullable":true
+          },
+          "month":{
+            "title":"Month",
+            "description":"Coma-separated list of month numbers, 1=Jan and so on.",
+            "example":"11,12",
+            "type":"string",
+            "nullable":true
+          },
+          "fromdate":{
+            "title":"From date",
+            "description":"Format is 'YYYY-MM-DD', include objects collected after this date.",
+            "example":"2020-10-09",
+            "type":"string",
+            "nullable":true
+          },
+          "todate":{
+            "title":"To date",
+            "description":"Format is 'YYYY-MM-DD', include objects collected before this date.",
+            "example":"2021-10-09",
+            "type":"string",
+            "nullable":true
+          },
+          "fromtime":{
+            "title":"From time",
+            "description":"Format is 'HH24:MM:SS', include objects collected after this time of day.",
+            "example":"1:17:00",
+            "type":"string",
+            "nullable":true
+          },
+          "totime":{
+            "title":"To time",
+            "description":"Format is 'HH24:MM:SS', include objects collected before this time of day.",
+            "example":"23:32:00",
+            "type":"string",
+            "nullable":true
+          },
+          "inverttime":{
+            "title":"Invert time",
+            "description":"If '1', include objects outside fromtime and totime range.",
+            "example":"0",
+            "type":"string",
+            "nullable":true
+          },
+          "validfromdate":{
+            "title":"Valid from date",
+            "description":"Format is 'YYYY-MM-DD HH24:MI', include objects validated/set to dubious after this date+time.",
+            "example":"2020-10-09 10:00:00",
+            "type":"string",
+            "nullable":true
+          },
+          "validtodate":{
+            "title":"Valid to date",
+            "description":"Format is 'YYYY-MM-DD HH24:MI', include objects validated/set to dubious before this date+time.",
+            "example":"2021-10-09 10:00:00",
+            "type":"string",
+            "nullable":true
+          },
+          "freenum":{
+            "title":"Free num",
+            "description":"Numerical DB column number in Object as basis for the 2 following criteria (freenumst, freenumend).",
+            "example":"n01",
+            "type":"string",
+            "nullable":true
+          },
+          "freenumst":{
+            "title":"Freenum start",
+            "description":"Start of included range for the column defined by freenum, in which objects are included.",
+            "example":"0",
+            "type":"string",
+            "nullable":true
+          },
+          "freenumend":{
+            "title":"Free num end",
+            "description":"End of included range for the column defined by freenum, in which objects are included.",
+            "example":"999999",
+            "type":"string",
+            "nullable":true
+          },
+          "freetxt":{
+            "title":"Free text",
+            "description":" Textual DB column number as basis for following criteria (freetxtval)\n            If starts with 's' then it's a text column in Sample\n            If starts with 'a' then it's a text column in Acquisition \n            If starts with 'p' then it's a text column in Process \n            If starts with 'o' then it's a text column in Object .\n        ",
+            "example":"p01",
+            "type":"string",
+            "nullable":true
+          },
+          "freetxtval":{
+            "title":"Free text val",
+            "description":"Text to match in the column defined by freetxt, for an object to be include.",
+            "example":"zooprocess",
+            "type":"string",
+            "nullable":true
+          },
+          "filt_annot":{
+            "title":"Filter annotator",
+            "description":"Coma-separated list of annotators, i.e. persons who validated the classification at any point in time.",
+            "example":[
+              "34,67,67"
+            ],
+            "type":"string",
+            "nullable":true
+          },
+          "filt_last_annot":{
+            "title":"Filter last annotator",
+            "description":"Coma-separated list of annotators, i.e. persons who validated the classification in last.",
+            "example":"34,67",
+            "type":"string",
+            "nullable":true
+          },
+          "fields":{
+            "title":"Fields",
+            "description":"Same as the 'fields' query parameter, which it overrides. Use it when the field list makes the URL too long.",
+            "example":"obj.longitude,fre.feret",
+            "type":"string",
+            "nullable":true
+          }
+        },
+        "type":"object",
+        "title":"Project filters Model",
+        "description":"How to reduce project data."
       },
       "ObjectSetQueryRsp":{
         "properties":{
