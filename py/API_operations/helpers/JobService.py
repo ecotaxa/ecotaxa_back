@@ -130,11 +130,42 @@ class JobServiceBase(Service, LogEmitter, ABC):
             [new_job]
         )  # Flush sends the SQL to PG, so we can get the id from sequence
         self.job_id = new_job.id
+        # Launching a new job of the same type means that older jobs waiting for
+        # an answer were abandoned; free their slot so the new one is not blocked.
+        self._supersede_asking_jobs(user_id, job_type, new_job.id)
         self.temp_for_jobs.erase_for(new_job.id)  # mainly for tests
         with LogsSwitcher(self):
             # Write arrival event into job log
             logger.info("Creating job %d", self.job_id)
         self.session.commit()
+
+    def _supersede_asking_jobs(
+        self, user_id: UserIDT, job_type: str, new_job_id: JobIDT
+    ) -> None:
+        """
+        Mark as failed the older jobs of this user and type which are waiting for
+        input. Users often forget about them and relaunch the same operation
+        instead of answering; keeping them asking would block the new job forever.
+        """
+        older_asking_jobs = (
+            self.session.query(Job)
+            .filter(Job.id > 0)
+            .filter(Job.owner_id == user_id)
+            .filter(Job.type == job_type)
+            .filter(Job.state == DBJobStateEnum.Asking)
+            .filter(Job.id != new_job_id)
+            .all()
+        )
+        for an_old_job in older_asking_jobs:
+            an_old_job.state = DBJobStateEnum.Error
+            an_old_job.progress_msg = "Superseded by job #%d" % new_job_id
+            an_old_job.updated_on = DateTime.now_time()
+        if older_asking_jobs:
+            logger.info(
+                "Superseded asking job(s) %s by job #%d",
+                [an_old_job.id for an_old_job in older_asking_jobs],
+                new_job_id,
+            )
 
     def _get_job(self) -> Job:
         job: Optional[Job] = self.session.get(Job, self.job_id)

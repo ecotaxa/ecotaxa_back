@@ -8,13 +8,13 @@ import sys
 import threading
 from multiprocessing import Process
 from threading import Event, Thread
-from typing import Any, Optional, List, ClassVar, Callable, Type, Union
+from typing import Any, Optional, List, ClassVar, Callable, Type, Union, Tuple
 
 from API_operations.helpers.JobService import JobServiceBase
 from API_operations.helpers.Service import Service
 from BO.Job import JobBO
 from DB.Job import Job, DBJobStateEnum, JobIDT
-from DB.helpers.ORM import clone_of
+from DB.helpers.ORM import aliased, clone_of, func, select
 from helpers import DynamicLogs
 from helpers.DynamicLogs import (
     get_logger,
@@ -135,6 +135,19 @@ class JobScheduler(Service):
     FILTER: ClassVar[List[str]] = []
     # Include only these job types
     INCLUDE: ClassVar[List[str]] = []
+    # A job in one of these states occupies the execution slot of its (owner, type).
+    # Asking jobs have no runner, but they can still be resumed. Until they are
+    # answered or superseded by a newer job of the same owner/type, another pending
+    # job of that owner/type must not start; otherwise resuming them could run two
+    # jobs concurrently.
+    ACTIVE_JOB_STATES: ClassVar[Tuple[DBJobStateEnum, ...]] = (
+        DBJobStateEnum.Running,
+        DBJobStateEnum.Asking,
+    )
+    # Arbitrary key for the advisory lock used while claiming a job. It serializes
+    # scheduler processes so that the owner/type limit check and the state change
+    # to Running are atomic.
+    CLAIM_LOCK_KEY: ClassVar[int] = 0x45434F54  # "ECOT"
     # A single runner per web process
     the_runner: Optional[Union[ThreadJobRunner, ProcessJobRunner]] = (
         None  # Only written by JobTimer_s_
@@ -147,19 +160,13 @@ class JobScheduler(Service):
     def __init__(self) -> None:
         super().__init__()
 
-    def _run_one(self) -> None:
+    def _pick_pending_job(self) -> Optional[Job]:
         """
-        Pick first pending job and run it, except if already running.
-        This is an instance method, so there is DB session to work with, released straight away.
-        Current thread: JobTimer
+        Pick the oldest pending job which can run now.
+
+        A user can only have one active job of a given type at a time. Jobs of
+        other types, or owned by other users, are not blocked by this rule.
         """
-        cls = JobScheduler
-        if cls.the_runner is not None:
-            # A single runner at a time
-            if cls.the_runner.is_alive():
-                return
-            cls.the_runner = None
-        # Pick the first pending job which is not already managed by another runner
         qry = (
             self.session.query(Job)
             .filter(Job.id > 0)
@@ -169,9 +176,45 @@ class JobScheduler(Service):
             qry = qry.filter(Job.type.in_(tuple(self.INCLUDE)))
         for a_type in self.FILTER:
             qry = qry.filter(Job.type != a_type)
-        qry = qry.with_for_update(skip_locked=True)
-        the_job: Optional[Job] = qry.first()
+        # One execution at a time per (owner, job type)
+        same_owner_and_type = aliased(Job)
+        same_type_is_active = (
+            select(same_owner_and_type.id)
+            .where(
+                same_owner_and_type.owner_id == Job.owner_id,
+                same_owner_and_type.type == Job.type,
+                same_owner_and_type.state.in_(self.ACTIVE_JOB_STATES),
+            )
+            .exists()
+        )
+        qry = qry.filter(~same_type_is_active)
+        # FIFO, so that a blocked job does not starve newer ones of other types/users
+        qry = qry.order_by(Job.id)
+        return qry.with_for_update(skip_locked=True).first()
+
+    def _run_one(self) -> None:
+        """
+        Pick the first pending job which is allowed to run and launch it, except if
+        a runner is already active.
+        This is an instance method, so there is DB session to work with, released straight away.
+        Current thread: JobTimer
+        """
+        cls = JobScheduler
+        if cls.the_runner is not None:
+            # A single runner at a time
+            if cls.the_runner.is_alive():
+                return
+            cls.the_runner = None
+        # Claiming a job and applying the owner/type limit must be atomic across
+        # scheduler processes. Otherwise, two of them could pick two pending jobs
+        # of the same owner and type before either is visible as Running.
+        self.session.execute(select(func.pg_advisory_xact_lock(cls.CLAIM_LOCK_KEY)))
+        # Pick the first pending eligible job, which is not already managed by
+        # another runner
+        the_job: Optional[Job] = self._pick_pending_job()
         if the_job is None:
+            # Release the advisory lock before doing idle work
+            self.session.commit()
             # Exercise the ro_session for Connection pool cleanup
             self.ro_session.query(Job).filter(Job.id == 0).first()
             if cls.todo_on_idle is not None:
