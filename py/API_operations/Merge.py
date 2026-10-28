@@ -12,11 +12,11 @@ from BO.Mappings import ProjectMapping, RemapOp, MAPPED_TABLES, MappedTableTypeT
 from BO.Project import ProjectBO
 from BO.ProjectPrivilege import ProjectPrivilegeBO
 from BO.Rights import RightsBO, Action
-from DB.Acquisition import Acquisition, AcquisitionIDT, ACQ_PRJ_OFFSET
-from DB.Object import ObjectHeader, ObjectFields, OBJ_PRJ_OFFSET
+from DB.Acquisition import Acquisition, AcquisitionIDT
+from DB.Object import ObjectHeader, ObjectFields
 from DB.Project import Project
 from DB.Sample import Sample, SampleIDT, SAM_PRJ_OFFSET
-from DB.helpers.ORM import orm_equals, any_, all_, func, update, delete
+from DB.helpers.ORM import orm_equals, any_, all_, func, update, delete, not_, or_
 from DB.helpers.Postgres import values_cte, text
 from helpers.DynamicLogs import get_logger
 from .helpers.Service import Service
@@ -147,17 +147,23 @@ class MergeService(Service):
         In OK Samples, Acquisitions which don't match the project ID in their IDs should receive new ones.
         In OK Acquisitions, Objects which don't match the project ID in their IDs should receive new ones.
         """
+        # Note: only IDs are read, and ranges are used for the "outside project" test,
+        # so that indexes are used. An expression on the IDs leads to a full scan of obj_head.
         # 1. Fix Samples
-        samples = (
-            session.query(Sample)
+        sam_ids = (
+            session.query(Sample.sampleid)
             .filter(Sample.projid == prj_id)
-            .filter(func.floor(Sample.sampleid / SAM_PRJ_OFFSET) != prj_id)
+            .filter(
+                or_(
+                    Sample.sampleid < prj_id * SAM_PRJ_OFFSET,
+                    Sample.sampleid >= (prj_id + 1) * SAM_PRJ_OFFSET,
+                )
+            )
             .all()
         )
         new_sam_id = Sample.get_next_pk(session, prj_id)
         sam_updates = []
-        for sam in samples:
-            old_sam_id = sam.sampleid
+        for (old_sam_id,) in sam_ids:
             sam_updates.append({"new": new_sam_id, "old": old_sam_id})
             new_sam_id += 1
 
@@ -172,17 +178,16 @@ class MergeService(Service):
                 session.execute(text(sql), chunk)
 
         # 2. Fix Acquisitions
-        acqs = (
-            session.query(Acquisition)
+        acq_ids = (
+            session.query(Acquisition.acquisid)
             .join(Sample)
             .filter(Sample.projid == prj_id)
-            .filter(func.floor(Acquisition.acquisid / ACQ_PRJ_OFFSET) != prj_id)
+            .filter(not_(Acquisition.acquisid.op("<@")(func.acq_in_prj(prj_id))))
             .all()
         )
         new_acq_id = Acquisition.get_next_pk(session, prj_id)
         acq_updates = []
-        for acq in acqs:
-            old_acq_id = acq.acquisid
+        for (old_acq_id,) in acq_ids:
             acq_updates.append({"new": new_acq_id, "old": old_acq_id})
             new_acq_id += 1
 
@@ -201,18 +206,17 @@ class MergeService(Service):
                     session.execute(text(sql), chunk)
 
         # 3. Fix Objects
-        objs = (
-            session.query(ObjectHeader)
+        obj_ids = (
+            session.query(ObjectHeader.objid)
             .join(Acquisition)
             .join(Sample)
             .filter(Sample.projid == prj_id)
-            .filter(func.floor(ObjectHeader.objid / OBJ_PRJ_OFFSET) != prj_id)
+            .filter(not_(ObjectHeader.objid.op("<@")(func.obj_in_prj(prj_id))))
             .all()
         )
         new_obj_id = ObjectHeader.get_next_pk(session, prj_id)
         obj_updates = []
-        for obj in objs:
-            old_obj_id = obj.objid
+        for (old_obj_id,) in obj_ids:
             obj_updates.append({"new": new_obj_id, "old": old_obj_id})
             new_obj_id += 1
 
