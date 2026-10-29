@@ -2,7 +2,7 @@
   "openapi":"3.0.2",
   "info":{
     "title":"EcoTaxa",
-    "version":"0.0.52"
+    "version":"0.0.54"
   },
   "servers":[
     {
@@ -7148,7 +7148,7 @@
           "MyFiles"
         ],
         "summary":"Put User File",
-        "description":"**Upload a file for the current user files directory.**\n\nThe returned text will contain a server-side path which is usable for some file-related operations.\n\n*e.g. import.*",
+        "description":"**Upload a file for the current user files directory.**\n\nThe returned text will contain a server-side path which is usable for some file-related operations.\n\nNote: Any archive (zip, tar, tar.gz) will be automatically and recursively extracted.\n⚠️ For very big files, this can lead to timeouts and failed extraction ⚠️\nUsing chunks in upload (via TUS protocol, /users_files/upload/*) is a better option in this case,\nas decompression will continue in background if too long.\n\n*e.g. import.*",
         "operationId":"post_user_file",
         "requestBody":{
           "content":{

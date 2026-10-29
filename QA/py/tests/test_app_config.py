@@ -304,6 +304,19 @@ def test_config_cors(tmp_path, base_config, mocker, mock_socket, no_cors_env):
     cfg.validate()
 
 
+def test_config_cors_any(tmp_path, base_config, mocker, mock_socket, no_cors_env):
+    # Same as the former nginx add_header 'Access-Control-Allow-Origin' '*'
+    config_path = tmp_path / "config.ini"
+    content = base_config.copy()
+    content.update({"CORS_ALLOWED_ORIGINS": "*"})
+    create_config_file(config_path, content)
+    mocker.patch.dict(os.environ, {"APP_CONFIG": str(config_path)})
+
+    cfg = Config()
+    assert cfg.get_cors_allowed_origins() == ["*"]
+    cfg.validate()
+
+
 def test_config_cors_absent(tmp_path, base_config, mocker, no_cors_env):
     config_path = tmp_path / "config.ini"
     create_config_file(config_path, base_config)
@@ -317,7 +330,6 @@ def test_config_cors_absent(tmp_path, base_config, mocker, no_cors_env):
 @pytest.mark.parametrize(
     "key, value, expected_error",
     [
-        ("CORS_ALLOWED_ORIGINS", "https://a.example.org,*", "cannot contain"),
         ("CORS_ALLOWED_ORIGIN_REGEX", "^http://(unclosed", "not a valid regex"),
     ],
 )

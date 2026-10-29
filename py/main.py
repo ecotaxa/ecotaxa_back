@@ -259,7 +259,8 @@ class FixLocationMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(FixLocationMiddleware)
 
-# Known third-party browser apps (EcoTaxoGuide, PlanktoScope...) calling the API from their own origin, see ecotaxa/ecotaxa#29.
+# Third-party browser apps (EcoTaxoGuide, PlanktoScope...) calling the API from their own origin, see ecotaxa/ecotaxa#29.
+# Allowed origins are listed in config, or '*' for any.
 # Added last, so outermost: it answers preflights itself and its headers cover error responses and rewritten redirects.
 # No credentials: the 'session' cookie is a valid auth (BearerOrCookieAuth), so these apps must use a Bearer token.
 cors_origins = Config().get_cors_allowed_origins()

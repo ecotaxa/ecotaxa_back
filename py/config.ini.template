@@ -97,7 +97,8 @@ OPENID_METADATA_URL =
 # Set to off only if the provider cannot supply this claim (not recommended).
 #OPENID_REQUIRE_VERIFIED_EMAIL = on
 # CORS: third-party browser apps allowed to read API responses (credentials are never allowed, apps use a Bearer token).
-# Comma-separated exact origins, scheme://host[:port] without trailing slash. '*' is refused.
-#CORS_ALLOWED_ORIGINS = https://ecotaxoguide.example.org
+# Comma-separated exact origins, scheme://host[:port] without trailing slash, e.g. https://ecotaxoguide.example.org
+# '*' allows any origin, as the former nginx add_header 'Access-Control-Allow-Origin' '*'.
+CORS_ALLOWED_ORIGINS = *
 # Regex for apps without a fixed origin, e.g. PlanktoScope UI served by each device.
 #CORS_ALLOWED_ORIGIN_REGEX = ^http://((pkscope|planktoscope)[a-z0-9-]*\.local|home\.pkscope|192\.168\.4\.1)(:\d+)?$

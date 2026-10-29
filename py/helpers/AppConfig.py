@@ -170,7 +170,7 @@ class Config(object):
         return extensions
 
     def get_cors_allowed_origins(self) -> List[str]:
-        # Exact origins (scheme://host[:port]) of third-party browser apps allowed to read API responses
+        # Exact origins (scheme://host[:port]) of third-party browser apps allowed to read API responses, or '*' for any
         ret = self._get("CORS_ALLOWED_ORIGINS", "")
         origins = [r.strip() for r in ret.split(",") if r.strip()]
         return origins
@@ -280,9 +280,7 @@ class Config(object):
         self.get_openid_require_verified_email()
         self.get_accepted_mime_types()
         self.get_archive_extensions()
-        cors_origins = self.get_cors_allowed_origins()
-        # Any origin would expose users' data to any site, list the allowed apps instead
-        assert "*" not in cors_origins, "CORS_ALLOWED_ORIGINS cannot contain '*'."
+        self.get_cors_allowed_origins()
         cors_origin_regex = self.get_cors_allowed_origin_regex()
         if cors_origin_regex is not None:
             try:
