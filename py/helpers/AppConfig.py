@@ -8,6 +8,7 @@
 
 import configparser
 import os
+import re
 import socket
 from pathlib import Path
 from typing import Optional, KeysView, Tuple, overload, Literal, List
@@ -168,6 +169,17 @@ class Config(object):
         extensions = [r.strip() for r in ret.split(",")]
         return extensions
 
+    def get_cors_allowed_origins(self) -> List[str]:
+        # Exact origins (scheme://host[:port]) of third-party browser apps allowed to read API responses
+        ret = self._get("CORS_ALLOWED_ORIGINS", "")
+        origins = [r.strip() for r in ret.split(",") if r.strip()]
+        return origins
+
+    def get_cors_allowed_origin_regex(self) -> Optional[str]:
+        # For apps without a fixed origin, e.g. PlanktoScope served by each device
+        ret = (self._get("CORS_ALLOWED_ORIGIN_REGEX") or "").strip()
+        return ret or None
+
     def get_taxoserver_url(self) -> str:
         url = self._get("TAXOSERVER_URL", mandatory=True).strip()
         return url + ("/" if url[-1] != "/" else "")
@@ -268,3 +280,12 @@ class Config(object):
         self.get_openid_require_verified_email()
         self.get_accepted_mime_types()
         self.get_archive_extensions()
+        cors_origins = self.get_cors_allowed_origins()
+        # Any origin would expose users' data to any site, list the allowed apps instead
+        assert "*" not in cors_origins, "CORS_ALLOWED_ORIGINS cannot contain '*'."
+        cors_origin_regex = self.get_cors_allowed_origin_regex()
+        if cors_origin_regex is not None:
+            try:
+                re.compile(cors_origin_regex)
+            except re.error as e:
+                assert False, f"CORS_ALLOWED_ORIGIN_REGEX is not a valid regex: {e}"

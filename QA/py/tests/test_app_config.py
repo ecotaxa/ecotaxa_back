@@ -271,3 +271,65 @@ def test_config_validate_fails_when_folder_permissions_invalid(
     cfg = Config()
     with pytest.raises(AssertionError, match=expected_error):
         cfg.validate()
+
+
+
+@pytest.fixture
+def no_cors_env(mocker):
+    # fastapi_fixture sets them in env for test_cors.py, and env has priority over the file.
+    # Via mocker, not monkeypatch: the tests' own mocker.patch.dict(os.environ) must be undone before, not after.
+    mocker.patch.dict(os.environ)
+    os.environ.pop("CORS_ALLOWED_ORIGINS", None)
+    os.environ.pop("CORS_ALLOWED_ORIGIN_REGEX", None)
+
+
+def test_config_cors(tmp_path, base_config, mocker, mock_socket, no_cors_env):
+    config_path = tmp_path / "config.ini"
+    content = base_config.copy()
+    content.update(
+        {
+            "CORS_ALLOWED_ORIGINS": " https://a.example.org, ,http://b.example.org:8080 ",
+            "CORS_ALLOWED_ORIGIN_REGEX": r"^http://pkscope-[a-z0-9-]*\.local$",
+        }
+    )
+    create_config_file(config_path, content)
+    mocker.patch.dict(os.environ, {"APP_CONFIG": str(config_path)})
+
+    cfg = Config()
+    assert cfg.get_cors_allowed_origins() == [
+        "https://a.example.org",
+        "http://b.example.org:8080",
+    ]
+    assert cfg.get_cors_allowed_origin_regex() == r"^http://pkscope-[a-z0-9-]*\.local$"
+    cfg.validate()
+
+
+def test_config_cors_absent(tmp_path, base_config, mocker, no_cors_env):
+    config_path = tmp_path / "config.ini"
+    create_config_file(config_path, base_config)
+    mocker.patch.dict(os.environ, {"APP_CONFIG": str(config_path)})
+
+    cfg = Config()
+    assert cfg.get_cors_allowed_origins() == []
+    assert cfg.get_cors_allowed_origin_regex() is None
+
+
+@pytest.mark.parametrize(
+    "key, value, expected_error",
+    [
+        ("CORS_ALLOWED_ORIGINS", "https://a.example.org,*", "cannot contain"),
+        ("CORS_ALLOWED_ORIGIN_REGEX", "^http://(unclosed", "not a valid regex"),
+    ],
+)
+def test_config_cors_invalid(
+    tmp_path, base_config, mocker, mock_socket, no_cors_env, key, value, expected_error
+):
+    config_path = tmp_path / "config.ini"
+    content = base_config.copy()
+    content.update({key: value})
+    create_config_file(config_path, content)
+    mocker.patch.dict(os.environ, {"APP_CONFIG": str(config_path)})
+
+    cfg = Config()
+    with pytest.raises(AssertionError, match=expected_error):
+        cfg.validate()

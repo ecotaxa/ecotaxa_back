@@ -33,6 +33,7 @@ from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import JSONResponse
 
@@ -205,7 +206,7 @@ api_logger = get_api_logger()
 
 app = FastAPI(
     title="EcoTaxa",
-    version="0.0.52",
+    version="0.0.54",
     # openapi URL as seen from navigator, this is included when /docs is required
     # which serves swagger-ui JS app. Stay in /api sub-path.
     openapi_url="/api/openapi.json",
@@ -257,6 +258,29 @@ class FixLocationMiddleware(BaseHTTPMiddleware):
 
 
 app.add_middleware(FixLocationMiddleware)
+
+# Known third-party browser apps (EcoTaxoGuide, PlanktoScope...) calling the API from their own origin, see ecotaxa/ecotaxa#29.
+# Added last, so outermost: it answers preflights itself and its headers cover error responses and rewritten redirects.
+# No credentials: the 'session' cookie is a valid auth (BearerOrCookieAuth), so these apps must use a Bearer token.
+cors_origins = Config().get_cors_allowed_origins()
+cors_origin_regex = Config().get_cors_allowed_origin_regex()
+if cors_origins or cors_origin_regex:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=cors_origins,
+        allow_origin_regex=cors_origin_regex,
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+        expose_headers=[
+            "Location",
+            "Content-Disposition",
+            "Tus-Resumable",
+            "Upload-Offset",
+            "Upload-Length",
+        ],
+        max_age=3600,
+    )
 
 # HTML stuff
 # app.mount("/styles", StaticFiles(directory="pages/styles"), name="styles")

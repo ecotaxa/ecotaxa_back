@@ -269,6 +269,15 @@ ARCHIVE_EXTENSIONS = zip,tar,gzip,tar.gz,tar.bz2,tar.xz,gz
 OPENID_CLIENT_ID=ecotaxa
 OPENID_CLIENT_SECRET=ugrv75rZRlVvUdk4YJE58sJulITDo0c8
 OPENID_METADATA_URL=https://my.keycloack.com/realms/theia/.well-known/openid-configuration
+OPENID_REQUIRE_VERIFIED_EMAIL = on
+MAX_CAPTCHA_TOKEN_LENGTH = 4096
+# Setting these enables captcha on registration, which tests don't expect
+#RECAPTCHAID =
+#RECAPTCHASECRET =
+#ALL_IN_ONE = off
+# Same values as in fastapi_fixture, which sets them in env before first import of main.py
+CORS_ALLOWED_ORIGINS = https://ecotaxoguide.example.org
+CORS_ALLOWED_ORIGIN_REGEX = ^http://((pkscope|planktoscope)[a-z0-9-]*\\.local|home\\.pkscope|192\\.168\\.4\\.1)(:\\d+)?$
 """
 
     def write_config(self):
