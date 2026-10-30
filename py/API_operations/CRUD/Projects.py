@@ -380,6 +380,24 @@ class ProjectsService(Service):
         """
         Read values for specific columns for these projects.
         """
+        # Security barrier, same as reading each project
+        if current_user_id is None:
+            [
+                RightsBO.anonymous_wants(self.ro_session, Action.READ, prj_id)
+                for prj_id in project_ids
+            ]
+        else:
+            # Reading a set of projects is not an access to each: keep recent projects
+            [
+                RightsBO.user_wants(
+                    self.session,
+                    current_user_id,
+                    Action.READ,
+                    prj_id,
+                    update_preference=False,
+                )
+                for prj_id in project_ids
+            ]
         projects = ProjectBOSet(self.ro_session, project_ids, public=False)
         ret = []
         columns: List = []

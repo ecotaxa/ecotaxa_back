@@ -145,11 +145,9 @@ def test_project_set_get_projects(fastapi):
     prj_ids_str = ",".join([str(i) for i in ids])
 
     url = PROJECT_SET_PROJECTS_URL.format(prj_ids=prj_ids_str)
-    # No auth
+    # No auth: the projects are not OPEN
     rsp = fastapi.get(url)
-    assert (
-        rsp.status_code == status.HTTP_200_OK
-    )  # Endpoint uses get_optional_current_user
+    assert rsp.status_code == status.HTTP_403_FORBIDDEN
 
     # With auth &default list
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
@@ -277,3 +275,29 @@ def test_project_set_get_projects(fastapi):
             ],
         },
     ]
+
+
+def test_project_set_get_projects_rights(fastapi):
+    # Columns of a project are readable only by who can read the project
+    from tests.credentials import ADMIN_USER_ID, USER_AUTH
+    from tests.test_import import create_project
+
+    prj_private = create_project(ADMIN_USER_ID, "Prj set rights private", access="0")
+    prj_public = create_project(ADMIN_USER_ID, "Prj set rights public", access="1")
+    prj_open = create_project(ADMIN_USER_ID, "Prj set rights open", access="2")
+
+    def get(prj_ids, headers=None):
+        url = PROJECT_SET_PROJECTS_URL.format(prj_ids=",".join(map(str, prj_ids)))
+        return fastapi.get(url, headers=headers or {}).status_code
+
+    # Anonymous: OPEN only
+    assert get([prj_open]) == status.HTTP_200_OK
+    assert get([prj_public]) == status.HTTP_403_FORBIDDEN
+    assert get([prj_private]) == status.HTTP_403_FORBIDDEN
+    # Logged-in, no privilege: OPEN and PUBLIC
+    assert get([prj_open, prj_public], USER_AUTH) == status.HTTP_200_OK
+    assert get([prj_private], USER_AUTH) == status.HTTP_403_FORBIDDEN
+    # One refused project refuses the whole request
+    assert get([prj_open, prj_private], USER_AUTH) == status.HTTP_403_FORBIDDEN
+    # Admin: all
+    assert get([prj_private, prj_public, prj_open], ADMIN_AUTH) == status.HTTP_200_OK
