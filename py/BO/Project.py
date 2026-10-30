@@ -1454,7 +1454,8 @@ class CollectionProjectBOSet(ProjectBOSet):
         return list of projects id validating the restricted_access.
         """
         noaccesses: ProjectIDListT = []
-        restricted_access = max(
+        # "0" PRIVATE < "1" PUBLIC < "2" OPEN, so the most restricted is the min
+        restricted_access = min(
             [cast(AccessLevelEnum, project.access) for project in self.projects]
         )
         for project in self.projects:
