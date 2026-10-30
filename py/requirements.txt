@@ -60,5 +60,5 @@ typer[all]==0.26.7
 # in API_models/mypy/plugin.py
 mypy==1.19.1
 # OpenId lib, latest 1.6.6 Requires-Python >=3.9
-authlib==1.7.2
+authlib==1.9.1
 types-Authlib==1.6.11.20260518
