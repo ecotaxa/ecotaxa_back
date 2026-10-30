@@ -12,6 +12,13 @@ def create_config_file(path, content):
             f.write(f"{k} = {v}\n")
 
 
+@pytest.fixture(autouse=True)
+def reset_config_singleton():
+    Config.reset()
+    yield
+    Config.reset()
+
+
 @pytest.fixture
 def temp_dirs(tmp_path):
     vault = tmp_path / "vault"
@@ -271,6 +278,35 @@ def test_config_validate_fails_when_folder_permissions_invalid(
     cfg = Config()
     with pytest.raises(AssertionError, match=expected_error):
         cfg.validate()
+
+
+def test_config_singleton_same_instance(tmp_path, mocker):
+    config_path = tmp_path / "config.ini"
+    create_config_file(config_path, {"SOME_KEY": "some_value"})
+    mocker.patch.dict(os.environ, {"APP_CONFIG": str(config_path)})
+
+    cfg1 = Config()
+    cfg2 = Config()
+    assert cfg1 is cfg2
+    assert cfg1.get_cnf("SOME_KEY") == "some_value"
+
+
+def test_config_reset_allows_reinit(tmp_path, mocker):
+    config_path1 = tmp_path / "config1.ini"
+    create_config_file(config_path1, {"KEY": "value1"})
+    mocker.patch.dict(os.environ, {"APP_CONFIG": str(config_path1)})
+
+    cfg1 = Config()
+    assert cfg1.get_cnf("KEY") == "value1"
+
+    config_path2 = tmp_path / "config2.ini"
+    create_config_file(config_path2, {"KEY": "value2"})
+    mocker.patch.dict(os.environ, {"APP_CONFIG": str(config_path2)})
+
+    Config.reset()
+    cfg2 = Config()
+    assert cfg2 is not cfg1
+    assert cfg2.get_cnf("KEY") == "value2"
 
 
 

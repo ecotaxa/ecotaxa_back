@@ -22,7 +22,16 @@ class Config(object):
     The application configuration
     """
 
-    def __init__(self):
+    _instance: Optional["Config"] = None
+
+    def __new__(cls, *args, **kwargs) -> "Config":
+        if cls._instance is None:
+            instance = super(Config, cls).__new__(cls)
+            instance._init_config()
+            cls._instance = instance
+        return cls._instance
+
+    def _init_config(self) -> None:
         if ENV_KEY in os.environ:
             config_file = Path(os.environ[ENV_KEY])
         else:
@@ -37,6 +46,11 @@ class Config(object):
         else:
             # Empty config, all from env or defaults
             self.parser = {}  # type: ignore
+
+    @classmethod
+    def reset(cls) -> None:
+        """Reset the singleton instance (for testing or config reloading)."""
+        cls._instance = None
 
     @overload
     def _get(

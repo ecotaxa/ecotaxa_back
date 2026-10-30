@@ -24,6 +24,7 @@ from FS.Vault import Vault
 from API_operations.exports.ForProject import ProjectExport
 from API_operations.admin.NightlyJob import NightlyJobService
 from API_operations.Subset import SubsetServiceOnProject
+from helpers.AppConfig import Config
 
 
 class EcoTaxaConfig(object):
@@ -50,6 +51,8 @@ def config() -> Generator[EcoTaxaConfig, Any, None]:
     shutil.rmtree(vault.path.joinpath("0000").as_posix(), ignore_errors=True)
     # env variable to conf
     os.environ["APP_CONFIG"] = (HERE / "config.ini").as_posix()
+    Config.reset()
     yield conf
     # Teardown
     conf.cleanup()
+    Config.reset()
