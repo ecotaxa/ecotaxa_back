@@ -11,7 +11,7 @@ from BO.Collection import CollectionIDT
 from BO.ColumnUpdate import ColUpdate
 from BO.DataLicense import AccessLevelEnum, LicenseEnum
 from BO.Job import DBJobStateEnum
-from BO.Project import ProjectBO, ProjectColumns, ProjectUserStats
+from BO.Project import ProjectBO, ProjectUserStats
 from BO.ProjectSet import ProjectSetColumnStats
 from BO.Sample import SampleTaxoStats
 from DB.Acquisition import Acquisition
@@ -907,19 +907,6 @@ class _DBProjectSetColumnStatDescription(DescriptiveModel):
 
 ProjectSetColumnStatsModel = dataclass_to_model_with_suffix(
     ProjectSetColumnStats, _DBProjectSetColumnStatDescription
-)
-
-
-class _ProjectColumnsDescription(DescriptiveModel):
-    projid: ProjectIDT = Field(
-        title="Project ID", description="Project ID from the call."
-    )
-    columns = Field(title="Columns", description="Column names from the call.")
-    values = Field(title="All rows", description="All rows regardless of emptiness.")
-
-
-ProjectColumnsModel = dataclass_to_model_with_suffix(
-    ProjectColumns, _ProjectColumnsDescription
 )
 
 

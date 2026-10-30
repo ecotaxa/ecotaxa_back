@@ -3,7 +3,7 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 
-from typing import List, Union, Tuple, Optional, Dict
+from typing import List, Union, Tuple, Optional
 
 from fastapi import HTTPException
 
@@ -16,10 +16,9 @@ from BO.Project import (
     ProjectBOSet,
     ProjectTaxoStats,
     ProjectUserStats,
-    ProjectColumns,
 )
 from BO.ProjectSet import ProjectSetColumnStats, LimitedInCategoriesProjectSet
-from BO.Rights import RightsBO, Action, NOT_FOUND
+from BO.Rights import RightsBO, Action
 from BO.User import UserIDT
 from DB.Project import Project, ANNOTATE_STATUS, ProjectIDT, ProjectIDListT
 from DB.Sample import Sample
@@ -370,88 +369,3 @@ class ProjectsService(Service):
         """
         # add security barrier ?
         return ProjectBO.in_collections(self.ro_session, projid)
-
-    def read_projects_columns(
-        self,
-        current_user_id: Optional[UserIDT],
-        project_ids: List[int],
-        fields: Optional[str] = FieldListType.default,
-    ) -> Optional[List[ProjectColumns]]:
-        """
-        Read values for specific columns for these projects.
-        """
-        # Security barrier, same as reading each project
-        if current_user_id is None:
-            [
-                RightsBO.anonymous_wants(self.ro_session, Action.READ, prj_id)
-                for prj_id in project_ids
-            ]
-        else:
-            # Reading a set of projects is not an access to each: keep recent projects
-            [
-                RightsBO.user_wants(
-                    self.session,
-                    current_user_id,
-                    Action.READ,
-                    prj_id,
-                    update_preference=False,
-                )
-                for prj_id in project_ids
-            ]
-        projects = ProjectBOSet(self.ro_session, project_ids, public=False)
-        ret = []
-        columns: List = []
-        if fields is not None and (
-            fields[0 : len(FieldListType.default)] == FieldListType.default.value
-            and len(fields) > 1
-        ):
-            project_columns: Dict = {
-                FieldListType.default: [
-                    Project.projid,
-                    Project.title,
-                    Project.instrument,
-                    Project.comments,
-                    Project.initclassiflist,
-                    Project.classiffieldlist,
-                    Project.cnn_network_id,
-                    Project.status,
-                    Project.access,
-                    Project.formulae,
-                ]
-            }
-
-            project_columns[FieldListType.all] = project_columns[
-                FieldListType.default
-            ] + [
-                Project.mappingobj,
-                Project.mappingsample,
-                Project.mappingprocess,
-                Project.mappingacq,
-            ]
-            lfields = fields.split(",")
-            typelist = lfields.pop(0)
-            columns = project_columns[typelist]
-            columnplus = []
-            if typelist != FieldListType.all and len(lfields):
-                lfields = lfields[0].split(",")
-                for col in project_columns[FieldListType.all]:
-                    if col.key in lfields:
-                        columnplus.append(col)
-                columns.extend(columnplus)
-
-        for project in projects.as_list():
-            values = []
-            for column in columns:
-                if hasattr(project, column.key):
-                    values.append(getattr(project, column.key))
-                elif column == "userstats":
-                    annotators = ProjectBO.read_user_stats(self.session, project_ids)
-                    creators = []
-                    for annotator in annotators[1].annotators:
-                        creators.append(annotator.id)
-                    values.append(creators)
-                else:
-                    values.append(NOT_FOUND)
-            cols = [col.key for col in columns]
-            ret.append(ProjectColumns(project.projid, cols, values))
-        return ret

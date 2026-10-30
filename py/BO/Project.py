@@ -146,17 +146,6 @@ class ProjectUserStats:
     activities: UserActivityListT
 
 
-@dataclass()
-class ProjectColumns:
-    """
-    Column value for specific columns.
-    """
-
-    projid: ProjectIDT
-    columns: List[str]
-    values: List[str]
-
-
 class FieldsList(object):
     @staticmethod
     def required() -> List[str]:

@@ -59,7 +59,6 @@ from API_models.crud import (
     ProjectTaxoStatsModel,
     ProjectUserStatsModel,
     ProjectSetColumnStatsModel,
-    ProjectColumnsModel,
     SampleTaxoStatsModel,
     ResetPasswordReq,
     UserActivateReq,
@@ -166,7 +165,7 @@ from BO.Collection import (
 from BO.ColumnUpdate import ColUpdateList
 from BO.Job import JobBO
 from BO.Object import ObjectBO
-from BO.Project import ProjectBO, ProjectUserStats, ProjectColumns
+from BO.Project import ProjectBO, ProjectUserStats
 from BO.ProjectSet import ProjectSetColumnStats
 from BO.Sample import SampleTaxoStats
 from BO.Taxonomy import TaxonBO
@@ -1388,7 +1387,6 @@ MyORJSONResponse.register(ObjectSetQueryRsp, ObjectSetQueryRsp)
 MyORJSONResponse.register(CollectionBO, CollectionModel)
 MyORJSONResponse.register(CollectionAggregatedRsp, CollectionAggregatedRsp)
 MyORJSONResponse.register(Sample, SampleModel)
-MyORJSONResponse.register(ProjectColumns, ProjectColumnsModel)
 project_model_columns = plain_columns(ProjectModel)
 
 
@@ -1666,38 +1664,6 @@ def project_collections(
         with RightsThrower():
             ret = sce.in_collections(current_user, project_id)
         return ret
-
-
-@app.get(
-    "/project_set/projects",
-    operation_id="project_set_get_projects",
-    tags=["projects"],
-    response_model=List[ProjectColumnsModel],
-    response_class=MyORJSONResponse,  # Force the ORJSON encoder
-)
-async def project_set_get_projects(  # MyORJSONResponse -> JSONResponse -> Response -> await
-    ids: str = Query(
-        ...,
-        title="Ids",
-        description="String containing the list of one or more project id separated by non-num char. \n \n **If several ids are provided**, one stat record will be returned per project.",
-        examples=["1"],
-    ),
-    fields: Optional[str] = Query(
-        default="*default",
-        title="Fields",
-        description="Return the default fields (typically used in conjunction with an additional field list). To return selected fields.",
-        examples=["*default,fieldlist"],
-    ),
-    current_user: Optional[int] = Depends(get_optional_current_user),
-) -> MyORJSONResponse:  # List[ProjectColumnsModel]
-    """
-    **Returns projects statistics**, i.e. used taxa and classification states.
-    """
-    with ProjectsService() as sce:
-        num_prj_ids = _split_num_list(ids)
-        with RightsThrower():
-            ret = sce.read_projects_columns(current_user, num_prj_ids, fields)
-    return MyORJSONResponse(ret)
 
 
 @app.get(

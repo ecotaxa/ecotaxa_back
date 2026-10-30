@@ -2845,75 +2845,6 @@
         }
       }
     },
-    "/project_set/projects":{
-      "get":{
-        "tags":[
-          "projects"
-        ],
-        "summary":"Project Set Get Projects",
-        "description":"**Returns projects statistics**, i.e. used taxa and classification states.",
-        "operationId":"project_set_get_projects",
-        "security":[
-          {
-            "BearerOrCookieAuth":[]
-          }
-        ],
-        "parameters":[
-          {
-            "name":"ids",
-            "in":"query",
-            "required":true,
-            "schema":{
-              "type":"string",
-              "title":"Ids",
-              "description":"String containing the list of one or more project id separated by non-num char. \n \n **If several ids are provided**, one stat record will be returned per project.",
-              "example":"1"
-            },
-            "description":"String containing the list of one or more project id separated by non-num char. \n \n **If several ids are provided**, one stat record will be returned per project."
-          },
-          {
-            "name":"fields",
-            "in":"query",
-            "required":false,
-            "schema":{
-              "title":"Fields",
-              "description":"Return the default fields (typically used in conjunction with an additional field list). To return selected fields.",
-              "default":"*default",
-              "example":"*default,fieldlist",
-              "type":"string",
-              "nullable":true
-            },
-            "description":"Return the default fields (typically used in conjunction with an additional field list). To return selected fields."
-          }
-        ],
-        "responses":{
-          "200":{
-            "description":"Successful Response",
-            "content":{
-              "application/json":{
-                "schema":{
-                  "type":"array",
-                  "items":{
-                    "$ref":"#/components/schemas/ProjectColumnsModel"
-                  },
-                  "title":"Response Project Set Get Projects"
-                }
-              }
-            }
-          },
-          "422":{
-            "description":"Validation Error",
-            "content":{
-              "application/json":{
-                "schema":{
-                  "$ref":"#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/project_set/taxo_stats":{
       "get":{
         "tags":[
@@ -10781,33 +10712,6 @@
           "orig_id"
         ],
         "title":"ProcessModel"
-      },
-      "ProjectColumnsModel":{
-        "properties":{
-          "projid":{
-            "type":"integer",
-            "title":"Project ID",
-            "description":"Project ID from the call."
-          },
-          "columns":{
-            "items":{
-              "type":"string"
-            },
-            "type":"array",
-            "title":"Columns",
-            "description":"Column names from the call."
-          },
-          "values":{
-            "items":{
-              "type":"string"
-            },
-            "type":"array",
-            "title":"All rows",
-            "description":"All rows regardless of emptiness."
-          }
-        },
-        "type":"object",
-        "title":"ProjectColumnsModel"
       },
       "ProjectFilters":{
         "properties":{
