@@ -8,7 +8,7 @@ import sys
 import threading
 from multiprocessing import Process
 from threading import Event, Thread
-from typing import Any, Optional, List, ClassVar, Callable, Type, Union
+from typing import Any, Optional, List, ClassVar, Type, Union
 
 from API_operations.helpers.JobService import JobServiceBase
 from API_operations.helpers.Service import Service
@@ -135,14 +135,14 @@ class JobScheduler(Service):
     FILTER: ClassVar[List[str]] = []
     # Include only these job types
     INCLUDE: ClassVar[List[str]] = []
-    # A single runner per web process
+    # A single runner per web process in DEV mode.
+    # In PROD, the_runner forks and exits immediately.
     the_runner: Optional[Union[ThreadJobRunner, ProcessJobRunner]] = (
         None  # Only written by JobTimer_s_
     )
     the_timer: Optional[threading.Timer] = None
     # First creation by Main, replacements by JobTimer_s_
     do_run: Event = Event()  # R/W by Main & JobTimer
-    todo_on_idle: Optional[Callable] = None
 
     def __init__(self) -> None:
         super().__init__()
@@ -155,7 +155,7 @@ class JobScheduler(Service):
         """
         cls = JobScheduler
         if cls.the_runner is not None:
-            # A single runner at a time
+            # A single runner at a time (short-lived for PROD, long for DEV)
             if cls.the_runner.is_alive():
                 return
             cls.the_runner = None
@@ -172,10 +172,6 @@ class JobScheduler(Service):
         qry = qry.with_for_update(skip_locked=True)
         the_job: Optional[Job] = qry.first()
         if the_job is None:
-            # Exercise the ro_session for Connection pool cleanup
-            self.ro_session.query(Job).filter(Job.id == 0).first()
-            if cls.todo_on_idle is not None:
-                cls.todo_on_idle()
             return
         logger.info("Found job to run: %s", str(the_job))
         # Align DB job state

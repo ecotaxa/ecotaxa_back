@@ -1,8 +1,8 @@
 from API_operations.Consistency import ProjectConsistencyChecker
 from API_operations.admin.NightlyJob import NightlyJobService, logger
 
-from tests.credentials import ADMIN_USER_ID
-from tests.tstlogs_fixture import pushd
+from credentials import ADMIN_USER_ID
+from tstlogs_fixture import pushd
 
 
 def check_project(tstlogs, prj_id: int):

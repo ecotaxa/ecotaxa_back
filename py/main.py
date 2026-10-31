@@ -157,6 +157,8 @@ from API_operations.exports.ForProject import (
 from API_operations.imports.Import import FileImport
 from API_operations.imports.SimpleImport import SimpleImport
 from BG_operations.JobScheduler import JobScheduler
+from BG_operations.LeaderElection import LeaderElection
+from BG_operations.ResourceCleaner import ResourceCleaner
 from BO.Classification import HistoricalClassification, ClassifIDT
 from BO.Collection import (
     CollectionBO,
@@ -188,7 +190,6 @@ from helpers.fastApiUtils import (
     MyORJSONResponse,
     ValidityThrower,
     adjust_if_ranged,
-    regular_mem_cleanup,
 )
 from helpers.login import LoginService
 from helpers.pydantic import sort_and_prune
@@ -4525,9 +4526,9 @@ app.add_exception_handler(
 
 dump_openapi(app, __file__)
 
-# Can be overwritten for testing
-# Note: in PROD there are 16 workers, statistically the jobs will start very fast
-JOB_INTERVAL = 5
+# Can be overwritten for testing. Leader process looks for what to do at this interval.
+JOB_INTERVAL = 2
+CLEANUP_INTERVAL = 10
 
 
 def register_exception(app: FastAPI):
@@ -4561,16 +4562,31 @@ async def lifespan(app: FastAPI):
     # The router for big files needs a valid USERSFILESAREA config
     app.include_router(create_big_files_router())
 
-    # Clean memory every minute
-    JobScheduler.todo_on_idle = regular_mem_cleanup
-    # Don't run predictions, they are left to a specialized runner
-    JobScheduler.FILTER = [PredictForProject.JOB_TYPE]
-    JobScheduler.launch_at_interval(JOB_INTERVAL)
+    # ResourceCleaner runs on all processes (leaders and followers) for periodic idle maintenance
+    # (connection pool expiration & memory cleanup).
+    ResourceCleaner.launch_at_interval(CLEANUP_INTERVAL)
 
-    yield
+    # Leader election: Exactly one worker process runs background jobs among 16 gunicorn/uvicorn workers.
+    with LeaderElection.acquire() as leader_election:
+        if leader_election.is_leader:
+            logger.info("Worker is LEADER")
+            # Don't run predictions, they are left to a specialized runner
+            JobScheduler.FILTER = [PredictForProject.JOB_TYPE]
+            JobScheduler.launch_at_interval(JOB_INTERVAL)
+        else:
+            pass  # Follower
 
-    # Shutdown logic
-    JobScheduler.shutdown()
+        try:
+            yield
+        except Exception as e:
+            logger.error("Error during server operation: %s", str(e), exc_info=True)
+            raise
+        finally:
+            if leader_election.is_leader:
+                JobScheduler.shutdown()
+                logger.info("JobScheduler shutdown complete")
+            ResourceCleaner.shutdown()
+            logger.info("MaintenanceScheduler shutdown complete")
 
 
 app.router.lifespan_context = lifespan
