@@ -32,9 +32,9 @@ def check_sqlalchemy_version() -> None:
 
 class TimeEvictedQueue(Queue):
     DB_SESSION_MAX_AGE: ClassVar[int] = (
-        300  # No inactive session should be older than 5m
+        300  # No physical DB connection should live longer than 5m
     )
-    CLEAN_INTERVAL: ClassVar[int] = 5  # Find sessions to expire after every n sec
+    CLEAN_INTERVAL: ClassVar[int] = 5  # Look for connections to expire every n sec
 
     def __init__(self, maxsize=0, use_lifo=False):
         assert (
@@ -55,7 +55,8 @@ class TimeEvictedQueue(Queue):
                     a_conn.dbapi_connection
                     and now - a_conn.starttime > self.DB_SESSION_MAX_AGE
                 ):
-                    # Note: below produces info logs for each invalidation in global logger, if set.
+                    # Note: invalidation is logged at INFO by the pool logger,
+                    # which is set to WARNING below.
                     a_conn.invalidate()
 
 
@@ -114,14 +115,15 @@ class Connection(object):
             # echo=True, echo_pool="debug",
             poolclass=TimeEvictedQueuePool,
             pool_use_lifo=True,
-            # We have our own age-based eviction strategy, the pool below will contain invalidated connections
+            # We have our own age-based eviction strategy; invalidated records stay in
+            # the pool and reconnect on their next checkout.
             pool_size=8,
             max_overflow=4,
             # In case something goes unexpected, user will wait for this time for a free connection (or failure)
             pool_timeout=60,
-            # This way we can restart the DB and sessions will re-establish themselves
-            # The cost is 1 (simple) query per connection pool recycle.
-            # Important: The invalidation mechanism now depends on it.
+            # This way we can restart the DB and sessions will re-establish themselves.
+            # It also catches connections that died while idle between sweeps.
+            # The cost is 1 (simple) query per connection checkout.
             pool_pre_ping=True,
             execution_options=exec_options,
             connect_args={
