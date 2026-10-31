@@ -11,7 +11,7 @@ pytest-asyncio==0.15.1
 coverage==7.6.0
 flake8==3.9.2
 radon==5.1.0
-deepdiff==7.0.1
+deepdiff==8.6.2
 # For openapi stubs generation
 openapi-generator-cli==4.3.1
 # For python API client generator
