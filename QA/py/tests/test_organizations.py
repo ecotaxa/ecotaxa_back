@@ -104,6 +104,12 @@ def test_organization_create_registration_token(fastapi, monkeypatch):
         ORGANIZATION_CREATE_URL, params={"token": "bogus"}, json=org_data
     )
     assert rsp.status_code == status.HTTP_403_FORBIDDEN
+    # Token for another action is not a registration one
+    token = UserValidation()._generate_token(
+        "new@plankton.org", action=ActivationType.update.value
+    )
+    rsp = fastapi.post(ORGANIZATION_CREATE_URL, params={"token": token}, json=org_data)
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     # Unlogged user creating an account, with the token sent by email
     token = UserValidation()._generate_token(
         "new@plankton.org", action=ActivationType.create.value
@@ -247,6 +253,12 @@ def test_organizations_edmo_search_registration_token(fastapi, mocker, monkeypat
     validation = UserValidation()
     params["token"] = validation._generate_token(
         "new@plankton.org", id=ORDINARY_USER_USER_ID, action=ActivationType.update.value
+    )
+    rsp = fastapi.get(ORGANIZATIONS_EDMO_SEARCH_URL, params=params)
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    # Token without user id but for another action is not a registration one either
+    params["token"] = validation._generate_token(
+        "new@plankton.org", action=ActivationType.update.value
     )
     rsp = fastapi.get(ORGANIZATIONS_EDMO_SEARCH_URL, params=params)
     assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT

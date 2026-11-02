@@ -413,7 +413,8 @@ class UserService(Service):
         token_email = self._uservalidation.get_email_from_token(token, short)
         token_user_id = self._uservalidation.get_id_from_token(token, short)
         if (
-            token_email is None and email is not None and email != token_email
+            email is not None
+            and (token_email is None or token_email.lower() != email.lower())
         ) or token_user_id != user_id:
             raise HTTPException(
                 status_code=422,
@@ -426,6 +427,17 @@ class UserService(Service):
         Check the token sent by email to an unlogged user creating an account, which is not yet in DB.
         """
         self._verify_token_throw(-1, token, short=False)
+        # only a token sent for creating an account, not one for another action without user id
+        if (
+            self._uservalidation.get_email_from_token(
+                token, short=False, action=ActivationType.create.value
+            )
+            is None
+        ):
+            raise HTTPException(
+                status_code=422,
+                detail=[DETAIL_INVALID_PARAMETER],
+            )
 
     @staticmethod
     def _verify_and_update_password_throw(new_password: str, usr: User):
