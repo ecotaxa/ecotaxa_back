@@ -7,7 +7,7 @@ import re
 import signal
 import time
 from pathlib import Path
-from typing import Tuple, List, Any, Dict, TextIO, Optional
+from typing import Tuple, List, Any, Dict, Optional
 
 from BG_operations.JobScheduler import JobScheduler
 from BO.Job import JobBO
@@ -15,7 +15,6 @@ from BO.Rights import RightsBO, NOT_FOUND, NOT_AUTHORIZED
 from DB.Job import JobIDT, DBJobStateEnum, Job
 from DB.User import Role, User, UserIDT
 from FS.TempDirForTasks import TempDirForTasks
-from helpers.fastApiUtils import AutoCloseBinaryIO
 from ..helpers.JobService import JobServiceBase
 from ..helpers.Service import Service
 
@@ -85,38 +84,34 @@ class JobCRUDService(Service):
         ), NOT_AUTHORIZED
         return job
 
-    def get_file_stream(
+    def get_file(
         self, current_user_id: UserIDT, job_id: JobIDT
-    ) -> Tuple[AutoCloseBinaryIO, str, str]:
+    ) -> Tuple[Path, str, str]:
         """
-        Return a stream containing the produced file associated with this job.
+        Return the file path, file name, and media type associated with this job.
         """
-        # Sanity & security checks
-        with self._query_for_update(current_user_id, job_id) as job_bo:
-            temp_for_job = TempDirForTasks(self.config.jobs_dir())
-            temp_dir = temp_for_job.base_dir_for(job_id)
-            # Get the job in its state...
-            sce_class = JobServiceBase.find_jobservice_class_by_type(job_bo.type)
-            assert sce_class is not None, "Found unknown job type %s for id %d" % (
-                job_bo.type,
-                job_id,
-            )
-            with JobScheduler.instantiate(sce_class, job_bo) as sce:
-                out_file_name = sce.PRODUCED_FILE_NAME
-                assert out_file_name is not None
-            # ...and the file in its temp directory
-            out_file_path = temp_dir / out_file_name
-            if out_file_name.endswith(".zip"):
-                media_type = "application/zip"
-            elif out_file_name.endswith(".tsv"):
-                media_type = "text/tab-separated-values"
-            else:
-                media_type = "unknown"
-            fp = AutoCloseBinaryIO(out_file_path)
-            return fp, out_file_name, media_type
-
-    def get_log_stream(self, current_user_id: UserIDT, job_id: JobIDT) -> TextIO:
-        return open(self.get_log_path(current_user_id, job_id), "r")
+        # Sanity & security checks.
+        job_bo = self.query(current_user_id, job_id)
+        temp_for_job = TempDirForTasks(self.config.jobs_dir())
+        temp_dir = temp_for_job.base_dir_for(job_id)
+        # Get the job in its state...
+        sce_class = JobServiceBase.find_jobservice_class_by_type(job_bo.type)
+        assert sce_class is not None, "Found unknown job type %s for id %d" % (
+            job_bo.type,
+            job_id,
+        )
+        with JobScheduler.instantiate(sce_class, job_bo) as sce:
+            out_file_name = sce.PRODUCED_FILE_NAME
+            assert out_file_name is not None
+        # ...and the file in its temp directory
+        out_file_path = temp_dir / out_file_name
+        if out_file_name.endswith(".zip"):
+            media_type = "application/zip"
+        elif out_file_name.endswith(".tsv"):
+            media_type = "text/tab-separated-values"
+        else:
+            media_type = "unknown"
+        return out_file_path, out_file_name, media_type
 
     def get_log_path(self, current_user_id: UserIDT, job_id: JobIDT) -> Path:
         # Sanity & security checks

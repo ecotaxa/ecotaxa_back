@@ -13,9 +13,8 @@ import sys
 import time
 import traceback
 from contextlib import AbstractContextManager
-from os import fstat
 from os.path import dirname
-from typing import Any, Optional, Dict, List, Type, Union, BinaryIO, Tuple
+from typing import Any, Optional, Dict, List, Type, Union, Tuple
 
 import orjson
 from fastapi import FastAPI, Depends, HTTPException
@@ -450,69 +449,6 @@ class MyORJSONResponse(JSONResponse):
             return bytes()
 
 
-def _get_range_header(range_header: str, file_size: int) -> Tuple[int, int]:
-    def _invalid_range():
-        return HTTPException(
-            status.HTTP_416_RANGE_NOT_SATISFIABLE,
-            detail=f"Invalid/unsupported request range (Range:{range_header!r})",
-        )
-
-    try:
-        h = range_header.replace("bytes=", "").split("-", 1)
-        start = int(h[0]) if h[0] != "" else 0
-        end = (
-            int(h[1]) if h[1] != "" else file_size
-        )  # We don't accept multiple ranges, this would raise in case
-        if end != file_size:
-            # We don't do chunked response, so it's 'all until the end' or nothing
-            int("foo")
-    except ValueError:
-        raise _invalid_range()
-
-    if start > end or start < 0 or end > file_size:
-        raise _invalid_range()
-    return start, end - 1 if end == file_size else end
-
-
-CHUNK_SIZE = 64 * 1024
-
-
-class AutoCloseBinaryIO(object):
-    """
-    An IO object which closes its underlying file pointer when going out of scope.
-    """
-
-    def __init__(self, path: str):
-        self.fd: BinaryIO = open(path, "rb")
-
-    def size(self) -> int:
-        return fstat(self.fd.fileno()).st_size
-
-    def seek(self, offset: int):
-        return self.fd.seek(offset)
-
-    def read(self, size: int = -1) -> bytes:
-        if self.fd is None:
-            return b""
-        return self.fd.read(size)
-
-    def __iter__(self):  # Comply with StreamingResponse interface
-        return self
-
-    def __next__(self):  # Comply with StreamingResponse interface
-        chunk = self.read(CHUNK_SIZE)
-        if not chunk:
-            if self.fd is not None:
-                self.fd.close()
-                self.fd = None
-            raise StopIteration()
-        return chunk
-
-    def __del__(self):
-        if hasattr(self, "fd") and self.fd is not None:
-            self.fd.close()
-
-
 last_mem_cleanup = time.time()
 
 
@@ -534,23 +470,6 @@ def regular_mem_cleanup():
 def _trim_memory() -> int:
     libc = ctypes.CDLL("libc.so.6")
     return libc.malloc_trim(0)
-
-
-def adjust_if_ranged(
-    range_hdr: Optional[str],
-    content: AutoCloseBinaryIO,
-    headers: dict,
-) -> int:
-    status_code = status.HTTP_200_OK
-    if range_hdr is not None:
-        file_size = content.size()
-        start, end = _get_range_header(range_hdr, file_size)
-        left_size = end - start + 1
-        headers["content-length"] = str(left_size)
-        headers["content-range"] = f"bytes {start}-{end}/{file_size}"
-        content.seek(start)
-        status_code = status.HTTP_206_PARTIAL_CONTENT
-    return status_code
 
 
 class SuppressNoResponseReturnedMiddleware(BaseHTTPMiddleware):

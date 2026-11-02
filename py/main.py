@@ -15,7 +15,6 @@ from typing import Union, Tuple, List, Dict, Any, cast
 from fastapi import (
     FastAPI,
     Request,
-    Header,
     Response,
     status,
     Depends,
@@ -29,7 +28,7 @@ from fastapi import (
 )
 from fastapi.exceptions import RequestValidationError
 from fastapi.logger import logger as fastapi_logger
-from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.responses import FileResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -187,7 +186,6 @@ from helpers.fastApiUtils import (
     get_optional_current_user,
     MyORJSONResponse,
     ValidityThrower,
-    adjust_if_ranged,
     regular_mem_cleanup,
 )
 from helpers.login import LoginService
@@ -1402,7 +1400,7 @@ project_model_columns = plain_columns(ProjectModel)
     response_model=List[ProjectModel],
     response_class=MyORJSONResponse,
 )
-async def list_projects(
+def list_projects(
     current_user: Optional[int] = Depends(get_optional_current_user),
     project_ids: Optional[str] = Query(
         default=None,
@@ -1477,7 +1475,7 @@ async def list_projects(
     response_model=List[ProjectModel],
     response_class=MyORJSONResponse,
 )
-async def search_projects(  # MyORJSONResponse -> JSONResponse -> Response -> await
+def search_projects(
     current_user: Optional[int] = Depends(get_optional_current_user),
     also_others: bool = Query(
         default=False,
@@ -1676,7 +1674,7 @@ def project_collections(
     response_model=List[ProjectTaxoStatsModel],
     response_class=MyORJSONResponse,  # Force the ORJSON encoder
 )
-async def project_set_get_stats(  # MyORJSONResponse -> JSONResponse -> Response -> await
+def project_set_get_stats(
     ids: str = Query(
         ...,
         title="Ids",
@@ -2550,8 +2548,7 @@ def process_query(
     response_model=ObjectSetQueryRsp,
     response_class=MyORJSONResponse,  # Force the ORJSON encoder
 )
-async def get_object_set(
-    # MyORJSONResponse -> JSONResponse -> Response -> await
+def get_object_set(
     project_id: int = Path(
         ..., description="Internal, numeric id of the project.", examples=[1]
     ),
@@ -2941,7 +2938,7 @@ def classify_auto_mult_object_set(
     response_model=ObjectSetQueryRsp,
     response_class=MyORJSONResponse,  # Force the ORJSON encoder
 )
-async def query_object_set_parents(  # MyORJSONResponse -> JSONResponse -> Response -> await
+def query_object_set_parents(
     object_ids: ObjectIDListT = Body(
         ...,
         title="Object IDs list",
@@ -3443,7 +3440,7 @@ def search_taxa(
     response_model=List[TaxonModel],
     response_class=MyORJSONResponse,  # Force the ORJSON encoder
 )
-async def query_taxa_set(  # MyORJSONResponse -> JSONResponse -> Response -> await
+def query_taxa_set(
     ids: str = Query(
         ...,
         title="Ids",
@@ -3468,7 +3465,7 @@ async def query_taxa_set(  # MyORJSONResponse -> JSONResponse -> Response -> awa
     response_model=Dict[str, TaxonModel],
     response_class=MyORJSONResponse,  # Force the ORJSON encoder
 )
-def wormsification_taxa_set(  # MyORJSONResponse -> JSONResponse -> Response -> await
+def wormsification_taxa_set(
     ids: str = Query(
         ...,
         title="Ids",
@@ -3853,9 +3850,9 @@ def nightly_maintenance(current_user: int = Depends(get_current_user)) -> int:
     include_in_schema=False,
     response_model=str,
 )
-async def activity_monitor(
+def activity_monitor(
     _current_user: int = Depends(get_current_user),
-) -> FileResponse:  # async due to FileResponse
+) -> FileResponse:
     """
     Return some API endpoints activity log
     """
@@ -3869,7 +3866,7 @@ async def activity_monitor(
     include_in_schema=True,
     response_class=MyORJSONResponse,
 )
-async def direct_db_query(  # MyORJSONResponse -> JSONResponse -> Response -> await
+def direct_db_query(
     q: str = Query(
         ...,
         title="Query",
@@ -4005,7 +4002,7 @@ def restart_job(
 
 
 @app.get("/jobs/{job_id}/log", operation_id="get_job_log_file", tags=["jobs"])
-async def get_job_log_file(  # async due to FileResponse
+def get_job_log_file(
     job_id: int = Path(
         ...,
         description="Internal, the unique numeric id of this job.",
@@ -4035,15 +4032,14 @@ async def get_job_log_file(  # async due to FileResponse
         }
     },
 )
-async def get_job_file(  # async due to StreamingResponse
+def get_job_file(
     job_id: int = Path(
         ...,
         description="Internal, the unique numeric id of this job.",
         examples=[47445],
     ),
     current_user: int = Depends(get_current_user),
-    range_header: Optional[str] = Header(None, alias="Range"),
-) -> StreamingResponse:
+) -> FileResponse:
     """
     **Return the file produced by given job.**
 
@@ -4051,17 +4047,12 @@ async def get_job_file(  # async due to StreamingResponse
     """
     with JobCRUDService() as sce:
         with RightsThrower():
-            file_like, file_name, media_type = sce.get_file_stream(current_user, job_id)
-    headers = {
-        "content-disposition": 'attachment; filename="' + file_name + '"',
-        "content-length": str(file_like.size()),
-        "accept-ranges": "bytes",
-    }
-    status_code = adjust_if_ranged(range_header, file_like, headers)
-    return StreamingResponse(
-        content=file_like,
-        status_code=status_code,
-        headers=headers,
+            file_path, file_name, media_type = sce.get_file(
+                current_user, job_id
+            )
+    return FileResponse(
+        path=file_path,
+        filename=file_name,
         media_type=media_type,
     )
 
@@ -4206,7 +4197,7 @@ async def put_user_file(  # async due to await file store
     },
     response_model=str,
 )
-def move_user_file(  # async due to await file move
+def move_user_file(
     source_path: str = Form(
         title="Source Path",
         description="The  path of the file or directory to be moved.",
@@ -4271,7 +4262,7 @@ def remove_user_file(
     },
     response_model=str,
 )
-async def create_user_file(  # async due to await file store
+def create_user_file(
     source_path: str = Form(
         title="Source Path",
         description="The path of the directory to be created.",
@@ -4462,7 +4453,7 @@ def get_migrated_ids(
     tags=["image"],
     include_in_schema=False,
 )
-async def get_image(  # async due to StreamingResponse
+def get_image(
     dir_id: str = Path(
         ...,
         description="Internal, image directory ID, 0-padded if < 1000.",
@@ -4471,14 +4462,13 @@ async def get_image(  # async due to StreamingResponse
     img_in_dir: str = Path(
         ..., description="Internal, image path in directory.", examples=["0075.jpg"]
     ),
-) -> StreamingResponse:
+) -> FileResponse:
     """
     Stream a vault image by its ref.
     """
     with ImageService() as sce:
-        file_like, length, media_type = sce.get_stream(dir_id, img_in_dir)
-    headers = {"content-length": str(length)}
-    return StreamingResponse(file_like, headers=headers, media_type=media_type)
+        file_path, media_type = sce.get_file(dir_id, img_in_dir)
+    return FileResponse(file_path, media_type=media_type)
 
 
 # ######################## END OF MISC
