@@ -9,7 +9,7 @@ import re
 import time
 from contextlib import asynccontextmanager
 from dataclasses import asdict
-from logging import INFO
+from logging import ERROR
 from typing import Union, Tuple, List, Dict, Any, cast
 
 from fastapi import (
@@ -198,7 +198,7 @@ from helpers.pydantic import sort_and_prune
 logger = get_logger(__name__)
 # TODO: A nicer API doc, see https://github.com/tiangolo/fastapi/issues/1140
 
-fastapi_logger.setLevel(INFO)
+fastapi_logger.setLevel(ERROR)
 
 api_logger = get_api_logger()
 
@@ -4507,14 +4507,17 @@ async def timing_middleware(request: Request, call_next):
         if endpoint and hasattr(endpoint, "__name__")
         else request.url.path
     )
+    user_id = getattr(request.state, "current_user_id", None)
+    user_str = f" | U:{user_id}" if user_id is not None else ""
     logger.info(
-        "%s %s %d | W:%.1fms C:%.1fms | %s ",
+        "%s %s %d | W:%.1fms C:%.1fms | %s%s",
         request.method,
         request.url.path,
         response.status_code,
         wall_ms,
         cpu_ms,
         func_name,
+        user_str,
     )
     return response
 

@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import status
 from fastapi.testclient import TestClient
 
@@ -217,3 +219,37 @@ def test_user_prefs(fastapi):
     assert response.json() is None
     response = fastapi.get(get_url % (prj_id, "usr2"), headers=USER2_AUTH)
     assert response.json() == ""
+
+
+def test_timing_middleware_log(fastapi, caplog, monkeypatch):
+    import main
+
+    monkeypatch.setattr(main.logger, "propagate", True)
+    monkeypatch.setattr(main.logger, "level", logging.INFO)
+    caplog.set_level(logging.INFO)
+
+    # 1. Unauthenticated request
+    fastapi.get("/status")
+    status_logs = [
+        rec.message
+        for rec in caplog.records
+        if rec.name == "main" and "/status" in rec.message
+    ]
+    assert status_logs, "Expected timing middleware log for /status"
+    status_log = status_logs[-1]
+    assert "GET /status 200" in status_log
+    assert "| W:" in status_log
+    assert "C:" in status_log
+    assert "| U:" not in status_log
+
+    # 2. Authenticated request
+    fastapi.get("/users/me", headers=ADMIN_AUTH)
+    auth_logs = [
+        rec.message
+        for rec in caplog.records
+        if rec.name == "main" and "/users/me" in rec.message
+    ]
+    assert auth_logs, "Expected timing middleware log for /users/me"
+    auth_log = auth_logs[-1]
+    assert "GET /users/me 200" in auth_log
+    assert f"| U:{ADMIN_USER_ID}" in auth_log

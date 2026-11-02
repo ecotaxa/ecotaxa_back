@@ -312,7 +312,9 @@ async def get_optional_current_user(
     if token is None:
         return None
     try:
-        return _get_current_user(token, getattr(request.state, "auth_source", None))
+        user_id = _get_current_user(token, getattr(request.state, "auth_source", None))
+        request.state.current_user_id = user_id
+        return user_id
     except HTTPException:
         return None
 
@@ -321,7 +323,9 @@ async def get_current_user(request: Request, token: str = Depends(mixed_scheme))
     """
     Just relay the call to the private def above.
     """
-    return _get_current_user(token, getattr(request.state, "auth_source", None))
+    user_id = _get_current_user(token, getattr(request.state, "auth_source", None))
+    request.state.current_user_id = user_id
+    return user_id
 
 
 def _forbidden_exception():

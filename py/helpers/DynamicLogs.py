@@ -48,11 +48,18 @@ class LogFormatter(logging.Formatter):
             return name
         return ".".join([p[0] for p in parts[:-1]] + [parts[-1]])
 
+    @staticmethod
+    def _abbreviate_thread_name(name: str | None) -> str | None:
+        if name == "AnyIO worker thread":  # Hardcoded in _asyncio.py
+            return "AnyIOWkThd"
+        return name
+
     def format(self, record: LogRecord) -> str:
         """
         Shorten logger name a bit Java-style
         """
         record.name = self._abbreviate_logger_name(record.name)
+        record.threadName = self._abbreviate_thread_name(record.threadName)
         return super().format(record)
 
 
