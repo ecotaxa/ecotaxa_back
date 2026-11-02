@@ -155,6 +155,12 @@ def dump_openapi(app: FastAPI, main_path: str):  # pragma: no cover
     try:
         openapi = app.openapi()
         openapi["openapi"] = "3.0.2"
+        # Exclude mirrored /api paths
+        openapi["paths"] = {
+            path: spec
+            for path, spec in openapi["paths"].items()
+            if not (path == "/api" or path.startswith("/api/"))
+        }
         adapt_openapi_31_to_30(openapi["components"]["schemas"])
         adapt_openapi_31_to_30(openapi["paths"])
         app.openapi_schema = openapi
