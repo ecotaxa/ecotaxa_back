@@ -429,7 +429,7 @@ class UserService(Service):
         self._verify_token_throw(-1, token, short=False)
         # only a token sent for creating an account, not one for another action without user id
         if (
-            self._uservalidation.get_email_from_token(
+            self._is_validation_active_throw().get_email_from_token(
                 token, short=False, action=ActivationType.create.value
             )
             is None
@@ -438,6 +438,17 @@ class UserService(Service):
                 status_code=422,
                 detail=[DETAIL_INVALID_PARAMETER],
             )
+
+    def registration_email_from_token(self, token: str) -> str:
+        """
+        The email of an unlogged user creating an account, from the token sent by email.
+        """
+        self.verify_registration_token_throw(token)
+        return str(
+            self._is_validation_active_throw().get_email_from_token(
+                token, short=False, action=ActivationType.create.value
+            )
+        )
 
     @staticmethod
     def _verify_and_update_password_throw(new_password: str, usr: User):

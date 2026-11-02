@@ -1125,7 +1125,7 @@
           "organizations"
         ],
         "summary":"Create Organization",
-        "description":"**Create a new organization**, return **NULL upon success.**\n\n🔒 Depending on logged user, different authorizations apply:\n- An administrator or user administrator or logged project manager can create an organization.\n- An ordinary logged user cannot create another organization this way.\n- An unlogged user creating an account can, with the token received by email.",
+        "description":"**Create a new organization**, return **NULL upon success.**\n\n🔒 Depending on logged user, different authorizations apply:\n- An administrator or user administrator can create organizations.\n- Any other logged user can create one, e.g. when updating one's profile.\n- An unlogged user creating an account can create one, with the token received by email.\n\nFor these last two, an organization they created before and that no person nor collection uses yet\nis replaced by the new one.",
         "operationId":"create_organization",
         "security":[
           {

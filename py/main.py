@@ -868,9 +868,12 @@ def create_organization(
     **Create a new organization**, return **NULL upon success.**
 
     🔒 Depending on logged user, different authorizations apply:
-    - An administrator or user administrator or logged project manager can create an organization.
-    - An ordinary logged user cannot create another organization this way.
-    - An unlogged user creating an account can, with the token received by email.
+    - An administrator or user administrator can create organizations.
+    - Any other logged user can create one, e.g. when updating one's profile.
+    - An unlogged user creating an account can create one, with the token received by email.
+
+    For these last two, an organization they created before and that no person nor collection uses yet
+    is replaced by the new one.
     """
     with OrganizationService() as sce:
         with ValidityThrower(), RightsThrower():

@@ -4024,6 +4024,16 @@ UPDATE alembic_version SET version_num='1f4c9b7e2a10' WHERE alembic_version.vers
 
 COMMIT;
 
+BEGIN;
+
+-- Running upgrade 1f4c9b7e2a10 -> 5d2e8c41a7b3
+
+ALTER TABLE organizations ADD COLUMN creator_email VARCHAR(255);
+
+UPDATE alembic_version SET version_num='5d2e8c41a7b3' WHERE alembic_version.version_num = '1f4c9b7e2a10';
+
+COMMIT;
+
 ------- Leave on tail
 
 ALTER TABLE alembic_version REPLICA IDENTITY FULL;

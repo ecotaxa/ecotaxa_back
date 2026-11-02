@@ -3,19 +3,21 @@
 # Copyright (C) 2025  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 
-from typing import Optional, List
+from typing import Optional, List, Sequence
 
 from fastapi import HTTPException
+from sqlalchemy import exists
 
 from API_models.crud import OrganizationModel
 from BO.Collection import CollectionBO, CollectionIDListT
 from BO.Rights import RightsBO, NOT_AUTHORIZED, NOT_FOUND
-from DB.Collection import CollectionUserRole
+from DB.Collection import CollectionOrgaRole, CollectionUserRole
 from DB.User import (
     Organization,
     OrganizationIDListT,
     OrganizationIDT,
     PeopleOrganizationDirectory,
+    Person,
     User,
     UserIDT,
 )
@@ -75,14 +77,31 @@ class OrganizationService(Service):
     ) -> OrganizationIDT:
         # Must be a valid user, e.g. choosing one's organization in one's profile, or creating an account
         if current_user_id is not None:
-            RightsBO.get_user_throw(self.ro_session, current_user_id)
+            current_user: User = RightsBO.get_user_throw(
+                self.ro_session, current_user_id
+            )
+            creator_email = current_user.email.lower()
+            is_limited = not current_user.is_manager()
         else:
-            self._is_registering_throw(token)
+            creator_email = self._is_registering_throw(token).lower()
+            is_limited = True
+        # One new organization per account form: the ones created before and still unused are replaced
+        unused = self._unused_orgs_of(creator_email) if is_limited else []
         # official name & code from EDMO, when found there
         new_org = self._with_edmo(new_org)
         # check valid org
-        self._is_valid_org_throw(new_org, new_org.id)
+        self._is_valid_org_throw(
+            new_org,
+            new_org.id,
+            replaced_names=[an_org.name.lower() for an_org in unused],
+        )
+        for an_org in unused:
+            logger.info("Unused organization replaced: '%s'", an_org.name)
+            self.session.delete(an_org)
+        # before the insert, which could reuse the name
+        self.session.flush()
         organization = Organization()
+        organization.creator_email = creator_email
         self.session.add(organization)
         cols_to_upd = self.UPDATABLE_COLS
         self._set_organization_row(
@@ -181,14 +200,25 @@ class OrganizationService(Service):
         return EDMOFetcher.search(name_part)
 
     @staticmethod
-    def _is_registering_throw(token: Optional[str]) -> None:
+    def _is_registering_throw(token: Optional[str]) -> str:
         """
-        check if unlogged user is creating an account, with the token received by email
+        check if unlogged user is creating an account, with the token received by email, return the email
         """
         if not token:
             raise HTTPException(status_code=403, detail=[NOT_AUTHORIZED])
         with UserService() as sce:
-            sce.verify_registration_token_throw(token)
+            return sce.registration_email_from_token(token)
+
+    def _unused_orgs_of(self, creator_email: str) -> List[Organization]:
+        """
+        Organizations created by creator_email, which no person nor collection uses
+        """
+        qry = self.session.query(Organization).filter(
+            Organization.creator_email == creator_email,
+            ~exists().where(Person.organization_id == Organization.id),
+            ~exists().where(CollectionOrgaRole.organization_id == Organization.id),
+        )
+        return qry.all()
 
     def list(
         self,
@@ -249,16 +279,25 @@ class OrganizationService(Service):
             action = ActivationType.create.name
         logger.info("Organization %s :  '%s'" % (action, update_src.name))
 
-    def _is_valid_org_throw(self, mod_src: OrganizationModel, _id: int):
+    def _is_valid_org_throw(
+        self,
+        mod_src: OrganizationModel,
+        _id: int,
+        replaced_names: Sequence[str] = (),
+    ):
         # check if it's a valid name
         if mod_src.name.strip() == "":
             raise HTTPException(
                 status_code=422,
                 detail=[DETAIL_CANT_CHECK_VALIDITY],
             )
-        # check if another organization exists with the same name
-        exists = self._has_ident_org(mod_src.name)
-        if exists and _id != mod_src.name:
+        # check if another organization exists with the same name, apart from the ones being replaced
+        has_same_name = self._has_ident_org(mod_src.name)
+        if (
+            has_same_name
+            and _id != mod_src.name
+            and mod_src.name.lower() not in replaced_names
+        ):
             raise HTTPException(
                 status_code=422,
                 detail=[DETAIL_ALREADY_EXISTS],
