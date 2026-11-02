@@ -179,6 +179,13 @@ def test_error(fastapi):
     assert "--- BACK-END ---" in response.content.decode("utf-8")
 
 
+def test_noop(fastapi):
+    # Only there for the models in the OpenAPI schema: answers null, was a 500 (response validation)
+    response = fastapi.get("/noop", headers=USER_AUTH)
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() is None
+
+
 def test_status(fastapi):
     # We need a test client which does not catch exceptions
     url = "/status"

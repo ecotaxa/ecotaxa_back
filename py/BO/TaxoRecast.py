@@ -6,7 +6,7 @@
 # Global preferences for a user
 #
 
-from typing import Tuple, Union, Optional, List, cast
+from typing import Tuple, Union, Optional, List
 
 from sqlalchemy.orm import Session
 
@@ -47,7 +47,8 @@ class TaxoRecastBO(object):
                 .all()
             )
             assert len(ret) > 0, NOT_FOUND
-            project_ids = cast(List[int], ret)
+            # The query returns rows, the rights check needs the ids
+            project_ids = [a_row[0] for a_row in ret]
         else:
             project_ids = [target_id]
         if for_update:

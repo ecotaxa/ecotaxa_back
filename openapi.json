@@ -6890,16 +6890,6 @@
               "example":47445
             },
             "description":"Internal, the unique numeric id of this job."
-          },
-          {
-            "name":"Range",
-            "in":"header",
-            "required":false,
-            "schema":{
-              "title":"Range",
-              "type":"string",
-              "nullable":true
-            }
           }
         ],
         "responses":{

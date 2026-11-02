@@ -8,9 +8,9 @@ from DB.helpers import Session
 from DB.CNNFeatureVector import ObjectCNNFeatureVector
 from starlette import status
 
-from tests.credentials import ADMIN_AUTH
+from tests.credentials import ADMIN_AUTH, ADMIN_USER_ID, USER_AUTH
 from tests.test_classification import classify_all
-from tests.test_import import do_test_import
+from tests.test_import import create_project, do_test_import
 from tests.test_objectset_query import _prj_query, OBJECT_SET_QUERY_URL
 
 copepod_id = 25828
@@ -151,3 +151,13 @@ def test_similarity_search(fastapi):
     assert rsp.status_code == status.HTTP_200_OK
     rsp_obj_ids = rsp.json()["object_ids"]
     assert rsp_obj_ids == list(reversed(obj_ids))
+
+
+def test_similarity_search_refused(fastapi):
+    # Needs Annotate on the project: a refusal is a 403, was a 500 (no RightsThrower)
+    prj_id = create_project(ADMIN_USER_ID, "Similarity Search refused", access="2")
+    url = f"/object_set/{prj_id}/similarity_search/1"
+    rsp = fastapi.post(url, json={})
+    assert rsp.status_code == status.HTTP_403_FORBIDDEN
+    rsp = fastapi.post(url, headers=USER_AUTH, json={})
+    assert rsp.status_code == status.HTTP_403_FORBIDDEN

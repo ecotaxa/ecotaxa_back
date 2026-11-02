@@ -79,6 +79,12 @@ def test_organization_crud(fastapi):
     assert org["directories"] == "edmo:5678"
 
 
+def test_organizations_list_unauthorized(fastapi):
+    # Without a token: refused, was a 500 (no RightsThrower around the rights check)
+    rsp = fastapi.get(ORGANIZATIONS_LIST_URL)
+    assert rsp.status_code == status.HTTP_403_FORBIDDEN
+
+
 def test_organization_create_unauthorized(fastapi):
     # Unlogged user without registration token cannot create organization
     org_data = {"id": -1, "name": "Unauthorized Org", "directories": None}

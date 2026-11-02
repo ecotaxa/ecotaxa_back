@@ -845,7 +845,8 @@ def get_organizations(
     """
     with OrganizationService() as sce:
         org_ids = _split_num_list(ids)
-        organizations = sce.list(current_user, org_ids)
+        with RightsThrower():
+            organizations = sce.list(current_user, org_ids)
     return organizations
 
 
@@ -2217,7 +2218,8 @@ def object_similarity_search(
     Returns, in given project, the objects matching the filter and similar to the queried one.
     """
     with SimilaritySearchForProject(project_id, object_id, filters.base(), size) as sce:
-        sim_search_rsp = sce.similarity_search(current_user)
+        with RightsThrower():
+            sim_search_rsp = sce.similarity_search(current_user)
 
     return sim_search_rsp
 
@@ -4373,6 +4375,8 @@ def do_nothing(_current_user: int = Depends(get_current_user)):
 
     It's also used for exporting models we need on client side.
     """
+    # The response model is only there for the OpenAPI schema: answer null without validating it
+    return JSONResponse(content=None)
 
 
 @app_router.get(
