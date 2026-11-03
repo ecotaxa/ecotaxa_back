@@ -103,6 +103,17 @@ def _add_privilege(prj_id, user_id, privilege):
         sce.session.commit()
 
 
+def _remove_privilege(prj_id, user_id):
+    from API_operations.CRUD.Projects import ProjectsService
+    from DB.ProjectPrivilege import ProjectPrivilege
+
+    with ProjectsService() as sce:
+        sce.session.query(ProjectPrivilege).filter(
+            ProjectPrivilege.projid == prj_id, ProjectPrivilege.member == user_id
+        ).delete()
+        sce.session.commit()
+
+
 def test_collection_taxo_recast_members(fastapi):
     # On a collection, the right is checked on each of its projects with the member's
     # privilege there. The ids were passed as rows, so no privilege ever matched.
@@ -119,28 +130,33 @@ def test_collection_taxo_recast_members(fastapi):
     coll_id = rsp.json()
     _add_privilege(prj_id, ORDINARY_USER_USER_ID, "Manage")
     _add_privilege(prj_id, ORDINARY_USER2_USER_ID, "View")
-    recast = {
-        "target_id": coll_id,
-        "operation": RecastOperation.collection_export.value,
-        "recast": {"from_to": {"6789": 25828}, "doc": {}},
-        "is_collection": True,
-    }
-    read = {
-        "target_id": coll_id,
-        "operation": RecastOperation.collection_export.value,
-        "is_collection": True,
-    }
-    # Manage on the project: may update, and read
-    rsp = fastapi.put(TAXORECAST_URL, headers=USER_AUTH, json=recast)
-    assert rsp.status_code == status.HTTP_200_OK
-    rsp = fastapi.get(TAXORECAST_URL, headers=USER_AUTH, params=read)
-    assert rsp.status_code == status.HTTP_200_OK
-    assert rsp.json()["from_to"] == {"6789": 25828}
-    # View on the PRIVATE project: may read, not update
-    rsp = fastapi.get(TAXORECAST_URL, headers=USER2_AUTH, params=read)
-    assert rsp.status_code == status.HTTP_200_OK
-    rsp = fastapi.put(TAXORECAST_URL, headers=USER2_AUTH, json=recast)
-    assert rsp.status_code == status.HTTP_403_FORBIDDEN
-    # No privilege on the PRIVATE project: may not even read
-    rsp = fastapi.get(TAXORECAST_URL, headers=USER3_AUTH, params=read)
-    assert rsp.status_code == status.HTTP_403_FORBIDDEN
+    # Other tests (e.g. test_guests) expect these users to manage nothing
+    try:
+        recast = {
+            "target_id": coll_id,
+            "operation": RecastOperation.collection_export.value,
+            "recast": {"from_to": {"6789": 25828}, "doc": {}},
+            "is_collection": True,
+        }
+        read = {
+            "target_id": coll_id,
+            "operation": RecastOperation.collection_export.value,
+            "is_collection": True,
+        }
+        # Manage on the project: may update, and read
+        rsp = fastapi.put(TAXORECAST_URL, headers=USER_AUTH, json=recast)
+        assert rsp.status_code == status.HTTP_200_OK
+        rsp = fastapi.get(TAXORECAST_URL, headers=USER_AUTH, params=read)
+        assert rsp.status_code == status.HTTP_200_OK
+        assert rsp.json()["from_to"] == {"6789": 25828}
+        # View on the PRIVATE project: may read, not update
+        rsp = fastapi.get(TAXORECAST_URL, headers=USER2_AUTH, params=read)
+        assert rsp.status_code == status.HTTP_200_OK
+        rsp = fastapi.put(TAXORECAST_URL, headers=USER2_AUTH, json=recast)
+        assert rsp.status_code == status.HTTP_403_FORBIDDEN
+        # No privilege on the PRIVATE project: may not even read
+        rsp = fastapi.get(TAXORECAST_URL, headers=USER3_AUTH, params=read)
+        assert rsp.status_code == status.HTTP_403_FORBIDDEN
+    finally:
+        _remove_privilege(prj_id, ORDINARY_USER_USER_ID)
+        _remove_privilege(prj_id, ORDINARY_USER2_USER_ID)
