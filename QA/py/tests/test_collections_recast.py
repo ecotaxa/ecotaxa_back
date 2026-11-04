@@ -5,10 +5,10 @@ from starlette import status
 
 from tests.credentials import (
     ADMIN_AUTH,
+    CREATOR_AUTH,
     ORDINARY_USER_USER_ID,
     ORDINARY_USER2_USER_ID,
     USER2_AUTH,
-    USER3_AUTH,
     USER_AUTH,
 )
 from tests.test_import import do_test_import
@@ -121,6 +121,8 @@ def test_collection_taxo_recast_members(fastapi):
     prj_id = do_test_import(fastapi, "Recast members project")
     rsp = fastapi.patch(f"/projects/{prj_id}", headers=ADMIN_AUTH, json={"access": "0"})
     assert rsp.status_code == status.HTTP_200_OK, rsp.text
+    rsp = fastapi.get(f"/projects/{prj_id}", headers=ADMIN_AUTH)
+    assert rsp.json()["access"] == "0"
     rsp = fastapi.post(
         COLLECTION_CREATE_URL,
         headers=ADMIN_AUTH,
@@ -154,9 +156,21 @@ def test_collection_taxo_recast_members(fastapi):
         assert rsp.status_code == status.HTTP_200_OK
         rsp = fastapi.put(TAXORECAST_URL, headers=USER2_AUTH, json=recast)
         assert rsp.status_code == status.HTTP_403_FORBIDDEN
-        # No privilege on the PRIVATE project: may not even read
-        rsp = fastapi.get(TAXORECAST_URL, headers=USER3_AUTH, params=read)
+        # Active, but no privilege on the PRIVATE project: may not even read
+        rsp = fastapi.get(TAXORECAST_URL, headers=CREATOR_AUTH, params=read)
         assert rsp.status_code == status.HTTP_403_FORBIDDEN
     finally:
         _remove_privilege(prj_id, ORDINARY_USER_USER_ID)
         _remove_privilege(prj_id, ORDINARY_USER2_USER_ID)
+
+
+def test_patch_project_access(fastapi):
+    # PATCH used to answer 200 but ignore "access"
+    prj_id = do_test_import(fastapi, "Patch access project")
+    for access in ("2", "0"):
+        rsp = fastapi.patch(
+            f"/projects/{prj_id}", headers=ADMIN_AUTH, json={"access": access}
+        )
+        assert rsp.status_code == status.HTTP_200_OK, rsp.text
+        rsp = fastapi.get(f"/projects/{prj_id}", headers=ADMIN_AUTH)
+        assert rsp.json()["access"] == access

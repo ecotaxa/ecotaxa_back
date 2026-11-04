@@ -586,6 +586,8 @@ class ProjectBO(object):
                     # Delete CNN features, which depend on the CNN network
                     DeepFeatures.delete_all(session, projid)
                 self._project.cnn_network_id = projectreq.cnn_network_id
+            elif modelfield == "access":
+                self._project.access = projectreq.access
             elif modelfield == "formulae":
                 formulae = projectreq.formulae
                 self._project.formulae = (
