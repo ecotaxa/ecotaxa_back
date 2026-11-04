@@ -3288,7 +3288,7 @@ def reclassif_stats(
         description="String containing the list of one or more taxa id separated by non-num char.",
         examples=["12876"],
     ),
-    current_user: Optional[int] = Depends(get_optional_current_user),
+    current_user: int = Depends(get_current_user),
 ) -> List[TaxonBO]:
     """
     Dig into reclassification logs and, for each input category id, **determine the most chosen target category,

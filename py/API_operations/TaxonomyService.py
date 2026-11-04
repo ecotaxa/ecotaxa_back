@@ -22,7 +22,7 @@ from BO.Classification import ClassifIDT, ClassifIDListT
 from BO.Collection import CollectionIDT
 from BO.Project import ProjectBO, ProjectBOSet
 from BO.ReClassifyLog import ReClassificationBO
-from BO.Rights import RightsBO
+from BO.Rights import RightsBO, Action
 from BO.TaxoRecast import TaxoRecastBO
 from BO.Taxonomy import TaxonomyBO, TaxonBO, TaxonBOSet, WoRMSBO
 from BO.User import UserBO
@@ -286,8 +286,10 @@ class TaxonomyService(Service):
         return jsonb_value
 
     def most_used_non_advised(
-        self, _current_user_id: Optional[UserIDT], taxon_ids: ClassifIDListT
+        self, current_user_id: UserIDT, taxon_ids: ClassifIDListT
     ) -> List[TaxonBO]:
+        # Security barrier: any active user
+        RightsBO.get_user_throw(self.ro_session, current_user_id)
         prev_choices = ReClassificationBO.previous_choices(self.ro_session, taxon_ids)
         ret_taxa = []
         for a_taxon_id in taxon_ids:
@@ -302,8 +304,19 @@ class TaxonomyService(Service):
         return [ret_dict[txid] for txid in ret_taxa]
 
     def reclassification_history(
-        self, _current_user_id: Optional[UserIDT], project_id: ProjectIDT
+        self, current_user_id: Optional[UserIDT], project_id: ProjectIDT
     ) -> List[Dict[str, Any]]:
+        # Security barrier
+        if current_user_id is None:
+            RightsBO.anonymous_wants(self.ro_session, Action.READ, project_id)
+        else:
+            RightsBO.user_wants(
+                self.ro_session,
+                current_user_id,
+                Action.READ,
+                project_id,
+                update_preference=False,
+            )
         history = ReClassificationBO.history_for_project(self.ro_session, project_id)
         return history
 
