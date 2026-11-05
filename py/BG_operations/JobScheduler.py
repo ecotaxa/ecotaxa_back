@@ -4,9 +4,9 @@
 #
 import multiprocessing as mp
 import os
+import signal
 import sys
 import threading
-from multiprocessing import Process
 from threading import Event, Thread
 from typing import Any, Optional, List, ClassVar, Callable, Type, Union
 
@@ -23,7 +23,7 @@ from helpers.DynamicLogs import (
 
 logger = get_logger(__name__)
 
-mp.set_start_method("spawn", force=True)
+spawn_ctx = mp.get_context("spawn")
 
 
 class BaseJobRunner:
@@ -62,12 +62,12 @@ class BaseJobRunner:
         Technical problem, which cannot be managed by the service as it was not possible
         to create it. Report here.
         """
-        session = Service().session
-        the_job = session.get(Job, job_id)
-        assert the_job is not None
-        the_job.state = DBJobStateEnum.Error
-        the_job.progress_msg = str(te)
-        session.commit()
+        with Service() as base_service:
+            the_job = base_service.session.get(Job, job_id)
+            if the_job is not None:
+                the_job.state = DBJobStateEnum.Error
+                the_job.progress_msg = str(te)
+                base_service.session.commit()
 
 
 class ThreadJobRunner(Thread, BaseJobRunner):
@@ -86,13 +86,13 @@ class ThreadJobRunner(Thread, BaseJobRunner):
         self.common_run(f"Thread {os.getpid()}/{threading.current_thread().ident}")
 
 
-class ProcessJobRunner(Process, BaseJobRunner):
+class ProcessJobRunner(spawn_ctx.Process, BaseJobRunner):  # type: ignore[name-defined]
     """
-    Run background part of a job in a process.
+    Run background part of a job in a process using isolated spawn context.
     """
 
     def __init__(self, a_db_job: JobBO):
-        Process.__init__(self, name="Job #%d" % a_db_job.id)
+        spawn_ctx.Process.__init__(self, name="Job #%d" % a_db_job.id)
         BaseJobRunner.__init__(self, a_db_job)
         self.daemon = False
 
@@ -100,21 +100,15 @@ class ProcessJobRunner(Process, BaseJobRunner):
         """
         Run the background part of the service.
         """
-        # Detach from prent
-        os.setsid()
-        # Redirect all FDs
         null_fd = os.open(os.devnull, os.O_RDWR)
         os.dup2(null_fd, 0)
         os.dup2(null_fd, 1)
         os.dup2(null_fd, 2)
         os.close(null_fd)
-        # Fork again
-        pid = os.fork()
-        if pid > 0:
-            os._exit(0)
-        else:
-            # spawned process
-            DynamicLogs.rewire_loggers_after_fork()
+
+        # Re-init loggers
+        DynamicLogs.rewire_loggers_after_fork()
+
         # Launch the job
         self.common_run(f"PID {os.getpid()}")
 
@@ -158,6 +152,8 @@ class JobScheduler(Service):
             # A single runner at a time
             if cls.the_runner.is_alive():
                 return
+            cls.the_runner.join()
+            cls._interpret_runner_result(cls.the_runner)
             cls.the_runner = None
         # Pick the first pending job which is not already managed by another runner
         qry = (
@@ -227,6 +223,84 @@ class JobScheduler(Service):
         cls.the_timer.start()
 
     @classmethod
+    def _interpret_runner_result(
+        cls, runner: Union[ThreadJobRunner, ProcessJobRunner]
+    ) -> None:
+        """
+        Interpret the result of waiting for a subprocess or thread runner,
+        log its completion status, and reconcile the database job record
+        if it ended unexpectedly without completing.
+        """
+        job_id = runner.db_job.id
+        exitcode: Optional[int] = getattr(
+            runner, "exitcode", None
+        )  # Will be None for threads
+
+        match exitcode:
+            case 0 | None:
+                pass
+            case int(code) if code < 0:
+                sig_num = -code
+                try:
+                    sig_name = signal.Signals(sig_num).name
+                    logger.error(
+                        "Job #%d process was terminated by signal %d (%s)",
+                        job_id,
+                        sig_num,
+                        sig_name,
+                    )
+                except (ValueError, AttributeError):
+                    logger.error(
+                        "Job #%d process was terminated by signal %d", job_id, sig_num
+                    )
+            case int(code) if code > 0:
+                logger.error("Job #%d process failed with exit code %d", job_id, code)
+            case _:
+                logger.warning(
+                    "Job #%d runner completed with unexpected exit code: %s",
+                    job_id,
+                    exitcode,
+                )
+
+        try:
+            with Service() as base_service:
+                the_job = base_service.session.get(Job, job_id)
+                assert the_job is not None
+                match the_job.state:
+                    case DBJobStateEnum.Running:
+                        match exitcode:
+                            case int(code) if code < 0:
+                                sig_num = -code
+                                try:
+                                    sig_name = signal.Signals(sig_num).name
+                                    msg = f"Process terminated by signal {sig_num} ({sig_name})"
+                                except (ValueError, AttributeError):
+                                    msg = f"Process terminated by signal {sig_num}"
+                            case int(code) if code > 0:
+                                msg = f"Process failed with exit code {code}"
+                            case _:
+                                msg = "Process ended unexpectedly"
+
+                        the_job.state = DBJobStateEnum.Error
+                        the_job.progress_msg = msg
+                        base_service.session.commit()
+                        logger.error(
+                            "Job #%d ended unexpectedly while in Running state. Updated state to Error: %s",
+                            job_id,
+                            msg,
+                        )
+                    case DBJobStateEnum.Finished | DBJobStateEnum.Error:
+                        pass
+                    case other_state:
+                        logger.warning(
+                            "Job #%d in unexpected DB state: %s",
+                            job_id,
+                            other_state,
+                        )
+        except Exception as e:
+            logger.exception("Error interpreting result for job %d: %s", job_id, e)
+
+    @classmethod
     def launch(cls, interval: int) -> None:
         # Current thread: JobTimer_s_
         try:
@@ -240,6 +314,7 @@ class JobScheduler(Service):
             if cls.the_runner is not None:
                 # Wait for child process indefinitely before taking another task
                 cls.the_runner.join()
+                cls._interpret_runner_result(cls.the_runner)
                 cls.the_runner = None
             cls.the_timer = None
         else:
@@ -264,12 +339,14 @@ class JobScheduler(Service):
         if cls.the_runner is not None:
             if not cls.the_runner.is_alive():
                 cls.the_runner.join(timeout=1)
+                cls._interpret_runner_result(cls.the_runner)
                 cls.the_runner = None
             else:
                 # If it's still alive, we might want to wait a bit or just leave it
                 # but for tests, we should probably try to join it
                 cls.the_runner.join(timeout=2)
                 if not cls.the_runner.is_alive():
+                    cls._interpret_runner_result(cls.the_runner)
                     cls.the_runner = None
                 else:
                     logger.warning("JobScheduler runner is still alive during shutdown")
