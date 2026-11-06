@@ -8570,7 +8570,7 @@
             "type":"string",
             "title":"Password regexp",
             "description":"8 to 64 chars, at least one uppercase, one lowercase, one number and one special char in '#?!@%^&*-+' ",
-            "default":"^(?:(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#?%^&+*-])).{8,64}$"
+            "default":"^(?:(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#?%^&+*\\-])).{8,64}$"
           },
           "email_verification":{
             "type":"boolean",

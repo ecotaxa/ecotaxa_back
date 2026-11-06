@@ -50,7 +50,7 @@ def test_used_constants(fastapi):
     assert data["profile_token_age"] == 24
     assert (
         data["password_regexp"]
-        == "^(?:(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#?%^&+*-])).{8,64}$"
+        == r"^(?:(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#?%^&+*\-])).{8,64}$"
     )
     assert data["access"] == {"PUBLIC": "1", "OPEN": "2", "PRIVATE": "0"}
     assert data["people_organization_directories"] == {
