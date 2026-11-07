@@ -51,13 +51,14 @@ async def tus_auth(
 
 
 async def _background_unpack(
-    user_dir: UserFilesDirectory, file_path: Path, dest_dir: Path
+    user_dir: UserFilesDirectory, orig_path: Path, file_path: Path, dest_dir: Path
 ) -> None:
     try:
         user_dir.switch_to_progress_marking()
         await asyncio.to_thread(
             user_dir.dispatch_unpack, compressed_path=file_path, to_path=dest_dir
         )
+        os.unlink(orig_path)
         logger.info("Done unpacking %s in background", file_path)
     except Exception as e:
         logger.error(
@@ -95,9 +96,10 @@ async def on_tus_upload_complete(
         dest_path = dest_dir / original_name
 
         if user_dir.is_compressed(tus_path):
-            tus_path = tus_path.rename(dest_path)
+            # Link destination, we have the upload from 2 inodes now
+            os.link(tus_path, dest_path)
             task = asyncio.create_task(
-                _background_unpack(user_dir, tus_path, dest_dir.absolute()),
+                _background_unpack(user_dir, tus_path, dest_path, dest_dir.absolute()),
                 name=f"unpack_{original_name}",
             )
             background_tasks.add(task)
