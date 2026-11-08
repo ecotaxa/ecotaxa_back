@@ -40,7 +40,7 @@ from DB.Object import (
 )
 from DB.Project import ProjectIDT, Project
 from DB.User import UserIDT
-from DB.helpers import Result
+from DB.helpers import Result, SQL
 from DB.helpers.Direct import text
 from DB.helpers.Hints import RECURS_HINT
 from DB.helpers.Postgres import db_server_now
@@ -144,7 +144,12 @@ class ObjectManager(Service):
         sql += "\n" + order_clause.get_sql()
 
         with CodeTimer("Query: SQL: %s PARAMS: %s: " % (sql, params), logger, 1):
-            res: Result = self.ro_session.execute(text(sql), params)
+            res: Result = self.ro_session.execute(
+                text(sql).execution_options(
+                    stream_results=True, max_row_buffer=SQL.DB_CHUNK_SIZE
+                ),
+                params,
+            )
         ids = []
         details = []
         total = 0
@@ -276,7 +281,12 @@ class ObjectManager(Service):
        AND obh.objid <@ obj_in_prj(sam.projid) """ % ObjectHeader.__tablename__
         params = {"ids": object_ids}
 
-        res: Result = self.ro_session.execute(text(sql), params)
+        res: Result = self.ro_session.execute(
+            text(sql).execution_options(
+                stream_results=True, max_row_buffer=SQL.DB_CHUNK_SIZE
+            ),
+            params,
+        )
         ids = [
             (objid, acquisid, sampleid, projid)
             for objid, acquisid, sampleid, projid in res

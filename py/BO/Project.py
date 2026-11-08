@@ -65,7 +65,7 @@ from DB.ProjectVariables import KNOWN_PROJECT_VARS
 from DB.Sample import Sample
 from DB.User import Role, User, UserStatus, Organization
 from DB.User import UserIDT, UserIDListT
-from DB.helpers import Session, Result
+from DB.helpers import Session, Result, SQL
 from DB.helpers.Bean import Bean
 from DB.helpers.Core import select
 from DB.helpers.Direct import text
@@ -949,9 +949,14 @@ class ProjectBO(object):
             sql_params["window_size"] = window_size
 
         with CodeTimer("Projects.projects_for_user query (ids):", logger):
-            res: Result = session.execute(text(sql), sql_params)
+            res: Result = session.execute(
+                text(sql).execution_options(
+                    stream_results=True, max_row_buffer=SQL.DB_CHUNK_SIZE
+                ),
+                sql_params,
+            )
             # single-element tuple :( DBAPI
-            ret = [an_id for an_id, in res.fetchall()]
+            ret = [an_id for an_id, in res]
         return ret
 
     @staticmethod
@@ -1171,6 +1176,7 @@ class ProjectBO(object):
             Sample,
             and_(Sample.sampleid == Acquisition.acq_sample_id, Sample.projid == prj_id),
         )
+        qry = qry.yield_per(SQL.DB_CHUNK_SIZE)
         return [an_id for an_id, in qry]
 
     @classmethod
@@ -1197,7 +1203,7 @@ class ProjectBO(object):
                         AND id = ANY(:ids)
                      FOR NO KEY UPDATE"""
         res = session.execute(text(pts_sql), {"prj": prj_id, "ids": needed_ids})
-        ids_in_db = {classif_id: nbr for (classif_id, nbr) in res.fetchall()}
+        ids_in_db = {classif_id: nbr for (classif_id, nbr) in res}
         ids_not_in_db = set(needed_ids).difference(ids_in_db.keys())
         if len(ids_not_in_db) > 0:
             # Insert rows for missing IDs
@@ -1265,6 +1271,7 @@ class ProjectBO(object):
             Sample,
             and_(Sample.sampleid == Acquisition.acq_sample_id, Sample.projid == prj_id),
         )
+        qry = qry.yield_per(SQL.DB_CHUNK_SIZE)
         ret = 0
         cache: Dict[typing.Tuple[Any], str] = {}
         for a_line in qry:

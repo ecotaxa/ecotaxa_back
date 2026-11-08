@@ -13,6 +13,10 @@ from typing import Union, List, Dict, Optional, Set, Generator, Tuple, Any, Self
 # A dict for sending parametrized SQL to the engine
 SQLParamDict = Dict[str, Union[int, float, Decimal, str, List[int], List[str]]]
 
+# Number of rows fetched at once when streaming large SQL results
+# (SQLAlchemy yield_per / stream_results max_row_buffer).
+DB_CHUNK_SIZE = 10000
+
 # Not completely exact but good enough
 COL_RE = re.compile(r"\b(\w+)\.(\w+)\b", re.ASCII)
 IDENTIFIER_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$", re.ASCII)

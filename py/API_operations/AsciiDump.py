@@ -10,6 +10,7 @@ from DB.Object import ObjectHeader, ObjectFields
 from DB.Process import Process
 from DB.Project import Project
 from DB.Sample import Sample
+from DB.helpers import SQL
 from DB.helpers.Direct import text
 from DB.helpers.ORM import Model, Table
 from .helpers.Service import Service
@@ -74,9 +75,9 @@ class AsciiDumper(Service):
         base_table: Table = a_table.__table__
         cols = [a_col.name for a_col in base_table.columns]
         pk = [a_pk_col.name for a_pk_col in base_table.primary_key]
-        res = self.ro_session.execute(
-            base_table.select().where(text(where)).order_by(pk[0])
-        )
+        stmt = base_table.select().where(text(where)).order_by(pk[0])
+        stmt = stmt.execution_options(yield_per=SQL.DB_CHUNK_SIZE)
+        res = self.ro_session.execute(stmt)
         for a_row in res:
             vals = []
             for col, col_val in zip(cols, a_row):

@@ -7,7 +7,7 @@ from typing import Any
 
 from sqlalchemy.orm import mapped_column
 
-from DB.helpers import Session
+from DB.helpers import Session, SQL
 from DB.helpers.DDL import Index, ForeignKey, Sequence
 from DB.helpers.Direct import text
 from DB.helpers.Postgres import CHAR, BIGINT, VARCHAR, BYTEA, SMALLINT
@@ -49,7 +49,12 @@ class Image(Model):
             "  JOIN images img ON img.objid = obh.objid "
             " WHERE sam.projid = :prj"
         )
-        res: Result = session.execute(sql, {"prj": prj_id})
+        res: Result = session.execute(
+            sql.execution_options(
+                stream_results=True, max_row_buffer=SQL.DB_CHUNK_SIZE
+            ),
+            {"prj": prj_id},
+        )
         ret = {img_id for img_id, in res}
         return ret
 

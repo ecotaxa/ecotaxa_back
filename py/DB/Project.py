@@ -8,6 +8,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, mapped_column
 
 from BO.DataLicense import AccessLevelEnum
+from DB.helpers import SQL
 from DB.helpers.ORM import Model, Mapped
 
 if TYPE_CHECKING:
@@ -112,6 +113,7 @@ class Project(Model):
         qry = qry.join(Acquisition).join(Sample).join(Project)
         qry = qry.filter(Project.projid.__eq__(prj_id))
         qry = qry.filter(ObjectHeader.objid.op("<@")(func.obj_in_prj(prj_id)))
+        qry = qry.yield_per(SQL.DB_CHUNK_SIZE)
         ret = {orig_id: objid for orig_id, objid in qry}
         return ret
 
@@ -126,6 +128,7 @@ class Project(Model):
         qry = qry.join(ObjectHeader).join(Acquisition).join(Sample).join(Project)
         qry = qry.filter(ObjectHeader.objid.op("<@")(func.obj_in_prj(prj_id)))
         qry = qry.filter(Project.projid == prj_id)
+        qry = qry.yield_per(SQL.DB_CHUNK_SIZE)
         for objid, imgrank in qry:
             ret.setdefault(objid, set()).add(imgrank)
         return ret

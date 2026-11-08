@@ -28,7 +28,7 @@ from DB.Object import (
 from DB.Process import Process
 from DB.Project import Project
 from DB.Sample import Sample
-from DB.helpers import Result
+from DB.helpers import Result, SQL
 from DB.helpers.Bean import bean_of, Bean
 from DB.helpers.DBWriter import DBWriter
 from DB.helpers.Direct import text
@@ -424,7 +424,12 @@ class SubsetServiceOnProject(JobServiceOnProjectBase):
         logger.info("SQL=%s", sql)
         logger.info("SQLParam=%s", params)
 
-        res: Result = self.ro_session.execute(text(sql), params)
+        res: Result = self.ro_session.execute(
+            text(sql).execution_options(
+                stream_results=True, max_row_buffer=SQL.DB_CHUNK_SIZE
+            ),
+            params,
+        )
         ids = [r for r, in res]
         logger.info("There are %d IDs", len(ids))
 

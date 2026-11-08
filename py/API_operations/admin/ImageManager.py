@@ -19,6 +19,7 @@ from DB.Object import ObjectHeader
 from DB.Project import ProjectIDT, Project
 from DB.Sample import Sample
 from DB.User import Role, UserIDT
+from DB.helpers import SQL
 from DB.helpers.ORM import aliased
 from FS.Vault import Vault
 from FS.VaultRemover import VaultRemover
@@ -64,6 +65,7 @@ class ImageManagerService(Service):
         )
         qry = qry.filter(ImageFile.imgid.is_(None))
         qry = qry.limit(max_digests)
+        qry = qry.yield_per(SQL.DB_CHUNK_SIZE)
         cnt = 0
         with CodeTimer("Files without md5, query '%s':" % str(qry), logger):
             obj_imgs_without_images = [rec for rec in qry]
@@ -98,6 +100,7 @@ class ImageManagerService(Service):
                 miss_qry = miss_qry.filter(Project.projid == prj_id)
             # On purpose, no "order by" clause. Results are random, but sorting takes a while on lots of images
             miss_qry = miss_qry.limit(left_for_unknown)
+            miss_qry = miss_qry.yield_per(SQL.DB_CHUNK_SIZE)
             with CodeTimer(
                 "Files with unknown state, query '%s':" % str(miss_qry), logger
             ):
@@ -182,6 +185,7 @@ class ImageManagerService(Service):
         qry = qry.filter(Project.projid.__eq__(prj_id))
         qry = qry.order_by(Image.objid, orig_img.imgid, Image.imgid)
         qry = qry.limit(max_deletes)
+        qry = qry.yield_per(SQL.DB_CHUNK_SIZE)
         with CodeTimer(
             "Dups same objs inside %d, query '%s':" % (prj_id, str(qry)), logger
         ):

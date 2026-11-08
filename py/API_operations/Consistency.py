@@ -13,6 +13,7 @@ from DB.Acquisition import Acquisition
 from DB.Object import ObjectHeader, ObjectFields
 from DB.Project import Project
 from DB.Sample import Sample
+from DB.helpers import SQL
 from .helpers.Service import Service
 
 
@@ -74,6 +75,7 @@ class ProjectConsistencyChecker(Service):
 
         qry = qry.filter(Project.projid == self.prj_id)
         qry = qry.filter(ObjectHeader.acquisid != ObjectFields.acquis_id)
+        qry = qry.yield_per(SQL.DB_CHUNK_SIZE)
         broken = [objid for objid, in qry]
         if len(broken) > 0:
             return ["acquisid mirror broken", broken]

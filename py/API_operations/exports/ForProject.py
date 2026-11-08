@@ -47,6 +47,7 @@ from DB.Object import (
 )
 from DB.Project import Project, ProjectIDListT, ProjectIDT
 from DB.TaxoRecast import TaxoRecast, RecastOperation
+from DB.helpers import SQL
 from DB.helpers.Direct import text
 from DB.helpers.SQL import OrderClause, SelectClause
 from FS.CommonDir import ExportFolder
@@ -55,7 +56,6 @@ from helpers import (
     DateTime,
 )  # Need to keep the whole module imported, as the function is mocked
 from helpers.DynamicLogs import get_logger, LogsSwitcher
-
 # TODO: Move somewhere else
 from ..helpers.JobService import JobServiceBase, ArgsDict  # fmt:skip
 
@@ -574,7 +574,12 @@ class ProjectExport(JobServiceBase):
         )
         logger.info("Execute SQL : %s" % sql)
         logger.info("Params : %s" % params)
-        res = self.ro_session.execute(text(sql), params)
+        res = self.ro_session.execute(
+            text(sql).execution_options(
+                stream_results=True, max_row_buffer=SQL.DB_CHUNK_SIZE
+            ),
+            params,
+        )
 
         now_txt = DateTime.now_time().strftime("%Y%m%d_%H%M")
         self._set_out_file_name("zip")

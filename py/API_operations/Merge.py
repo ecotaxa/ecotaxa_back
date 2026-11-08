@@ -16,6 +16,7 @@ from DB.Acquisition import Acquisition, AcquisitionIDT
 from DB.Object import ObjectHeader, ObjectFields
 from DB.Project import Project
 from DB.Sample import Sample, SampleIDT, SAM_PRJ_OFFSET
+from DB.helpers import SQL
 from DB.helpers.ORM import orm_equals, any_, all_, func, update, delete, not_, or_
 from DB.helpers.Postgres import values_cte, text
 from helpers.DynamicLogs import get_logger
@@ -212,7 +213,7 @@ class MergeService(Service):
             .join(Sample)
             .filter(Sample.projid == prj_id)
             .filter(not_(ObjectHeader.objid.op("<@")(func.obj_in_prj(prj_id))))
-            .all()
+            .yield_per(SQL.DB_CHUNK_SIZE)
         )
         new_obj_id = ObjectHeader.get_next_pk(session, prj_id)
         obj_updates = []

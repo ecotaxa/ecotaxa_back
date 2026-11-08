@@ -17,7 +17,7 @@ from DB.Object import ObjectHeader, ObjectFields
 from DB.Process import Process
 from DB.Project import Project
 from DB.Sample import Sample
-from DB.helpers import Result
+from DB.helpers import Result, SQL
 from DB.helpers.Direct import text
 from DB.helpers.ORM import Model, contains_eager, any_
 from DB.helpers.SQL import SelectClause
@@ -171,7 +171,12 @@ class JsonDumper(Service):
         logger.info("SQLParam=%s", params)
 
         with CodeTimer("Get IDs:", logger):
-            res: Result = self.session.execute(text(sql), params)
+            res: Result = self.session.execute(
+                text(sql).execution_options(
+                    stream_results=True, max_row_buffer=SQL.DB_CHUNK_SIZE
+                ),
+                params,
+            )
         ids = [r["objid"] for r in res.mappings()]
 
         logger.info("NB OBJIDS=%d", len(ids))

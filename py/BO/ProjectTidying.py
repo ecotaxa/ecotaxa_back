@@ -14,6 +14,7 @@ from DB.Object import ObjectHeader, ObjectIDT
 from DB.Process import Process, ProcessOrigIDT
 from DB.Project import ProjectIDT
 from DB.Sample import Sample, SampleOrigIDT
+from DB.helpers import SQL
 from DB.helpers.Core import select
 
 
@@ -61,6 +62,7 @@ class ProjectTopology(object):
                 Acquisition.acquisid.op("<@")(func.acq_in_prj(prj_id)),
                 ObjectHeader.objid.op("<@")(func.obj_in_prj(prj_id)),
             )
+            .execution_options(yield_per=SQL.DB_CHUNK_SIZE)
         )
 
         sam_orig_id: str

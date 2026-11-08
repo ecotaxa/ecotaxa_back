@@ -202,6 +202,7 @@ class ObjectBOSet(object):
     Lots of ObjectBOs, because working one by one is slow...
     Also cook a view on the fields in use
     TODO: Apply calculations onto set.
+    TODO: Unused?
     """
 
     def __init__(self, session: Session, object_ids: Any, obj_mapping: TableMapping):
@@ -218,6 +219,7 @@ class ObjectBOSet(object):
             ObjectHeader.objid == ReducedObjectFields.objfid,  # type: ignore
         )
         qry = qry.options(joinedload(ObjectHeader.all_images))
+        # No yield_per() here: it is incompatible with joinedload of a collection.
         self.all = [
             ObjectBO(session, 0, an_obj, its_fields) for an_obj, its_fields in qry
         ]

@@ -72,7 +72,7 @@ from DB.Project import ProjectIDListT, Project
 from DB.Sample import Sample
 from DB.Taxonomy import Taxonomy, TaxoStatus
 from DB.User import User, UserIDT
-from DB.helpers import Result
+from DB.helpers import Result, SQL
 from DB.helpers.Core import select
 from DB.helpers.Direct import func
 from DB.helpers.ORM import Delete, Update, any_, and_, or_, case
@@ -526,6 +526,7 @@ class EnumeratedObjectSet(MappedTable):
         qry = qry.join(Acquisition)
         qry = qry.join(ObjectHeader)
         qry = qry.filter(ObjectHeader.objid == any_(self.object_ids))
+        qry = qry.yield_per(SQL.DB_CHUNK_SIZE)
         with CodeTimer("Prjs for %d objs: " % len(self.object_ids), logger):
             return [an_id for an_id, in qry]
 
@@ -610,6 +611,7 @@ class EnumeratedObjectSet(MappedTable):
         )
         qry = qry.filter(ObjectHeader.objid == any_(self.object_ids))
         qry = qry.filter(ObjectHeader.classif_qual.in_(MANUAL_STATES_TEXT))
+        qry = qry.yield_per(SQL.DB_CHUNK_SIZE)
         # A bit dirty but fast
         prev_nb_objs = len(self.object_ids)
         new_objects_ids = []
@@ -790,6 +792,7 @@ class EnumeratedObjectSet(MappedTable):
             ObjectHeader.objid == subq_alias.c.objid,
             isouter=(from_user_id is None),
         )
+        qry = qry.execution_options(yield_per=SQL.DB_CHUNK_SIZE)
         if from_user_id is not None:
             # If taking history from a user, don't apply to the objects he/she classified
             # in last already.
@@ -802,7 +805,7 @@ class EnumeratedObjectSet(MappedTable):
         logger.info("_get_last_classif_history qry:%s", str(qry))
         res = self.session.execute(qry).mappings()
         with CodeTimer("HISTORY for %d objs: " % len(self.object_ids), logger):
-            ret = [HistoricalLastClassif(**rec) for rec in res.fetchall()]
+            ret = [HistoricalLastClassif(**rec) for rec in res]
         logger.info("_get_last_classif_history qry: %d rows", len(ret))
         return ret
 
@@ -1145,6 +1148,7 @@ class EnumeratedObjectSet(MappedTable):
             ObjectHeader.classif_score,
         ).with_for_update(key_share=True)
         qry = qry.where(ObjectHeader.objid == any_(self.object_ids))
+        qry = qry.execution_options(yield_per=SQL.DB_CHUNK_SIZE)
         logger.info("Fetch with lock: %s", qry)
         res: Result = self.session.execute(qry)
         prev = {rec["objid"]: rec for rec in res.mappings()}

@@ -13,10 +13,10 @@ from BO.Rights import RightsBO, Action
 from DB.CNNFeatureVector import ObjectCNNFeatureVector
 from DB.Object import ObjectIDT
 from DB.Project import ProjectIDT
+from DB.helpers import SQL
 from DB.helpers.Direct import text
 from DB.helpers.SQL import OrderClause, SelectClause
 from helpers.DynamicLogs import get_logger
-
 # TODO: Move somewhere else
 from .helpers.Service import Service
 
@@ -99,10 +99,18 @@ class SimilaritySearchForProject(Service):
         {dist_exp.get_sql()}
         FROM {from_.get_sql()} {where_clause.get_sql()} \n{order_clause.get_sql()}
         """
-        self.ro_session.execute(text("SET LOCAL ivvflat.probes = 10"))
-        result = self.ro_session.execute(text(query), params).mappings().fetchall()
-        neighbors = [res["objcnnid"] for res in result]
-        distances = [res["l2_dist"] for res in result]
+        self.ro_session.execute(text("SET LOCAL ivfflat.probes = 10"))
+        result = self.ro_session.execute(
+            text(query).execution_options(
+                stream_results=True, max_row_buffer=SQL.DB_CHUNK_SIZE
+            ),
+            params,
+        ).mappings()
+        neighbors = []
+        distances = []
+        for row in result:
+            neighbors.append(row["objcnnid"])
+            distances.append(row["l2_dist"])
         if len(distances) >= 1:
             # Scale scores based on largest distance, and compute a similarity, ~ inverse of distance
             scale = distances[-1]

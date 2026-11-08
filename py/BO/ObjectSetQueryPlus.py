@@ -29,6 +29,7 @@ from BO.Classification import ClassifIDT
 from BO.ComputedVar import ComputedVar
 from BO.ObjectSet import DescribedObjectSet, DescribedObjectBOSet
 from BO.Vocabulary import Term
+from DB.helpers import SQL
 from DB.helpers.Direct import text
 from DB.helpers.ORM import Session, Row
 from DB.helpers.SQL import (
@@ -344,7 +345,12 @@ class ObjectSetQueryPlus(object):
         sql, params = self.get_sql()
         logger.info("Execute SQL : %s", sql)
         logger.info("Params : %s", params)
-        res = ro_session.execute(text(sql), params)
+        res = ro_session.execute(
+            text(sql).execution_options(
+                stream_results=True, max_row_buffer=SQL.DB_CHUNK_SIZE
+            ),
+            params,
+        )
         if self.sum_exp is None:
             # Pure SQL, emit each row
             for a_simple_row in res.mappings():
