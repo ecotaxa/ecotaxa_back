@@ -17,8 +17,7 @@ from DB.helpers import SQL
 from DB.helpers.Direct import text
 from DB.helpers.SQL import OrderClause, SelectClause
 from helpers.DynamicLogs import get_logger
-# TODO: Move somewhere else
-from .helpers.Service import Service
+from .helpers.Service import Service  # TODO: Move somewhere else
 
 logger = get_logger(__name__)
 

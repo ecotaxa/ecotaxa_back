@@ -58,13 +58,20 @@ async def _background_unpack(
         await asyncio.to_thread(
             user_dir.dispatch_unpack, compressed_path=file_path, to_path=dest_dir
         )
-        os.unlink(orig_path)
         logger.info("Done unpacking %s in background", file_path)
     except Exception as e:
         logger.error(
             "Error unpacking %s in background: %s", file_path, str(e), exc_info=True
         )
         raise
+    finally:
+        # Always release the TUS upload.
+        try:
+            os.unlink(orig_path)
+        except FileNotFoundError:
+            pass
+        except OSError as e:
+            logger.warning("Could not remove uploaded file %s: %s", orig_path, e)
 
 
 async def on_tus_upload_complete(
@@ -96,8 +103,15 @@ async def on_tus_upload_complete(
         dest_path = dest_dir / original_name
 
         if user_dir.is_compressed(tus_path):
-            # Link destination, we have the upload from 2 inodes now
-            os.link(tus_path, dest_path)
+            # Link destination, we have the upload from 2 inodes now.
+            try:
+                os.link(tus_path, dest_path)
+            except FileExistsError:
+                # Already there
+                if dest_path.is_dir():
+                    raise
+                dest_path.unlink(missing_ok=True)
+                os.link(tus_path, dest_path)
             task = asyncio.create_task(
                 _background_unpack(user_dir, tus_path, dest_path, dest_dir.absolute()),
                 name=f"unpack_{original_name}",

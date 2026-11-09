@@ -1271,7 +1271,7 @@ class ProjectBO(object):
             Sample,
             and_(Sample.sampleid == Acquisition.acq_sample_id, Sample.projid == prj_id),
         )
-        qry = qry.yield_per(SQL.DB_CHUNK_SIZE)
+        # qry = qry.yield_per(SQL.DB_CHUNK_SIZE) # Cannot use cursor and commit every chunk
         ret = 0
         cache: Dict[typing.Tuple[Any], str] = {}
         for a_line in qry:

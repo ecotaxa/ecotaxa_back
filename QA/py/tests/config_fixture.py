@@ -18,6 +18,7 @@ sys.path.extend([join("", "..", "..", "py")])
 
 HERE = Path(dirname(realpath(__file__)))
 
+from DB.helpers import SQL
 from DB.helpers.DBWriter import DBWriter
 from BO.TSVFile import TSVFile
 from FS.Vault import Vault
@@ -42,6 +43,8 @@ def config() -> Generator[EcoTaxaConfig, Any, None]:
     ProjectExport.ROWS_REPORT_EVERY = 5
     ProjectExport.IMAGES_REPORT_EVERY = 7
     NightlyJobService.REPORT_EVERY = 2
+    # Small DB fetch chunks, to exercise server-side cursor chunking.
+    SQL.DB_CHUNK_SIZE = 5
     # Avoid testing time explosion.
     # Comment for a better coverage of Process jobs. But some tests will fail
     # due to the fresh process.
