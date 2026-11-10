@@ -15,7 +15,6 @@ from typing import (
     Tuple,
     ClassVar,
     Optional,
-    cast,
     Union,
     TextIO,
     Type,
@@ -163,7 +162,7 @@ class TSVFile(object):
                 and "object_annotation_category" in field_set
             )
 
-            vals_cache: Dict[str, str] = dict()
+            vals_cache: Dict[str, Dict[Any, Any]] = {}
             # Loop over all lines
             row_count_for_csv = 0
             for rawlig in self.rdr:
@@ -171,10 +170,11 @@ class TSVFile(object):
                 row_count_for_csv += 1
                 counter += 1
 
-                # Value is wrongly deduced (by typings) as a mandatory str from the rdr, it's optional in fact
-                rawlig2 = cast(Dict[str, Optional[str]], rawlig)
-
-                lig = {self.clean_fields[field]: v for field, v in rawlig2.items()}
+                lig = {
+                    self.clean_fields[field]: v
+                    for field, v in rawlig.items()
+                    if field in self.clean_fields
+                }
 
                 if both_categories_present:
                     # Remove textual category if the category id is provided and populated
@@ -680,7 +680,7 @@ class TSVFile(object):
         field_set: Set[str],
         lig: Dict[str, Optional[str]],
         dicts_to_write,
-        vals_cache: Dict,
+        vals_cache: Dict[str, Dict[Any, Any]],
     ):
         """
         Read the data line into target dicts. Values go into the right bucket, i.e. target dict, depending
@@ -689,7 +689,7 @@ class TSVFile(object):
         :param field_set: The fields present in DB record.
         :param lig: A line of TSV data, as {header: val} dict.
         :param dicts_to_write: The output data.
-        :param vals_cache: A cache of values, per column and seen value.
+        :param vals_cache: A cache of transformed values, per column and seen value.
         """
         predefined_mapping = GlobalMapping.PREDEFINED_FIELDS
         custom_mapping = how.custom_mapping
@@ -706,10 +706,11 @@ class TSVFile(object):
             db_col = m["field"]
             is_numeric = m["type"] == "n"
             # Try to get the transformed value from the cache
-            cache_key: Tuple[str, Any] = (a_field, raw_val)
-            if cache_key in vals_cache:
-                cached_field_value = vals_cache.get(cache_key)
+            field_cache = vals_cache.get(a_field)
+            if field_cache is not None and raw_val in field_cache:
+                cached_field_value = field_cache[raw_val]
             else:
+                can_cache = True
                 csv_val = clean_value(raw_val, is_numeric)
                 # If no relevant value, set field to NULL, i.e. None
                 if csv_val == "":
@@ -739,7 +740,7 @@ class TSVFile(object):
 
                     cached_field_value = datetime.datetime.combine(date, time)
                     # no caching of this one as it depends on another value on same line
-                    cache_key = ("0", None)
+                    can_cache = False
                 elif db_col == "classif_id":
                     # We map 2 fields to classif_id, the second (text one) has [t] type, treated here.
                     # The first, numeric, version is in "if type=n" case above.
@@ -765,8 +766,9 @@ class TSVFile(object):
                 else:
                     # Assume it's an ordinary text field with nothing special
                     cached_field_value = csv_val
-                # Cache if relevant, setting the cache_key to "0" above effectively voids
-                vals_cache[cache_key] = cached_field_value
+                # Cache if relevant
+                if can_cache:
+                    vals_cache.setdefault(a_field, {})[raw_val] = cached_field_value
 
             # Write the field into the right object
             dict_to_write = dicts_to_write[db_table]
@@ -938,8 +940,22 @@ class TSVFile(object):
     def do_validate(self, how: ImportHow, diag: ImportDiagnostic):
         with self.open():
             self.validate_structure(how, diag)
-            rows_for_csv = self.validate_content(how, diag)
+            mapping_per_field = self.get_fields_infos(how)
+            rows_for_csv = self.validate_content(how, diag, mapping_per_field)
             return rows_for_csv
+
+    def get_fields_infos(self, how: ImportHow) -> dict[str, dict]:
+        mapping_per_field: Dict[str, Dict] = {}
+        for raw_field, a_field in self.clean_fields.items():
+            m = GlobalMapping.PREDEFINED_FIELDS.get(a_field)
+            if m is None:
+                m = GlobalMapping.DOUBLED_FIELDS.get(a_field)
+                if m is None:
+                    m = how.custom_mapping.search_field(a_field)
+                    if m is None:
+                        continue
+            mapping_per_field[a_field] = m
+        return mapping_per_field
 
     def validate_structure(self, how: ImportHow, diag: ImportDiagnostic):
         """
@@ -1035,9 +1051,11 @@ class TSVFile(object):
                     self.user_loc,
                 )
 
-    def validate_content(self, how: ImportHow, diag: ImportDiagnostic):
+    def validate_content(
+        self, how: ImportHow, diag: ImportDiagnostic, mapping_per_field: Dict[str, Dict]
+    ):
         row_count_for_csv = 0
-        vals_cache: Dict = {}
+        seen_vals: Dict[str, Set[Optional[str]]] = {}
         local_keys: Dict[str, int] = {}
         logged_parents: Set[Tuple[Any, Any]] = set()
         lig: Dict
@@ -1045,7 +1063,7 @@ class TSVFile(object):
             row_count_for_csv += 1
             line_num = row_count_for_csv + 2
 
-            self.validate_line(how, diag, lig, line_num, vals_cache)
+            self.validate_line(how, diag, lig, line_num, seen_vals, mapping_per_field)
 
             # Verify the image file
             object_id = clean_value_and_none(lig.get("object_id", ""))
@@ -1150,7 +1168,8 @@ class TSVFile(object):
         diag: ImportDiagnostic,
         lig: Dict[Optional[str], str],
         line_num: int,
-        vals_cache: Dict,
+        seen_vals: Dict[str, Set[Optional[str]]],
+        mapping_per_field: Optional[Dict[str, Dict]] = None,
     ):
         """
             Validate a line from data point of view.
@@ -1158,9 +1177,12 @@ class TSVFile(object):
         :param diag:
         :param lig:
         :param line_num: User (from 1) line number
-        :param vals_cache:
+        :param seen_vals: Already seen values per field
+        :param mapping_per_field:
         :return:
         """
+        if mapping_per_field is None:
+            mapping_per_field = self.get_fields_infos(how)
         if None in lig.keys():
             diag.error(
                 "line %d: Value(s) %s must not be in a header-less column."
@@ -1169,26 +1191,18 @@ class TSVFile(object):
             )
             return
         latitude_was_seen = False
-        predefined_mapping = GlobalMapping.PREDEFINED_FIELDS
-        second_mapping = GlobalMapping.DOUBLED_FIELDS
-        custom_mapping = how.custom_mapping
         for raw_field, a_field in self.clean_fields.items():
-            m = predefined_mapping.get(a_field)
+            m = mapping_per_field.get(a_field)
             if m is None:
-                m = second_mapping.get(a_field)
-                if m is None:
-                    m = custom_mapping.search_field(a_field)
-                    # No mapping, not stored
-                    if m is None:
-                        continue
+                # No mapping, not stored
+                continue
             raw_val = lig.get(raw_field)
             # Try to get the value from the cache
-            cache_key = (raw_field, raw_val)
-            if cache_key in vals_cache:
+            field_seen = seen_vals.get(raw_field)
+            if field_seen is not None and raw_val in field_seen:
                 if a_field == "object_lat":
                     latitude_was_seen = True
                 continue
-            vals_cache[cache_key] = 1
             is_numeric = m["type"] == "n"
             # Same column with same value was not seen already, proceed
             csv_val: str = clean_value_and_none(raw_val, is_numeric)
@@ -1206,9 +1220,9 @@ class TSVFile(object):
                         "Correct range is -90/+90°." % (line_num, csv_val, raw_field),
                         self.user_loc,
                     )
-                    del vals_cache[cache_key]
                 else:
                     latitude_was_seen = True
+                    seen_vals.setdefault(raw_field, set()).add(raw_val)
             elif a_field == "object_lon":
                 vf = convert_degree_minute_float_to_decimal_degree(csv_val)
                 if vf is None or vf < -180 or vf > 180:
@@ -1217,6 +1231,8 @@ class TSVFile(object):
                         "Correct range is -180/+180°." % (line_num, csv_val, raw_field),
                         self.user_loc,
                     )
+                else:
+                    seen_vals.setdefault(raw_field, set()).add(raw_val)
             elif is_numeric:
                 vf = to_float(csv_val)
                 if vf is None:
@@ -1225,11 +1241,14 @@ class TSVFile(object):
                         % (line_num, csv_val, raw_field),
                         self.user_loc,
                     )
-                elif a_field == "object_annotation_category_id":
-                    diag.classif_id_seen.add(int(vf))
+                else:
+                    if a_field == "object_annotation_category_id":
+                        diag.classif_id_seen.add(int(vf))
+                    seen_vals.setdefault(raw_field, set()).add(raw_val)
             elif a_field in ("object_date", "object_annotation_date"):
                 try:
                     ObjectHeader.date_from_txt(csv_val)
+                    seen_vals.setdefault(raw_field, set()).add(raw_val)
                 except ValueError:
                     diag.error(
                         "line %d: Invalid Date value '%s' for field '%s'."
@@ -1239,6 +1258,7 @@ class TSVFile(object):
             elif a_field in ("object_time", "object_annotation_time"):
                 try:
                     ObjectHeader.time_from_txt(csv_val)
+                    seen_vals.setdefault(raw_field, set()).add(raw_val)
                 except ValueError:
                     diag.error(
                         "line %d: Invalid Time value '%s' for field '%s'."
@@ -1258,8 +1278,12 @@ class TSVFile(object):
                 maybe_email = clean_value_and_none(
                     lig.get("object_annotation_person_email", "")
                 )
-                # TODO: It's more "diag" than "how"
-                how.found_users[csv_val.lower()] = {"email": maybe_email}
+                user_key = csv_val.lower()
+                # If not recorded yet, or if this line provides an email a previous didn't
+                if user_key not in how.found_users or (
+                    maybe_email and not how.found_users[user_key].get("email")
+                ):
+                    how.found_users[user_key] = {"email": maybe_email}
             elif a_field == "object_annotation_status":
                 if csv_val != "noid" and csv_val.lower() not in classif_qual_revert:
                     diag.error(
@@ -1267,6 +1291,10 @@ class TSVFile(object):
                         % (line_num, csv_val, raw_field),
                         self.user_loc,
                     )
+                else:
+                    seen_vals.setdefault(raw_field, set()).add(raw_val)
+            else:
+                seen_vals.setdefault(raw_field, set()).add(raw_val)
         # Update missing GPS count
         if not latitude_was_seen:
             diag.nb_objects_without_gps += 1

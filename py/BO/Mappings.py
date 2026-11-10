@@ -407,7 +407,7 @@ class ProjectMapping(object):
     def search_field(self, full_tsv_field: str) -> Optional[Dict]:
         """
         Return the storage (i.e. target of mapping) for a custom field in given table.
-        e.g. acq_operator -> {'acquisition', 't02', 't'}
+        e.g. acq_operator -> {"table":'acquisition', "field":'t02', "type":'t'}
         """
         try:
             prfx, tsv_col = full_tsv_field.split("_", 1)
