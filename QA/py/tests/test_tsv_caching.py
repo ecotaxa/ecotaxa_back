@@ -4,7 +4,7 @@ from pathlib import Path
 import datetime
 
 import BO.Mappings as GlobalMapping
-from BO.TSVFile import TSVFile
+from BO.TSVFile import TSVFile, LRUCache
 from BO.helpers.ImportHelpers import ImportHow, ImportDiagnostic
 from BO.Mappings import ProjectMapping
 from DB.Object import ObjectHeader, ObjectFields
@@ -31,29 +31,57 @@ def test_missing_gps_count_with_cache():
     seen_vals = {}
 
     # Line 1: empty latitude
-    lig1 = {"object_id": "obj1", "img_file_name": "1.png", "object_lat": "", "object_lon": ""}
+    lig1 = {
+        "object_id": "obj1",
+        "img_file_name": "1.png",
+        "object_lat": "",
+        "object_lon": "",
+    }
     tsv.validate_line(how, diag, lig1, 1, seen_vals)
     assert diag.nb_objects_without_gps == 1
 
     # Line 2: also empty latitude (should not be marked as seen by cache hit)
-    lig2 = {"object_id": "obj2", "img_file_name": "2.png", "object_lat": "", "object_lon": ""}
+    lig2 = {
+        "object_id": "obj2",
+        "img_file_name": "2.png",
+        "object_lat": "",
+        "object_lon": "",
+    }
     tsv.validate_line(how, diag, lig2, 2, seen_vals)
     assert diag.nb_objects_without_gps == 2
 
     # Line 3: valid latitude
-    lig3 = {"object_id": "obj3", "img_file_name": "3.png", "object_lat": "43.5", "object_lon": "7.3"}
+    lig3 = {
+        "object_id": "obj3",
+        "img_file_name": "3.png",
+        "object_lat": "43.5",
+        "object_lon": "7.3",
+    }
     tsv.validate_line(how, diag, lig3, 3, seen_vals)
     assert diag.nb_objects_without_gps == 2
 
     # Line 4: same valid latitude (cache hit, should be marked as seen)
-    lig4 = {"object_id": "obj4", "img_file_name": "4.png", "object_lat": "43.5", "object_lon": "7.3"}
+    lig4 = {
+        "object_id": "obj4",
+        "img_file_name": "4.png",
+        "object_lat": "43.5",
+        "object_lon": "7.3",
+    }
     tsv.validate_line(how, diag, lig4, 4, seen_vals)
     assert diag.nb_objects_without_gps == 2
 
 
 def test_validation_error_not_suppressed_by_cache():
     """Verify that repeated invalid values across lines are all reported and not silently suppressed by cache."""
-    headers = ["object_id", "img_file_name", "object_lat", "object_lon", "object_date", "object_time", "object_annotation_status"]
+    headers = [
+        "object_id",
+        "img_file_name",
+        "object_lat",
+        "object_lon",
+        "object_date",
+        "object_time",
+        "object_annotation_status",
+    ]
     tsv = _create_tsv_file_instance(headers)
 
     how = ImportHow(1, False, ProjectMapping(), False, [], 1)
@@ -90,7 +118,12 @@ def test_validation_error_not_suppressed_by_cache():
 
 def test_user_email_synchronization_across_lines():
     """Verify that user email is not lost if line 1 has no email but line 2 provides email."""
-    headers = ["object_id", "img_file_name", "object_annotation_person_name", "object_annotation_person_email"]
+    headers = [
+        "object_id",
+        "img_file_name",
+        "object_annotation_person_name",
+        "object_annotation_person_email",
+    ]
     tsv = _create_tsv_file_instance(headers)
 
     how = ImportHow(1, False, ProjectMapping(), False, [], 1)
@@ -120,7 +153,12 @@ def test_user_email_synchronization_across_lines():
 
 def test_taxon_category_registration_across_lines():
     """Verify that taxon name is registered even if first line has category_id and second line does not."""
-    headers = ["object_id", "img_file_name", "object_annotation_category", "object_annotation_category_id"]
+    headers = [
+        "object_id",
+        "img_file_name",
+        "object_annotation_category",
+        "object_annotation_category_id",
+    ]
     tsv = _create_tsv_file_instance(headers)
 
     how = ImportHow(1, False, ProjectMapping(), False, [], 1)
@@ -160,7 +198,9 @@ def test_read_fields_to_dicts_classif_date_caching():
         "object_annotation_time": "10:00:00",
     }
     TSVFile.read_fields_to_dicts(how, field_set, lig1, dicts_to_write_1, vals_cache)
-    assert dicts_to_write_1[ObjectHeader.__tablename__]["classif_date"] == datetime.datetime(2020, 1, 1, 10, 0, 0)
+    assert dicts_to_write_1[ObjectHeader.__tablename__][
+        "classif_date"
+    ] == datetime.datetime(2020, 1, 1, 10, 0, 0)
     assert "object_annotation_date" not in vals_cache
 
     dicts_to_write_2 = {alias: dict() for alias in GlobalMapping.TARGET_CLASSES.keys()}
@@ -169,7 +209,9 @@ def test_read_fields_to_dicts_classif_date_caching():
         "object_annotation_time": "15:30:00",
     }
     TSVFile.read_fields_to_dicts(how, field_set, lig2, dicts_to_write_2, vals_cache)
-    assert dicts_to_write_2[ObjectHeader.__tablename__]["classif_date"] == datetime.datetime(2020, 1, 1, 15, 30, 0)
+    assert dicts_to_write_2[ObjectHeader.__tablename__][
+        "classif_date"
+    ] == datetime.datetime(2020, 1, 1, 15, 30, 0)
 
 
 def test_read_fields_to_dicts_nested_caching():
@@ -187,7 +229,9 @@ def test_read_fields_to_dicts_nested_caching():
     TSVFile.read_fields_to_dicts(how, field_set, lig, dicts_to_write, vals_cache)
 
     assert dicts_to_write[ObjectHeader.__tablename__]["latitude"] == 43.5
-    assert dicts_to_write[ObjectHeader.__tablename__]["objdate"] == datetime.date(2021, 5, 15)
+    assert dicts_to_write[ObjectHeader.__tablename__]["objdate"] == datetime.date(
+        2021, 5, 15
+    )
     assert dicts_to_write[ObjectHeader.__tablename__]["orig_id"] == "test_obj_1"
 
     # Check nested structure: vals_cache[field_name][raw_val] == produced_val
@@ -199,12 +243,14 @@ def test_read_fields_to_dicts_nested_caching():
     dicts_to_write_2 = {alias: dict() for alias in GlobalMapping.TARGET_CLASSES.keys()}
     TSVFile.read_fields_to_dicts(how, field_set, lig, dicts_to_write_2, vals_cache)
     assert dicts_to_write_2[ObjectHeader.__tablename__]["latitude"] == 43.5
-    assert dicts_to_write_2[ObjectHeader.__tablename__]["objdate"] == datetime.date(2021, 5, 15)
+    assert dicts_to_write_2[ObjectHeader.__tablename__]["objdate"] == datetime.date(
+        2021, 5, 15
+    )
     assert dicts_to_write_2[ObjectHeader.__tablename__]["orig_id"] == "test_obj_1"
 
 
 def test_validate_line_seen_vals_structure():
-    """Verify that seen_vals in validate_line is populated as Dict[str, Set[Any]] mapping field_name -> Set[raw_val]."""
+    """Verify that seen_vals in validate_line is populated as Dict[str, LRUCache] mapping field_name -> LRUCache of seen raw values."""
     headers = ["object_id", "img_file_name", "object_lat", "object_lon", "object_date"]
     tsv = _create_tsv_file_instance(headers)
 
@@ -221,13 +267,13 @@ def test_validate_line_seen_vals_structure():
     }
     tsv.validate_line(how, diag, lig, 1, seen_vals)
 
-    # Check that seen_vals is a dict of sets mapping raw_field -> set of seen raw values
+    # Check that seen_vals is a dict of LRUCache mapping raw_field -> LRUCache of seen raw values
     assert isinstance(seen_vals, dict)
-    assert isinstance(seen_vals["object_lat"], set)
+    assert isinstance(seen_vals["object_lat"], LRUCache)
     assert "43.5" in seen_vals["object_lat"]
-    assert isinstance(seen_vals["object_lon"], set)
+    assert isinstance(seen_vals["object_lon"], LRUCache)
     assert "7.3" in seen_vals["object_lon"]
-    assert isinstance(seen_vals["object_date"], set)
+    assert isinstance(seen_vals["object_date"], LRUCache)
     assert "2021-05-15" in seen_vals["object_date"]
 
 
@@ -269,12 +315,14 @@ def test_validate_line_skips_unmapped_columns():
     """Verify that validate_line skips unmapped columns (where field is not in mapping_per_field)."""
     headers = ["object_id", "img_file_name", "object_lat", "unmapped_col"]
     tsv = TSVFile(Path("/tmp/dummy.tsv"), "dummy.tsv", Path("/tmp"))
-    tsv.clean_fields = OrderedDict([
-        ("object_id", "object_id"),
-        ("img_file_name", "img_file_name"),
-        ("object_lat", "object_lat"),
-        ("unmapped_col", "unmapped_col"),
-    ])
+    tsv.clean_fields = OrderedDict(
+        [
+            ("object_id", "object_id"),
+            ("img_file_name", "img_file_name"),
+            ("object_lat", "object_lat"),
+            ("unmapped_col", "unmapped_col"),
+        ]
+    )
 
     how = ImportHow(1, False, ProjectMapping(), False, [], 1)
     diag = ImportDiagnostic()
@@ -292,3 +340,83 @@ def test_validate_line_skips_unmapped_columns():
     assert "unmapped_col" not in diag.cols_seen
     assert "unmapped_col" not in seen_vals
     assert "object_lat" in diag.cols_seen
+
+
+def test_lru_cache_basic_operations():
+    """Verify that LRUCache respects capacity and evicts oldest items in LRU order."""
+    s = LRUCache(capacity=3)
+    assert isinstance(s, dict)
+    assert isinstance(s, OrderedDict)
+    assert len(s) == 0
+
+    s.set("a")
+    s.set("b")
+    s.set("c")
+    assert len(s) == 3
+    assert set(s.keys()) == {"a", "b", "c"}
+    assert list(s.keys()) == ["a", "b", "c"]
+
+    # Re-setting an existing key ("a") moves it to the end (most recently used)
+    s.set("a")
+    assert len(s) == 3
+    assert list(s.keys()) == ["b", "c", "a"]
+
+    # Adding a 4th distinct item evicts oldest ('b')
+    s.set("d")
+    assert len(s) == 3
+    assert "b" not in s
+    assert list(s.keys()) == ["c", "a", "d"]
+
+    # Accessing 'c' via __getitem__ moves it to the end
+    _ = s["c"]
+    assert list(s.keys()) == ["a", "d", "c"]
+
+    # Adding a 5th item evicts 'a'
+    s.set("e")
+    assert len(s) == 3
+    assert "a" not in s
+    assert list(s.keys()) == ["d", "c", "e"]
+
+    # Test dict-like key-value caching behavior
+    cache = LRUCache(capacity=2)
+    cache["k1"] = 100
+    cache["k2"] = 200
+    assert cache["k1"] == 100  # moves k1 to end: [k2, k1]
+    cache["k3"] = 300  # evicts k2
+    assert "k2" not in cache
+    assert cache["k1"] == 100
+    assert cache["k3"] == 300
+
+    # Clear
+    cache.clear()
+    assert len(cache) == 0
+
+
+def test_validate_line_with_lru_cache_seen_vals():
+    """Verify that seen_vals in validate_line uses LRUCache and stays bounded in size."""
+    headers = ["object_id", "img_file_name", "object_lat"]
+    tsv = _create_tsv_file_instance(headers)
+
+    how = ImportHow(1, False, ProjectMapping(), False, [], 1)
+    diag = ImportDiagnostic()
+    seen_vals = {}
+
+    # Initialize with custom capacity of 3 for testing bounded eviction in validate_line
+    seen_vals["object_lat"] = LRUCache(capacity=3)
+
+    for i in range(5):
+        lig = {
+            "object_id": f"obj{i}",
+            "img_file_name": f"{i}.png",
+            "object_lat": f"43.{i}",
+        }
+        tsv.validate_line(how, diag, lig, i + 1, seen_vals)
+
+    lat_seen = seen_vals["object_lat"]
+    assert isinstance(lat_seen, LRUCache)
+    assert len(lat_seen) == 3
+    assert "43.0" not in lat_seen
+    assert "43.1" not in lat_seen
+    assert "43.2" in lat_seen
+    assert "43.3" in lat_seen
+    assert "43.4" in lat_seen

@@ -9,10 +9,18 @@
 #      ../../DwCA/gbif-data-validator/validator-ws/run-prod coll_6512_export.zip
 # EMODnet QC source code:
 #      https://github.com/EMODnet/EMODnetBiocheck
-import BO.ProjectVarsDefault as DefaultVars
 import datetime
 import json
 import re
+from collections import OrderedDict
+from functools import lru_cache
+from typing import Dict, List, Optional, Tuple, cast, Set, Any, Iterable
+from urllib.parse import quote_plus
+
+from fastapi import HTTPException
+from sqlalchemy import bindparam
+
+import BO.ProjectVarsDefault as DefaultVars
 from API_models.exports import ExportRsp, SciExportTypeEnum
 from BO.Classification import ClassifIDT, ClassifIDListT, ClassifIDSetT
 from BO.Collection import (
@@ -48,9 +56,7 @@ from DB.User import Organization, User, UserIDT
 from DB.helpers import Session
 from DB.helpers.Direct import text
 from DB.helpers.Postgres import timestamp_to_str
-from collections import OrderedDict
 from data.Countries import countries_by_name
-from fastapi import HTTPException
 from formats.DarwinCore.Archive import DwC_Archive, DwcArchive
 from formats.DarwinCore.DatasetMeta import DatasetMetadata
 from formats.DarwinCore.MoF import (
@@ -80,16 +86,11 @@ from formats.DarwinCore.models import (
     EMLIdentifier,
     EMLAssociatedPerson,
 )
-from functools import lru_cache
 from helpers.CustomException import ValidationException
 from helpers.DateTime import now_time
 from helpers.DynamicLogs import get_logger, LogsSwitcher
 from helpers.httpexception import DETAIL_ONE_OR_MORE_PRIVATE, DETAIL_EXPORT_PREVENTED
 from providers.NERC import NERCFetcher
-from sqlalchemy import bindparam
-from typing import Dict, List, Optional, Tuple, cast, Set, Any, Iterable
-from urllib.parse import quote_plus
-
 from ..helpers.JobService import JobServiceBase, ArgsDict
 
 logger = get_logger(__name__)
@@ -965,7 +966,7 @@ class DarwinCoreExport(JobServiceBase):
         sample_count = res.one()[0]
         return sample_count
 
-    @lru_cache(maxsize=None)
+    @lru_cache(maxsize=50)
     def _get_instrument_url_and_label(
         self, project: Project
     ) -> Optional[Tuple[str, str]]:

@@ -67,6 +67,29 @@ logger = get_logger(__name__)
 ABSORBED_DIFF_CLASSIF_WHEN = datetime.timedelta(seconds=1)
 
 
+class LRUCache(OrderedDict):
+    def __init__(self, capacity: int = 1000, *args, **kwargs):
+        self.capacity = capacity
+        super().__init__(*args, **kwargs)
+
+    def __getitem__(self, key: Any) -> Any:
+        value = super().__getitem__(key)
+        self.move_to_end(key)
+        return value
+
+    def __setitem__(self, key: Any, value: Any) -> None:
+        if key in self:
+            self.move_to_end(key)
+        super().__setitem__(key, value)
+
+        if len(self) > self.capacity:
+            oldest_key = next(iter(self))
+            del self[oldest_key]
+
+    def set(self, key) -> None:
+        self[key] = 1
+
+
 class TSVFile(object):
     """
     A tab-separated file, index of images with additional information about them.
@@ -768,7 +791,9 @@ class TSVFile(object):
                     cached_field_value = csv_val
                 # Cache if relevant
                 if can_cache:
-                    vals_cache.setdefault(a_field, {})[raw_val] = cached_field_value
+                    vals_cache.setdefault(a_field, LRUCache())[
+                        raw_val
+                    ] = cached_field_value
 
             # Write the field into the right object
             dict_to_write = dicts_to_write[db_table]
@@ -1055,7 +1080,7 @@ class TSVFile(object):
         self, how: ImportHow, diag: ImportDiagnostic, mapping_per_field: Dict[str, Dict]
     ):
         row_count_for_csv = 0
-        seen_vals: Dict[str, Set[Optional[str]]] = {}
+        seen_vals: Dict[str, LRUCache] = {}
         local_keys: Dict[str, int] = {}
         logged_parents: Set[Tuple[Any, Any]] = set()
         lig: Dict
@@ -1168,7 +1193,7 @@ class TSVFile(object):
         diag: ImportDiagnostic,
         lig: Dict[Optional[str], str],
         line_num: int,
-        seen_vals: Dict[str, Set[Optional[str]]],
+        seen_vals: Dict[str, LRUCache],
         mapping_per_field: Optional[Dict[str, Dict]] = None,
     ):
         """
@@ -1200,7 +1225,7 @@ class TSVFile(object):
             # Try to get the value from the cache
             field_seen = seen_vals.get(raw_field)
             if field_seen is not None and raw_val in field_seen:
-                if a_field == "object_lat":
+                if a_field == "object_lat":  # TODO: Useful?
                     latitude_was_seen = True
                 continue
             is_numeric = m["type"] == "n"
@@ -1222,7 +1247,7 @@ class TSVFile(object):
                     )
                 else:
                     latitude_was_seen = True
-                    seen_vals.setdefault(raw_field, set()).add(raw_val)
+                    seen_vals.setdefault(raw_field, LRUCache()).set(raw_val)
             elif a_field == "object_lon":
                 vf = convert_degree_minute_float_to_decimal_degree(csv_val)
                 if vf is None or vf < -180 or vf > 180:
@@ -1232,7 +1257,7 @@ class TSVFile(object):
                         self.user_loc,
                     )
                 else:
-                    seen_vals.setdefault(raw_field, set()).add(raw_val)
+                    seen_vals.setdefault(raw_field, LRUCache()).set(raw_val)
             elif is_numeric:
                 vf = to_float(csv_val)
                 if vf is None:
@@ -1244,11 +1269,11 @@ class TSVFile(object):
                 else:
                     if a_field == "object_annotation_category_id":
                         diag.classif_id_seen.add(int(vf))
-                    seen_vals.setdefault(raw_field, set()).add(raw_val)
+                    seen_vals.setdefault(raw_field, LRUCache()).set(raw_val)
             elif a_field in ("object_date", "object_annotation_date"):
                 try:
                     ObjectHeader.date_from_txt(csv_val)
-                    seen_vals.setdefault(raw_field, set()).add(raw_val)
+                    seen_vals.setdefault(raw_field, LRUCache()).set(raw_val)
                 except ValueError:
                     diag.error(
                         "line %d: Invalid Date value '%s' for field '%s'."
@@ -1258,7 +1283,7 @@ class TSVFile(object):
             elif a_field in ("object_time", "object_annotation_time"):
                 try:
                     ObjectHeader.time_from_txt(csv_val)
-                    seen_vals.setdefault(raw_field, set()).add(raw_val)
+                    seen_vals.setdefault(raw_field, LRUCache()).set(raw_val)
                 except ValueError:
                     diag.error(
                         "line %d: Invalid Time value '%s' for field '%s'."
@@ -1292,9 +1317,9 @@ class TSVFile(object):
                         self.user_loc,
                     )
                 else:
-                    seen_vals.setdefault(raw_field, set()).add(raw_val)
+                    seen_vals.setdefault(raw_field, LRUCache()).set(raw_val)
             else:
-                seen_vals.setdefault(raw_field, set()).add(raw_val)
+                seen_vals.setdefault(raw_field, LRUCache()).set(raw_val)
         # Update missing GPS count
         if not latitude_was_seen:
             diag.nb_objects_without_gps += 1
