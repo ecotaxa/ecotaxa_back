@@ -392,3 +392,14 @@ def _log_exception_throw(e: Exception, context: Optional[str] = None):
         code = 500
     logger.error(str(code) + " " + message + " " + str(context))
     raise
+
+
+def get_tus_files_dir() -> str:
+    """
+    Get the directory where uploaded files (via TUS) are stored.
+    Use a subfolder of the users files area.
+    """
+    base_dir = Config().get_users_files_dir()
+    tus_dir = Path(base_dir, "tus_uploads")
+    tus_dir.mkdir(parents=True, exist_ok=True)
+    return str(tus_dir)

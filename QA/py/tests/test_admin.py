@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 
 from API_operations.helpers.Service import Service
+from FS.UserFilesDir import get_tus_files_dir
 from helpers.AppConfig import Config
 from sqlalchemy import text
 from starlette import status
@@ -112,6 +113,16 @@ def create_fake_users_directories(monkeypatch):
     recent_trash_file.write_text("recent trashed file")
     os.utime(recent_trash_file, (recent_trash_time, recent_trash_time))
 
+    # 6. TUS uploads directory (old should be removed, recent should NOT be removed)
+    tus_dir = Path(get_tus_files_dir())
+    old_tus_file = tus_dir / "old_tus_upload.tmp"
+    old_tus_file.write_text("old tus file")
+    os.utime(old_tus_file, (old_time, old_time))
+
+    recent_tus_file = tus_dir / "recent_tus_upload.tmp"
+    recent_tus_file.write_text("recent tus file")
+    os.utime(recent_tus_file, (recent_time, recent_time))
+
     return {
         "users_files_dir": users_files_dir,
         "user_dir": user_dir,
@@ -122,6 +133,8 @@ def create_fake_users_directories(monkeypatch):
         "recent_in_mixed": recent_in_mixed,
         "recent_dir": recent_dir,
         "recent_trash_file": recent_trash_file,
+        "old_tus_file": old_tus_file,
+        "recent_tus_file": recent_tus_file,
     }
 
 
@@ -140,6 +153,8 @@ def test_nightly_job(fastapi, caplog, tstlogs, mock_taxoserver, monkeypatch):
     recent_in_mixed = fake_dirs["recent_in_mixed"]
     recent_dir = fake_dirs["recent_dir"]
     recent_trash_file = fake_dirs["recent_trash_file"]
+    old_tus_file = fake_dirs["old_tus_file"]
+    recent_tus_file = fake_dirs["recent_tus_file"]
 
     # Generate a few jobs however, and warp them back in time
     test_export_roundtrip(fastapi, tstlogs)  # Import/Export/Import
@@ -166,11 +181,13 @@ def test_nightly_job(fastapi, caplog, tstlogs, mock_taxoserver, monkeypatch):
     assert not old_dir.exists()
     assert not old_trash_subdir.exists()
     assert not old_trash_file.exists()
+    assert not old_tus_file.exists()
     assert mixed_dir.exists()
     assert recent_in_mixed.exists()
     assert recent_dir.exists()
     assert (recent_dir / "recent_file.txt").exists()
     assert recent_trash_file.exists()
+    assert recent_tus_file.exists()
 
     maintenance_log_file = (
         users_files_dir
@@ -181,6 +198,7 @@ def test_nightly_job(fastapi, caplog, tstlogs, mock_taxoserver, monkeypatch):
     assert "old_folder" in maintenance_log_content
     assert "old_trash_sub" in maintenance_log_content
     assert "old_trash_file.txt" in maintenance_log_content
+    assert "old_tus_upload.tmp" in maintenance_log_content
 
     # Second cleanup must do nothing
     log = do_nightly(fastapi)
@@ -191,7 +209,9 @@ def test_nightly_job(fastapi, caplog, tstlogs, mock_taxoserver, monkeypatch):
     assert not old_dir.exists()
     assert not old_trash_subdir.exists()
     assert not old_trash_file.exists()
+    assert not old_tus_file.exists()
     assert mixed_dir.exists()
     assert recent_in_mixed.exists()
     assert recent_dir.exists()
     assert recent_trash_file.exists()
+    assert recent_tus_file.exists()

@@ -34,7 +34,7 @@ from DB.helpers import Result
 from DB.helpers import Session
 from DB.helpers.Direct import text
 from FS.TempDirForTasks import TempDirForTasks
-from FS.UserFilesDir import UserFilesDirectory
+from FS.UserFilesDir import UserFilesDirectory, get_tus_files_dir
 from helpers.DynamicLogs import get_logger, LogsSwitcher
 
 logger = get_logger(__name__)
@@ -486,6 +486,12 @@ class NightlyJobService(JobServiceBase):
             item = Path(entry)
             tf = int(os.path.getctime(item))
             if tf < trashtime:
+                self._delete_definitely(loggerfilename, item, tf, users_files_dir)
+        # remove old files in TUS uploads directory
+        for entry in glob(get_tus_files_dir() + os.path.sep + "*"):
+            item = Path(entry)
+            tf = int(os.path.getctime(item))
+            if tf < old:
                 self._delete_definitely(loggerfilename, item, tf, users_files_dir)
         # bottom to top scandir
         for entry in glob(users_files_dir + os.path.sep + userdirpattern + "*"):

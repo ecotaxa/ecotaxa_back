@@ -14,7 +14,7 @@ from tuspyserver.file import _validate_uid_within_dir
 from tuspyserver.lock import acquire_upload_lock
 from tuspyserver.storage.local import LocalFileStorage
 
-from FS.UserFilesDir import UserFilesDirectory
+from FS.UserFilesDir import UserFilesDirectory, get_tus_files_dir
 from helpers.AppConfig import Config
 from helpers.DynamicLogs import get_logger
 from helpers.fastApiUtils import get_current_user
@@ -25,17 +25,6 @@ TUS_PREFIX = "/user_files/upload"
 logger = get_logger(__name__)
 
 background_tasks: Set[asyncio.Task[Any]] = set()
-
-
-def get_tus_files_dir() -> str:
-    """
-    Get the directory where big files are stored.
-    Use a subfolder of the users files area.
-    """
-    base_dir = Config().get_users_files_dir()
-    tus_dir = Path(base_dir, "tus_uploads")
-    tus_dir.mkdir(parents=True, exist_ok=True)
-    return str(tus_dir)
 
 
 async def tus_auth(
@@ -64,14 +53,6 @@ async def _background_unpack(
             "Error unpacking %s in background: %s", file_path, str(e), exc_info=True
         )
         raise
-    finally:
-        # Always release the TUS upload.
-        try:
-            os.unlink(orig_path)
-        except FileNotFoundError:
-            pass
-        except OSError as e:
-            logger.warning("Could not remove uploaded file %s: %s", orig_path, e)
 
 
 async def on_tus_upload_complete(
@@ -184,7 +165,6 @@ async def get_on_complete_handler(
     Dependency that returns the completion handler with the current user id.
     """
     current_user_id = getattr(request.state, "current_user_id", None)
-    logger.info("get_on_complete_handler: current_user_id=%s", current_user_id)
     if current_user_id is None:
         # This should not happen if tus_auth was called
         logger.error(
