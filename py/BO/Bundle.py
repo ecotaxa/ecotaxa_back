@@ -51,16 +51,26 @@ class InBundle(object):
         self.user_loc = user_loc
         # Compute the files we have to process.
         self.possible_files: List[Path] = []
+        # File names are matched case-insensitively, e.g. ecotaxa_x.TSV or b_Images.ZIP
         for a_filter in self.TSV_FILTERS:
-            for a_file in self.path.glob(a_filter):
+            for a_file in self.path.glob(a_filter, case_sensitive=False):
                 self.possible_files.append(a_file)
         self.possible_files.sort()
-        bundles = list(self.path.glob(self.UVP6_FILTER))
-        for bundle_dir in self.path.glob(self.UVP6_DIRS_FILTER):
+        bundles = list(self.path.glob(self.UVP6_FILTER, case_sensitive=False))
+        for bundle_dir in self.path.glob(self.UVP6_DIRS_FILTER, case_sensitive=False):
             if not bundle_dir.is_dir():
                 continue
-            tsv_file = bundle_dir / ("ecotaxa_" + bundle_dir.name[:-7] + ".tsv")
-            if not tsv_file.exists():
+            expected_tsv = ("ecotaxa_" + bundle_dir.name[:-7] + ".tsv").lower()
+            tsv_file = next(
+                (
+                    a_file
+                    for a_file in self.possible_files
+                    if a_file.parent == bundle_dir
+                    and a_file.name.lower() == expected_tsv
+                ),
+                None,
+            )
+            if tsv_file is None:
                 continue
             self.possible_files.remove(tsv_file)
             bundles.append(bundle_dir)
@@ -348,7 +358,7 @@ class InBundle(object):
         """
         ret: List[Path] = []
         for a_filter in self.IMAGE_FILTERS:
-            ret.extend(self.path.glob(a_filter))
+            ret.extend(self.path.glob(a_filter, case_sensitive=False))
         # Images are duplicated in a hidden folder for .zips coming from OsX
         ret = [
             a_file.relative_to(self.path)
@@ -383,10 +393,12 @@ class UVP6Bundle(InBundle):
         # might be write-protected
         sample_dir = temp_dir / name_no_zip
         tsv_file = "ecotaxa_" + sample_id + ".tsv"
-        sample_tsv = sample_dir / tsv_file
         if sample_dir.exists():
             # Target directory exists, e.g. from step1 if we're in step2
-            if not sample_tsv.exists():  # pragma: no cover
+            if not any(
+                a_file.name.lower() == tsv_file.lower()
+                for a_file in sample_dir.iterdir()
+            ):  # pragma: no cover
                 # There was an incorrect unzipping before, as we miss the main TSV
                 shutil.rmtree(sample_dir.as_posix())
         if not sample_dir.exists():

@@ -371,3 +371,36 @@ def test_corrupt_archive_kinds(tmp_path, name, content, cause):
     assert exc.value.message.startswith(DETAIL_CORRUPT_ARCHIVE)
     assert isinstance(exc.value.__cause__, cause)
     _nothing_left(parent)
+
+
+#
+# Extensions are compared case-insensitively
+#
+def test_uppercase_extensions_in_archive(tmp_path):
+    root, parent = _setup(tmp_path)
+    inner = zip_bytes({"x.tsv": TSV})
+    archive = _upload(
+        parent,
+        "name.zip",
+        zip_bytes(
+            {"DATA.TSV": TSV, "b.Csv": TSV, "c.TXT": TSV, "IMG.PNG": PNG_1X1, "INNER.ZIP": inner}
+        ),
+    )
+    make_user_dir(root).dispatch_unpack(archive, parent)
+    assert tree(parent) == [
+        "name/",
+        "name/DATA.TSV",
+        "name/IMG.PNG",
+        "name/INNER/",
+        "name/INNER/x.tsv",
+        "name/b.Csv",
+        "name/c.TXT",
+    ]
+
+
+@pytest.mark.parametrize("name", ["TOP.TSV", "top.Txt", "Top.CSV"])
+def test_uppercase_plain_upload_kept(tmp_path, name):
+    root, parent = _setup(tmp_path)
+    upload = _upload(parent, name, TSV)
+    make_user_dir(root).dispatch_unpack(upload, parent)
+    assert tree(parent) == [name]

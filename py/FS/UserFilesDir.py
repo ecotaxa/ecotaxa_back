@@ -60,7 +60,9 @@ class UserFilesDirectory(object):
         config = Config()
         users_files_dir = config.get_users_files_dir()
         self.accepted_mime_types: List[str] = config.get_accepted_mime_types()
-        self.archive_extensions: List[str] = config.get_archive_extensions()
+        self.archive_extensions: List[str] = [
+            an_ext.lower() for an_ext in config.get_archive_extensions()
+        ]
         self.user_id = user_id
         self.list_errors: Dict[str, str] = {}
         self._root_path = Path(users_files_dir, self.USER_DIR_PATTERN % self.user_id)
@@ -273,7 +275,8 @@ class UserFilesDirectory(object):
 
     @staticmethod
     def _get_file_info(filename: str, path: Path) -> Tuple[str, Path, Optional[str]]:
-        file_ext = filename.split(".")[-1]
+        # Lowercase, extensions are compared case-insensitively
+        file_ext = filename.split(".")[-1].lower()
         parts = filename.split(os.path.sep)
         filepath = path.joinpath(str(Path(parts[0])), os.path.sep.join(parts[1:]))
         try:
@@ -302,7 +305,7 @@ class UserFilesDirectory(object):
         if mime_type in self.accepted_mime_types:
             return True
         # Same extension fallback as for archive members
-        if filepath.split(".")[-1] in TEXT_EXTENSIONS:
+        if filepath.split(".")[-1].lower() in TEXT_EXTENSIONS:
             return True
         logger.info(
             "File format not accepted '%s' '%s' , user_id '%s'",
