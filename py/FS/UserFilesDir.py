@@ -429,7 +429,8 @@ class UserFilesDirectory(object):
     def _one_level_deeper(self) -> Generator[None, None, None]:
         self._unpack_depth += 1
         try:
-            if self._unpack_depth > self.max_unpack_depth:
+            # A 0 limit means no check
+            if 0 < self.max_unpack_depth < self._unpack_depth:
                 raise UnprocessableEntityException(
                     "%s (max. %d levels)" % (DETAIL_UNPACK_TOO_DEEP, self.max_unpack_depth)
                 )

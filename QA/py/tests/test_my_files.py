@@ -460,15 +460,26 @@ def test_upload_unpack_limits(fastapi, tmp_path, monkeypatch):
 
 
 def test_config_zero_unpack_limits(monkeypatch):
-    """MAX_UNPACKED_SIZE / MAX_UNPACK_ENTRIES at 0 are valid, and mean no limit."""
+    """Unpack limits are 0, i.e. no limit, when absent, and 0 is a valid value."""
     from helpers.AppConfig import Config
 
     conf = Config()
+    # Absent from config.ini: 0, no limit
+    for a_key in ("MAX_UNPACKED_SIZE", "MAX_UNPACK_ENTRIES", "MAX_UNPACK_DEPTH"):
+        monkeypatch.delenv(a_key, raising=False)
+    monkeypatch.setattr(conf.parser, "get", lambda key, default=None: default)
+    assert conf.get_max_unpacked_size() == 0
+    assert conf.get_max_unpack_entries() == 0
+    assert conf.get_max_unpack_depth() == 0
     # Environment overrides config.ini
     monkeypatch.setenv("MAX_UNPACKED_SIZE", "0")
     monkeypatch.setenv("MAX_UNPACK_ENTRIES", "0")
+    monkeypatch.setenv("MAX_UNPACK_DEPTH", "0")
     assert conf.get_max_unpacked_size() == 0
     assert conf.get_max_unpack_entries() == 0
+    assert conf.get_max_unpack_depth() == 0
+    monkeypatch.setenv("MAX_UNPACK_DEPTH", "3")
+    assert conf.get_max_unpack_depth() == 3
 
 
 def test_config_unpack_min_free_disk(monkeypatch):
@@ -478,7 +489,7 @@ def test_config_unpack_min_free_disk(monkeypatch):
     conf = Config()
     monkeypatch.delenv("UNPACK_MIN_FREE_DISK", raising=False)
     monkeypatch.setattr(conf.parser, "get", lambda key, default=None: default)
-    assert conf.get_unpack_min_free_disk() == (0.1, None)  # Default
+    assert conf.get_unpack_min_free_disk() == (None, 0)  # Default: no check
     for val, expected in (
         ("5%", (0.05, None)),
         ("0%", (0.0, None)),

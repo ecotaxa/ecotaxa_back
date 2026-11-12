@@ -169,18 +169,19 @@ class Config(object):
     def get_max_upload_size(self) -> int:
         return int(self._get("MAX_UPLOAD_SIZE", "665600"))
 
+    # The unpack limits below are all off (0) when absent from config.ini
+
     def get_max_unpacked_size(self) -> int:
         """Max total size (bytes) of an upload once unpacked, nested archives included. 0: no limit."""
-        default = 10 * self.get_max_upload_size()
-        return int(self._get("MAX_UNPACKED_SIZE", str(default)) or default)
+        return int(self._get("MAX_UNPACKED_SIZE", "0") or 0)
 
     def get_max_unpack_depth(self) -> int:
-        """Max nesting level of archives in an upload, the uploaded archive being 1."""
-        return int(self._get("MAX_UNPACK_DEPTH", "5") or 5)
+        """Max nesting level of archives in an upload, the uploaded archive being 1. 0: no limit."""
+        return int(self._get("MAX_UNPACK_DEPTH", "0") or 0)
 
     def get_max_unpack_entries(self) -> int:
         """Max number of entries in an upload once unpacked, nested archives included. 0: no limit."""
-        return int(self._get("MAX_UNPACK_ENTRIES", "1000000") or 1000000)
+        return int(self._get("MAX_UNPACK_ENTRIES", "0") or 0)
 
     def get_unpack_min_free_disk(self) -> Tuple[Optional[float], Optional[int]]:
         """
@@ -188,7 +189,7 @@ class Config(object):
         returned as (ratio, None), or a number of bytes, returned as (None, bytes).
         0 or 0%: no check of free disk space.
         """
-        val = (self._get("UNPACK_MIN_FREE_DISK", "10%") or "10%").strip()
+        val = (self._get("UNPACK_MIN_FREE_DISK", "0") or "0").strip()
         if val.endswith("%"):
             percent = float(val[:-1])
             assert 0 <= percent < 100, "UNPACK_MIN_FREE_DISK percentage must be in [0, 100["
@@ -318,7 +319,7 @@ class Config(object):
         self.get_max_captcha_token_length()
         self.get_max_upload_size()
         assert self.get_max_unpacked_size() >= 0, "MAX_UNPACKED_SIZE must be >= 0"
-        assert self.get_max_unpack_depth() > 0, "MAX_UNPACK_DEPTH must be > 0"
+        assert self.get_max_unpack_depth() >= 0, "MAX_UNPACK_DEPTH must be >= 0"
         assert self.get_max_unpack_entries() >= 0, "MAX_UNPACK_ENTRIES must be >= 0"
         self.get_unpack_min_free_disk()
         self.get_taxoserver_url()

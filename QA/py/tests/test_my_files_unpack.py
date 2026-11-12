@@ -750,3 +750,10 @@ def test_wrapped_tar_with_dir_entries(tmp_path):
         tar.addfile(info, io.BytesIO(TSV))
     make_user_dir(root).dispatch_unpack(archive, parent)
     assert tree(parent) == ["name/", "name/a.tsv"]
+
+
+def test_zero_depth_means_no_check(tmp_path):
+    root, parent = _setup(tmp_path)
+    archive = _upload(parent, "name.zip", _nested_zips(8))
+    _limited(root, max_unpack_depth=0).dispatch_unpack(archive, parent)
+    assert "name/in/in/in/in/in/in/in/x.tsv" in tree(parent)
