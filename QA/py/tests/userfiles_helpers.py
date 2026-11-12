@@ -27,12 +27,7 @@ def make_user_dir(root: Path) -> UserFilesDirectory:
     ret._root_path = root
     ret.trash_directory = UserFilesDirectory.TRASH_DIRECTORY % 1
     ret.compressed_origin = None
-    if hasattr(UserFilesDirectory, "_mark_in_progress"):
-        # Code before staging
-        ret.mark_progress = lambda compressed_path: compressed_path
-        ret.unmark_progress = lambda to_path: None
-    else:
-        ret.report_to_file = False
+    ret.report_to_file = False
     return ret
 
 

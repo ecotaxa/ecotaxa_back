@@ -2,6 +2,7 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2021  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+import datetime
 import gzip
 import os
 import shutil
@@ -49,16 +50,13 @@ class UserFilesDirectory(object):
         self._root_path = Path(users_files_dir, self.USER_DIR_PATTERN % self.user_id)
         self.trash_directory = self.TRASH_DIRECTORY % self.user_id
         self.compressed_origin: Optional[Path] = None
-        self.mark_progress = lambda compressed_path: compressed_path
-        self.unmark_progress = lambda to_path: None
+        # When set, an unpack failure is reported in a file next to the archive
+        self.report_to_file = False
 
-    def switch_to_progress_marking(self):
-        """Future unpacking operations are considered potentially long
-        so give feedback to users in the file names"""
-        self.mark_progress = lambda compressed_path: self._mark_in_progress(
-            compressed_path
-        )
-        self.unmark_progress = lambda to_path: self._unmark_directories(to_path)
+    def switch_to_background(self):
+        """Future unpacking operations run in background, nobody gets their exceptions,
+        so report failures to the user in an error file."""
+        self.report_to_file = True
 
     async def add_file(self, name: str, path: Optional[str], stream: UploadFile) -> str:
         """
@@ -193,7 +191,7 @@ class UserFilesDirectory(object):
         and filtering out unaccepted file formats.
 
         :param archive: An open ZipFile or TarFile archive instance.
-        :param filepath: Full path of the archive file (may contain progress prefixes).
+        :param filepath: Full path of the archive file.
         :param path: Target directory Path where archive contents are to be extracted.
         :return: Relative subfolder path derived from the archive file name.
         """
@@ -211,9 +209,8 @@ class UserFilesDirectory(object):
 
         # If archive entries are not already encapsulated in a root folder
         # matching sub_path (and not temporary), create and extract into that subfolder
-        sub_path = sub_path[1:] if sub_path.startswith(PROGRESS_PREFIX) else sub_path
         if sub_path == "temp/":
-            pass  # Zipfile sent by client and its derivative starting with PROGRESS_PREFIX
+            pass  # Zipfile sent by client
         elif filenames[0][0 : len(sub_path)] != sub_path:
             path = path.joinpath(
                 sub_path[:-1]
@@ -247,7 +244,7 @@ class UserFilesDirectory(object):
                     and not compressed_path.is_dir()
                     and not self._is_trash_dir(str(path))
                 ):
-                    self.dispatch_unpack(compressed_path, path)
+                    self._dispatch_nested(compressed_path, path)
             # Accept text/tabular data files based on extension fallback
             elif file_ext in more_mime.keys():
                 extracted.append(filename)
@@ -325,7 +322,7 @@ class UserFilesDirectory(object):
                 decompressed_path, "wb"
             ) as f_out:
                 shutil.copyfileobj(f_in, f_out)
-            self.dispatch_unpack(path / decompressed_path.name, path)
+            self._dispatch_nested(path / decompressed_path.name, path)
         except Exception as e:
             if decompressed_path.exists():
                 decompressed_path.unlink()
@@ -334,32 +331,77 @@ class UserFilesDirectory(object):
             input_path.unlink(missing_ok=True)
 
     @staticmethod
-    def _mark_in_progress(path: Path) -> Path:
-        """Rename the file being extracted so that the user has feedback
-        on the extraction in progress"""
-        in_progress_path = path.parent / f"{PROGRESS_PREFIX}{path.name}"
-        path.rename(in_progress_path)
-        return in_progress_path
+    def _new_staging_dir(parent: Path, archive: Path) -> Path:
+        """
+        Create a new, private, staging directory for unpacking archive into parent.
+        Its name starts with PROGRESS_PREFIX so that the user sees the extraction in progress.
+        """
+        name = archive.name
+        stem = name.rsplit(".", 1)[0] if "." in name else name
+        base = PROGRESS_PREFIX + stem
+        num = 1
+        while True:
+            candidate = parent / (base if num == 1 else "%s-%d" % (base, num))
+            try:
+                candidate.mkdir()
+                return candidate
+            except FileExistsError:
+                num += 1
 
-    @staticmethod
-    def _unmark_directories(path: Path) -> None:
+    @classmethod
+    def _publish(cls, staging: Path, parent: Path) -> None:
         """
-        Remove PROGRESS_PREFIX from any directory or subdir starting with it.
+        Move the content of the staging directory into parent, merging into existing directories.
         """
-        path = Path(path)
-        if not path.exists() or not path.is_dir():
+        for an_entry in list(staging.iterdir()):
+            cls._move_merging(an_entry, parent / an_entry.name)
+        staging.rmdir()
+
+    @classmethod
+    def _move_merging(cls, src: Path, dst: Path) -> None:
+        src_is_dir = src.is_dir() and not src.is_symlink()
+        dst_is_dir = dst.is_dir() and not dst.is_symlink()
+        if not dst.exists() and not dst.is_symlink():
+            src.rename(dst)
+        elif src_is_dir and dst_is_dir:
+            for a_child in list(src.iterdir()):
+                cls._move_merging(a_child, dst / a_child.name)
+            src.rmdir()
+        elif not src_is_dir and not dst_is_dir:
+            # File (or link) over file (or link): replace, as extractall does
+            src.replace(dst)
+        else:
+            logger.error("Cannot publish %s over %s, not the same kind", src, dst)
+            raise UnprocessableEntityException(DETAIL_NOTHING_DONE)
+
+    ERROR_FILE_SUFFIX = ".unpack_error.txt"
+
+    @classmethod
+    def _error_file(cls, parent: Path, archive_name: str) -> Path:
+        return parent / (archive_name + cls.ERROR_FILE_SUFFIX)
+
+    def _report_failure(self, parent: Path, archive_name: str, e: Exception) -> None:
+        """
+        If in background, leave a file telling the user why the archive produced nothing.
+        Never raises.
+        """
+        if not self.report_to_file:
             return
-
-        for root, dirs, _ in os.walk(path, topdown=False):
-            for d in dirs:
-                if d.startswith(PROGRESS_PREFIX):
-                    old_path = Path(root) / d
-                    new_path = Path(root) / d.removeprefix(PROGRESS_PREFIX)
-                    old_path.rename(new_path)
-
-        if path.name.startswith(PROGRESS_PREFIX):
-            new_path = path.parent / path.name.removeprefix(PROGRESS_PREFIX)
-            path.rename(new_path)
+        try:
+            message = str(e) if str(e) else repr(e)
+            # No server path in the message
+            for a_root in (str(self._root_path.absolute()), str(self._root_path)):
+                message = message.replace(a_root, "")
+            when = datetime.datetime.now(datetime.timezone.utc).strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
+            content = (
+                "Extraction of '%s' failed at %s UTC, nothing was kept from it.\n"
+                "[%s] %s\n" % (archive_name, when, e.__class__.__name__, message)
+            )
+            self._error_file(parent, archive_name).write_text(content)
+        except Exception as e2:
+            logger.error("Could not report unpack failure of %s: %s", archive_name, e2)
 
     @staticmethod
     def is_compressed(path: Path) -> bool:
@@ -370,16 +412,44 @@ class UserFilesDirectory(object):
             or UserFilesDirectory._is_gz(posix_path)
         )
 
-    def dispatch_unpack(self, compressed_path: Path, to_path: Path):
+    def dispatch_unpack(self, compressed_path: Path, to_path: Path) -> None:
+        """
+        Top-level unpacking of compressed_path, an uploaded file, into to_path.
+        All or nothing for an archive: it is extracted, recursively, into a private
+        staging directory, which content is moved into to_path only on success.
+        On failure, the staging directory (archive and partial output) is removed.
+        """
+        if not self.is_compressed(compressed_path):
+            self._dispatch_nested(compressed_path, to_path)
+            return
+        archive_name = compressed_path.name
+        staging = self._new_staging_dir(to_path, compressed_path)
+        try:
+            try:
+                relative = compressed_path.relative_to(to_path)
+            except ValueError:
+                relative = Path(archive_name)
+            # Same relative position, so the same layout as without staging
+            staged_archive = staging / relative
+            staged_archive.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(compressed_path, staged_archive)
+            self._dispatch_nested(staged_archive, staging)
+            self._publish(staging, to_path)
+        except Exception as e:
+            shutil.rmtree(staging, ignore_errors=True)
+            compressed_path.unlink(missing_ok=True)
+            self._report_failure(to_path, archive_name, e)
+            raise
+        # A previous failure of the same archive is not relevant anymore
+        self._error_file(to_path, archive_name).unlink(missing_ok=True)
+
+    def _dispatch_nested(self, compressed_path: Path, to_path: Path) -> None:
         if zipfile.is_zipfile(compressed_path.as_posix()):
-            self.unpack_zip(self.mark_progress(compressed_path), to_path)
-            self.unmark_progress(to_path)
+            self.unpack_zip(compressed_path, to_path)
         elif tarfile.is_tarfile(compressed_path.as_posix()):
-            self.unpack_tar(self.mark_progress(compressed_path), to_path)
-            self.unmark_progress(to_path)
+            self.unpack_tar(compressed_path, to_path)
         elif self._is_gz(compressed_path.as_posix()):
-            self.unpack_gz(self.mark_progress(compressed_path), to_path)
-            self.unmark_progress(to_path)
+            self.unpack_gz(compressed_path, to_path)
         elif not self._has_accepted_format(to_path, str(compressed_path)):
             os.remove(compressed_path)
             self.list_errors.update({"Not accepted": str(compressed_path)})

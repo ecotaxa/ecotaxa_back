@@ -8,25 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from FS.UserFilesDir import UserFilesDirectory
-from helpers.AppConfig import Config
-
-
-def _user_dir(root: Path) -> UserFilesDirectory:
-    # No Config() / config.ini needed
-    ret = object.__new__(UserFilesDirectory)
-    ret.accepted_mime_types = [
-        m.strip() for m in Config.DEFAULT_MIMETYPES.split(",")
-    ]
-    ret.archive_extensions = [a.strip() for a in Config.DEFAULT_ARCHIVES.split(",")]
-    ret.user_id = 1
-    ret.list_errors = {}
-    ret._root_path = root
-    ret.trash_directory = UserFilesDirectory.TRASH_DIRECTORY % 1
-    ret.compressed_origin = None
-    ret.mark_progress = lambda compressed_path: compressed_path
-    ret.unmark_progress = lambda to_path: None
-    return ret
+from tests.userfiles_helpers import make_user_dir as _user_dir
 
 
 def _add_file(tar: tarfile.TarFile, name: str, content: bytes = b"a\tb\n") -> None:

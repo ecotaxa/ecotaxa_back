@@ -43,7 +43,7 @@ async def _background_unpack(
     user_dir: UserFilesDirectory, orig_path: Path, file_path: Path, dest_dir: Path
 ) -> None:
     try:
-        user_dir.switch_to_progress_marking()
+        user_dir.switch_to_background()
         await asyncio.to_thread(
             user_dir.dispatch_unpack, compressed_path=file_path, to_path=dest_dir
         )
