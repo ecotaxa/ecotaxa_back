@@ -681,3 +681,72 @@ def test_disk_space_zero_margin_no_check(tmp_path, monkeypatch):
         archive, parent
     )
     assert tree(parent) == ["name/", "name/a.tsv"]
+
+
+#
+# Target folder of an archive: its own name, next to it, all entries inside
+#
+def test_nested_wrapped_in_subfolder(tmp_path):
+    root, parent = _setup(tmp_path)
+    inner = zip_bytes({"inner/x.tsv": TSV})
+    archive = _upload(parent, "name.zip", zip_bytes({"a.tsv": TSV, "sub/inner.zip": inner}))
+    make_user_dir(root).dispatch_unpack(archive, parent)
+    assert tree(parent) == [
+        "name/",
+        "name/a.tsv",
+        "name/sub/",
+        "name/sub/inner/",
+        "name/sub/inner/x.tsv",
+    ]
+
+
+@pytest.mark.parametrize(
+    "members",
+    [
+        {"name/a.tsv": TSV, "other.tsv": TSV},
+        {"other.tsv": TSV, "name/a.tsv": TSV},
+    ],
+)
+def test_partly_wrapped_all_inside(tmp_path, members):
+    root, parent = _setup(tmp_path)
+    archive = _upload(parent, "name.zip", zip_bytes(members))
+    make_user_dir(root).dispatch_unpack(archive, parent)
+    # Same result whatever the order, nothing outside name/
+    assert tree(parent) == [
+        "name/",
+        "name/name/",
+        "name/name/a.tsv",
+        "name/other.tsv",
+    ]
+
+
+def test_macos_zip_stays_wrapped(tmp_path):
+    root, parent = _setup(tmp_path)
+    archive = _upload(
+        parent,
+        "name.zip",
+        zip_bytes({"name/a.tsv": TSV, "__MACOSX/name/._a.tsv": b"\x00\x05\x16\x07"}),
+    )
+    make_user_dir(root).dispatch_unpack(archive, parent)
+    # The macOS junk is not a reason to wrap again. It is extracted next to name/, as before.
+    assert tree(parent) == [
+        "__MACOSX/",
+        "__MACOSX/name/",
+        "__MACOSX/name/._a.tsv",
+        "name/",
+        "name/a.tsv",
+    ]
+
+
+def test_wrapped_tar_with_dir_entries(tmp_path):
+    root, parent = _setup(tmp_path)
+    archive = parent / "name.tar"
+    with tarfile.open(archive, "w") as tar:
+        a_dir = tarfile.TarInfo("name")
+        a_dir.type = tarfile.DIRTYPE
+        tar.addfile(a_dir)
+        info = tarfile.TarInfo("name/a.tsv")
+        info.size = len(TSV)
+        tar.addfile(info, io.BytesIO(TSV))
+    make_user_dir(root).dispatch_unpack(archive, parent)
+    assert tree(parent) == ["name/", "name/a.tsv"]

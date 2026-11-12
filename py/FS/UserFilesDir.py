@@ -248,20 +248,26 @@ class UserFilesDirectory(object):
         self._consume_unpack_budget(len(filenames), declared_size, path)
         extracted = []
 
-        # Derive the destination subfolder name from the archive filename
-        # by stripping the base directory prefix and file extension(s)
-        sub_path = filepath[len(str(path)) :]
-        sub_path = ".".join(sub_path[1:].split(".")[:-1]) + os.path.sep
-
-        # If archive entries are not already encapsulated in a root folder
-        # matching sub_path (and not temporary), create and extract into that subfolder
-        if sub_path == "temp/":
-            pass  # Zipfile sent by client
-        elif filenames[0][0 : len(sub_path)] != sub_path:
-            path = path.joinpath(
-                sub_path[:-1]
-            )  # A single directory with the same name. Extract into it.
-            # TODO: Buggy, there could be multiple directories, filenames[0] is inaccurate
+        # The archive's own name, without its (last) extension, e.g. "inner" for sub/inner.zip
+        archive_path = Path(filepath)
+        own_name = ".".join(archive_path.name.split(".")[:-1])
+        # macOS zips add __MACOSX/ entries, they don't tell if the content is wrapped
+        checked = [a_name for a_name in filenames if not a_name.startswith("__MACOSX/")]
+        # Extract next to the archive, into a folder with its name unless all entries
+        # are already in such a folder. So nothing goes outside that folder.
+        if own_name == "temp" and archive_path.parent == path:
+            pass  # Zipfile sent by client, its content goes directly into path
+        elif (
+            own_name != ""
+            and len(checked) > 0
+            and all(
+                a_name == own_name or a_name.startswith(own_name + "/")
+                for a_name in checked
+            )
+        ):
+            path = archive_path.parent  # Already wrapped
+        else:
+            path = archive_path.parent / own_name
 
         # Extract all files and directories into the target path
         if isinstance(archive, tarfile.TarFile):
