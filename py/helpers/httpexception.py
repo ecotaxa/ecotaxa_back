@@ -32,7 +32,8 @@ DETAIL_ONE_OR_MORE_PRIVATE = (
 DETAIL_EXPORT_PREVENTED = "Export operation prevented."
 DETAIL_EXCLUSIVE_CREATOR_ASSOCIATE = "A user cannot be in both the “creator” and “associate” categories at the same time."
 # unpack
-DETAIL_INVALID_ZIP_FILE = "zipfile is corrupt"
+DETAIL_CORRUPT_ARCHIVE = "Archive is corrupt"
+DETAIL_ARCHIVE_MEMBER_REFUSED = "Archive contains a refused entry"
 DETAIL_INVALID_LARGE_ZIP_FILE = "big zipfile not zip64 encoded"
 DETAIL_FILE_PROTECTED = "directory or file is protected"
 DETAIL_SSL_ERROR = "SSL ERROR"

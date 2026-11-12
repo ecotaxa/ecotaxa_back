@@ -97,6 +97,12 @@ import tarfile
 import pytest
 
 from FS.UserFilesDir import UserFilesDirectory, PROGRESS_PREFIX
+from helpers.CustomException import UnprocessableEntityException
+from helpers.httpexception import (
+    DETAIL_CORRUPT_ARCHIVE,
+    DETAIL_ARCHIVE_MEMBER_REFUSED,
+    DETAIL_NOTHING_DONE,
+)
 
 
 def _nothing_left(parent: Path):
@@ -112,8 +118,9 @@ def _corrupt_zip() -> bytes:
 def test_truncated_zip(tmp_path):
     root, parent = _setup(tmp_path)
     archive = _upload(parent, "name.zip", _corrupt_zip())
-    with pytest.raises(Exception):
+    with pytest.raises(UnprocessableEntityException) as exc:
         make_user_dir(root).dispatch_unpack(archive, parent)
+    assert exc.value.message.startswith(DETAIL_CORRUPT_ARCHIVE)
     _nothing_left(parent)
 
 
@@ -126,8 +133,9 @@ def test_corrupt_nested_zip(tmp_path):
         "name.zip",
         zip_bytes({"a.tsv": TSV, "x.png": PNG_1X1, "sub/inner_Images.zip": bad_inner}),
     )
-    with pytest.raises(Exception):
+    with pytest.raises(UnprocessableEntityException) as exc:
         make_user_dir(root).dispatch_unpack(archive, parent)
+    assert exc.value.message.startswith(DETAIL_CORRUPT_ARCHIVE)
     _nothing_left(parent)
 
 
@@ -139,8 +147,9 @@ def test_refused_tar_member(tmp_path):
             info = tarfile.TarInfo(a_name)
             info.size = len(TSV)
             tar.addfile(info, io.BytesIO(TSV))
-    with pytest.raises(tarfile.TarError):
+    with pytest.raises(UnprocessableEntityException) as exc:
         make_user_dir(root).dispatch_unpack(archive, parent)
+    assert exc.value.message.startswith(DETAIL_ARCHIVE_MEMBER_REFUSED)
     _nothing_left(parent)
     assert list(tmp_path.rglob("escape.tsv")) == []
 
@@ -172,12 +181,12 @@ def test_background_failure_reported(tmp_path):
     archive = _upload(parent, "name.zip", _corrupt_zip())
     user_dir = make_user_dir(root)
     user_dir.switch_to_background()
-    with pytest.raises(Exception):
+    with pytest.raises(UnprocessableEntityException):
         user_dir.dispatch_unpack(archive, parent)
     assert tree(parent) == ["name.zip" + UserFilesDirectory.ERROR_FILE_SUFFIX]
     report = (parent / ("name.zip" + UserFilesDirectory.ERROR_FILE_SUFFIX)).read_text()
     assert "name.zip" in report
-    assert "[" in report and "]" in report
+    assert "[UnprocessableEntityException] " + DETAIL_CORRUPT_ARCHIVE in report
     assert str(root) not in report
     # A later successful upload of the same name removes the report
     archive = _upload(parent, "name.zip", zip_bytes({"a.tsv": TSV}))
@@ -188,8 +197,9 @@ def test_background_failure_reported(tmp_path):
 def test_sync_failure_not_reported_in_file(tmp_path):
     root, parent = _setup(tmp_path)
     archive = _upload(parent, "name.zip", _corrupt_zip())
-    with pytest.raises(Exception):
+    with pytest.raises(UnprocessableEntityException) as exc:
         make_user_dir(root).dispatch_unpack(archive, parent)
+    assert exc.value.message.startswith(DETAIL_CORRUPT_ARCHIVE)
     _nothing_left(parent)
 
 
@@ -212,8 +222,9 @@ def test_dir_over_file_collision(tmp_path):
     root, parent = _setup(tmp_path)
     (parent / "name").write_bytes(TSV)
     archive = _upload(parent, "name.zip", zip_bytes({"a.tsv": TSV}))
-    with pytest.raises(Exception):
+    with pytest.raises(UnprocessableEntityException) as exc:
         make_user_dir(root).dispatch_unpack(archive, parent)
+    assert exc.value.message == DETAIL_NOTHING_DONE
     assert tree(parent) == ["name"]
     assert (parent / "name").read_bytes() == TSV
 
@@ -265,6 +276,7 @@ def test_gzipped_tsv_kept(tmp_path):
 # Empty archives
 #
 import zipfile
+import zlib
 
 from FS.UserFilesDir import EmptyArchiveException
 from helpers.httpexception import DETAIL_EMPTY_ARCHIVE
@@ -310,3 +322,52 @@ def test_empty_nested_archive_dropped(tmp_path):
     )
     make_user_dir(root).dispatch_unpack(archive, parent)
     assert tree(parent) == ["name/", "name/a.tsv", "name/sub/"]
+
+
+#
+# Other corrupt archive kinds: all a 422 "corrupt", nothing left
+#
+import os
+
+
+def _deflated_zip(content: bytes) -> bytes:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as z:
+        z.writestr("a.tsv", content)
+    return buf.getvalue()
+
+
+def _tar(mode: str, content: bytes) -> bytes:
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode=mode) as tar:
+        info = tarfile.TarInfo("a.tsv")
+        info.size = len(content)
+        tar.addfile(info, io.BytesIO(content))
+    return buf.getvalue()
+
+
+_RANDOM = os.urandom(2000) + TSV * 200
+
+
+@pytest.mark.parametrize(
+    "name,content,cause",
+    [
+        # Damaged deflate stream
+        (
+            "name.zip",
+            _deflated_zip(TSV * 200)[:45] + b"\xff" * 20 + _deflated_zip(TSV * 200)[65:],
+            zlib.error,
+        ),
+        ("name.tar", _tar("w", TSV * 200)[:700], tarfile.ReadError),
+        ("name.tar.gz", _tar("w:gz", _RANDOM)[: len(_tar("w:gz", _RANDOM)) // 2], EOFError),
+        ("a.tsv.gz", gzip.compress(TSV * 200)[:20], EOFError),
+    ],
+)
+def test_corrupt_archive_kinds(tmp_path, name, content, cause):
+    root, parent = _setup(tmp_path)
+    archive = _upload(parent, name, content)
+    with pytest.raises(UnprocessableEntityException) as exc:
+        make_user_dir(root).dispatch_unpack(archive, parent)
+    assert exc.value.message.startswith(DETAIL_CORRUPT_ARCHIVE)
+    assert isinstance(exc.value.__cause__, cause)
+    _nothing_left(parent)

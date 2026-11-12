@@ -4,12 +4,10 @@
 #
 # Exhibit some not-so-intuitive behavior of /my_files and associated upload
 #
-import gzip
 import pathlib
 import shutil
 import time
 import zipfile
-import zlib
 from typing import Dict
 
 import pytest
@@ -259,6 +257,8 @@ def test_my_files_error_cases(fastapi, tmp_path):
     - Move to existing target (place already taken by an existing file or directory)
     - Move file to existing dir (where target dir already contains the item)
     """
+    from helpers.httpexception import DETAIL_CORRUPT_ARCHIVE
+
     # Clean user files first
     api_remove_user_file(fastapi, "*", CREATOR_AUTH)
 
@@ -273,13 +273,15 @@ def test_my_files_error_cases(fastapi, tmp_path):
     corrupted_zip = tmp_path / "corrupted.zip"
     corrupted_zip.write_bytes(zip_bytes[:30] + b"\x00" * 20 + zip_bytes[50:])
     with open(corrupted_zip, "rb") as fin:
-        with pytest.raises(zipfile.BadZipFile):
-            fastapi.post(
-                MY_FILES_URL,
-                headers=CREATOR_AUTH,
-                data={"path": "corrupted.zip"},
-                files={"file": fin},
-            )
+        rsp = fastapi.post(
+            MY_FILES_URL,
+            headers=CREATOR_AUTH,
+            data={"path": "corrupted.zip"},
+            files={"file": fin},
+        )
+    # A corrupt archive is the user's problem: 422, not a server error
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT, rsp.text
+    assert DETAIL_CORRUPT_ARCHIVE in rsp.text
 
     # Corrupted gzip archive: valid 2-byte header \x1f\x8b so _is_gz is True, but corrupted gzip stream
     corrupted_gz = tmp_path / "corrupted.tsv.gz"
@@ -287,13 +289,15 @@ def test_my_files_error_cases(fastapi, tmp_path):
         b"\x1f\x8b\x08\x00corrupted_gzip_content_not_valid_gzip_stream"
     )
     with open(corrupted_gz, "rb") as fin:
-        with pytest.raises((gzip.BadGzipFile, zlib.error)):
-            fastapi.post(
-                MY_FILES_URL,
-                headers=CREATOR_AUTH,
-                data={"path": "corrupted.tsv.gz"},
-                files={"file": fin},
-            )
+        rsp = fastapi.post(
+            MY_FILES_URL,
+            headers=CREATOR_AUTH,
+            data={"path": "corrupted.tsv.gz"},
+            files={"file": fin},
+        )
+    # A corrupt archive is the user's problem: 422, not a server error
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT, rsp.text
+    assert DETAIL_CORRUPT_ARCHIVE in rsp.text
 
     # 2. Try to delete / move the trash directory or manipulate protected trash
     trash_dir_name = f"trash.{CREATOR_USER_ID}"
@@ -382,5 +386,29 @@ def test_upload_empty_archive(fastapi, tmp_path):
     assert DETAIL_EMPTY_ARCHIVE in rsp.text
     list_rsp = fastapi.get(MY_FILES_URL + SEPARATOR + "test_empty", headers=CREATOR_AUTH)
     assert list_rsp.status_code == 200
+    assert list_rsp.json()["entries"] == []
+    api_remove_user_file(fastapi, "*", CREATOR_AUTH)
+
+
+def test_upload_corrupt_archive(fastapi, tmp_path):
+    """A corrupt archive is refused with a 422, not a 500."""
+    from helpers.httpexception import DETAIL_CORRUPT_ARCHIVE
+
+    good = tmp_path / "good.zip"
+    with zipfile.ZipFile(good, "w") as z:
+        z.writestr("a.tsv", "object_id\n[t]\n" + "obj\n" * 200)
+    content = good.read_bytes()
+    corrupt = tmp_path / "corrupt.zip"
+    corrupt.write_bytes(content[:40] + b"\x00" * 40 + content[80:])
+    with open(corrupt, "rb") as fin:
+        rsp = fastapi.post(
+            MY_FILES_URL,
+            headers=CREATOR_AUTH,
+            data={"path": "test_corrupt/corrupt.zip"},
+            files={"file": fin},
+        )
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT, rsp.text
+    assert DETAIL_CORRUPT_ARCHIVE in rsp.text
+    list_rsp = fastapi.get(MY_FILES_URL + SEPARATOR + "test_corrupt", headers=CREATOR_AUTH)
     assert list_rsp.json()["entries"] == []
     api_remove_user_file(fastapi, "*", CREATOR_AUTH)

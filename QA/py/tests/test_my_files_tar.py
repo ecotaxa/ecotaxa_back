@@ -8,6 +8,8 @@ from pathlib import Path
 
 import pytest
 
+from helpers.CustomException import UnprocessableEntityException
+from helpers.httpexception import DETAIL_ARCHIVE_MEMBER_REFUSED
 from tests.userfiles_helpers import make_user_dir as _user_dir
 
 
@@ -49,8 +51,10 @@ def test_tar_traversal_rejected(tmp_path, member):
     archive = target / "cont.tar"
     with tarfile.open(archive, "w") as tar:
         _add_file(tar, member)
-    with pytest.raises(tarfile.TarError):
+    with pytest.raises(UnprocessableEntityException) as exc:
         _user_dir(root).dispatch_unpack(archive, target)
+    assert exc.value.message.startswith(DETAIL_ARCHIVE_MEMBER_REFUSED)
+    assert isinstance(exc.value.__cause__, tarfile.FilterError)
     assert list(tmp_path.rglob("escape.txt")) == []
 
 
@@ -63,7 +67,7 @@ def test_tar_absolute_member_stays_inside(tmp_path):
     # "data" filter either rejects or strips the leading /, never writes there
     try:
         _user_dir(root).dispatch_unpack(archive, target)
-    except tarfile.TarError:
+    except UnprocessableEntityException:
         pass
     assert not outside.exists()
 
@@ -79,6 +83,8 @@ def test_tar_symlink_outside_rejected(tmp_path):
         link.linkname = outside.as_posix()
         tar.addfile(link)
         _add_file(tar, "cont/lnk/pwned.txt")
-    with pytest.raises(tarfile.TarError):
+    with pytest.raises(UnprocessableEntityException) as exc:
         _user_dir(root).dispatch_unpack(archive, target)
+    assert exc.value.message.startswith(DETAIL_ARCHIVE_MEMBER_REFUSED)
+    assert isinstance(exc.value.__cause__, tarfile.FilterError)
     assert list(outside.iterdir()) == []

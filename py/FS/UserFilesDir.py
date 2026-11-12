@@ -8,6 +8,7 @@ import os
 import shutil
 import tarfile
 import zipfile
+import zlib
 from pathlib import Path
 from typing import Optional, List, Dict, Tuple
 
@@ -20,7 +21,8 @@ from helpers.AppConfig import Config
 from helpers.CustomException import UnprocessableEntityException, BaseAppException
 from helpers.DynamicLogs import get_logger
 from helpers.httpexception import (
-    DETAIL_INVALID_ZIP_FILE,
+    DETAIL_CORRUPT_ARCHIVE,
+    DETAIL_ARCHIVE_MEMBER_REFUSED,
     DETAIL_NOTHING_DONE,
     DETAIL_FILE_PROTECTED,
     DETAIL_EMPTY_ARCHIVE,
@@ -317,7 +319,7 @@ class UserFilesDirectory(object):
             with zipfile.ZipFile(input_path, "r", allowZip64=True) as archive:
                 self.extract_archive(archive, str(input_path), path)
         except Exception as e:
-            _log_exception_throw(e, str(self.compressed_origin))
+            _unpack_exception_throw(e, str(self.compressed_origin))
         finally:
             input_path.unlink(missing_ok=True)
 
@@ -326,7 +328,7 @@ class UserFilesDirectory(object):
             with tarfile.open(input_path, "r") as archive:
                 self.extract_archive(archive, str(input_path), path)
         except Exception as e:
-            _log_exception_throw(e, str(self.compressed_origin))
+            _unpack_exception_throw(e, str(self.compressed_origin))
         finally:
             input_path.unlink(missing_ok=True)
 
@@ -342,7 +344,7 @@ class UserFilesDirectory(object):
         except Exception as e:
             if decompressed_path.exists():
                 decompressed_path.unlink()
-            _log_exception_throw(e, str(self.compressed_origin))
+            _unpack_exception_throw(e, str(self.compressed_origin))
         finally:
             input_path.unlink(missing_ok=True)
 
@@ -431,11 +433,19 @@ class UserFilesDirectory(object):
             logger.error("Could not report unpack failure of %s: %s", file_name, e2)
 
     @staticmethod
+    def _is_tar(filepath: str) -> bool:
+        """tarfile.is_tarfile, but also False when the content is a corrupt compressed stream"""
+        try:
+            return tarfile.is_tarfile(filepath)
+        except (EOFError, zlib.error, gzip.BadGzipFile):
+            return False
+
+    @staticmethod
     def is_compressed(path: Path) -> bool:
         posix_path = path.as_posix()
         return (
             zipfile.is_zipfile(posix_path)
-            or tarfile.is_tarfile(posix_path)
+            or UserFilesDirectory._is_tar(posix_path)
             or UserFilesDirectory._is_gz(posix_path)
         )
 
@@ -483,7 +493,7 @@ class UserFilesDirectory(object):
     def _dispatch_nested(self, compressed_path: Path, to_path: Path) -> None:
         if zipfile.is_zipfile(compressed_path.as_posix()):
             self.unpack_zip(compressed_path, to_path)
-        elif tarfile.is_tarfile(compressed_path.as_posix()):
+        elif self._is_tar(compressed_path.as_posix()):
             self.unpack_tar(compressed_path, to_path)
         elif self._is_gz(compressed_path.as_posix()):
             self.unpack_gz(compressed_path, to_path)
@@ -493,16 +503,40 @@ class UserFilesDirectory(object):
         logger.info(f"Unpack done for {compressed_path}->{to_path}")
 
 
+# What a broken archive, sent by the user, raises while being read
+CORRUPT_ARCHIVE_EXCEPTIONS = (
+    zipfile.BadZipFile,
+    zlib.error,
+    tarfile.TarError,
+    gzip.BadGzipFile,
+    EOFError,
+)
+
+
+def _unpack_exception_throw(e: Exception, context: Optional[str] = None):
+    """
+    During unpacking: a corrupt or refused archive is the user's problem, raise it as such (422).
+    Other errors (e.g. disk full) are re-raised as they are.
+    """
+    if isinstance(e, BaseAppException):
+        # Already qualified, e.g. from a nested archive
+        raise e
+    if isinstance(e, CORRUPT_ARCHIVE_EXCEPTIONS):
+        error_detail = str(e) if str(e) else e.__class__.__name__
+        if isinstance(e, tarfile.FilterError):
+            message = f"{DETAIL_ARCHIVE_MEMBER_REFUSED}: {error_detail}"
+        else:
+            message = f"{DETAIL_CORRUPT_ARCHIVE}: {error_detail}"
+        logger.error("422 " + message + " " + str(context))
+        raise UnprocessableEntityException(message) from e
+    _log_exception_throw(e, context)
+
+
 def _log_exception_throw(e: Exception, context: Optional[str] = None):
-    if isinstance(e, zipfile.BadZipFile):
-        message = DETAIL_INVALID_ZIP_FILE
-        code = 422
-    else:
-        error_detail = str(e) if str(e) else repr(e)
-        message = f"[{e.__class__.__name__}] {error_detail}"
-        code = 500
-    logger.error(str(code) + " " + message + " " + str(context))
-    raise
+    error_detail = str(e) if str(e) else repr(e)
+    message = f"[{e.__class__.__name__}] {error_detail}"
+    logger.error("500 " + message + " " + str(context))
+    raise e
 
 
 def get_tus_files_dir() -> str:
