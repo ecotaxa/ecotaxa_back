@@ -7015,6 +7015,57 @@
         }
       }
     },
+    "/user_files/unpack_status/{upload_id}":{
+      "get":{
+        "tags":[
+          "MyFiles"
+        ],
+        "summary":"Get Unpack Status",
+        "description":"**Status of the unpacking of an archive uploaded with TUS.** Poll it until state is 'done' or 'error'.\nWhile unpacking, the Retry-After header suggests when to ask again.",
+        "operationId":"get_unpack_status",
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ],
+        "parameters":[
+          {
+            "name":"upload_id",
+            "in":"path",
+            "required":true,
+            "schema":{
+              "type":"string",
+              "description":"The TUS upload id, i.e. the last part of the Location returned when the upload was created.",
+              "title":"Upload Id",
+              "example":"fd8d989adda14069ba8495a71af1d6b8"
+            },
+            "description":"The TUS upload id, i.e. the last part of the Location returned when the upload was created."
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/UnpackStatusModel"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/user_files/{sub_path}":{
       "get":{
         "tags":[
@@ -12568,6 +12619,97 @@
           "refresh_expires_in"
         ],
         "title":"Token response Model"
+      },
+      "UnpackStatusModel":{
+        "properties":{
+          "state":{
+            "type":"string",
+            "title":"State",
+            "description":"'unpacking', then 'done' or 'error'.",
+            "example":"unpacking"
+          },
+          "name":{
+            "type":"string",
+            "title":"Name",
+            "description":"Uploaded file name.",
+            "example":"b_da_19.zip"
+          },
+          "percent":{
+            "type":"integer",
+            "title":"Percent",
+            "description":"Progress, 0 to 100. Counts the entries of the uploaded archive checked or, for nested archives, unpacked. It does not move while the files of an archive are written, so for one big archive without nested ones it stays low, then jumps to 100.",
+            "default":0,
+            "example":42
+          },
+          "entries_done":{
+            "title":"Entries done",
+            "description":"Entries of the uploaded archive done.",
+            "example":420,
+            "type":"integer",
+            "nullable":true
+          },
+          "entries_total":{
+            "title":"Entries total",
+            "description":"Entries of the uploaded archive, once its headers are read.",
+            "example":1000,
+            "type":"integer",
+            "nullable":true
+          },
+          "files_done":{
+            "title":"Files done",
+            "description":"Files unpacked so far, nested archives included.",
+            "example":12000,
+            "type":"integer",
+            "nullable":true
+          },
+          "bytes_done":{
+            "title":"Bytes done",
+            "description":"Bytes unpacked so far, nested archives included.",
+            "example":123456789,
+            "type":"integer",
+            "nullable":true
+          },
+          "bytes_declared":{
+            "title":"Bytes declared",
+            "description":"Uncompressed size declared by the uploaded archive, nested archives not included.",
+            "example":223456789,
+            "type":"integer",
+            "nullable":true
+          },
+          "result_paths":{
+            "title":"Result paths",
+            "description":"When done, where the result is in My Files.",
+            "example":[
+              "my_folder/b_da_19"
+            ],
+            "items":{
+              "type":"string"
+            },
+            "type":"array",
+            "nullable":true
+          },
+          "message":{
+            "title":"Message",
+            "description":"When error, why nothing was kept.",
+            "example":"[UnprocessableEntityException] Archive is corrupt: Bad CRC-32 for file 'a.tsv'",
+            "type":"string",
+            "nullable":true
+          },
+          "updated":{
+            "type":"string",
+            "title":"Updated",
+            "description":"Last update, UTC ISO format.",
+            "example":"2026-11-12T14:00:00.123456+00:00"
+          }
+        },
+        "type":"object",
+        "required":[
+          "state",
+          "name",
+          "updated"
+        ],
+        "title":"UnpackStatusModel",
+        "description":"Status of the unpacking of an archive uploaded with TUS, to poll until state is 'done' or 'error'."
       },
       "UserActivateReq":{
         "properties":{

@@ -11,7 +11,7 @@ import tarfile
 import zipfile
 import zlib
 from pathlib import Path
-from typing import Optional, List, Dict, Tuple, Generator
+from typing import Optional, List, Dict, Tuple, Generator, Callable, Any
 
 from magic_rs import from_path, CantMatchTypeError
 from starlette.datastructures import UploadFile
@@ -90,6 +90,9 @@ class UserFilesDirectory(object):
             config.get_unpack_min_free_disk()
         )
         self._reset_unpack_budget()
+        # Optional, called with the unpack status as it changes, see _status
+        self.status_reporter: Optional[Callable[[Dict[str, Any]], None]] = None
+        self._status_fields: Dict[str, Any] = {}
 
     def switch_to_background(self):
         """Future unpacking operations run in background, nobody gets their exceptions,
@@ -246,6 +249,9 @@ class UserFilesDirectory(object):
         else:
             declared_size = sum(a_member.size for a_member in archive.getmembers())
         self._consume_unpack_budget(len(filenames), declared_size, path)
+        top_level = self._unpack_depth == 1
+        if top_level:
+            self._status(entries_total=len(filenames), bytes_declared=declared_size)
         extracted = []
 
         # The archive's own name, without its (last) extension, e.g. "inner" for sub/inner.zip
@@ -277,7 +283,11 @@ class UserFilesDirectory(object):
             archive.extractall(path.as_posix())
 
         # Validate extracted files, unpack nested archives, and purge unaccepted formats
-        for filename in filenames:
+        # Progress is reported here, entry by entry of the top-level archive, but only
+        # once extractall() above is done: it gives no progress itself.
+        for entry_num, filename in enumerate(filenames):
+            if top_level:
+                self._status_entries_done(entry_num, len(filenames))
             file_ext, compressed_path, mime_type = self._get_file_info(filename, path)
 
             # Recursively unpack nested archives (e.g., zip inside tar), of configured
@@ -304,6 +314,8 @@ class UserFilesDirectory(object):
             else:
                 os.remove(compressed_path)
                 logger.info("NOT EXTRACTED '%s' ", str(compressed_path))
+        if top_level:
+            self._status_entries_done(len(filenames), len(filenames))
 
     def _is_nested_archive(self, filename: str, filepath: Path) -> bool:
         """
@@ -436,6 +448,7 @@ class UserFilesDirectory(object):
                 "%s (max. %d)" % (DETAIL_UNPACK_TOO_MANY_ENTRIES, self.max_unpack_entries)
             )
         self._unpacked_size += size
+        self._status(files_done=self._unpacked_entries, bytes_done=self._unpacked_size)
         if 0 < self.max_unpacked_size < self._unpacked_size:
             raise UnprocessableEntityException(
                 "%s (max. %d bytes)" % (DETAIL_UNPACK_TOO_LARGE, self.max_unpacked_size)
@@ -472,13 +485,16 @@ class UserFilesDirectory(object):
                 num += 1
 
     @classmethod
-    def _publish(cls, staging: Path, parent: Path) -> None:
+    def _publish(cls, staging: Path, parent: Path) -> List[str]:
         """
         Move the content of the staging directory into parent, merging into existing directories.
+        Return the published names.
         """
-        for an_entry in list(staging.iterdir()):
+        published = list(staging.iterdir())
+        for an_entry in published:
             cls._move_merging(an_entry, parent / an_entry.name)
         staging.rmdir()
+        return sorted(an_entry.name for an_entry in published)
 
     @classmethod
     def _move_merging(cls, src: Path, dst: Path) -> None:
@@ -503,24 +519,45 @@ class UserFilesDirectory(object):
     def _error_file(cls, parent: Path, archive_name: str) -> Path:
         return parent / (archive_name + cls.ERROR_FILE_SUFFIX)
 
+    def _failure_message(self, e: Exception) -> str:
+        """What to tell the user about e, without server paths."""
+        if isinstance(e, BaseAppException):
+            message = e.message
+        else:
+            message = str(e) if str(e) else repr(e)
+        for a_root in (str(self._root_path.absolute()), str(self._root_path)):
+            message = message.replace(a_root, "")
+        return "[%s] %s" % (e.__class__.__name__, message)
+
     def _report_failure(self, parent: Path, archive_name: str, e: Exception) -> None:
         """
         If in background, leave a file telling the user why the archive produced nothing.
         Never raises.
         """
-        if isinstance(e, BaseAppException):
-            message = e.message
-        else:
-            message = str(e) if str(e) else repr(e)
-        # No server path in the message
-        for a_root in (str(self._root_path.absolute()), str(self._root_path)):
-            message = message.replace(a_root, "")
         self._report(
             parent,
             archive_name,
             "Extraction of '%s' failed at {when} UTC, nothing was kept from it.\n"
-            "[%s] %s\n" % (archive_name, e.__class__.__name__, message),
+            "%s\n" % (archive_name, self._failure_message(e)),
         )
+
+    def _status(self, **fields: Any) -> None:
+        """
+        Merge fields into the unpack status, and tell the reporter if any. Only reports,
+        never changes the unpacking. Never raises.
+        """
+        if self.status_reporter is None:
+            return
+        self._status_fields.update(fields)
+        try:
+            self.status_reporter(dict(self._status_fields))
+        except Exception as e:
+            logger.error("Could not report unpack status: %s", e)
+
+    def _status_entries_done(self, done: int, total: int) -> None:
+        # 100 only once published
+        percent = min(99, 100 * done // total) if total else 0
+        self._status(entries_done=done, percent=percent)
 
     def _report(self, parent: Path, file_name: str, text: str) -> None:
         """
@@ -576,6 +613,8 @@ class UserFilesDirectory(object):
             return
         archive_name = compressed_path.name
         self._reset_unpack_budget()
+        self._status_fields = {}
+        self._status(state="unpacking", name=archive_name, percent=0)
         staging = self._new_staging_dir(to_path, compressed_path)
         try:
             try:
@@ -587,14 +626,30 @@ class UserFilesDirectory(object):
             staged_archive.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(compressed_path, staged_archive)
             self._dispatch_nested(staged_archive, staging)
-            self._publish(staging, to_path)
+            published = self._publish(staging, to_path)
         except Exception as e:
             shutil.rmtree(staging, ignore_errors=True)
             compressed_path.unlink(missing_ok=True)
             self._report_failure(to_path, archive_name, e)
+            self._status(state="error", message=self._failure_message(e))
             raise
+        self._status(
+            state="done", percent=100, result_paths=self._relative_paths(to_path, published)
+        )
         # A previous failure of the same archive is not relevant anymore
         self._error_file(to_path, archive_name).unlink(missing_ok=True)
+
+    def _relative_paths(self, parent: Path, names: List[str]) -> List[str]:
+        """Paths of names in parent, relative to the user root, as My Files shows them"""
+        ret = []
+        for a_name in names:
+            try:
+                ret.append(
+                    (parent / a_name).absolute().relative_to(self._root_path.absolute()).as_posix()
+                )
+            except ValueError:
+                ret.append(a_name)
+        return ret
 
     def _dispatch_nested(self, compressed_path: Path, to_path: Path) -> None:
         if zipfile.is_zipfile(compressed_path.as_posix()):

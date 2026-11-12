@@ -14,6 +14,7 @@ from tuspyserver.file import _validate_uid_within_dir
 from tuspyserver.lock import acquire_upload_lock
 from tuspyserver.storage.local import LocalFileStorage
 
+from FS.UnpackStatus import UnpackStatus
 from FS.UserFilesDir import UserFilesDirectory, get_tus_files_dir
 from helpers.AppConfig import Config
 from helpers.DynamicLogs import get_logger
@@ -79,10 +80,22 @@ async def _start_unpack(
     dest_path: Path,
     dest_dir: Path,
     name: str,
+    user_id: int = -1,
 ) -> asyncio.Task[None]:
     """
     Start unpacking dest_path into dest_dir in background, and wait a bit for it.
+    The status, for polling, is keyed by the TUS upload id, i.e. tus_path name.
     """
+    # Best effort, a status problem must not prevent the unpacking
+    try:
+        status: Optional[UnpackStatus] = UnpackStatus(tus_path.name, user_id, name)
+    except Exception as e:
+        logger.error("No unpack status for %s: %s", tus_path.name, e)
+        status = None
+    if status is not None:
+        # Before the task, so a poll right after the last PATCH finds it
+        status.update({"state": "unpacking", "percent": 0})
+        user_dir.status_reporter = status.update
     task = asyncio.create_task(
         _background_unpack(user_dir, tus_path, dest_path, dest_dir),
         name=f"unpack_{name}",
@@ -97,6 +110,29 @@ async def _start_unpack(
     except TimeoutError:
         logger.info("TUS file upload unpack CONTINUES into %s ", dest_dir)
     return task
+
+
+def _final_plain_status(
+    user_dir: UserFilesDirectory, upload_id: str, user_id: int, dest_path: Path
+) -> None:
+    """Status of an upload which is not an archive: kept or refused, no unpacking."""
+    try:
+        status = UnpackStatus(upload_id, user_id, dest_path.name)
+    except Exception as e:
+        logger.error("No unpack status for %s: %s", upload_id, e)
+        return
+    if dest_path.exists():
+        status.update(
+            {
+                "state": "done",
+                "percent": 100,
+                "result_paths": user_dir._relative_paths(
+                    dest_path.parent, [dest_path.name]
+                ),
+            }
+        )
+    else:
+        status.update({"state": "error", "message": "File type not accepted"})
 
 
 async def on_tus_upload_complete(
@@ -138,7 +174,12 @@ async def on_tus_upload_complete(
                 dest_path.unlink(missing_ok=True)
                 os.link(tus_path, dest_path)
             await _start_unpack(
-                user_dir, tus_path, dest_path, dest_dir.absolute(), original_name
+                user_dir,
+                tus_path,
+                dest_path,
+                dest_dir.absolute(),
+                original_name,
+                current_user_id,
             )
         else:
             # Plain uncompressed file case, should not happen with EcoTaxa client which always sends a zip
@@ -162,6 +203,7 @@ async def on_tus_upload_complete(
             # Nobody gets this hook errors, so report a refusal to the user in a file.
             user_dir.switch_to_background()
             user_dir.dispatch_unpack(dest_path, dest_dir)
+            _final_plain_status(user_dir, tus_path.name, current_user_id, dest_path)
             logger.info(
                 "TUS file upload complete: moved %s to %s", file_path, dest_path
             )

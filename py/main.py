@@ -71,7 +71,7 @@ from API_models.exports import (
     SummaryExportReq,
     BackupExportReq,
 )
-from API_models.filesystem import DirectoryModel
+from API_models.filesystem import DirectoryModel, UnpackStatusModel
 from API_models.filters import Optional, ProjectFilters, ProjectFiltersDict
 from API_models.helpers.Introspect import plain_columns
 from API_models.imports import ImportReq, SimpleImportRsp, SimpleImportReq, ImportRsp
@@ -112,6 +112,7 @@ from API_models.taxonomy import (
     TaxonomyRecastReq,
 )
 from API_operations.BigFiles import create_big_files_router, TUS_PREFIX
+from FS.UnpackStatus import UnpackStatus
 from API_operations.CRUD.Collections import CollectionsService
 from API_operations.CRUD.Constants import ConstantsService
 from API_operations.CRUD.Guests import GuestService
@@ -4121,6 +4122,41 @@ def list_common_files(
 
 # ######################## END OF COMMON FILES
 # ######################## START OF USERS FILES
+# Before list_user_files, which would take the path for a sub_path
+@app_router.get(
+    "/user_files/unpack_status/{upload_id}",
+    operation_id="get_unpack_status",
+    tags=["MyFiles"],
+    response_model=UnpackStatusModel,
+)
+def get_unpack_status(
+    response: Response,
+    upload_id: str = Path(
+        ...,
+        description="The TUS upload id, i.e. the last part of the Location returned when the upload was created.",
+        examples=["fd8d989adda14069ba8495a71af1d6b8"],
+    ),
+    current_user: int = Depends(get_current_user),
+) -> UnpackStatusModel:
+    """
+    **Status of the unpacking of an archive uploaded with TUS.** Poll it until state is 'done' or 'error'.
+    While unpacking, the Retry-After header suggests when to ask again.
+    """
+    unpack_status = UnpackStatus.read(upload_id)
+    # Same answer for another user's upload, not to tell it exists
+    if unpack_status is None or unpack_status.get("user_id") != current_user:
+        raise HTTPException(status_code=404, detail="Not found")
+    if unpack_status.get("state") == "unpacking":
+        response.headers["Retry-After"] = "2"
+    return UnpackStatusModel(
+        **{
+            a_key: a_val
+            for a_key, a_val in unpack_status.items()
+            if a_key in UnpackStatusModel.model_fields
+        }
+    )
+
+
 @app_router.get(
     "/user_files/{sub_path:path}",
     operation_id="list_user_files",

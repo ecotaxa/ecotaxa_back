@@ -35,6 +35,8 @@ def make_user_dir(root: Path) -> UserFilesDirectory:
     # No check of free disk space
     ret.min_free_disk_ratio, ret.min_free_disk_bytes = None, 0
     ret._reset_unpack_budget()
+    ret.status_reporter = None
+    ret._status_fields = {}
     return ret
 
 
