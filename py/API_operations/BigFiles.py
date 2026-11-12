@@ -48,11 +48,55 @@ async def _background_unpack(
             user_dir.dispatch_unpack, compressed_path=file_path, to_path=dest_dir
         )
         logger.info("Done unpacking %s in background", file_path)
+    except asyncio.CancelledError:
+        # e.g. server shutdown. The unpacking thread itself cannot be stopped.
+        logger.warning(
+            "Unpacking %s in background was cancelled, thread may continue", file_path
+        )
+        raise
     except Exception as e:
         logger.error(
             "Error unpacking %s in background: %s", file_path, str(e), exc_info=True
         )
         raise
+
+
+# Wait for this long (s) max, to give impression it's sync for small archives
+UNPACK_SYNC_WAIT: float = 120
+
+
+def _forget_task(task: asyncio.Task[None]) -> None:
+    background_tasks.discard(task)
+    if not task.cancelled():
+        # Mark the exception, if any, as retrieved: it was logged by _background_unpack,
+        # and after the sync wait nobody awaits the task.
+        task.exception()
+
+
+async def _start_unpack(
+    user_dir: UserFilesDirectory,
+    tus_path: Path,
+    dest_path: Path,
+    dest_dir: Path,
+    name: str,
+) -> asyncio.Task[None]:
+    """
+    Start unpacking dest_path into dest_dir in background, and wait a bit for it.
+    """
+    task = asyncio.create_task(
+        _background_unpack(user_dir, tus_path, dest_path, dest_dir),
+        name=f"unpack_{name}",
+    )
+    background_tasks.add(task)
+    task.add_done_callback(_forget_task)
+    logger.info("TUS file upload complete: uncompressing into %s ", dest_dir)
+    try:
+        # Shield: on timeout, wait_for cancels only the shield, the unpack goes on
+        await asyncio.wait_for(asyncio.shield(task), timeout=UNPACK_SYNC_WAIT)
+        logger.info("TUS file upload unpack done into %s ", dest_dir)
+    except TimeoutError:
+        logger.info("TUS file upload unpack CONTINUES into %s ", dest_dir)
+    return task
 
 
 async def on_tus_upload_complete(
@@ -93,19 +137,9 @@ async def on_tus_upload_complete(
                     raise
                 dest_path.unlink(missing_ok=True)
                 os.link(tus_path, dest_path)
-            task = asyncio.create_task(
-                _background_unpack(user_dir, tus_path, dest_path, dest_dir.absolute()),
-                name=f"unpack_{original_name}",
+            await _start_unpack(
+                user_dir, tus_path, dest_path, dest_dir.absolute(), original_name
             )
-            background_tasks.add(task)
-            task.add_done_callback(background_tasks.discard)
-            logger.info("TUS file upload complete: uncompressing into %s ", dest_dir)
-            try:
-                # Wait for 2 minutes max, to give impression it's sync for small archives
-                await asyncio.wait_for(task, timeout=120)
-                logger.info("TUS file upload unpack done into %s ", dest_dir)
-            except TimeoutError:
-                logger.info("TUS file upload unpack CONTINUES into %s ", dest_dir)
         else:
             # Plain uncompressed file case, should not happen with EcoTaxa client which always sends a zip
             stem = Path(original_name).stem
