@@ -17,12 +17,13 @@ from starlette.datastructures import UploadFile
 from DB.User import UserIDT
 from FS.CommonDir import CommonFolder, DirEntryT
 from helpers.AppConfig import Config
-from helpers.CustomException import UnprocessableEntityException
+from helpers.CustomException import UnprocessableEntityException, BaseAppException
 from helpers.DynamicLogs import get_logger
 from helpers.httpexception import (
     DETAIL_INVALID_ZIP_FILE,
     DETAIL_NOTHING_DONE,
     DETAIL_FILE_PROTECTED,
+    DETAIL_EMPTY_ARCHIVE,
 )
 
 logger = get_logger(__name__)
@@ -34,6 +35,13 @@ TEXT_EXTENSIONS = {
     "txt": "text/plain",
     "tsv": "text/tab-separated-values",
 }
+
+
+class EmptyArchiveException(UnprocessableEntityException):
+    """An archive without any entry"""
+
+    def __init__(self) -> None:
+        super().__init__(DETAIL_EMPTY_ARCHIVE)
 
 
 class UserFilesDirectory(object):
@@ -206,6 +214,8 @@ class UserFilesDirectory(object):
             filenames = archive.namelist()
         else:
             filenames = archive.getnames()
+        if len(filenames) == 0:
+            raise EmptyArchiveException()
         extracted = []
 
         # Derive the destination subfolder name from the archive filename
@@ -243,7 +253,11 @@ class UserFilesDirectory(object):
                     and not compressed_path.is_dir()
                     and not self._is_trash_dir(str(path))
                 ):
-                    self._dispatch_nested(compressed_path, path)
+                    try:
+                        self._dispatch_nested(compressed_path, path)
+                    except EmptyArchiveException:
+                        # Nothing to keep from it, and it was removed. Not worth failing the whole upload.
+                        logger.info("Empty nested archive '%s' removed", compressed_path)
             # Accept text/tabular data files based on extension fallback
             elif file_ext in TEXT_EXTENSIONS:
                 extracted.append(filename)
@@ -387,7 +401,10 @@ class UserFilesDirectory(object):
         If in background, leave a file telling the user why the archive produced nothing.
         Never raises.
         """
-        message = str(e) if str(e) else repr(e)
+        if isinstance(e, BaseAppException):
+            message = e.message
+        else:
+            message = str(e) if str(e) else repr(e)
         # No server path in the message
         for a_root in (str(self._root_path.absolute()), str(self._root_path)):
             message = message.replace(a_root, "")

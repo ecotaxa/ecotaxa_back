@@ -259,3 +259,54 @@ def test_gzipped_tsv_kept(tmp_path):
     make_user_dir(root).dispatch_unpack(upload, parent)
     assert tree(parent) == ["ecotaxa_a.tsv"]
     assert (parent / "ecotaxa_a.tsv").read_bytes() == TSV
+
+
+#
+# Empty archives
+#
+import zipfile
+
+from FS.UserFilesDir import EmptyArchiveException
+from helpers.httpexception import DETAIL_EMPTY_ARCHIVE
+
+
+def _empty_archive(parent: Path, kind: str) -> Path:
+    archive = parent / ("name." + kind)
+    if kind == "zip":
+        zipfile.ZipFile(archive, "w").close()
+    else:
+        tarfile.open(archive, "w").close()
+    return archive
+
+
+@pytest.mark.parametrize("kind", ["zip", "tar"])
+def test_empty_archive_refused(tmp_path, kind):
+    root, parent = _setup(tmp_path)
+    archive = _empty_archive(parent, kind)
+    with pytest.raises(EmptyArchiveException):
+        make_user_dir(root).dispatch_unpack(archive, parent)
+    _nothing_left(parent)
+
+
+def test_empty_archive_reported_in_background(tmp_path):
+    root, parent = _setup(tmp_path)
+    archive = _empty_archive(parent, "zip")
+    user_dir = make_user_dir(root)
+    user_dir.switch_to_background()
+    with pytest.raises(EmptyArchiveException):
+        user_dir.dispatch_unpack(archive, parent)
+    error_file = "name.zip" + UserFilesDirectory.ERROR_FILE_SUFFIX
+    assert tree(parent) == [error_file]
+    report = (parent / error_file).read_text()
+    assert "[EmptyArchiveException] " + DETAIL_EMPTY_ARCHIVE in report
+
+
+def test_empty_nested_archive_dropped(tmp_path):
+    root, parent = _setup(tmp_path)
+    archive = _upload(
+        parent,
+        "name.zip",
+        zip_bytes({"a.tsv": TSV, "sub/empty.zip": zip_bytes({})}),
+    )
+    make_user_dir(root).dispatch_unpack(archive, parent)
+    assert tree(parent) == ["name/", "name/a.tsv", "name/sub/"]

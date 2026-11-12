@@ -363,3 +363,24 @@ def test_import_refuses_extraction_in_progress(fastapi):
         )
         assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT, rsp.text
         assert DETAIL_EXTRACTION_IN_PROGRESS in rsp.text
+
+
+def test_upload_empty_archive(fastapi, tmp_path):
+    """An empty archive is refused with a clear message."""
+    from helpers.httpexception import DETAIL_EMPTY_ARCHIVE
+
+    empty = tmp_path / "empty.zip"
+    zipfile.ZipFile(empty, "w").close()
+    with open(empty, "rb") as fin:
+        rsp = fastapi.post(
+            MY_FILES_URL,
+            headers=CREATOR_AUTH,
+            data={"path": "test_empty/empty.zip"},
+            files={"file": fin},
+        )
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT, rsp.text
+    assert DETAIL_EMPTY_ARCHIVE in rsp.text
+    list_rsp = fastapi.get(MY_FILES_URL + SEPARATOR + "test_empty", headers=CREATOR_AUTH)
+    assert list_rsp.status_code == 200
+    assert list_rsp.json()["entries"] == []
+    api_remove_user_file(fastapi, "*", CREATOR_AUTH)
