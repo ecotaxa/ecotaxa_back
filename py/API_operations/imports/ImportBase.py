@@ -7,13 +7,17 @@ import zipfile
 from abc import ABC
 from typing import Union, Optional
 
+from fastapi import HTTPException
+from starlette import status
+
 from API_models.imports import ImportReq, SimpleImportReq
 from API_operations.helpers.JobService import JobServiceOnProjectBase, ArgsDict
 from DB.User import UserIDT
 from FS.CommonDir import CommonFolder
-from FS.UserFilesDir import UserFilesDirectory
+from FS.UserFilesDir import UserFilesDirectory, PROGRESS_PREFIX
 from FS.Vault import Vault
 from helpers.DynamicLogs import get_logger
+from helpers.httpexception import DETAIL_EXTRACTION_IN_PROGRESS
 
 logger = get_logger(__name__)
 
@@ -30,6 +34,15 @@ class ImportServiceBase(JobServiceOnProjectBase, ABC):
         super().__init__(prj_id)
         """ The project ID to import into """
         self.req = req
+        # An archive is being unpacked there, content is incomplete
+        if any(
+            a_part.startswith(PROGRESS_PREFIX)
+            for a_part in req.source_path.split(os.path.sep)
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=DETAIL_EXTRACTION_IN_PROGRESS,
+            )
         # From legacy code, vault and temptask are in src directory
         self.vault = Vault(self.config.vault_dir())
 

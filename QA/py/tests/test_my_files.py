@@ -349,3 +349,17 @@ def test_my_files_error_cases(fastapi, tmp_path):
 
     # Clean up after test
     api_remove_user_file(fastapi, "*", CREATOR_AUTH)
+
+
+def test_import_refuses_extraction_in_progress(fastapi):
+    """An import from a folder still being unpacked (staging '⌛' folder) is refused."""
+    from FS.UserFilesDir import PROGRESS_PREFIX
+    from helpers.httpexception import DETAIL_EXTRACTION_IN_PROGRESS
+
+    prj_id = create_project(CREATOR_USER_ID, "Import while unpacking")
+    for a_path in (PROGRESS_PREFIX + "name", "sub/" + PROGRESS_PREFIX + "name/x"):
+        rsp = api_file_import(
+            fastapi, prj_id, {"source_path": a_path}, auth=CREATOR_AUTH
+        )
+        assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT, rsp.text
+        assert DETAIL_EXTRACTION_IN_PROGRESS in rsp.text
