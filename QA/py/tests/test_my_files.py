@@ -116,8 +116,8 @@ def test_my_files(fastapi, tstlogs, title):
         "cont.tar",
         "cont.gz",
         "cont.zip",
-        # "ecotaxa_b_da_19.tsv.gz", # TODO: Is removed after decomp, magic_rs does not know
-        # "ecotaxa_b_da_19.csv.gz",
+        "ecotaxa_b_da_19.tsv.gz",
+        "ecotaxa_b_da_19.csv.gz",
         "x2EA0yD7AwC7h13F.png.gz",
     ],
 )

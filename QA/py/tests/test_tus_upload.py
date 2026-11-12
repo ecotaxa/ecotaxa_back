@@ -116,3 +116,50 @@ def test_tus_upload_protocol(fastapi):
     assert extracted_folder in [e["name"] for e in entries]
 
     api_remove_user_file(fastapi, "*", CREATOR_AUTH)
+
+
+def _tus_upload(fastapi, content: bytes, filename: str, path: str) -> None:
+    """Upload content in a single PATCH"""
+    metadata_str = _encode_metadata({"filename": filename, "path": path})
+    res_post = fastapi.post(
+        TUS_UPLOAD_URL,
+        headers={
+            "Tus-Resumable": TUS_VERSION,
+            "Upload-Length": str(len(content)),
+            "Upload-Metadata": metadata_str,
+            **CREATOR_AUTH,
+        },
+    )
+    assert res_post.status_code == status.HTTP_201_CREATED
+    res_patch = fastapi.patch(
+        res_post.headers["Location"],
+        headers={
+            "Tus-Resumable": TUS_VERSION,
+            "Content-Type": "application/offset+octet-stream",
+            "Upload-Offset": "0",
+            **CREATOR_AUTH,
+        },
+        content=content,
+    )
+    assert res_patch.status_code == status.HTTP_204_NO_CONTENT
+
+
+def _names_in(fastapi, folder: str):
+    res_files = fastapi.get(MY_FILES_URL + "/" + folder, headers=CREATOR_AUTH)
+    assert res_files.status_code == status.HTTP_200_OK
+    return sorted(e["name"] for e in res_files.json()["entries"])
+
+
+def test_tus_upload_plain_files(fastapi):
+    """
+    Files which are not archives go through the same type check as archive members:
+    text data is kept, other unaccepted types are removed, with an explanation file.
+    """
+    api_remove_user_file(fastapi, "*", CREATOR_AUTH)
+    _tus_upload(fastapi, b"object_id\n[t]\nobj1\n", "ecotaxa_a.tsv", "plain/x")
+    _tus_upload(fastapi, b"\x7fELF\x02\x01" + b"\x00" * 64, "evil.bin", "plain/x")
+    assert _names_in(fastapi, "plain") == [
+        "ecotaxa_a.tsv",
+        "evil.bin.unpack_error.txt",
+    ]
+    api_remove_user_file(fastapi, "*", CREATOR_AUTH)

@@ -216,3 +216,46 @@ def test_dir_over_file_collision(tmp_path):
         make_user_dir(root).dispatch_unpack(archive, parent)
     assert tree(parent) == ["name"]
     assert (parent / "name").read_bytes() == TSV
+
+
+#
+# Plain (not archive) uploads: same type check as for archive members.
+#
+import gzip
+
+
+@pytest.mark.parametrize("name", ["ecotaxa_a.tsv", "b.csv", "c.txt", "d.png"])
+def test_plain_upload_accepted(tmp_path, name):
+    root, parent = _setup(tmp_path)
+    upload = _upload(parent, name, PNG_1X1 if name.endswith(".png") else TSV)
+    make_user_dir(root).dispatch_unpack(upload, parent)
+    assert tree(parent) == [name]
+
+
+def test_plain_upload_refused(tmp_path):
+    root, parent = _setup(tmp_path)
+    upload = _upload(parent, "evil.bin", b"\x7fELF\x02\x01")
+    make_user_dir(root).dispatch_unpack(upload, parent)
+    # Sync: no report file, just removed
+    _nothing_left(parent)
+
+
+def test_plain_upload_refused_reported_in_background(tmp_path):
+    root, parent = _setup(tmp_path)
+    upload = _upload(parent, "evil.bin", b"\x7fELF\x02\x01")
+    user_dir = make_user_dir(root)
+    user_dir.switch_to_background()
+    user_dir.dispatch_unpack(upload, parent)
+    error_file = "evil.bin" + UserFilesDirectory.ERROR_FILE_SUFFIX
+    assert tree(parent) == [error_file]
+    report = (parent / error_file).read_text()
+    assert "evil.bin" in report and "not accepted" in report
+    assert str(root) not in report
+
+
+def test_gzipped_tsv_kept(tmp_path):
+    root, parent = _setup(tmp_path)
+    upload = _upload(parent, "ecotaxa_a.tsv.gz", gzip.compress(TSV))
+    make_user_dir(root).dispatch_unpack(upload, parent)
+    assert tree(parent) == ["ecotaxa_a.tsv"]
+    assert (parent / "ecotaxa_a.tsv").read_bytes() == TSV

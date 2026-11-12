@@ -28,6 +28,12 @@ from helpers.httpexception import (
 logger = get_logger(__name__)
 BUFFER_SIZE = 1024 * 1024
 PROGRESS_PREFIX = "⌛"
+# Additional accepted tabular/text formats, by extension, as magic detection can't type them
+TEXT_EXTENSIONS = {
+    "csv": "text/csv",
+    "txt": "text/plain",
+    "tsv": "text/tab-separated-values",
+}
 
 
 class UserFilesDirectory(object):
@@ -224,13 +230,6 @@ class UserFilesDirectory(object):
         else:
             archive.extractall(path.as_posix())
 
-        # Additional accepted tabular/text formats that might not match standard MIME filters
-        more_mime = {
-            "csv": "text/csv",
-            "txt": "text/plain",
-            "tsv": "text/tab-separated-values",
-        }
-
         # Validate extracted files, unpack nested archives, and purge unaccepted formats
         for filename in filenames:
             file_ext, compressed_path, mime_type = self._get_file_info(filename, path)
@@ -246,7 +245,7 @@ class UserFilesDirectory(object):
                 ):
                     self._dispatch_nested(compressed_path, path)
             # Accept text/tabular data files based on extension fallback
-            elif file_ext in more_mime.keys():
+            elif file_ext in TEXT_EXTENSIONS:
                 extracted.append(filename)
             # Preserve directory hierarchy
             elif os.path.isdir(compressed_path):
@@ -285,6 +284,9 @@ class UserFilesDirectory(object):
         except (CantMatchTypeError, Exception):
             mime_type = None
         if mime_type in self.accepted_mime_types:
+            return True
+        # Same extension fallback as for archive members
+        if filepath.split(".")[-1] in TEXT_EXTENSIONS:
             return True
         logger.info(
             "File format not accepted '%s' '%s' , user_id '%s'",
@@ -385,23 +387,31 @@ class UserFilesDirectory(object):
         If in background, leave a file telling the user why the archive produced nothing.
         Never raises.
         """
+        message = str(e) if str(e) else repr(e)
+        # No server path in the message
+        for a_root in (str(self._root_path.absolute()), str(self._root_path)):
+            message = message.replace(a_root, "")
+        self._report(
+            parent,
+            archive_name,
+            "Extraction of '%s' failed at {when} UTC, nothing was kept from it.\n"
+            "[%s] %s\n" % (archive_name, e.__class__.__name__, message),
+        )
+
+    def _report(self, parent: Path, file_name: str, text: str) -> None:
+        """
+        If in background, write text, with {when} replaced, into the error file for file_name.
+        Never raises.
+        """
         if not self.report_to_file:
             return
         try:
-            message = str(e) if str(e) else repr(e)
-            # No server path in the message
-            for a_root in (str(self._root_path.absolute()), str(self._root_path)):
-                message = message.replace(a_root, "")
             when = datetime.datetime.now(datetime.timezone.utc).strftime(
                 "%Y-%m-%d %H:%M:%S"
             )
-            content = (
-                "Extraction of '%s' failed at %s UTC, nothing was kept from it.\n"
-                "[%s] %s\n" % (archive_name, when, e.__class__.__name__, message)
-            )
-            self._error_file(parent, archive_name).write_text(content)
+            self._error_file(parent, file_name).write_text(text.replace("{when}", when))
         except Exception as e2:
-            logger.error("Could not report unpack failure of %s: %s", archive_name, e2)
+            logger.error("Could not report unpack failure of %s: %s", file_name, e2)
 
     @staticmethod
     def is_compressed(path: Path) -> bool:
@@ -421,6 +431,16 @@ class UserFilesDirectory(object):
         """
         if not self.is_compressed(compressed_path):
             self._dispatch_nested(compressed_path, to_path)
+            if compressed_path.exists():
+                self._error_file(to_path, compressed_path.name).unlink(missing_ok=True)
+            else:
+                # Removed by the format check
+                self._report(
+                    to_path,
+                    compressed_path.name,
+                    "Upload of '%s' refused at {when} UTC, its file type is not accepted.\n"
+                    % compressed_path.name,
+                )
             return
         archive_name = compressed_path.name
         staging = self._new_staging_dir(to_path, compressed_path)

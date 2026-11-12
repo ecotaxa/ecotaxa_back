@@ -158,8 +158,10 @@ async def on_tus_upload_complete(
                     "Destination file %s already exists, overwriting", dest_path
                 )
             shutil.move(tus_path, str(dest_path))
-            # Keep policy to exclude unwanted files.
-            user_dir.dispatch_unpack(tus_path, dest_path)
+            # Keep policy to exclude unwanted files, on the moved file, in its directory.
+            # Nobody gets this hook errors, so report a refusal to the user in a file.
+            user_dir.switch_to_background()
+            user_dir.dispatch_unpack(dest_path, dest_dir)
             logger.info(
                 "TUS file upload complete: moved %s to %s", file_path, dest_path
             )
