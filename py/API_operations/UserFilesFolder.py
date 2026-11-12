@@ -71,7 +71,7 @@ class UserFilesFolderService(Service):
         folder = UserFilesDirectory(current_user_id)
         try:
             ret = await folder.add_file(file_name, path, file)
-        except UnprocessableEntityException as e:
+        except BaseAppException as e:
             raise HTTPException(status_code=e.status_code, detail=e.message)
         return ret
 

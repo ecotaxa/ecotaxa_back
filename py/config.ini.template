@@ -82,6 +82,15 @@ SERVERURL = https://localfronturl:5001
 USERSFILESAREA = /eco_users_files
 # max upload file size in bytes
 MAX_UPLOAD_SIZE = 681574400
+# max total size in bytes of an upload once unpacked, nested archives included. 0: no limit. Default 10 x MAX_UPLOAD_SIZE
+#MAX_UNPACKED_SIZE = 6815744000
+# max nesting level of archives in an upload, the uploaded archive being 1. Default 5
+#MAX_UNPACK_DEPTH = 5
+# max number of files in an upload once unpacked, nested archives included. 0: no limit. Default 1000000
+#MAX_UNPACK_ENTRIES = 1000000
+# free space that unpacking must leave on the users files disk, a percentage of the disk ("10%") or bytes.
+# Unpacking is refused otherwise. 0: no check. Default 10%
+#UNPACK_MIN_FREE_DISK = 10%
 # number of days before deleting my files directories
 TIMETOLIVE = 60
 

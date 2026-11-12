@@ -28,6 +28,13 @@ def make_user_dir(root: Path) -> UserFilesDirectory:
     ret.trash_directory = UserFilesDirectory.TRASH_DIRECTORY % 1
     ret.compressed_origin = None
     ret.report_to_file = False
+    # Limits, generous by default, tests lower them
+    ret.max_unpacked_size = 10**12
+    ret.max_unpack_depth = 5
+    ret.max_unpack_entries = 10**6
+    # No check of free disk space
+    ret.min_free_disk_ratio, ret.min_free_disk_bytes = None, 0
+    ret._reset_unpack_budget()
     return ret
 
 

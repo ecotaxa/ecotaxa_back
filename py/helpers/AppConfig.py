@@ -169,6 +169,34 @@ class Config(object):
     def get_max_upload_size(self) -> int:
         return int(self._get("MAX_UPLOAD_SIZE", "665600"))
 
+    def get_max_unpacked_size(self) -> int:
+        """Max total size (bytes) of an upload once unpacked, nested archives included. 0: no limit."""
+        default = 10 * self.get_max_upload_size()
+        return int(self._get("MAX_UNPACKED_SIZE", str(default)) or default)
+
+    def get_max_unpack_depth(self) -> int:
+        """Max nesting level of archives in an upload, the uploaded archive being 1."""
+        return int(self._get("MAX_UNPACK_DEPTH", "5") or 5)
+
+    def get_max_unpack_entries(self) -> int:
+        """Max number of entries in an upload once unpacked, nested archives included. 0: no limit."""
+        return int(self._get("MAX_UNPACK_ENTRIES", "1000000") or 1000000)
+
+    def get_unpack_min_free_disk(self) -> Tuple[Optional[float], Optional[int]]:
+        """
+        Free disk space that unpacking must leave, either a percentage of the disk, e.g. "10%",
+        returned as (ratio, None), or a number of bytes, returned as (None, bytes).
+        0 or 0%: no check of free disk space.
+        """
+        val = (self._get("UNPACK_MIN_FREE_DISK", "10%") or "10%").strip()
+        if val.endswith("%"):
+            percent = float(val[:-1])
+            assert 0 <= percent < 100, "UNPACK_MIN_FREE_DISK percentage must be in [0, 100["
+            return percent / 100, None
+        nb_bytes = int(val)
+        assert nb_bytes >= 0, "UNPACK_MIN_FREE_DISK must be >= 0"
+        return None, nb_bytes
+
     DEFAULT_MIMETYPES = "application/zip,application/gzip,application/x-tar,text/plain,text/csv,text/tab-separated-values,image/jpeg,image/png,image/x-png,image/gif,image/tiff"
 
     def get_accepted_mime_types(self) -> List[str]:
@@ -289,6 +317,10 @@ class Config(object):
         self.get_time_to_live()
         self.get_max_captcha_token_length()
         self.get_max_upload_size()
+        assert self.get_max_unpacked_size() >= 0, "MAX_UNPACKED_SIZE must be >= 0"
+        assert self.get_max_unpack_depth() > 0, "MAX_UNPACK_DEPTH must be > 0"
+        assert self.get_max_unpack_entries() >= 0, "MAX_UNPACK_ENTRIES must be >= 0"
+        self.get_unpack_min_free_disk()
         self.get_taxoserver_url()
         self.get_openid_config()
         self.get_openid_require_verified_email()

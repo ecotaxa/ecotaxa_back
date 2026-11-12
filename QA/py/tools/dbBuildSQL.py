@@ -266,6 +266,8 @@ MAX_UPLOAD_SIZE = 681574400
 TIMETOLIVE = {TIMETOLIVE}
 ACCEPTED_MIME_TYPES = application/zip,application/gzip,application/x-tar,text/plain,text/csv,text/tab-separated-values,image/jpeg,image/png,image/x-png,image/gif,image/tiff
 ARCHIVE_EXTENSIONS = zip,tar,gzip,tar.gz,tar.bz2,tar.xz,gz
+# Tests must not depend on the free space of the host disk
+UNPACK_MIN_FREE_DISK = 0
 OPENID_CLIENT_ID=ecotaxa
 OPENID_CLIENT_SECRET=ugrv75rZRlVvUdk4YJE58sJulITDo0c8
 OPENID_METADATA_URL=https://my.keycloack.com/realms/theia/.well-known/openid-configuration

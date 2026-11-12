@@ -2,6 +2,7 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2021  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+import contextlib
 import datetime
 import gzip
 import os
@@ -10,7 +11,7 @@ import tarfile
 import zipfile
 import zlib
 from pathlib import Path
-from typing import Optional, List, Dict, Tuple
+from typing import Optional, List, Dict, Tuple, Generator
 
 from magic_rs import from_path, CantMatchTypeError
 from starlette.datastructures import UploadFile
@@ -26,6 +27,10 @@ from helpers.httpexception import (
     DETAIL_NOTHING_DONE,
     DETAIL_FILE_PROTECTED,
     DETAIL_EMPTY_ARCHIVE,
+    DETAIL_UNPACK_TOO_LARGE,
+    DETAIL_UNPACK_TOO_MANY_ENTRIES,
+    DETAIL_UNPACK_TOO_DEEP,
+    DETAIL_UNPACK_NO_DISK_SPACE,
 )
 
 logger = get_logger(__name__)
@@ -44,6 +49,13 @@ class EmptyArchiveException(UnprocessableEntityException):
 
     def __init__(self) -> None:
         super().__init__(DETAIL_EMPTY_ARCHIVE)
+
+
+class InsufficientStorageException(BaseAppException):
+    """Not the user's fault, the server disk is (almost) full"""
+
+    def __init__(self, message: str):
+        super().__init__(message, status_code=507)
 
 
 class UserFilesDirectory(object):
@@ -70,6 +82,14 @@ class UserFilesDirectory(object):
         self.compressed_origin: Optional[Path] = None
         # When set, an unpack failure is reported in a file next to the archive
         self.report_to_file = False
+        # Limits of one upload once unpacked, nested archives included
+        self.max_unpacked_size = config.get_max_unpacked_size()
+        self.max_unpack_depth = config.get_max_unpack_depth()
+        self.max_unpack_entries = config.get_max_unpack_entries()
+        self.min_free_disk_ratio, self.min_free_disk_bytes = (
+            config.get_unpack_min_free_disk()
+        )
+        self._reset_unpack_budget()
 
     def switch_to_background(self):
         """Future unpacking operations run in background, nobody gets their exceptions,
@@ -220,6 +240,12 @@ class UserFilesDirectory(object):
             filenames = archive.getnames()
         if len(filenames) == 0:
             raise EmptyArchiveException()
+        # Check limits from what the archive declares, before writing anything
+        if isinstance(archive, zipfile.ZipFile):
+            declared_size = sum(an_info.file_size for an_info in archive.infolist())
+        else:
+            declared_size = sum(a_member.size for a_member in archive.getmembers())
+        self._consume_unpack_budget(len(filenames), declared_size, path)
         extracted = []
 
         # Derive the destination subfolder name from the archive filename
@@ -357,10 +383,17 @@ class UserFilesDirectory(object):
     def unpack_gz(self, input_path: Path, path: Path) -> None:
         decompressed_path = input_path.with_suffix("")
         try:
+            # Size is unknown in advance, check limits while decompressing
+            self._consume_unpack_budget(1, 0, path)
             with gzip.open(input_path, "rb") as f_in, open(
                 decompressed_path, "wb"
             ) as f_out:
-                shutil.copyfileobj(f_in, f_out)
+                while True:
+                    chunk = f_in.read(BUFFER_SIZE)
+                    if not chunk:
+                        break
+                    self._consume_unpack_budget(0, len(chunk), path)
+                    f_out.write(chunk)
             self._dispatch_nested(path / decompressed_path.name, path)
         except Exception as e:
             if decompressed_path.exists():
@@ -368,6 +401,51 @@ class UserFilesDirectory(object):
             _unpack_exception_throw(e, str(self.compressed_origin))
         finally:
             input_path.unlink(missing_ok=True)
+
+    def _reset_unpack_budget(self) -> None:
+        self._unpacked_size = 0
+        self._unpacked_entries = 0
+        self._unpack_depth = 0
+
+    @contextlib.contextmanager
+    def _one_level_deeper(self) -> Generator[None, None, None]:
+        self._unpack_depth += 1
+        try:
+            if self._unpack_depth > self.max_unpack_depth:
+                raise UnprocessableEntityException(
+                    "%s (max. %d levels)" % (DETAIL_UNPACK_TOO_DEEP, self.max_unpack_depth)
+                )
+            yield
+        finally:
+            self._unpack_depth -= 1
+
+    def _consume_unpack_budget(self, nb_entries: int, size: int, where: Path) -> None:
+        """
+        Account for nb_entries / size bytes about to be written in where, raise if over a limit.
+        """
+        # A 0 limit means no check
+        self._unpacked_entries += nb_entries
+        if 0 < self.max_unpack_entries < self._unpacked_entries:
+            raise UnprocessableEntityException(
+                "%s (max. %d)" % (DETAIL_UNPACK_TOO_MANY_ENTRIES, self.max_unpack_entries)
+            )
+        self._unpacked_size += size
+        if 0 < self.max_unpacked_size < self._unpacked_size:
+            raise UnprocessableEntityException(
+                "%s (max. %d bytes)" % (DETAIL_UNPACK_TOO_LARGE, self.max_unpacked_size)
+            )
+        # A 0 margin means no check
+        if size > 0 and (self.min_free_disk_ratio or self.min_free_disk_bytes):
+            usage = shutil.disk_usage(where)
+            if self.min_free_disk_ratio is not None:
+                min_free = usage.total * self.min_free_disk_ratio
+            else:
+                min_free = self.min_free_disk_bytes or 0
+            if usage.free - size < min_free:
+                logger.error(
+                    "Disk almost full, refusing to unpack %d bytes into %s", size, where
+                )
+                raise InsufficientStorageException(DETAIL_UNPACK_NO_DISK_SPACE)
 
     @staticmethod
     def _new_staging_dir(parent: Path, archive: Path) -> Path:
@@ -491,6 +569,7 @@ class UserFilesDirectory(object):
                 )
             return
         archive_name = compressed_path.name
+        self._reset_unpack_budget()
         staging = self._new_staging_dir(to_path, compressed_path)
         try:
             try:
@@ -513,11 +592,14 @@ class UserFilesDirectory(object):
 
     def _dispatch_nested(self, compressed_path: Path, to_path: Path) -> None:
         if zipfile.is_zipfile(compressed_path.as_posix()):
-            self.unpack_zip(compressed_path, to_path)
+            with self._one_level_deeper():
+                self.unpack_zip(compressed_path, to_path)
         elif self._is_tar(compressed_path.as_posix()):
-            self.unpack_tar(compressed_path, to_path)
+            with self._one_level_deeper():
+                self.unpack_tar(compressed_path, to_path)
         elif self._is_gz(compressed_path.as_posix()):
-            self.unpack_gz(compressed_path, to_path)
+            with self._one_level_deeper():
+                self.unpack_gz(compressed_path, to_path)
         elif not self._has_accepted_format(to_path, str(compressed_path)):
             os.remove(compressed_path)
             self.list_errors.update({"Not accepted": str(compressed_path)})

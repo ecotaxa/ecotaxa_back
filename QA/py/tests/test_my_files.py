@@ -412,3 +412,82 @@ def test_upload_corrupt_archive(fastapi, tmp_path):
     list_rsp = fastapi.get(MY_FILES_URL + SEPARATOR + "test_corrupt", headers=CREATOR_AUTH)
     assert list_rsp.json()["entries"] == []
     api_remove_user_file(fastapi, "*", CREATOR_AUTH)
+
+
+def _post_zip(fastapi, tmp_path, content: str, dest: str):
+    archive = tmp_path / "big.zip"
+    with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as z:
+        z.writestr("a.tsv", content)
+    with open(archive, "rb") as fin:
+        return fastapi.post(
+            MY_FILES_URL,
+            headers=CREATOR_AUTH,
+            data={"path": dest + "/big.zip"},
+            files={"file": fin},
+        )
+
+
+def test_upload_unpack_limits(fastapi, tmp_path, monkeypatch):
+    """Limits once unpacked: 422 when too large, 507 when the disk would be (almost) full."""
+    from collections import namedtuple
+
+    import FS.UserFilesDir as UserFilesDirModule
+    from helpers.AppConfig import Config
+    from helpers.httpexception import (
+        DETAIL_UNPACK_TOO_LARGE,
+        DETAIL_UNPACK_NO_DISK_SPACE,
+    )
+
+    content = "object_id\n[t]\n" + "obj\n" * 50_000
+    monkeypatch.setattr(Config, "get_max_unpacked_size", lambda self: 10_000)
+    rsp = _post_zip(fastapi, tmp_path, content, "test_limits")
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT, rsp.text
+    assert DETAIL_UNPACK_TOO_LARGE in rsp.text
+
+    monkeypatch.setattr(Config, "get_max_unpacked_size", lambda self: 10**9)
+    monkeypatch.setattr(Config, "get_unpack_min_free_disk", lambda self: (0.1, None))
+    Usage = namedtuple("Usage", "total used free")
+    monkeypatch.setattr(
+        UserFilesDirModule.shutil, "disk_usage", lambda path: Usage(10**6, 9 * 10**5, 10**5)
+    )
+    rsp = _post_zip(fastapi, tmp_path, content, "test_limits")
+    assert rsp.status_code == 507, rsp.text
+    assert DETAIL_UNPACK_NO_DISK_SPACE in rsp.text
+
+    list_rsp = fastapi.get(MY_FILES_URL + SEPARATOR + "test_limits", headers=CREATOR_AUTH)
+    assert list_rsp.json()["entries"] == []
+    api_remove_user_file(fastapi, "*", CREATOR_AUTH)
+
+
+def test_config_zero_unpack_limits(monkeypatch):
+    """MAX_UNPACKED_SIZE / MAX_UNPACK_ENTRIES at 0 are valid, and mean no limit."""
+    from helpers.AppConfig import Config
+
+    conf = Config()
+    # Environment overrides config.ini
+    monkeypatch.setenv("MAX_UNPACKED_SIZE", "0")
+    monkeypatch.setenv("MAX_UNPACK_ENTRIES", "0")
+    assert conf.get_max_unpacked_size() == 0
+    assert conf.get_max_unpack_entries() == 0
+
+
+def test_config_unpack_min_free_disk(monkeypatch):
+    """UNPACK_MIN_FREE_DISK is a percentage of the disk, or bytes, 0 meaning no check."""
+    from helpers.AppConfig import Config
+
+    conf = Config()
+    monkeypatch.delenv("UNPACK_MIN_FREE_DISK", raising=False)
+    monkeypatch.setattr(conf.parser, "get", lambda key, default=None: default)
+    assert conf.get_unpack_min_free_disk() == (0.1, None)  # Default
+    for val, expected in (
+        ("5%", (0.05, None)),
+        ("0%", (0.0, None)),
+        ("50000000000", (None, 50000000000)),
+        ("0", (None, 0)),
+    ):
+        monkeypatch.setenv("UNPACK_MIN_FREE_DISK", val)
+        assert conf.get_unpack_min_free_disk() == expected
+    for wrong in ("150%", "-1", "lots"):
+        monkeypatch.setenv("UNPACK_MIN_FREE_DISK", wrong)
+        with pytest.raises((AssertionError, ValueError)):
+            conf.get_unpack_min_free_disk()

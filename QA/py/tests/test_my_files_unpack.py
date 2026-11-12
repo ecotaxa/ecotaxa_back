@@ -463,3 +463,221 @@ def test_nested_fake_tgz_removed(tmp_path):
     )
     make_user_dir(root).dispatch_unpack(archive, parent)
     assert tree(parent) == ["name/", "name/a.tsv"]
+
+
+#
+# Limits of an upload once unpacked: size, entries, nesting depth, free disk space
+#
+from collections import namedtuple
+
+import FS.UserFilesDir as UserFilesDirModule
+from FS.UserFilesDir import InsufficientStorageException
+from helpers.httpexception import (
+    DETAIL_UNPACK_TOO_LARGE,
+    DETAIL_UNPACK_TOO_MANY_ENTRIES,
+    DETAIL_UNPACK_TOO_DEEP,
+    DETAIL_UNPACK_NO_DISK_SPACE,
+)
+
+
+def _limited(root: Path, **limits) -> UserFilesDirectory:
+    ret = make_user_dir(root)
+    for a_key, a_val in limits.items():
+        setattr(ret, a_key, a_val)
+    return ret
+
+
+def _refused(user_dir, archive, parent, detail, exc_class=UnprocessableEntityException):
+    with pytest.raises(exc_class) as exc:
+        user_dir.dispatch_unpack(archive, parent)
+    assert exc.value.message.startswith(detail), exc.value.message
+    _nothing_left(parent)
+
+
+def test_size_limit_zip(tmp_path):
+    root, parent = _setup(tmp_path)
+    # Highly compressible, like a zip bomb
+    archive = _upload(parent, "name.zip", _deflated_zip(b"\x00" * 100_000))
+    assert archive.stat().st_size < 1000
+    _refused(_limited(root, max_unpacked_size=50_000), archive, parent, DETAIL_UNPACK_TOO_LARGE)
+
+
+def test_size_limit_ok_at_limit(tmp_path):
+    root, parent = _setup(tmp_path)
+    archive = _upload(parent, "name.zip", zip_bytes({"a.tsv": TSV}))
+    _limited(root, max_unpacked_size=len(TSV)).dispatch_unpack(archive, parent)
+    assert tree(parent) == ["name/", "name/a.tsv"]
+
+
+def test_size_limit_adds_nested(tmp_path):
+    root, parent = _setup(tmp_path)
+    inner = zip_bytes({"x.tsv": TSV * 100})
+    archive = _upload(parent, "name.zip", zip_bytes({"a.tsv": TSV, "in.zip": inner}))
+    # Each archive alone is under the limit, not all together
+    outer_size = len(TSV) + len(inner)
+    inner_size = len(TSV) * 100
+    limit = max(outer_size, inner_size) + 10
+    assert outer_size + inner_size > limit
+    _refused(_limited(root, max_unpacked_size=limit), archive, parent, DETAIL_UNPACK_TOO_LARGE)
+
+
+def test_size_limit_compressed_tar(tmp_path):
+    root, parent = _setup(tmp_path)
+    archive = _upload(parent, "name.tar.gz", _tar("w:gz", b"\x00" * 100_000))
+    _refused(_limited(root, max_unpacked_size=50_000), archive, parent, DETAIL_UNPACK_TOO_LARGE)
+
+
+def test_size_limit_gz_streamed(tmp_path):
+    root, parent = _setup(tmp_path)
+    # Not zeros: a gzipped stream of zeros is a valid (empty) tar
+    archive = _upload(parent, "a.tsv.gz", gzip.compress(TSV * 200_000))
+    _refused(_limited(root, max_unpacked_size=1_500_000), archive, parent, DETAIL_UNPACK_TOO_LARGE)
+
+
+def test_entries_limit(tmp_path):
+    root, parent = _setup(tmp_path)
+    inner = zip_bytes({"x.tsv": TSV, "y.tsv": TSV})
+    archive = _upload(
+        parent, "name.zip", zip_bytes({"a.tsv": TSV, "b.tsv": TSV, "in.zip": inner})
+    )
+    # 3 in the upload, 2 in the nested archive
+    _limited(root, max_unpack_entries=5).dispatch_unpack(archive, parent)
+    assert len(tree(parent)) == 6
+    root, parent = _setup(tmp_path / "again")
+    archive = _upload(
+        parent, "name.zip", zip_bytes({"a.tsv": TSV, "b.tsv": TSV, "in.zip": inner})
+    )
+    _refused(_limited(root, max_unpack_entries=4), archive, parent, DETAIL_UNPACK_TOO_MANY_ENTRIES)
+
+
+def _nested_zips(depth: int) -> bytes:
+    content = zip_bytes({"x.tsv": TSV})
+    for _ in range(depth - 1):
+        content = zip_bytes({"in.zip": content})
+    return content
+
+
+def test_depth_limit(tmp_path):
+    root, parent = _setup(tmp_path)
+    # Upload + 2 levels, as for UVP6: upload.zip / *Images.zip, plus one
+    archive = _upload(parent, "name.zip", _nested_zips(3))
+    _limited(root, max_unpack_depth=3).dispatch_unpack(archive, parent)
+    assert "name/in/in/x.tsv" in tree(parent)
+    root, parent = _setup(tmp_path / "again")
+    archive = _upload(parent, "name.zip", _nested_zips(4))
+    _refused(_limited(root, max_unpack_depth=3), archive, parent, DETAIL_UNPACK_TOO_DEEP)
+
+
+_Usage = namedtuple("_Usage", "total used free")
+
+
+def test_disk_space(tmp_path, monkeypatch):
+    root, parent = _setup(tmp_path)
+    archive = _upload(parent, "name.zip", zip_bytes({"a.tsv": TSV * 100}))
+    # Less than 10% would be left
+    monkeypatch.setattr(
+        UserFilesDirModule.shutil,
+        "disk_usage",
+        lambda path: _Usage(10_000, 9_000, 1_000 + len(TSV) * 50),
+    )
+    _refused(
+        _limited(root, min_free_disk_ratio=0.1),
+        archive,
+        parent,
+        DETAIL_UNPACK_NO_DISK_SPACE,
+        InsufficientStorageException,
+    )
+    # Unless the check is off, with a 0 margin
+    archive = _upload(parent, "name.zip", zip_bytes({"a.tsv": TSV * 100}))
+    _limited(root, min_free_disk_ratio=0.0).dispatch_unpack(archive, parent)
+    assert tree(parent) == ["name/", "name/a.tsv"]
+
+
+def test_limit_reported_in_background(tmp_path):
+    root, parent = _setup(tmp_path)
+    archive = _upload(parent, "name.zip", _deflated_zip(b"\x00" * 100_000))
+    user_dir = _limited(root, max_unpacked_size=50_000)
+    user_dir.switch_to_background()
+    with pytest.raises(UnprocessableEntityException):
+        user_dir.dispatch_unpack(archive, parent)
+    error_file = "name.zip" + UserFilesDirectory.ERROR_FILE_SUFFIX
+    assert tree(parent) == [error_file]
+    assert DETAIL_UNPACK_TOO_LARGE in (parent / error_file).read_text()
+
+
+def test_budget_is_per_upload(tmp_path):
+    root, parent = _setup(tmp_path)
+    user_dir = _limited(root, max_unpacked_size=len(TSV), max_unpack_entries=1)
+    for a_name in ("a.zip", "b.zip"):
+        archive = _upload(parent, a_name, zip_bytes({"x.tsv": TSV}))
+        user_dir.dispatch_unpack(archive, parent)
+    assert tree(parent) == ["a/", "a/x.tsv", "b/", "b/x.tsv"]
+
+
+def test_zero_limits_mean_no_check(tmp_path):
+    root, parent = _setup(tmp_path)
+    inner = zip_bytes({"x.tsv": TSV, "y.tsv": TSV})
+    archive = _upload(
+        parent, "name.zip", zip_bytes({"a.tsv": TSV * 1000, "in.zip": inner})
+    )
+    _limited(root, max_unpacked_size=0, max_unpack_entries=0).dispatch_unpack(
+        archive, parent
+    )
+    assert tree(parent) == [
+        "name/",
+        "name/a.tsv",
+        "name/in/",
+        "name/in/x.tsv",
+        "name/in/y.tsv",
+    ]
+
+
+def test_zero_limits_gz_streamed(tmp_path):
+    root, parent = _setup(tmp_path)
+    archive = _upload(parent, "a.tsv.gz", gzip.compress(TSV * 200_000))
+    _limited(root, max_unpacked_size=0).dispatch_unpack(archive, parent)
+    assert tree(parent) == ["a.tsv"]
+
+
+def test_disk_space_margin_in_bytes(tmp_path, monkeypatch):
+    root, parent = _setup(tmp_path)
+    size = len(TSV) * 100
+    # 1 TB disk with 50 GB + size free: under a 10% margin, but just enough for a 50 GB one
+    monkeypatch.setattr(
+        UserFilesDirModule.shutil,
+        "disk_usage",
+        lambda path: _Usage(10**12, 10**12 - 50 * 10**9 - size, 50 * 10**9 + size),
+    )
+    archive = _upload(parent, "name.zip", zip_bytes({"a.tsv": TSV * 100}))
+    _refused(
+        _limited(root, min_free_disk_ratio=0.1),
+        archive,
+        parent,
+        DETAIL_UNPACK_NO_DISK_SPACE,
+        InsufficientStorageException,
+    )
+    archive = _upload(parent, "name.zip", zip_bytes({"a.tsv": TSV * 100}))
+    _refused(
+        _limited(root, min_free_disk_bytes=50 * 10**9 + 1),
+        archive,
+        parent,
+        DETAIL_UNPACK_NO_DISK_SPACE,
+        InsufficientStorageException,
+    )
+    archive = _upload(parent, "name.zip", zip_bytes({"a.tsv": TSV * 100}))
+    _limited(root, min_free_disk_bytes=50 * 10**9).dispatch_unpack(archive, parent)
+    assert tree(parent) == ["name/", "name/a.tsv"]
+
+
+def test_disk_space_zero_margin_no_check(tmp_path, monkeypatch):
+    root, parent = _setup(tmp_path)
+
+    def no_call(path):
+        raise AssertionError("disk_usage should not be called")
+
+    monkeypatch.setattr(UserFilesDirModule.shutil, "disk_usage", no_call)
+    archive = _upload(parent, "name.zip", zip_bytes({"a.tsv": TSV}))
+    _limited(root, min_free_disk_ratio=None, min_free_disk_bytes=0).dispatch_unpack(
+        archive, parent
+    )
+    assert tree(parent) == ["name/", "name/a.tsv"]
