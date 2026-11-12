@@ -51,20 +51,9 @@ class InBundle(object):
         self.user_loc = user_loc
         # Compute the files we have to process.
         self.possible_files: List[Path] = []
-        nb_files = 0
-
-        def one_more() -> None:
-            nonlocal nb_files
-            nb_files += 1
-            if nb_files > self.MAX_FILES:
-                raise ImportError(
-                    "You tried to import too many files, max. is %d" % self.MAX_FILES
-                )
-
         for a_filter in self.TSV_FILTERS:
             for a_file in self.path.glob(a_filter):
                 self.possible_files.append(a_file)
-                one_more()
         self.possible_files.sort()
         bundles = list(self.path.glob(self.UVP6_FILTER))
         for bundle_dir in self.path.glob(self.UVP6_DIRS_FILTER):
@@ -75,13 +64,18 @@ class InBundle(object):
                 continue
             self.possible_files.remove(tsv_file)
             bundles.append(bundle_dir)
+        # Count once, after UVP6 dirs' TSVs were removed, so that a UVP6 sample
+        # counts for 1, be it a *Images.zip or an *Images directory
+        if len(self.possible_files) + len(bundles) > self.MAX_FILES:
+            raise ImportError(
+                "You tried to import too many files, max. is %d" % self.MAX_FILES
+            )
         self.sub_bundles: List[UVP6Bundle] = []
         for a_bundle in bundles:
             bundle_loc = str(a_bundle.relative_to(self.path))
             self.sub_bundles.append(
                 UVP6Bundle(a_bundle, user_loc + "/" + bundle_loc, temp_dir)
             )
-            one_more()
 
     def possible_files_as_posix(self) -> Generator[str, None, None]:
         """
