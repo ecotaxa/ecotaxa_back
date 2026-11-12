@@ -7,10 +7,22 @@ import gc
 import logging
 import time
 from pathlib import Path
+from typing import Any
 
 import pytest
 
-import API_operations.BigFiles as BigFiles
+# Imported by the 'bigfiles' fixture: BigFiles reads the configuration (USERSFILESAREA) at import,
+# and the tests config.ini is only written by the 'database' fixture, after collection.
+BigFiles: Any = None
+
+
+@pytest.fixture
+def bigfiles(database):
+    global BigFiles
+    import API_operations.BigFiles as module
+
+    BigFiles = module
+    return module
 
 
 class FakeUserDir:
@@ -32,12 +44,12 @@ class FakeUserDir:
 
 
 @pytest.fixture
-def short_wait(monkeypatch):
-    monkeypatch.setattr(BigFiles, "UNPACK_SYNC_WAIT", 0.1)
+def short_wait(bigfiles, monkeypatch):
+    monkeypatch.setattr(bigfiles, "UNPACK_SYNC_WAIT", 0.1)
 
 
 @pytest.fixture
-def bigfiles_logs(monkeypatch):
+def bigfiles_logs(bigfiles, monkeypatch):
     """Capture BigFiles log messages, whatever the app's logging setup"""
     messages = []
 
