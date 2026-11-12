@@ -221,7 +221,11 @@ class UserFilesDirectory(object):
             # TODO: Buggy, there could be multiple directories, filenames[0] is inaccurate
 
         # Extract all files and directories into the target path
-        archive.extractall(path.as_posix())
+        if isinstance(archive, tarfile.TarFile):
+            # No absolute paths, no escape out of path, no links outside, no devices
+            archive.extractall(path.as_posix(), filter="data")
+        else:
+            archive.extractall(path.as_posix())
 
         # Additional accepted tabular/text formats that might not match standard MIME filters
         more_mime = {
