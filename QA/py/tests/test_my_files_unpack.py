@@ -404,3 +404,62 @@ def test_uppercase_plain_upload_kept(tmp_path, name):
     upload = _upload(parent, name, TSV)
     make_user_dir(root).dispatch_unpack(upload, parent)
     assert tree(parent) == [name]
+
+
+#
+# Compressed tars: .tgz, and compound extensions from ARCHIVE_EXTENSIONS
+#
+def _a_tar(mode: str) -> bytes:
+    return _tar(mode, TSV)
+
+
+def test_top_level_tgz(tmp_path):
+    root, parent = _setup(tmp_path)
+    archive = _upload(parent, "x.tgz", _a_tar("w:gz"))
+    make_user_dir(root).dispatch_unpack(archive, parent)
+    assert tree(parent) == ["x/", "x/a.tsv"]
+
+
+@pytest.mark.parametrize(
+    "name,mode,folder",
+    [
+        ("in.tgz", "w:gz", "in"),
+        ("in.TGZ", "w:gz", "in"),
+        ("in.tar.gz", "w:gz", "in.tar"),
+        ("in.tar.bz2", "w:bz2", "in.tar"),
+        ("in.tar.xz", "w:xz", "in.tar"),
+    ],
+)
+def test_nested_compressed_tar(tmp_path, name, mode, folder):
+    root, parent = _setup(tmp_path)
+    archive = _upload(
+        parent, "name.zip", zip_bytes({"a.tsv": TSV, name: _a_tar(mode)})
+    )
+    make_user_dir(root).dispatch_unpack(archive, parent)
+    assert tree(parent) == [
+        "name/",
+        "name/a.tsv",
+        "name/" + folder + "/",
+        "name/" + folder + "/a.tsv",
+    ]
+
+
+def test_nested_archive_type_not_configured(tmp_path):
+    root, parent = _setup(tmp_path)
+    archive = _upload(
+        parent, "name.zip", zip_bytes({"a.tsv": TSV, "in.tar.bz2": _a_tar("w:bz2")})
+    )
+    user_dir = make_user_dir(root)
+    user_dir.archive_extensions = ["zip", "tar", "gz"]
+    user_dir.dispatch_unpack(archive, parent)
+    # Not a configured archive type, and its MIME type is not accepted
+    assert tree(parent) == ["name/", "name/a.tsv"]
+
+
+def test_nested_fake_tgz_removed(tmp_path):
+    root, parent = _setup(tmp_path)
+    archive = _upload(
+        parent, "name.zip", zip_bytes({"a.tsv": TSV, "fake.tgz": b"not an archive"})
+    )
+    make_user_dir(root).dispatch_unpack(archive, parent)
+    assert tree(parent) == ["name/", "name/a.tsv"]

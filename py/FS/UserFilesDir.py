@@ -248,20 +248,20 @@ class UserFilesDirectory(object):
         for filename in filenames:
             file_ext, compressed_path, mime_type = self._get_file_info(filename, path)
 
-            # Check if file matches configured accepted MIME types
-            if mime_type in self.accepted_mime_types:
+            # Recursively unpack nested archives (e.g., zip inside tar), of configured
+            # archive types, even if their MIME type is not listed (e.g. .tar.bz2)
+            if self._is_nested_archive(filename, compressed_path) and not self._is_trash_dir(
+                str(path)
+            ):
                 extracted.append(filename)
-                # Recursively unpack nested archives (e.g., zip inside tar)
-                if (
-                    file_ext in self.archive_extensions
-                    and not compressed_path.is_dir()
-                    and not self._is_trash_dir(str(path))
-                ):
-                    try:
-                        self._dispatch_nested(compressed_path, path)
-                    except EmptyArchiveException:
-                        # Nothing to keep from it, and it was removed. Not worth failing the whole upload.
-                        logger.info("Empty nested archive '%s' removed", compressed_path)
+                try:
+                    self._dispatch_nested(compressed_path, path)
+                except EmptyArchiveException:
+                    # Nothing to keep from it, and it was removed. Not worth failing the whole upload.
+                    logger.info("Empty nested archive '%s' removed", compressed_path)
+            # Check if file matches configured accepted MIME types
+            elif mime_type in self.accepted_mime_types:
+                extracted.append(filename)
             # Accept text/tabular data files based on extension fallback
             elif file_ext in TEXT_EXTENSIONS:
                 extracted.append(filename)
@@ -272,6 +272,25 @@ class UserFilesDirectory(object):
             else:
                 os.remove(compressed_path)
                 logger.info("NOT EXTRACTED '%s' ", str(compressed_path))
+
+    def _is_nested_archive(self, filename: str, filepath: Path) -> bool:
+        """
+        Is the archive member an archive to unpack: its extension, possibly compound like
+        "tar.gz" ("tgz" being "tar.gz"), is a configured archive one, and its content is an archive.
+        """
+        parts = filename.lower().rsplit("/", 1)[-1].split(".")
+        if len(parts) < 2:
+            return False
+        candidates = {parts[-1]}
+        if len(parts) >= 3:
+            candidates.add(parts[-2] + "." + parts[-1])
+        if parts[-1] == "tgz":
+            candidates.add("tar.gz")
+        if not candidates & set(self.archive_extensions):
+            return False
+        if filepath.is_dir():
+            return False
+        return self.is_compressed(filepath)
 
     @staticmethod
     def _get_file_info(filename: str, path: Path) -> Tuple[str, Path, Optional[str]]:
@@ -336,7 +355,6 @@ class UserFilesDirectory(object):
             input_path.unlink(missing_ok=True)
 
     def unpack_gz(self, input_path: Path, path: Path) -> None:
-        # TODO: Works for e.g. .tar.gz but NOT for .tgz which is a common extension
         decompressed_path = input_path.with_suffix("")
         try:
             with gzip.open(input_path, "rb") as f_in, open(
