@@ -89,6 +89,7 @@ async def _start_unpack(
     The status, for polling, is keyed by the TUS upload id, i.e. tus_path name.
     A failure during the wait is raised.
     """
+    user_dir.upload_id = tus_path.name
     status = _new_status(tus_path.name, user_id, name)
     if status is not None:
         # Before the task, so a poll right after the last PATCH finds it

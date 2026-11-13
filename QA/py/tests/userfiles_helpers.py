@@ -36,6 +36,9 @@ def make_user_dir(root: Path) -> UserFilesDirectory:
     ret.min_free_disk_ratio, ret.min_free_disk_bytes = None, 0
     ret._reset_unpack_budget()
     ret.status_reporter = None
+    # No registration of unpackings, tests set it
+    ret.registry_dir = None
+    ret.upload_id = None
     ret._status_fields = {}
     return ret
 

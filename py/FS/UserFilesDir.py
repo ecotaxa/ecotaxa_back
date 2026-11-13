@@ -17,6 +17,7 @@ from magic_rs import from_path, CantMatchTypeError
 from starlette.datastructures import UploadFile
 
 from DB.User import UserIDT
+from FS import UnpackRegistry
 from FS.CommonDir import CommonFolder, DirEntryT
 from helpers.AppConfig import Config
 from helpers.CustomException import UnprocessableEntityException, BaseAppException
@@ -90,6 +91,10 @@ class UserFilesDirectory(object):
         self.compressed_origin: Optional[Path] = None
         # When set, an unpack failure is reported in a file next to the archive
         self.report_to_file = False
+        # Where unpackings in progress are registered, to clean up after a restart
+        self.registry_dir: Optional[Path] = get_unpack_registry_dir()
+        # The TUS upload being unpacked, if any
+        self.upload_id: Optional[str] = None
         # Limits of one upload once unpacked, nested archives included
         self.max_unpacked_size = config.get_max_unpacked_size()
         self.max_unpack_depth = config.get_max_unpack_depth()
@@ -630,22 +635,33 @@ class UserFilesDirectory(object):
             return
         self._status(state="unpacking", name=archive_name, percent=0)
         staging = self._new_staging_dir(to_path, compressed_path)
-        try:
+        # If this process dies meanwhile, the next one to start cleans up
+        with UnpackRegistry.registered(
+            self.registry_dir,
+            {
+                "staging": str(staging.absolute()),
+                "parent": str(to_path.absolute()),
+                "name": archive_name,
+                "user_id": self.user_id,
+                "upload_id": self.upload_id,
+            },
+        ):
             try:
-                relative = compressed_path.relative_to(to_path)
-            except ValueError:
-                relative = Path(archive_name)
-            # Same relative position, so the same layout as without staging
-            staged_archive = staging / relative
-            staged_archive.parent.mkdir(parents=True, exist_ok=True)
-            shutil.move(compressed_path, staged_archive)
-            self._dispatch_nested(staged_archive, staging)
-            published = self._publish(staging, to_path)
-        except Exception as e:
-            shutil.rmtree(staging, ignore_errors=True)
-            compressed_path.unlink(missing_ok=True)
-            self._report_failure(to_path, archive_name, e)
-            raise
+                try:
+                    relative = compressed_path.relative_to(to_path)
+                except ValueError:
+                    relative = Path(archive_name)
+                # Same relative position, so the same layout as without staging
+                staged_archive = staging / relative
+                staged_archive.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(compressed_path, staged_archive)
+                self._dispatch_nested(staged_archive, staging)
+                published = self._publish(staging, to_path)
+            except Exception as e:
+                shutil.rmtree(staging, ignore_errors=True)
+                compressed_path.unlink(missing_ok=True)
+                self._report_failure(to_path, archive_name, e)
+                raise
         self._status(
             state="done", percent=100, result_paths=self._relative_paths(to_path, published)
         )
@@ -725,3 +741,15 @@ def get_tus_files_dir() -> str:
     tus_dir = Path(base_dir, "tus_uploads")
     tus_dir.mkdir(parents=True, exist_ok=True)
     return str(tus_dir)
+
+
+def get_unpack_registry_dir() -> Path:
+    """Where unpackings in progress are registered, shared by all server processes."""
+    return Path(get_tus_files_dir(), ".unpacking")
+
+
+def sweep_stale_unpacks() -> int:
+    """Clean up after the unpackings of dead processes, see UnpackRegistry."""
+    return UnpackRegistry.sweep_stale(
+        get_unpack_registry_dir(), Path(Config().get_users_files_dir())
+    )

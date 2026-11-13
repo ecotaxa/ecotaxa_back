@@ -4,6 +4,7 @@
 #
 # Based on https://fastapi.tiangolo.com/
 #
+import asyncio
 import os
 import re
 import time
@@ -113,6 +114,7 @@ from API_models.taxonomy import (
 )
 from API_operations.BigFiles import create_big_files_router, TUS_PREFIX
 from FS.UnpackStatus import UnpackStatus
+from FS.UserFilesDir import sweep_stale_unpacks
 from API_operations.CRUD.Collections import CollectionsService
 from API_operations.CRUD.Constants import ConstantsService
 from API_operations.CRUD.Guests import GuestService
@@ -4608,6 +4610,14 @@ async def lifespan(app: FastAPI):
     # Small service construction & check, to ensure config and the DB are OK
     with ConstantsService() as sce:
         sce.config.validate()
+
+    # Unpackings interrupted by a restart left staging folders in users files
+    try:
+        nb_swept = await asyncio.to_thread(sweep_stale_unpacks)
+        if nb_swept:
+            logger.warning("Cleaned up %d interrupted unpacking(s)", nb_swept)
+    except Exception as e:
+        logger.error("Could not clean up interrupted unpackings: %s", e)
 
     # The router for big files needs a valid USERSFILESAREA config
     big_files_router = create_big_files_router()
