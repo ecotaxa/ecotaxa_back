@@ -198,20 +198,6 @@ class Config(object):
         assert nb_bytes >= 0, "UNPACK_MIN_FREE_DISK must be >= 0"
         return None, nb_bytes
 
-    DEFAULT_MIMETYPES = "application/zip,application/gzip,application/x-tar,text/plain,text/csv,text/tab-separated-values,image/jpeg,image/png,image/x-png,image/gif,image/tiff"
-
-    def get_accepted_mime_types(self) -> List[str]:
-        ret = self._get("ACCEPTED_MIME_TYPES", self.DEFAULT_MIMETYPES)
-        mimes = [r.strip() for r in ret.split(",")]
-        return mimes
-
-    DEFAULT_ARCHIVES = "zip,tar,gzip,tar.gz,tar.bz2,tar.xz,gz"
-
-    def get_archive_extensions(self) -> List[str]:
-        ret = self._get("ARCHIVE_EXTENSIONS", self.DEFAULT_ARCHIVES)
-        extensions = [r.strip() for r in ret.split(",")]
-        return extensions
-
     def get_cors_allowed_origins(self) -> List[str]:
         # Exact origins (scheme://host[:port]) of third-party browser apps allowed to read API responses, or '*' for any
         ret = self._get("CORS_ALLOWED_ORIGINS", "")
@@ -325,8 +311,6 @@ class Config(object):
         self.get_taxoserver_url()
         self.get_openid_config()
         self.get_openid_require_verified_email()
-        self.get_accepted_mime_types()
-        self.get_archive_extensions()
         self.get_cors_allowed_origins()
         cors_origin_regex = self.get_cors_allowed_origin_regex()
         if cors_origin_regex is not None:

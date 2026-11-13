@@ -72,7 +72,7 @@ class UserFilesFolderService(Service):
         try:
             ret = await folder.add_file(file_name, path, file)
         except BaseAppException as e:
-            code, message = folder.unpack_failure(file_name, e)
+            code, message = folder.unpacker.unpack_failure(file_name, e)
             raise HTTPException(status_code=code, detail=message)
         return ret
 

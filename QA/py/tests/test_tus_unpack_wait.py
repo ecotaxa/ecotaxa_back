@@ -32,6 +32,9 @@ class FakeUserDir:
         self.duration = duration
         self.fail = fail
         self.done = False
+        self.upload_id = None
+        self.status_reporter = None
+        self.unpacker = self
 
     def switch_to_background(self):
         pass

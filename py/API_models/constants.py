@@ -22,6 +22,30 @@ FORMULAE = """subsample_coef: 1/ssm.sub_part
 total_water_volume: sam.tot_vol/1000
 individual_volume: 4.0/3.0*math.pi*(math.sqrt(obj.area/math.pi)*ssm.pixel_size)**3"""
 
+DEFAULT_MIMETYPES = [
+    "application/zip",
+    "application/gzip",
+    "application/x-tar",
+    "text/plain",
+    "text/csv",
+    "text/tab-separated-values",
+    "image/jpeg",
+    "image/png",
+    "image/x-png",
+    "image/gif",
+    "image/tiff",
+]
+
+DEFAULT_ARCHIVES = [
+    "zip",
+    "tar",
+    "gzip",
+    "tar.gz",
+    "tar.bz2",
+    "tar.xz",
+    "gz",
+]
+
 
 class Constants(BaseModel):
     """Values which can be considered identical over the lifetime of the back-end."""
@@ -135,12 +159,12 @@ class Constants(BaseModel):
     accepted_mime_types: List[str] = Field(
         title="Accepted mime types",
         description="File import and My Files, list of accepted mime types",
-        default=[],
+        default=DEFAULT_MIMETYPES,
     )
     archive_extensions: List[str] = Field(
         title="Accepted archive extensions",
         description="File import and My Files, list of accepted archive extensions",
-        default=[],
+        default=DEFAULT_ARCHIVES,
     )
     all_in_one: bool = Field(
         title="All in One",

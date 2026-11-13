@@ -14,7 +14,7 @@ from tuspyserver.file import _validate_uid_within_dir
 from tuspyserver.lock import acquire_upload_lock
 from tuspyserver.storage.local import LocalFileStorage
 
-from FS.UnpackStatus import UnpackStatus
+from FS.Unpack import UnpackStatus, Unpacker
 from FS.UserFilesDir import UserFilesDirectory, get_tus_files_dir
 from helpers.AppConfig import Config
 from helpers.CustomException import BaseAppException, UnprocessableEntityException
@@ -46,9 +46,11 @@ async def _background_unpack(
     user_dir: UserFilesDirectory, orig_path: Path, file_path: Path, dest_dir: Path
 ) -> None:
     try:
-        user_dir.switch_to_background()
+        user_dir.unpacker.switch_to_background()
         await asyncio.to_thread(
-            user_dir.dispatch_unpack, compressed_path=file_path, to_path=dest_dir
+            user_dir.unpacker.dispatch_unpack,
+            compressed_path=file_path,
+            to_path=dest_dir,
         )
         logger.info("Done unpacking %s in background", file_path)
     except asyncio.CancelledError:
@@ -89,12 +91,12 @@ async def _start_unpack(
     The status, for polling, is keyed by the TUS upload id, i.e. tus_path name.
     A failure during the wait is raised.
     """
-    user_dir.upload_id = tus_path.name
+    user_dir.unpacker.upload_id = tus_path.name
     status = _new_status(tus_path.name, user_id, name)
     if status is not None:
         # Before the task, so a poll right after the last PATCH finds it
         status.update({"state": "unpacking", "percent": 0})
-        user_dir.status_reporter = status.update
+        user_dir.unpacker.status_reporter = status.update
     task = asyncio.create_task(
         _background_unpack(user_dir, tus_path, dest_path, dest_dir),
         name=f"unpack_{name}",
@@ -147,7 +149,7 @@ async def on_tus_upload_complete(
         dest_dir = destination_directory(user_dir, metadata.get("path"))
         dest_path = dest_dir / original_name
 
-        if user_dir.is_compressed(tus_path):
+        if Unpacker.is_compressed(tus_path):
             # Link destination, we have the upload from 2 inodes now.
             try:
                 os.link(tus_path, dest_path)
@@ -189,9 +191,9 @@ async def on_tus_upload_complete(
             # The client may be gone, so report a refusal to the user in a file too.
             status = _new_status(tus_path.name, current_user_id, dest_path.name)
             if status is not None:
-                user_dir.status_reporter = status.update
-            user_dir.switch_to_background()
-            user_dir.dispatch_unpack(dest_path, dest_dir)
+                user_dir.unpacker.status_reporter = status.update
+            user_dir.unpacker.switch_to_background()
+            user_dir.unpacker.dispatch_unpack(dest_path, dest_dir)
             logger.info(
                 "TUS file upload complete: moved %s to %s", file_path, dest_path
             )
@@ -202,7 +204,9 @@ async def on_tus_upload_complete(
             str(e),
             exc_info=not isinstance(e, BaseAppException),
         )
-        raise _upload_failure(user_dir, tus_path.name, current_user_id, original_name, e)
+        raise _upload_failure(
+            user_dir, tus_path.name, current_user_id, original_name, e
+        )
 
 
 def _upload_failure(
@@ -217,7 +221,7 @@ def _upload_failure(
     record it in the upload status, for polling.
     """
     if user_dir is not None:
-        code, message = user_dir.unpack_failure(name, e)
+        code, message = user_dir.unpacker.unpack_failure(name, e)
     elif isinstance(e, BaseAppException):
         code, message = e.status_code, e.message
     else:

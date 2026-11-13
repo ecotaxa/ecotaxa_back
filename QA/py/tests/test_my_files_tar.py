@@ -39,7 +39,7 @@ def test_tar_extract_uses_data_filter(tmp_path, monkeypatch):
         return orig(self, *args, **kwargs)
 
     monkeypatch.setattr(tarfile.TarFile, "extractall", spy)
-    _user_dir(root).dispatch_unpack(archive, target)
+    _user_dir(root).unpacker.dispatch_unpack(archive, target)
     assert seen == ["data"]
     assert (target / "cont" / "ecotaxa_a.tsv").is_file()
     assert not archive.exists()
@@ -52,7 +52,7 @@ def test_tar_traversal_rejected(tmp_path, member):
     with tarfile.open(archive, "w") as tar:
         _add_file(tar, member)
     with pytest.raises(UnprocessableEntityException) as exc:
-        _user_dir(root).dispatch_unpack(archive, target)
+        _user_dir(root).unpacker.dispatch_unpack(archive, target)
     assert exc.value.message.startswith(DETAIL_ARCHIVE_MEMBER_REFUSED)
     assert isinstance(exc.value.__cause__, tarfile.FilterError)
     assert list(tmp_path.rglob("escape.txt")) == []
@@ -66,7 +66,7 @@ def test_tar_absolute_member_stays_inside(tmp_path):
         _add_file(tar, outside.as_posix())
     # "data" filter either rejects or strips the leading /, never writes there
     try:
-        _user_dir(root).dispatch_unpack(archive, target)
+        _user_dir(root).unpacker.dispatch_unpack(archive, target)
     except UnprocessableEntityException:
         pass
     assert not outside.exists()
@@ -84,7 +84,7 @@ def test_tar_symlink_outside_rejected(tmp_path):
         tar.addfile(link)
         _add_file(tar, "cont/lnk/pwned.txt")
     with pytest.raises(UnprocessableEntityException) as exc:
-        _user_dir(root).dispatch_unpack(archive, target)
+        _user_dir(root).unpacker.dispatch_unpack(archive, target)
     assert exc.value.message.startswith(DETAIL_ARCHIVE_MEMBER_REFUSED)
     assert isinstance(exc.value.__cause__, tarfile.FilterError)
     assert list(outside.iterdir()) == []

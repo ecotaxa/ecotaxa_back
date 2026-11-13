@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-import FS.UnpackStatus as UnpackStatusModule
-from FS.UnpackStatus import UnpackStatus
+import FS.Unpack as UnpackModule
+from FS.Unpack import UnpackStatus
 from tests.userfiles_helpers import make_user_dir, zip_bytes, tree, TSV
 
 
@@ -22,7 +22,7 @@ def _setup(tmp_path: Path):
 def _recorded(root: Path):
     user_dir = make_user_dir(root)
     statuses = []
-    user_dir.status_reporter = statuses.append
+    user_dir.unpacker.status_reporter = statuses.append
     return user_dir, statuses
 
 
@@ -38,7 +38,7 @@ def test_status_nested_archives(tmp_path):
         zip_bytes({"s1_Images.zip": inner, "s2_Images.zip": inner, "s3_Images.zip": inner})
     )
     user_dir, statuses = _recorded(root)
-    user_dir.dispatch_unpack(archive, parent)
+    user_dir.unpacker.dispatch_unpack(archive, parent)
     states = [a_status["state"] for a_status in statuses]
     assert states[0] == "unpacking" and states[-1] == "done"
     assert set(states[:-1]) == {"unpacking"}
@@ -65,7 +65,7 @@ def test_status_error(tmp_path):
     archive.write_bytes(zip_bytes({"a.tsv": TSV, "in.zip": _corrupt(inner)}))
     user_dir, statuses = _recorded(root)
     with pytest.raises(Exception):
-        user_dir.dispatch_unpack(archive, parent)
+        user_dir.unpacker.dispatch_unpack(archive, parent)
     last = statuses[-1]
     assert last["state"] == "error" and last["status_code"] == 422
     assert last["message"].startswith(
@@ -80,7 +80,7 @@ def test_status_flat_archive_limit(tmp_path):
     archive = parent / "name.zip"
     archive.write_bytes(zip_bytes({"%d.tsv" % num: TSV for num in range(10)}))
     user_dir, statuses = _recorded(root)
-    user_dir.dispatch_unpack(archive, parent)
+    user_dir.unpacker.dispatch_unpack(archive, parent)
     # The first statuses after reading the headers: all files are counted (declared),
     # but the percent is still 0, extractall() gives no progress
     with_total = [a_status for a_status in statuses if "entries_total" in a_status]
@@ -93,8 +93,8 @@ def test_no_reporter_no_status(tmp_path):
     archive = parent / "name.zip"
     archive.write_bytes(zip_bytes({"a.tsv": TSV}))
     user_dir = make_user_dir(root)
-    user_dir.dispatch_unpack(archive, parent)
-    assert user_dir._status_fields == {}
+    user_dir.unpacker.dispatch_unpack(archive, parent)
+    assert user_dir.unpacker._status_fields == {}
     assert tree(parent) == ["name/", "name/a.tsv"]
 
 
@@ -105,7 +105,7 @@ def test_no_reporter_no_status(tmp_path):
 def tus_dir(tmp_path, monkeypatch):
     ret = tmp_path / "tus"
     ret.mkdir()
-    monkeypatch.setattr(UnpackStatusModule, "get_tus_files_dir", lambda: str(ret))
+    monkeypatch.setattr(UnpackModule, "get_tus_files_dir", lambda: str(ret))
     return ret
 
 

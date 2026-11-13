@@ -357,7 +357,7 @@ def test_my_files_error_cases(fastapi, tmp_path):
 
 def test_import_refuses_extraction_in_progress(fastapi):
     """An import from a folder still being unpacked (staging '⌛' folder) is refused."""
-    from FS.UserFilesDir import PROGRESS_PREFIX
+    from FS.Unpack import PROGRESS_PREFIX
     from helpers.httpexception import DETAIL_EXTRACTION_IN_PROGRESS
 
     prj_id = create_project(CREATOR_USER_ID, "Import while unpacking")
@@ -449,7 +449,7 @@ def test_upload_unpack_limits(fastapi, tmp_path, monkeypatch):
     """Limits once unpacked: 422 when too large, 507 when the disk would be (almost) full."""
     from collections import namedtuple
 
-    import FS.UserFilesDir as UserFilesDirModule
+    import FS.Unpack as UnpackModule
     from helpers.AppConfig import Config
     from helpers.httpexception import (
         DETAIL_UNPACK_TOO_LARGE,
@@ -466,7 +466,7 @@ def test_upload_unpack_limits(fastapi, tmp_path, monkeypatch):
     monkeypatch.setattr(Config, "get_unpack_min_free_disk", lambda self: (0.1, None))
     Usage = namedtuple("Usage", "total used free")
     monkeypatch.setattr(
-        UserFilesDirModule.shutil, "disk_usage", lambda path: Usage(10**6, 9 * 10**5, 10**5)
+        UnpackModule.shutil, "disk_usage", lambda path: Usage(10**6, 9 * 10**5, 10**5)
     )
     rsp = _post_zip(fastapi, tmp_path, content, "test_limits")
     assert rsp.status_code == 507, rsp.text

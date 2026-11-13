@@ -14,7 +14,8 @@ from API_models.imports import ImportReq, SimpleImportReq
 from API_operations.helpers.JobService import JobServiceOnProjectBase, ArgsDict
 from DB.User import UserIDT
 from FS.CommonDir import CommonFolder
-from FS.UserFilesDir import UserFilesDirectory, PROGRESS_PREFIX
+from FS.Unpack import PROGRESS_PREFIX
+from FS.UserFilesDir import UserFilesDirectory
 from FS.Vault import Vault
 from helpers.DynamicLogs import get_logger
 from helpers.httpexception import DETAIL_EXTRACTION_IN_PROGRESS

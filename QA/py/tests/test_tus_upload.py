@@ -252,7 +252,7 @@ def test_tus_unpack_status(fastapi):
 
 def test_tus_unpack_status_while_unpacking(fastapi, monkeypatch):
     """While unpacking: state unpacking, with Retry-After."""
-    from FS.UnpackStatus import UnpackStatus
+    from FS.Unpack import UnpackStatus
 
     status_obj = UnpackStatus("1" * 32, 3, "x.zip")
     monkeypatch.setattr(UnpackStatus, "MIN_INTERVAL", 0)

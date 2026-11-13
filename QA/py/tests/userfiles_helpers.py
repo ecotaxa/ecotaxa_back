@@ -7,8 +7,9 @@ import zipfile
 from pathlib import Path
 from typing import Dict, List
 
+from API_models.constants import DEFAULT_ARCHIVES, DEFAULT_MIMETYPES
+from FS.Unpack import Unpacker
 from FS.UserFilesDir import UserFilesDirectory
-from helpers.AppConfig import Config
 
 # A valid 1x1 PNG, recognized by magic_rs
 PNG_1X1 = base64.b64decode(
@@ -20,26 +21,30 @@ TSV = b"object_id\n[t]\nobj1\n"
 def make_user_dir(root: Path) -> UserFilesDirectory:
     """A UserFilesDirectory rooted at root, without Config()"""
     ret = object.__new__(UserFilesDirectory)
-    ret.accepted_mime_types = [m.strip() for m in Config.DEFAULT_MIMETYPES.split(",")]
-    ret.archive_extensions = [a.strip() for a in Config.DEFAULT_ARCHIVES.split(",")]
     ret.user_id = 1
-    ret.list_errors = {}
     ret._root_path = root
     ret.trash_directory = UserFilesDirectory.TRASH_DIRECTORY % 1
-    ret.compressed_origin = None
-    ret.report_to_file = False
+    unpacker = object.__new__(Unpacker)
+    unpacker.accepted_mime_types = list(DEFAULT_MIMETYPES)
+    unpacker.archive_extensions = [a.lower() for a in DEFAULT_ARCHIVES]
+    unpacker.user_id = ret.user_id
+    unpacker.list_errors = {}
+    unpacker._root_path = root
+    unpacker.compressed_origin = None
+    unpacker.report_to_file = False
     # Limits, generous by default, tests lower them
-    ret.max_unpacked_size = 10**12
-    ret.max_unpack_depth = 5
-    ret.max_unpack_entries = 10**6
+    unpacker.max_unpacked_size = 10**12
+    unpacker.max_unpack_depth = 5
+    unpacker.max_unpack_entries = 10**6
     # No check of free disk space
-    ret.min_free_disk_ratio, ret.min_free_disk_bytes = None, 0
-    ret._reset_unpack_budget()
-    ret.status_reporter = None
+    unpacker.min_free_disk_ratio, unpacker.min_free_disk_bytes = None, 0
+    unpacker._reset_unpack_budget()
+    unpacker.status_reporter = None
     # No registration of unpackings, tests set it
-    ret.registry_dir = None
-    ret.upload_id = None
-    ret._status_fields = {}
+    unpacker.registry_dir = None
+    unpacker.upload_id = None
+    unpacker._status_fields = {}
+    ret.unpacker = unpacker
     return ret
 
 

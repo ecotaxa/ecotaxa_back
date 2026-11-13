@@ -8684,7 +8684,19 @@
             "type":"array",
             "title":"Accepted mime types",
             "description":"File import and My Files, list of accepted mime types",
-            "default":[]
+            "default":[
+              "application/zip",
+              "application/gzip",
+              "application/x-tar",
+              "text/plain",
+              "text/csv",
+              "text/tab-separated-values",
+              "image/jpeg",
+              "image/png",
+              "image/x-png",
+              "image/gif",
+              "image/tiff"
+            ]
           },
           "archive_extensions":{
             "items":{
@@ -8693,7 +8705,15 @@
             "type":"array",
             "title":"Accepted archive extensions",
             "description":"File import and My Files, list of accepted archive extensions",
-            "default":[]
+            "default":[
+              "zip",
+              "tar",
+              "gzip",
+              "tar.gz",
+              "tar.bz2",
+              "tar.xz",
+              "gz"
+            ]
           },
           "all_in_one":{
             "type":"boolean",
