@@ -285,7 +285,6 @@ class Unpacker(object):
     """
 
     ERROR_FILE_SUFFIX = ".unpack_error.log"
-    PROGRESS_PREFIX = PROGRESS_PREFIX
 
     def __init__(
         self,
@@ -399,13 +398,10 @@ class Unpacker(object):
         if top_level:
             self._status_entries_done(len(filenames), len(filenames))
 
-    def _is_embedded_archive(self, filename: str, filepath: Path) -> bool:
-        return self._is_nested_archive(filename, filepath)
-
     def _is_accepted_extracted_file(self, filename: str, filepath: Path) -> bool:
         if filepath.is_dir():
             return True
-        if self._is_embedded_archive(filename, filepath):
+        if self._is_nested_archive(filename, filepath):
             return True
         file_ext, _, mime_type = self.get_file_info(filepath.name, filepath.parent)
         if file_ext in TEXT_EXTENSIONS:
@@ -450,25 +446,11 @@ class Unpacker(object):
 
         return file_ext, filepath, mime_type
 
-    def _has_accepted_format(self, path: Path, filepath: str) -> bool:
-        # Same extension fallback as for archive members
-        if filepath.split(".")[-1].lower() in TEXT_EXTENSIONS:
+    def _has_accepted_format(self, filepath: Union[Path, str]) -> bool:
+        p = Path(filepath)
+        file_ext, _, mime_type = self.get_file_info(p.name, p.parent)
+        if file_ext in TEXT_EXTENSIONS or mime_type in self.accepted_mime_types:
             return True
-        try:
-            py_magic = from_path(filepath)
-            mime_type = py_magic.mime_type()
-        except (CantMatchTypeError, Exception):
-            mime_type = None
-        if mime_type in self.accepted_mime_types:
-            return True
-        logger.info(
-            "File format not accepted '%s' '%s' , user_id '%s'",
-            str(path),
-            str(filepath),
-            str(self.user_id),
-        )
-        path_error = str(path.joinpath(filepath.lstrip(os.path.sep)))
-        self.list_errors.update({"Not accepted": path_error})
         return False
 
     def unpack_zip(self, input_path: Path, path: Path) -> None:
@@ -478,7 +460,7 @@ class Unpacker(object):
                 "r",
                 allowZip64=True,
                 filter_func=self._is_accepted_extracted_file,
-                is_embedded_archive=self._is_embedded_archive,
+                is_embedded_archive=self._is_nested_archive,
             ) as archive:
                 self.extract_archive(archive, str(input_path), path)
         except Exception as e:
@@ -492,7 +474,7 @@ class Unpacker(object):
                 input_path,
                 "r",
                 filter_func=self._is_accepted_extracted_file,
-                is_embedded_archive=self._is_embedded_archive,
+                is_embedded_archive=self._is_nested_archive,
             ) as archive:
                 self.extract_archive(archive, str(input_path), path)
         except Exception as e:
@@ -804,8 +786,14 @@ class Unpacker(object):
         elif self._is_gz(compressed_path.as_posix()):
             with self._one_level_deeper():
                 self.unpack_gz(compressed_path, to_path)
-        elif not self._has_accepted_format(to_path, str(compressed_path)):
+        elif not self._has_accepted_format(compressed_path):
             os.remove(compressed_path)
+            logger.info(
+                "File format not accepted '%s' '%s' , user_id '%s'",
+                str(to_path),
+                str(compressed_path),
+                str(self.user_id),
+            )
             self.list_errors.update({"Not accepted": str(compressed_path)})
         logger.info(f"Unpack done for {compressed_path}->{to_path}")
 

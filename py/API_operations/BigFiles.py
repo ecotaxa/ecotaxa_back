@@ -43,7 +43,7 @@ async def tus_auth(
 
 
 async def _background_unpack(
-    user_dir: UserFilesDirectory, orig_path: Path, file_path: Path, dest_dir: Path
+    user_dir: UserFilesDirectory, file_path: Path, dest_dir: Path
 ) -> None:
     try:
         user_dir.unpacker.switch_to_background()
@@ -98,7 +98,7 @@ async def _start_unpack(
         status.update({"state": "unpacking", "percent": 0})
         user_dir.unpacker.status_reporter = status.update
     task = asyncio.create_task(
-        _background_unpack(user_dir, tus_path, dest_path, dest_dir),
+        _background_unpack(user_dir, dest_path, dest_dir),
         name=f"unpack_{name}",
     )
     background_tasks.add(task)

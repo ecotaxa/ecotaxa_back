@@ -25,8 +25,8 @@ def make_user_dir(root: Path) -> UserFilesDirectory:
     ret._root_path = root
     ret.trash_directory = UserFilesDirectory.TRASH_DIRECTORY % 1
     unpacker = object.__new__(Unpacker)
-    unpacker.accepted_mime_types = list(DEFAULT_MIMETYPES)
-    unpacker.archive_extensions = [a.lower() for a in DEFAULT_ARCHIVES]
+    unpacker.accepted_mime_types = set(DEFAULT_MIMETYPES)
+    unpacker.archive_extensions = {a.lower() for a in DEFAULT_ARCHIVES}
     unpacker.user_id = ret.user_id
     unpacker.list_errors = {}
     unpacker._root_path = root

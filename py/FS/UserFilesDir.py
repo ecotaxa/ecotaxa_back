@@ -10,9 +10,8 @@ from typing import List, Optional
 from starlette.datastructures import UploadFile
 
 from DB.User import UserIDT
-from FS import Unpack
 from FS.CommonDir import CommonFolder, DirEntryT
-from FS.Unpack import Unpacker, _log_exception_throw, get_tus_files_dir
+from FS.Unpack import Unpacker, _log_exception_throw, get_tus_files_dir, sweep_stale
 from helpers.AppConfig import Config
 from helpers.CustomException import UnprocessableEntityException
 from helpers.httpexception import DETAIL_FILE_PROTECTED, DETAIL_NOTHING_DONE
@@ -27,8 +26,6 @@ class UserFilesDirectory(object):
 
     USER_DIR_PATTERN = "ecotaxa_user.%d"
     TRASH_DIRECTORY = "trash.%d"
-    COMPRESSED_PATTERN = "*"
-    TSV = ".tsv"
 
     def __init__(self, user_id: UserIDT):
         config = Config()
@@ -177,6 +174,6 @@ def get_unpack_registry_dir() -> Path:
 
 def sweep_stale_unpacks() -> int:
     """Clean up after the unpackings of dead processes, see Unpack."""
-    return Unpack.sweep_stale(
+    return sweep_stale(
         get_unpack_registry_dir(), Path(Config().get_users_files_dir())
     )
