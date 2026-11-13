@@ -118,8 +118,10 @@ def test_tus_upload_protocol(fastapi):
     api_remove_user_file(fastapi, "*", CREATOR_AUTH)
 
 
-def _tus_upload(fastapi, content: bytes, filename: str, path: str) -> str:
-    """Upload content in a single PATCH, return the upload id"""
+def _tus_upload(
+    fastapi, content: bytes, filename: str, path: str, expected=status.HTTP_204_NO_CONTENT
+) -> str:
+    """Upload content in a single PATCH, check its answer, return the upload id"""
     metadata_str = _encode_metadata({"filename": filename, "path": path})
     res_post = fastapi.post(
         TUS_UPLOAD_URL,
@@ -141,7 +143,10 @@ def _tus_upload(fastapi, content: bytes, filename: str, path: str) -> str:
         },
         content=content,
     )
-    assert res_patch.status_code == status.HTTP_204_NO_CONTENT
+    assert res_patch.status_code == expected, res_patch.text
+    _tus_upload.last_detail = (
+        res_patch.json()["detail"] if expected != status.HTTP_204_NO_CONTENT else None
+    )
     return res_post.headers["Location"].rstrip("/").split("/")[-1]
 
 
@@ -158,10 +163,17 @@ def test_tus_upload_plain_files(fastapi):
     """
     api_remove_user_file(fastapi, "*", CREATOR_AUTH)
     _tus_upload(fastapi, b"object_id\n[t]\nobj1\n", "ecotaxa_a.tsv", "plain/x")
-    _tus_upload(fastapi, b"\x7fELF\x02\x01" + b"\x00" * 64, "evil.bin", "plain/x")
+    _tus_upload(
+        fastapi,
+        b"\x7fELF\x02\x01" + b"\x00" * 64,
+        "evil.bin",
+        "plain/x",
+        expected=status.HTTP_422_UNPROCESSABLE_CONTENT,
+    )
+    assert _tus_upload.last_detail == "Upload of 'evil.bin' refused: File type not accepted"
     assert _names_in(fastapi, "plain") == [
         "ecotaxa_a.tsv",
-        "evil.bin.unpack_error.txt",
+        "evil.bin.unpack_error.log",
     ]
     api_remove_user_file(fastapi, "*", CREATOR_AUTH)
 
@@ -205,18 +217,32 @@ def test_tus_unpack_status(fastapi):
     # Corrupt archive
     good = _zip({"a.tsv": tsv * 100})
     upload_id = _tus_upload(
-        fastapi, good[:40] + b"\x00" * 40 + good[80:], "bad.zip", "st_dir/x"
+        fastapi,
+        good[:40] + b"\x00" * 40 + good[80:],
+        "bad.zip",
+        "st_dir/x",
+        expected=status.HTTP_422_UNPROCESSABLE_CONTENT,
     )
-    got = _status_of(fastapi, upload_id).json()
-    assert got["state"] == "error"
-    assert "Archive is corrupt" in got["message"]
+    assert _tus_upload.last_detail.startswith(
+        "Extraction of 'bad.zip' failed, nothing was kept: Archive is corrupt"
+    )
+    rsp = _status_of(fastapi, upload_id)
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert rsp.json()["detail"] == _tus_upload.last_detail
     # Not archives
     upload_id = _tus_upload(fastapi, tsv, "ecotaxa_p.tsv", "st_dir/x")
     got = _status_of(fastapi, upload_id).json()
     assert got["state"] == "done" and got["result_paths"] == ["st_dir/ecotaxa_p.tsv"]
-    upload_id = _tus_upload(fastapi, b"\x7fELF\x02\x01" + b"\x00" * 64, "e.bin", "st_dir/x")
-    got = _status_of(fastapi, upload_id).json()
-    assert got["state"] == "error"
+    upload_id = _tus_upload(
+        fastapi,
+        b"\x7fELF\x02\x01" + b"\x00" * 64,
+        "e.bin",
+        "st_dir/x",
+        expected=status.HTTP_422_UNPROCESSABLE_CONTENT,
+    )
+    rsp = _status_of(fastapi, upload_id)
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert rsp.json()["detail"] == "Upload of 'e.bin' refused: File type not accepted"
     # Another user, an unknown or invalid id: 404
     assert _status_of(fastapi, upload_id, USER_AUTH).status_code == 404
     assert _status_of(fastapi, "0" * 32).status_code == 404

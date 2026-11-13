@@ -183,10 +183,13 @@ def test_background_failure_reported(tmp_path):
     user_dir.switch_to_background()
     with pytest.raises(UnprocessableEntityException):
         user_dir.dispatch_unpack(archive, parent)
-    assert tree(parent) == ["name.zip" + UserFilesDirectory.ERROR_FILE_SUFFIX]
-    report = (parent / ("name.zip" + UserFilesDirectory.ERROR_FILE_SUFFIX)).read_text()
-    assert "name.zip" in report
-    assert "[UnprocessableEntityException] " + DETAIL_CORRUPT_ARCHIVE in report
+    assert tree(parent) == ["name.zip.unpack_error.log"]
+    report = (parent / "name.zip.unpack_error.log").read_text()
+    assert (
+        "Extraction of 'name.zip' failed, nothing was kept: " + DETAIL_CORRUPT_ARCHIVE
+        in report
+    )
+    assert "Exception" not in report
     assert str(root) not in report
     # A later successful upload of the same name removes the report
     archive = _upload(parent, "name.zip", zip_bytes({"a.tsv": TSV}))
@@ -243,10 +246,28 @@ def test_plain_upload_accepted(tmp_path, name):
     assert tree(parent) == [name]
 
 
+from FS.UserFilesDir import FileTypeRefusedException
+from helpers.httpexception import DETAIL_FILE_TYPE_NOT_ACCEPTED
+
+
+def test_server_error_message_is_generic(tmp_path):
+    root, _parent = _setup(tmp_path)
+    user_dir = make_user_dir(root)
+    code, message = user_dir.unpack_failure("a.zip", OSError("disk on fire " + str(root)))
+    assert code == 500
+    assert message == "Extraction of 'a.zip' failed, nothing was kept: unexpected server error"
+
+
 def test_plain_upload_refused(tmp_path):
     root, parent = _setup(tmp_path)
     upload = _upload(parent, "evil.bin", b"\x7fELF\x02\x01")
-    make_user_dir(root).dispatch_unpack(upload, parent)
+    user_dir = make_user_dir(root)
+    with pytest.raises(FileTypeRefusedException) as exc:
+        user_dir.dispatch_unpack(upload, parent)
+    assert user_dir.unpack_failure("evil.bin", exc.value) == (
+        422,
+        "Upload of 'evil.bin' refused: " + DETAIL_FILE_TYPE_NOT_ACCEPTED,
+    )
     # Sync: no report file, just removed
     _nothing_left(parent)
 
@@ -256,11 +277,12 @@ def test_plain_upload_refused_reported_in_background(tmp_path):
     upload = _upload(parent, "evil.bin", b"\x7fELF\x02\x01")
     user_dir = make_user_dir(root)
     user_dir.switch_to_background()
-    user_dir.dispatch_unpack(upload, parent)
-    error_file = "evil.bin" + UserFilesDirectory.ERROR_FILE_SUFFIX
+    with pytest.raises(FileTypeRefusedException):
+        user_dir.dispatch_unpack(upload, parent)
+    error_file = "evil.bin.unpack_error.log"
     assert tree(parent) == [error_file]
     report = (parent / error_file).read_text()
-    assert "evil.bin" in report and "not accepted" in report
+    assert "Upload of 'evil.bin' refused: " + DETAIL_FILE_TYPE_NOT_ACCEPTED in report
     assert str(root) not in report
 
 
@@ -310,7 +332,7 @@ def test_empty_archive_reported_in_background(tmp_path):
     error_file = "name.zip" + UserFilesDirectory.ERROR_FILE_SUFFIX
     assert tree(parent) == [error_file]
     report = (parent / error_file).read_text()
-    assert "[EmptyArchiveException] " + DETAIL_EMPTY_ARCHIVE in report
+    assert "nothing was kept: " + DETAIL_EMPTY_ARCHIVE in report
 
 
 def test_empty_nested_archive_dropped(tmp_path):

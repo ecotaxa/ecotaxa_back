@@ -84,6 +84,17 @@ def test_fast_unpack_waited(short_wait, bigfiles_logs):
     assert any("unpack done" in m for m in bigfiles_logs)
 
 
+def test_fast_unpack_failure_raised(short_wait, bigfiles_logs):
+    """A failure during the wait reaches the hook, so the final PATCH"""
+    user_dir = FakeUserDir(0.01, fail=True)
+
+    async def scenario():
+        with pytest.raises(OSError):
+            await _start(user_dir)
+
+    asyncio.run(scenario())
+
+
 def test_slow_unpack_not_cancelled(short_wait, bigfiles_logs):
     user_dir = FakeUserDir(0.5)
 

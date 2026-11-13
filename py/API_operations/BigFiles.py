@@ -8,7 +8,7 @@ import shutil
 from pathlib import Path
 from typing import Callable, Dict, Any, Set, Optional
 
-from fastapi import Depends, Request
+from fastapi import Depends, HTTPException, Request
 from tuspyserver import create_tus_router
 from tuspyserver.file import _validate_uid_within_dir
 from tuspyserver.lock import acquire_upload_lock
@@ -17,8 +17,10 @@ from tuspyserver.storage.local import LocalFileStorage
 from FS.UnpackStatus import UnpackStatus
 from FS.UserFilesDir import UserFilesDirectory, get_tus_files_dir
 from helpers.AppConfig import Config
+from helpers.CustomException import BaseAppException, UnprocessableEntityException
 from helpers.DynamicLogs import get_logger
 from helpers.fastApiUtils import get_current_user
+from helpers.httpexception import DETAIL_UNKNOWN_ERROR
 
 TUS_PREFIX = "/user_files/upload"
 
@@ -85,13 +87,9 @@ async def _start_unpack(
     """
     Start unpacking dest_path into dest_dir in background, and wait a bit for it.
     The status, for polling, is keyed by the TUS upload id, i.e. tus_path name.
+    A failure during the wait is raised.
     """
-    # Best effort, a status problem must not prevent the unpacking
-    try:
-        status: Optional[UnpackStatus] = UnpackStatus(tus_path.name, user_id, name)
-    except Exception as e:
-        logger.error("No unpack status for %s: %s", tus_path.name, e)
-        status = None
+    status = _new_status(tus_path.name, user_id, name)
     if status is not None:
         # Before the task, so a poll right after the last PATCH finds it
         status.update({"state": "unpacking", "percent": 0})
@@ -112,27 +110,13 @@ async def _start_unpack(
     return task
 
 
-def _final_plain_status(
-    user_dir: UserFilesDirectory, upload_id: str, user_id: int, dest_path: Path
-) -> None:
-    """Status of an upload which is not an archive: kept or refused, no unpacking."""
+def _new_status(upload_id: str, user_id: int, name: str) -> Optional[UnpackStatus]:
+    """Best effort, a status problem must not prevent the unpacking"""
     try:
-        status = UnpackStatus(upload_id, user_id, dest_path.name)
+        return UnpackStatus(upload_id, user_id, name)
     except Exception as e:
         logger.error("No unpack status for %s: %s", upload_id, e)
-        return
-    if dest_path.exists():
-        status.update(
-            {
-                "state": "done",
-                "percent": 100,
-                "result_paths": user_dir._relative_paths(
-                    dest_path.parent, [dest_path.name]
-                ),
-            }
-        )
-    else:
-        status.update({"state": "error", "message": "File type not accepted"})
+        return None
 
 
 async def on_tus_upload_complete(
@@ -147,17 +131,16 @@ async def on_tus_upload_complete(
         current_user_id,
         metadata,
     )
+    # e.g. /mnt/tus_uploads/fd8d989adda14069ba8495a71af1d6b8
+    tus_path = Path(file_path)
+    original_name = metadata.get("filename")
+    if original_name is None:
+        original_name = tus_path.name  # Hum, unlikely
+    else:
+        # Ensure no directory traversal
+        original_name = os.path.basename(original_name)
+    user_dir: Optional[UserFilesDirectory] = None
     try:
-        # e.g. /mnt/tus_uploads/fd8d989adda14069ba8495a71af1d6b8
-        tus_path = Path(file_path)
-
-        # metadata contains 'filename' if provided by client (Upload-Metadata header)
-        original_name = metadata.get("filename")
-        if original_name is None:
-            original_name = tus_path.name  # Hum, unlikely
-        else:
-            # Ensure no directory traversal
-            original_name = os.path.basename(original_name)
 
         user_dir = UserFilesDirectory(current_user_id)
         dest_dir = destination_directory(user_dir, metadata.get("path"))
@@ -170,7 +153,9 @@ async def on_tus_upload_complete(
             except FileExistsError:
                 # Already there
                 if dest_path.is_dir():
-                    raise
+                    raise UnprocessableEntityException(
+                        "A folder named '%s' is already there" % original_name
+                    )
                 dest_path.unlink(missing_ok=True)
                 os.link(tus_path, dest_path)
             await _start_unpack(
@@ -200,17 +185,52 @@ async def on_tus_upload_complete(
                 )
             shutil.move(tus_path, str(dest_path))
             # Keep policy to exclude unwanted files, on the moved file, in its directory.
-            # Nobody gets this hook errors, so report a refusal to the user in a file.
+            # The client may be gone, so report a refusal to the user in a file too.
+            status = _new_status(tus_path.name, current_user_id, dest_path.name)
+            if status is not None:
+                user_dir.status_reporter = status.update
             user_dir.switch_to_background()
             user_dir.dispatch_unpack(dest_path, dest_dir)
-            _final_plain_status(user_dir, tus_path.name, current_user_id, dest_path)
             logger.info(
                 "TUS file upload complete: moved %s to %s", file_path, dest_path
             )
     except Exception as e:
-        logger.error("Error in on_tus_upload_complete: %s", str(e))
-        # Depending on tuspyserver, raising here might or might not be handled.
-        # But we should at least log it.
+        # tuspyserver lets it through, so it is the response to the last PATCH
+        logger.error(
+            "Error in on_tus_upload_complete: %s",
+            str(e),
+            exc_info=not isinstance(e, BaseAppException),
+        )
+        raise _upload_failure(user_dir, tus_path.name, current_user_id, original_name, e)
+
+
+def _upload_failure(
+    user_dir: Optional[UserFilesDirectory],
+    upload_id: str,
+    user_id: int,
+    name: str,
+    e: Exception,
+) -> HTTPException:
+    """
+    The HTTP error for e, raised while treating the upload. Unless the unpacking already did,
+    record it in the upload status, for polling.
+    """
+    if user_dir is not None:
+        code, message = user_dir.unpack_failure(name, e)
+    elif isinstance(e, BaseAppException):
+        code, message = e.status_code, e.message
+    else:
+        code, message = 500, DETAIL_UNKNOWN_ERROR
+    previous = UnpackStatus.read(upload_id)
+    if previous is not None and previous.get("state") == "error":
+        # Recorded by the unpacking, same answer
+        code = previous.get("status_code", code)
+        message = previous.get("message", message)
+    else:
+        status = _new_status(upload_id, user_id, name)
+        if status is not None:
+            status.update({"state": "error", "status_code": code, "message": message})
+    return HTTPException(status_code=code, detail=message)
 
 
 def destination_directory(

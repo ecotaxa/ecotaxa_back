@@ -72,7 +72,8 @@ class UserFilesFolderService(Service):
         try:
             ret = await folder.add_file(file_name, path, file)
         except BaseAppException as e:
-            raise HTTPException(status_code=e.status_code, detail=e.message)
+            code, message = folder.unpack_failure(file_name, e)
+            raise HTTPException(status_code=code, detail=message)
         return ret
 
     def list(self, sub_path: str, current_user_id: UserIDT) -> DirectoryModel:

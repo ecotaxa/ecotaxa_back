@@ -7021,7 +7021,7 @@
           "MyFiles"
         ],
         "summary":"Get Unpack Status",
-        "description":"**Status of the unpacking of an archive uploaded with TUS.** Poll it until state is 'done' or 'error'.\nWhile unpacking, the Retry-After header suggests when to ask again.",
+        "description":"**Status of the unpacking of an archive uploaded with TUS.** Poll it until state is 'done',\nor an error is returned. While unpacking, the Retry-After header suggests when to ask again.\n\nIf the upload failed, answers its HTTP error, with why nothing was kept as detail:\n422 for a refused upload (corrupt or empty archive, limit reached, file type not accepted),\n507 when the server has not enough disk space, 500 for other server errors.",
         "operationId":"get_unpack_status",
         "security":[
           {
@@ -12625,7 +12625,7 @@
           "state":{
             "type":"string",
             "title":"State",
-            "description":"'unpacking', then 'done' or 'error'.",
+            "description":"'unpacking', then 'done'.",
             "example":"unpacking"
           },
           "name":{
@@ -12688,13 +12688,6 @@
             "type":"array",
             "nullable":true
           },
-          "message":{
-            "title":"Message",
-            "description":"When error, why nothing was kept.",
-            "example":"[UnprocessableEntityException] Archive is corrupt: Bad CRC-32 for file 'a.tsv'",
-            "type":"string",
-            "nullable":true
-          },
           "updated":{
             "type":"string",
             "title":"Updated",
@@ -12709,7 +12702,7 @@
           "updated"
         ],
         "title":"UnpackStatusModel",
-        "description":"Status of the unpacking of an archive uploaded with TUS, to poll until state is 'done' or 'error'."
+        "description":"Status of the unpacking of an archive uploaded with TUS, to poll until state is 'done'.\nA failure is not a status, but the HTTP error of the poll."
       },
       "UserActivateReq":{
         "properties":{

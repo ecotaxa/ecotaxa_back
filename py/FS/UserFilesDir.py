@@ -31,6 +31,7 @@ from helpers.httpexception import (
     DETAIL_UNPACK_TOO_MANY_ENTRIES,
     DETAIL_UNPACK_TOO_DEEP,
     DETAIL_UNPACK_NO_DISK_SPACE,
+    DETAIL_FILE_TYPE_NOT_ACCEPTED,
 )
 
 logger = get_logger(__name__)
@@ -56,6 +57,13 @@ class InsufficientStorageException(BaseAppException):
 
     def __init__(self, message: str):
         super().__init__(message, status_code=507)
+
+
+class FileTypeRefusedException(UnprocessableEntityException):
+    """An uploaded plain file, i.e. not an archive, of a type not accepted"""
+
+    def __init__(self) -> None:
+        super().__init__(DETAIL_FILE_TYPE_NOT_ACCEPTED)
 
 
 class UserFilesDirectory(object):
@@ -514,33 +522,36 @@ class UserFilesDirectory(object):
             logger.error("Cannot publish %s over %s, not the same kind", src, dst)
             raise UnprocessableEntityException(DETAIL_NOTHING_DONE)
 
-    ERROR_FILE_SUFFIX = ".unpack_error.txt"
+    ERROR_FILE_SUFFIX = ".unpack_error.log"
 
     @classmethod
     def _error_file(cls, parent: Path, archive_name: str) -> Path:
         return parent / (archive_name + cls.ERROR_FILE_SUFFIX)
 
-    def _failure_message(self, e: Exception) -> str:
-        """What to tell the user about e, without server paths."""
-        if isinstance(e, BaseAppException):
-            message = e.message
-        else:
-            message = str(e) if str(e) else repr(e)
-        for a_root in (str(self._root_path.absolute()), str(self._root_path)):
-            message = message.replace(a_root, "")
-        return "[%s] %s" % (e.__class__.__name__, message)
-
-    def _report_failure(self, parent: Path, archive_name: str, e: Exception) -> None:
+    def unpack_failure(self, name: str, e: Exception) -> Tuple[int, str]:
         """
-        If in background, leave a file telling the user why the archive produced nothing.
+        The HTTP status code and the message, for the user, of e raised while unpacking
+        the upload 'name'. The message has no server path, and no detail of server errors,
+        which are in the logs.
+        """
+        if isinstance(e, BaseAppException):
+            code, reason = e.status_code, e.message
+            for a_root in (str(self._root_path.absolute()), str(self._root_path)):
+                reason = reason.replace(a_root, "")
+        else:
+            code, reason = 500, "unexpected server error"
+        if isinstance(e, FileTypeRefusedException):
+            return code, "Upload of '%s' refused: %s" % (name, reason)
+        return code, "Extraction of '%s' failed, nothing was kept: %s" % (name, reason)
+
+    def _report_failure(self, parent: Path, name: str, e: Exception) -> None:
+        """
+        Tell, in the status and if in background in a file, why the upload produced nothing.
         Never raises.
         """
-        self._report(
-            parent,
-            archive_name,
-            "Extraction of '%s' failed at {when} UTC, nothing was kept from it.\n"
-            "%s\n" % (archive_name, self._failure_message(e)),
-        )
+        code, message = self.unpack_failure(name, e)
+        self._report(parent, name, "{when} UTC %s\n" % message)
+        self._status(state="error", status_code=code, message=message)
 
     def _status(self, **fields: Any) -> None:
         """
@@ -599,22 +610,24 @@ class UserFilesDirectory(object):
         staging directory, which content is moved into to_path only on success.
         On failure, the staging directory (archive and partial output) is removed.
         """
-        if not self.is_compressed(compressed_path):
-            self._dispatch_nested(compressed_path, to_path)
-            if compressed_path.exists():
-                self._error_file(to_path, compressed_path.name).unlink(missing_ok=True)
-            else:
-                # Removed by the format check
-                self._report(
-                    to_path,
-                    compressed_path.name,
-                    "Upload of '%s' refused at {when} UTC, its file type is not accepted.\n"
-                    % compressed_path.name,
-                )
-            return
         archive_name = compressed_path.name
         self._reset_unpack_budget()
         self._status_fields = {}
+        if not self.is_compressed(compressed_path):
+            self._dispatch_nested(compressed_path, to_path)
+            if not compressed_path.exists():
+                # Removed by the format check
+                e = FileTypeRefusedException()
+                self._report_failure(to_path, archive_name, e)
+                raise e
+            self._status(
+                state="done",
+                name=archive_name,
+                percent=100,
+                result_paths=self._relative_paths(to_path, [archive_name]),
+            )
+            self._error_file(to_path, archive_name).unlink(missing_ok=True)
+            return
         self._status(state="unpacking", name=archive_name, percent=0)
         staging = self._new_staging_dir(to_path, compressed_path)
         try:
@@ -632,7 +645,6 @@ class UserFilesDirectory(object):
             shutil.rmtree(staging, ignore_errors=True)
             compressed_path.unlink(missing_ok=True)
             self._report_failure(to_path, archive_name, e)
-            self._status(state="error", message=self._failure_message(e))
             raise
         self._status(
             state="done", percent=100, result_paths=self._relative_paths(to_path, published)

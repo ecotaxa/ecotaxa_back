@@ -67,8 +67,10 @@ def test_status_error(tmp_path):
     with pytest.raises(Exception):
         user_dir.dispatch_unpack(archive, parent)
     last = statuses[-1]
-    assert last["state"] == "error"
-    assert "Archive is corrupt" in last["message"]
+    assert last["state"] == "error" and last["status_code"] == 422
+    assert last["message"].startswith(
+        "Extraction of 'name.zip' failed, nothing was kept: Archive is corrupt"
+    )
     assert str(root) not in last["message"]
     assert "result_paths" not in last
 

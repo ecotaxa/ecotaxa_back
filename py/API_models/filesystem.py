@@ -53,12 +53,13 @@ class DirectoryModel(BaseModel):
 
 class UnpackStatusModel(BaseModel):
     """
-    Status of the unpacking of an archive uploaded with TUS, to poll until state is 'done' or 'error'.
+    Status of the unpacking of an archive uploaded with TUS, to poll until state is 'done'.
+    A failure is not a status, but the HTTP error of the poll.
     """
 
     state: str = Field(
         title="State",
-        description="'unpacking', then 'done' or 'error'.",
+        description="'unpacking', then 'done'.",
         examples=["unpacking"],
     )
     name: str = Field(
@@ -107,12 +108,6 @@ class UnpackStatusModel(BaseModel):
         title="Result paths",
         description="When done, where the result is in My Files.",
         examples=[["my_folder/b_da_19"]],
-    )
-    message: Optional[str] = Field(
-        default=None,
-        title="Message",
-        description="When error, why nothing was kept.",
-        examples=["[UnprocessableEntityException] Archive is corrupt: Bad CRC-32 for file 'a.tsv'"],
     )
     updated: str = Field(
         title="Updated",

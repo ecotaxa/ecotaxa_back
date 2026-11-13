@@ -191,6 +191,7 @@ from helpers.fastApiUtils import (
     regular_mem_cleanup,
 )
 from helpers.login import LoginService
+from helpers.httpexception import DETAIL_UNKNOWN_ERROR
 from helpers.pydantic import sort_and_prune
 
 # from fastapi.middleware.gzip import GZipMiddleware
@@ -4139,13 +4140,22 @@ def get_unpack_status(
     current_user: int = Depends(get_current_user),
 ) -> UnpackStatusModel:
     """
-    **Status of the unpacking of an archive uploaded with TUS.** Poll it until state is 'done' or 'error'.
-    While unpacking, the Retry-After header suggests when to ask again.
+    **Status of the unpacking of an archive uploaded with TUS.** Poll it until state is 'done',
+    or an error is returned. While unpacking, the Retry-After header suggests when to ask again.
+
+    If the upload failed, answers its HTTP error, with why nothing was kept as detail:
+    422 for a refused upload (corrupt or empty archive, limit reached, file type not accepted),
+    507 when the server has not enough disk space, 500 for other server errors.
     """
     unpack_status = UnpackStatus.read(upload_id)
     # Same answer for another user's upload, not to tell it exists
     if unpack_status is None or unpack_status.get("user_id") != current_user:
         raise HTTPException(status_code=404, detail="Not found")
+    if unpack_status.get("state") == "error":
+        raise HTTPException(
+            status_code=unpack_status.get("status_code", 422),
+            detail=unpack_status.get("message", DETAIL_UNKNOWN_ERROR),
+        )
     if unpack_status.get("state") == "unpacking":
         response.headers["Retry-After"] = "2"
     return UnpackStatusModel(

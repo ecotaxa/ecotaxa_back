@@ -390,6 +390,24 @@ def test_upload_empty_archive(fastapi, tmp_path):
     api_remove_user_file(fastapi, "*", CREATOR_AUTH)
 
 
+def test_upload_refused_plain_file(fastapi, tmp_path):
+    """A plain file of a refused type is a 422 with a clear message, and is not kept."""
+    evil = tmp_path / "evil.bin"
+    evil.write_bytes(b"\x7fELF\x02\x01" + b"\x00" * 64)
+    with open(evil, "rb") as fin:
+        rsp = fastapi.post(
+            MY_FILES_URL,
+            headers=CREATOR_AUTH,
+            data={"path": "test_evil/evil.bin"},
+            files={"file": fin},
+        )
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT, rsp.text
+    assert rsp.json()["detail"] == "Upload of 'evil.bin' refused: File type not accepted"
+    list_rsp = fastapi.get(MY_FILES_URL + SEPARATOR + "test_evil", headers=CREATOR_AUTH)
+    assert list_rsp.json()["entries"] == []
+    api_remove_user_file(fastapi, "*", CREATOR_AUTH)
+
+
 def test_upload_corrupt_archive(fastapi, tmp_path):
     """A corrupt archive is refused with a 422, not a 500."""
     from helpers.httpexception import DETAIL_CORRUPT_ARCHIVE
