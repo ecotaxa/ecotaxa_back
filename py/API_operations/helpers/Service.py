@@ -84,12 +84,9 @@ class Service(BaseService, ContextManager):
             Service.the_connection = conn
         else:
             conn = Service.the_connection
-        # Use a single read-only connection, with fallback to the r/w one
+        # Use a single read-only connection, mandatory for separating workloads
         if not Service.the_readonly_connection:
-            if "RO_DB_HOST" in config.list_cnf():
-                ro_conn = self.build_connection(config, True)
-            else:
-                ro_conn = conn
+            ro_conn = self.build_connection(config, True)
             Service.the_readonly_connection = ro_conn
         else:
             ro_conn = Service.the_readonly_connection
