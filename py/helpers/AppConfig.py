@@ -10,11 +10,93 @@ import configparser
 import os
 import re
 import socket
+from enum import StrEnum
 from pathlib import Path
-from typing import Optional, KeysView, Tuple, overload, Literal, List
+from typing import (
+    Optional,
+    Tuple,
+    overload,
+    Literal,
+    List,
+)
 
 # Env. variable
 ENV_KEY = "APP_CONFIG"
+
+
+class ConfigKey(StrEnum):
+    """
+    Standard configuration keys.
+    """
+
+    # DB connectivity
+    DB_USER = "DB_USER"
+    DB_PASSWORD = "DB_PASSWORD"
+    DB_HOST = "DB_HOST"
+    DB_PORT = "DB_PORT"
+    DB_DATABASE = "DB_DATABASE"
+    RO_DB_USER = "RO_DB_USER"
+    RO_DB_PASSWORD = "RO_DB_PASSWORD"
+    RO_DB_HOST = "RO_DB_HOST"
+    RO_DB_PORT = "RO_DB_PORT"
+    RO_DB_DATABASE = "RO_DB_DATABASE"
+    # Application manager & General
+    APPMANAGER_EMAIL = "APPMANAGER_EMAIL"
+    APPMANAGER_NAME = "APPMANAGER_NAME"
+    INSTANCE_ID = "INSTANCE_ID"
+    ALL_IN_ONE = "ALL_IN_ONE"
+    THUMBSIZELIMIT = "THUMBSIZELIMIT"
+    # File & Directory paths
+    VAULT_DIR = "VAULT_DIR"
+    JOBS_DIR = "JOBS_DIR"
+    SERVERLOADAREA = "SERVERLOADAREA"
+    FTPEXPORTAREA = "FTPEXPORTAREA"
+    MODELSAREA = "MODELSAREA"
+    USERSFILESAREA = "USERSFILESAREA"
+    DIR_MAIL_TEMPLATES = "DIR_MAIL_TEMPLATES"
+    TIMETOLIVE = "TIMETOLIVE"
+    MAX_UPLOAD_SIZE = "MAX_UPLOAD_SIZE"
+    # Security & Authentication
+    SECRET_KEY = "SECRET_KEY"
+    SECURITY_PASSWORD_HASH = "SECURITY_PASSWORD_HASH"
+    SECURITY_PASSWORD_SALT = "SECURITY_PASSWORD_SALT"
+    PASSWORD_SINGLE_HASH = "PASSWORD_SINGLE_HASH"
+    ACCESS_TOKEN_TTL = "ACCESS_TOKEN_TTL"
+    REFRESH_TOKEN_TTL = "REFRESH_TOKEN_TTL"
+    MAX_REFRESH_FAMILIES = "MAX_REFRESH_FAMILIES"
+    LEGACY_TOKENS = "LEGACY_TOKENS"
+    # Verification, Captcha, URLs
+    RECAPTCHAID = "RECAPTCHAID"
+    RECAPTCHASECRET = "RECAPTCHASECRET"
+    MAX_CAPTCHA_TOKEN_LENGTH = "MAX_CAPTCHA_TOKEN_LENGTH"
+    USER_EMAIL_VERIFICATION = "USER_EMAIL_VERIFICATION"
+    ACCOUNT_VALIDATION = "ACCOUNT_VALIDATION"
+    ADD_TICKET = "ADD_TICKET"
+    SERVERURL = "SERVERURL"
+    # Mail service
+    MAILSERVICE_SECRET_KEY = "MAILSERVICE_SECRET_KEY"
+    MAILSERVICE_SALT = "MAILSERVICE_SALT"
+    SENDER_ACCOUNT = "SENDER_ACCOUNT"
+    # Taxonomy server
+    TAXOSERVER_URL = "TAXOSERVER_URL"
+    TAXOSERVER_INSTANCE_ID = "TAXOSERVER_INSTANCE_ID"
+    TAXOSERVER_SHARED_SECRET = "TAXOSERVER_SHARED_SECRET"
+    # OpenID Connect
+    OPENID_CLIENT_ID = "OPENID_CLIENT_ID"
+    OPENID_CLIENT_SECRET = "OPENID_CLIENT_SECRET"
+    OPENID_METADATA_URL = "OPENID_METADATA_URL"
+    OPENID_REQUIRE_VERIFIED_EMAIL = "OPENID_REQUIRE_VERIFIED_EMAIL"
+    # Mime types & Archives
+    ACCEPTED_MIME_TYPES = "ACCEPTED_MIME_TYPES"
+    ARCHIVE_EXTENSIONS = "ARCHIVE_EXTENSIONS"
+    # CORS
+    CORS_ALLOWED_ORIGINS = "CORS_ALLOWED_ORIGINS"
+    CORS_ALLOWED_ORIGIN_REGEX = "CORS_ALLOWED_ORIGIN_REGEX"
+    # Disk space / Unpack
+    UNPACK_MIN_FREE_DISK = "UNPACK_MIN_FREE_DISK"
+    # Server & Logging
+    APP_PORT = "APP_PORT"
+    NO_TIME_LOG = "NO_TIME_LOG"
 
 
 class Config(object):
@@ -23,6 +105,8 @@ class Config(object):
     """
 
     _instance: Optional["Config"] = None
+
+    KNOWN_CONFIG_KEYS = list(ConfigKey)
 
     def __new__(cls, *args, **kwargs) -> "Config":
         if cls._instance is None:
@@ -54,16 +138,25 @@ class Config(object):
 
     @overload
     def _get(
-        self, key: str, default: Optional[str] = ..., mandatory: Literal[True] = ...
+        self,
+        key: str,
+        default: Optional[str] = ...,
+        mandatory: Literal[True] = ...,
     ) -> str: ...
 
     @overload
     def _get(
-        self, key: str, default: Optional[str] = ..., mandatory: Literal[False] = ...
+        self,
+        key: str,
+        default: Optional[str] = ...,
+        mandatory: Literal[False] = ...,
     ) -> Optional[str]: ...
 
     def _get(
-        self, key: str, default: Optional[str] = None, mandatory: bool = False
+        self,
+        key: str,
+        default: Optional[str] = None,
+        mandatory: bool = False,
     ) -> Optional[str]:
         # Priority to environment variables
         if key in os.environ:
@@ -74,129 +167,183 @@ class Config(object):
         return val
 
     def vault_dir(self) -> str:
-        return self._get("VAULT_DIR", mandatory=True)
+        return self._get(ConfigKey.VAULT_DIR, mandatory=True)
 
     def jobs_dir(self) -> str:
-        return self._get("JOBS_DIR", mandatory=True)
+        return self._get(ConfigKey.JOBS_DIR, mandatory=True)
 
     def common_folder(self) -> Optional[str]:
-        return self._get("SERVERLOADAREA", mandatory=False)
+        return self._get(ConfigKey.SERVERLOADAREA, mandatory=False)
 
     def export_folder(self) -> Optional[str]:
-        return self._get("FTPEXPORTAREA", mandatory=False)
+        return self._get(ConfigKey.FTPEXPORTAREA, mandatory=False)
+
+    def models_dir(self) -> str:
+        return self._get(ConfigKey.MODELSAREA, mandatory=True)
 
     def secret_key(self) -> str:
-        return self._get("SECRET_KEY", mandatory=True)
+        return self._get(ConfigKey.SECRET_KEY, mandatory=True)
 
     def get_db_address(self, read_only: bool = False) -> Tuple[str, int, str]:
-        prfx = "RO_" if read_only else ""
-        host = self._get(prfx + "DB_HOST", mandatory=True)
-        port_str = self._get(prfx + "DB_PORT")
+        host = self._get(
+            ConfigKey.RO_DB_HOST if read_only else ConfigKey.DB_HOST, mandatory=True
+        )
+        port_str = self._get(ConfigKey.RO_DB_PORT if read_only else ConfigKey.DB_PORT)
         port = int(port_str) if port_str else 5432
-        db_name = self._get(prfx + "DB_DATABASE", mandatory=True)
+        db_name = self._get(
+            ConfigKey.RO_DB_DATABASE if read_only else ConfigKey.DB_DATABASE,
+            mandatory=True,
+        )
         return host, port, db_name
 
     def get_db_credentials(self, read_only: bool = False) -> Tuple[str, str]:
-        prfx = "RO_" if read_only else ""
-        user = self._get(prfx + "DB_USER", mandatory=True)
-        password = self._get(prfx + "DB_PASSWORD", mandatory=True)
+        user = self._get(
+            ConfigKey.RO_DB_USER if read_only else ConfigKey.DB_USER, mandatory=True
+        )
+        password = self._get(
+            ConfigKey.RO_DB_PASSWORD if read_only else ConfigKey.DB_PASSWORD,
+            mandatory=True,
+        )
         return user, password
 
     def get_thumbnails_limit(self) -> int:
-        return int(self._get("THUMBSIZELIMIT", mandatory=True))
+        return int(self._get(ConfigKey.THUMBSIZELIMIT, mandatory=True))
 
     def get_app_manager(self) -> Tuple[str, str]:
-        return self._get("APPMANAGER_NAME", mandatory=True), self._get(
-            "APPMANAGER_EMAIL", mandatory=True
+        return self._get(ConfigKey.APPMANAGER_NAME, mandatory=True), self._get(
+            ConfigKey.APPMANAGER_EMAIL, mandatory=True
         )
 
+    def get_instance_id(self) -> str:
+        return self._get(ConfigKey.INSTANCE_ID, "EcoTaxa.01")
+
     def get_user_email_verification(self) -> Optional[str]:
-        return self._get("USER_EMAIL_VERIFICATION")
+        return self._get(ConfigKey.USER_EMAIL_VERIFICATION)
 
     def get_account_validation(self) -> Optional[str]:
-        return self._get("ACCOUNT_VALIDATION")
+        return self._get(ConfigKey.ACCOUNT_VALIDATION)
 
     def get_recaptchaid(self) -> Optional[str]:
-        return self._get("RECAPTCHAID")
+        return self._get(ConfigKey.RECAPTCHAID)
 
     def get_recaptchasecret(self) -> Optional[str]:
-        return self._get("RECAPTCHASECRET")
+        return self._get(ConfigKey.RECAPTCHASECRET)
 
     def get_all_in_one(self) -> Optional[str]:
-        return self._get("ALL_IN_ONE")
+        return self._get(ConfigKey.ALL_IN_ONE)
 
     def get_dir_mail_templates(self) -> Optional[str]:
-        return self._get("DIR_MAIL_TEMPLATES")
+        return self._get(ConfigKey.DIR_MAIL_TEMPLATES)
 
     def get_mailservice_secret_key(self) -> Optional[str]:
-        return self._get("MAILSERVICE_SECRET_KEY")
+        return self._get(ConfigKey.MAILSERVICE_SECRET_KEY)
 
     def get_mailservice_salt(self) -> Optional[str]:
-        return self._get("MAILSERVICE_SALT")
+        return self._get(ConfigKey.MAILSERVICE_SALT)
 
     def get_sender_account(self) -> Optional[str]:
         # Email settings for account management (CSV: 0: sender email, 1: password (optional for plain SMTP), 2: host, [3: smtp port, 4: imap port, 5: login user])
-        return self._get("SENDER_ACCOUNT")
+        return self._get(ConfigKey.SENDER_ACCOUNT)
 
     def get_add_ticket(self) -> str:
         # string separator - separate  ticket number if ticket software is used and admin comment to user
-        return (self._get("ADD_TICKET") or "").strip()
+        return (self._get(ConfigKey.ADD_TICKET) or "").strip()
 
     def get_account_validation_url(self) -> str:
         # TODO find a way to have multi request url ( list of identified url ???)
-        url = self._get("SERVERURL", mandatory=True).strip()
+        url = self._get(ConfigKey.SERVERURL, mandatory=True).strip()
         return url + ("/" if url[-1] != "/" else "")
 
     def get_users_files_dir(self) -> str:
         # My files service
-        return self._get("USERSFILESAREA", mandatory=True).strip()
+        return self._get(ConfigKey.USERSFILESAREA, mandatory=True).strip()
 
     def get_time_to_live(self) -> str:
         # My files service
-        val = self._get("TIMETOLIVE", mandatory=True)
+        val = self._get(ConfigKey.TIMETOLIVE, mandatory=True)
         return val.strip()
 
-    def get_cnf(self, key: str, default: Optional[str] = None) -> Optional[str]:
-        # TODO: stop using so we can enumerate the keys
-        return self._get(key, default)
+    def get_max_refresh_families(self) -> int:
+        return int(self._get(ConfigKey.MAX_REFRESH_FAMILIES, "10"))
 
-    def list_cnf(self) -> KeysView[str]:
-        return self.parser.keys()
+    def list_cnf(self) -> List[str]:
+        keys: List[str] = list(self.parser.keys())
+        for k in self.KNOWN_CONFIG_KEYS:
+            if k in os.environ and k not in keys:
+                keys.append(k)
+        return keys
 
     def get_max_captcha_token_length(self) -> int:
-        return int(self._get("MAX_CAPTCHA_TOKEN_LENGTH", "4096"))
+        return int(self._get(ConfigKey.MAX_CAPTCHA_TOKEN_LENGTH, "4096"))
 
     def get_max_upload_size(self) -> int:
-        return int(self._get("MAX_UPLOAD_SIZE", "665600"))
+        return int(self._get(ConfigKey.MAX_UPLOAD_SIZE, "665600"))
 
     DEFAULT_MIMETYPES = "application/zip,application/gzip,application/x-tar,text/plain,text/csv,text/tab-separated-values,image/jpeg,image/png,image/x-png,image/gif,image/tiff"
 
     def get_accepted_mime_types(self) -> List[str]:
-        ret = self._get("ACCEPTED_MIME_TYPES", self.DEFAULT_MIMETYPES)
+        ret = self._get(ConfigKey.ACCEPTED_MIME_TYPES, self.DEFAULT_MIMETYPES)
         mimes = [r.strip() for r in ret.split(",")]
         return mimes
 
     DEFAULT_ARCHIVES = "zip,tar,gzip,tar.gz,tar.bz2,tar.xz,gz"
 
     def get_archive_extensions(self) -> List[str]:
-        ret = self._get("ARCHIVE_EXTENSIONS", self.DEFAULT_ARCHIVES)
+        ret = self._get(ConfigKey.ARCHIVE_EXTENSIONS, self.DEFAULT_ARCHIVES)
         extensions = [r.strip() for r in ret.split(",")]
         return extensions
 
     def get_cors_allowed_origins(self) -> List[str]:
         # Exact origins (scheme://host[:port]) of third-party browser apps allowed to read API responses, or '*' for any
-        ret = self._get("CORS_ALLOWED_ORIGINS", "")
+        ret = self._get(ConfigKey.CORS_ALLOWED_ORIGINS, "")
         origins = [r.strip() for r in ret.split(",") if r.strip()]
         return origins
 
     def get_cors_allowed_origin_regex(self) -> Optional[str]:
         # For apps without a fixed origin, e.g. PlanktoScope served by each device
-        ret = (self._get("CORS_ALLOWED_ORIGIN_REGEX") or "").strip()
+        ret = (self._get(ConfigKey.CORS_ALLOWED_ORIGIN_REGEX) or "").strip()
         return ret or None
 
     def get_taxoserver_url(self) -> str:
-        url = self._get("TAXOSERVER_URL", mandatory=True).strip()
+        url = self._get(ConfigKey.TAXOSERVER_URL, mandatory=True).strip()
         return url + ("/" if url[-1] != "/" else "")
+
+    def get_taxoserver_instance_id(self) -> str:
+        return self._get(ConfigKey.TAXOSERVER_INSTANCE_ID, mandatory=True)
+
+    def get_taxoserver_shared_secret(self) -> str:
+        return self._get(ConfigKey.TAXOSERVER_SHARED_SECRET, mandatory=True)
+
+    def get_security_password_hash(self) -> Optional[str]:
+        return self._get(ConfigKey.SECURITY_PASSWORD_HASH)
+
+    def get_security_password_salt(self) -> Optional[str]:
+        return self._get(ConfigKey.SECURITY_PASSWORD_SALT)
+
+    def get_access_token_ttl(self) -> int:
+        return int(self._get(ConfigKey.ACCESS_TOKEN_TTL, "3600"))
+
+    def get_refresh_token_ttl(self) -> int:
+        return int(self._get(ConfigKey.REFRESH_TOKEN_TTL, "864000"))
+
+    def get_legacy_tokens_on(self) -> bool:
+        return (self._get(ConfigKey.LEGACY_TOKENS, "on") or "on").strip().lower() in (
+            "on",
+            "true",
+            "1",
+            "yes",
+        )
+
+    def get_app_port(self) -> int:
+        return int(self._get(ConfigKey.APP_PORT, "8000"))
+
+    def get_no_time_log(self) -> bool:
+        return (self._get(ConfigKey.NO_TIME_LOG, "off") or "off").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
 
     def get_openid_require_verified_email(self) -> bool:
         """
@@ -204,7 +351,7 @@ class Config(object):
         email as verified. Defaults to on, as an unverified email must not be
         used to attach an external identity to a local account.
         """
-        val = self._get("OPENID_REQUIRE_VERIFIED_EMAIL", "on")
+        val = self._get(ConfigKey.OPENID_REQUIRE_VERIFIED_EMAIL, "on")
         return (val or "on").strip().lower() in ("on", "true", "1", "yes")
 
     def get_openid_config(self) -> Tuple[Optional[str], Optional[str], Optional[str]]:
@@ -213,9 +360,9 @@ class Config(object):
         or (None, None, None) if none are present.
         Raise an exception if only some are present.
         """
-        client_id = self._get("OPENID_CLIENT_ID")
-        client_secret = self._get("OPENID_CLIENT_SECRET")
-        metadata_url = self._get("OPENID_METADATA_URL")
+        client_id = self._get(ConfigKey.OPENID_CLIENT_ID)
+        client_secret = self._get(ConfigKey.OPENID_CLIENT_SECRET)
+        metadata_url = self._get(ConfigKey.OPENID_METADATA_URL)
 
         configs = [client_id, client_secret, metadata_url]
         if all(configs):
@@ -225,11 +372,11 @@ class Config(object):
 
         missing = []
         if not client_id:
-            missing.append("OPENID_CLIENT_ID")
+            missing.append(ConfigKey.OPENID_CLIENT_ID)
         if not client_secret:
-            missing.append("OPENID_CLIENT_SECRET")
+            missing.append(ConfigKey.OPENID_CLIENT_SECRET)
         if not metadata_url:
-            missing.append("OPENID_METADATA_URL")
+            missing.append(ConfigKey.OPENID_METADATA_URL)
         raise ValueError(
             f"Inconsistent OpenID configuration. Missing: {', '.join(missing)}"
         )

@@ -4,7 +4,6 @@
 #
 import abc
 import logging
-import os
 import sys
 import time
 from abc import ABC
@@ -12,13 +11,10 @@ from logging import Logger, Handler, LogRecord
 from threading import get_ident
 from typing import Dict
 
-# Format without %(asctime)s if NO_TIME_LOG environment variable is set
-_NO_TIME_LOG = os.getenv("NO_TIME_LOG", "").strip().lower() in (
-    "1",
-    "true",
-    "yes",
-    "on",
-)
+from helpers.AppConfig import Config
+
+# Format without %(asctime)s if NO_TIME_LOG is set
+_NO_TIME_LOG = Config().get_no_time_log()
 ASCTIME_FORMAT = "" if _NO_TIME_LOG else "%(asctime)s|"
 # General format for Web workers
 LOGGING_FORMAT = (

@@ -7,6 +7,7 @@ from typing import Optional
 
 from BO.Rights import RightsBO
 from DB.User import Role, User, UserIDT
+from helpers.AppConfig import ConfigKey
 from .helpers.Service import Service
 
 
@@ -19,8 +20,11 @@ class StatusService(Service):
     def __init__(self) -> None:
         super().__init__()
 
-    # TODO: Use const from elsewhere
-    PATHS_IN_CONF = ["SERVERLOADAREA", "FTPEXPORTAREA", "MODELSAREA"]
+    PATHS_IN_CONF = [
+        ConfigKey.SERVERLOADAREA,
+        ConfigKey.FTPEXPORTAREA,
+        ConfigKey.MODELSAREA,
+    ]
 
     def run(self, current_user_id: Optional[UserIDT]) -> str:
         """
@@ -37,19 +41,19 @@ class StatusService(Service):
         is_admin = current_user.has_role(Role.APP_ADMINISTRATOR)
         ret = ["Config dump:"]
         for k in self.config.list_cnf():
-            if not is_admin and not "appmanager" in k:
+            if not is_admin and not "appmanager" in k.lower():
                 continue
-            v = self.config.get_cnf(k)
+            v = self.config._get(k)
             if "secret" in k.lower() or "salt" in k.lower() or "password" in k.lower():
                 v = "*************"
             ret.append("  %s: %s" % (k, v))
         ret.append("Paths:")
         for pk in self.PATHS_IN_CONF:
             try:
-                path_str = self.config.get_cnf(pk)
+                path_str = self.config._get(pk)
             except KeyError:
                 path_str = None
-            if path_str is None:
+            if path_str is None or not path_str.strip("'"):
                 ret.append("  %s not found" % pk)
                 continue
             path = Path(path_str.strip("'"))
