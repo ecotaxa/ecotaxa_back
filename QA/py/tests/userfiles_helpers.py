@@ -3,6 +3,7 @@
 #
 import base64
 import io
+import tarfile
 import zipfile
 from pathlib import Path
 from typing import Dict, List
@@ -53,6 +54,16 @@ def zip_bytes(members: Dict[str, bytes]) -> bytes:
     with zipfile.ZipFile(buf, "w") as z:
         for name, content in members.items():
             z.writestr(name, content)
+    return buf.getvalue()
+
+
+def tar_bytes(members: Dict[str, bytes], mode: str = "w") -> bytes:
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode=mode) as tar:
+        for name, content in members.items():
+            info = tarfile.TarInfo(name)
+            info.size = len(content)
+            tar.addfile(info, io.BytesIO(content))
     return buf.getvalue()
 
 

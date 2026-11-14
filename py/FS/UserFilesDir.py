@@ -60,9 +60,7 @@ class UserFilesDirectory(object):
             while len(buff) != 0:
                 file.write(buff)  # type: ignore # Mypy is unaware of async read result
                 buff = await stream.read(BUFFER_SIZE)
-        _, compressed_path, _ = Unpacker.get_file_info(
-            name.lstrip(os.path.sep), base_path.absolute()
-        )
+        compressed_path = base_path.absolute() / name.lstrip(os.path.sep)
         self.unpacker.compressed_origin = compressed_path
         self.unpacker.dispatch_unpack(compressed_path, base_path.absolute())
         return str(source_path)
@@ -174,6 +172,4 @@ def get_unpack_registry_dir() -> Path:
 
 def sweep_stale_unpacks() -> int:
     """Clean up after the unpackings of dead processes, see Unpack."""
-    return sweep_stale(
-        get_unpack_registry_dir(), Path(Config().get_users_files_dir())
-    )
+    return sweep_stale(get_unpack_registry_dir(), Path(Config().get_users_files_dir()))

@@ -4,7 +4,14 @@
 #
 from pathlib import Path
 
-from tests.userfiles_helpers import make_user_dir, zip_bytes, tree, TSV, PNG_1X1
+from tests.userfiles_helpers import (
+    make_user_dir,
+    zip_bytes,
+    tar_bytes,
+    tree,
+    TSV,
+    PNG_1X1,
+)
 
 
 def _setup(tmp_path: Path):
@@ -162,16 +169,16 @@ def test_failure_during_type_check(tmp_path, monkeypatch):
         zip_bytes({"a.tsv": TSV, "b.tsv": TSV, "c.tsv": TSV}),
     )
     unpacker = make_user_dir(root).unpacker
-    orig = Unpacker._classify_extracted_file
+    orig = Unpacker.classify_file
     calls = []
 
-    def failing(header, filename, filepath):
+    def failing(cls, filepath: Path, filename: str, header: bytes | None = None):
         calls.append(filename)
         if len(calls) == 2:
             raise OSError("No space left on device")
-        return orig(header, filename, filepath)
+        return orig(filepath, filename, header)
 
-    monkeypatch.setattr(Unpacker, "_classify_extracted_file", failing)
+    monkeypatch.setattr(Unpacker, "classify_file", failing)
     with pytest.raises(OSError):
         unpacker.dispatch_unpack(archive, parent)
     _nothing_left(parent)
@@ -456,6 +463,31 @@ def test_top_level_tgz(tmp_path):
     archive = _upload(parent, "x.tgz", _a_tar("w:gz"))
     make_user_dir(root).unpacker.dispatch_unpack(archive, parent)
     assert tree(parent) == ["x/", "x/a.tsv"]
+
+
+def test_zip_inside_tgz(tmp_path):
+    root, parent = _setup(tmp_path)
+    inner = zip_bytes({"ecotaxa_inner.tsv": TSV, "x.png": PNG_1X1})
+    archive = _upload(
+        parent,
+        "name.tgz",
+        tar_bytes(
+            {"a.tsv": TSV, "sub/inner_Images.zip": inner, "top.zip": inner},
+            mode="w:gz",
+        ),
+    )
+    make_user_dir(root).unpacker.dispatch_unpack(archive, parent)
+    assert tree(parent) == [
+        "name/",
+        "name/a.tsv",
+        "name/sub/",
+        "name/sub/inner_Images/",
+        "name/sub/inner_Images/ecotaxa_inner.tsv",
+        "name/sub/inner_Images/x.png",
+        "name/top/",
+        "name/top/ecotaxa_inner.tsv",
+        "name/top/x.png",
+    ]
 
 
 @pytest.mark.parametrize(

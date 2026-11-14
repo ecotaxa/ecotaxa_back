@@ -31,7 +31,7 @@ from typing import (
     Union,
 )
 
-from magic_rs import CantMatchTypeError, from_path
+from magic_rs import CantMatchTypeError, from_bytes
 
 from API_models.constants import DEFAULT_ARCHIVES, DEFAULT_MIMETYPES
 from DB.User import UserIDT
@@ -79,6 +79,7 @@ ARCHIVE_MIME_TYPES = {
     "application/gzip",
     "application/x-bzip2",
     "application/x-xz",
+    "application/x-tar",
 }
 
 # TUS upload ids are uuid4().hex
@@ -171,7 +172,7 @@ class _HeaderPeekStream:
             # Once the header is complete (true after the 1st read() in 99.9% of cases),
             # bypass this Python wrapper for all subsequent reads on this file.
             if len(self.header) >= self._peek_size or size == -1:
-                self.read = self._source.read  # type:ignore
+                self.read = self._source.read  # type: ignore
         return chunk
 
     def __enter__(self):
@@ -222,7 +223,11 @@ class FilteredZipFile(zipfile.ZipFile):
         peek, self._last_peek = self._last_peek, None
         header = peek.header if peek is not None else b""
         extracted = Path(extracted_str)
-        classification = Unpacker._classify_extracted_file(header, extracted.name, extracted)
+        try:
+            classification = Unpacker.classify_file(extracted, extracted.name, header)
+        except Exception:
+            extracted.unlink(missing_ok=True)
+            raise
         if classification is None:
             extracted.unlink(missing_ok=True)
             logger.info("NOT EXTRACTED '%s' ", str(extracted_str))
@@ -262,7 +267,6 @@ class FilteredTarFile(tarfile.TarFile):
     ) -> None:
         super().__init__(*args, **kwargs)
         self.embedded_archives: List[Tuple[Path, ArchiveKind]] = []
-        self._last_peek: Optional[_HeaderPeekStream] = None
 
     @classmethod
     def open(  # type: ignore[override]
@@ -272,30 +276,23 @@ class FilteredTarFile(tarfile.TarFile):
     ) -> "FilteredTarFile":
         return super().open(*args, **kwargs)  # type: ignore[call-overload, no-any-return]
 
-    def extractfile(self, member):
-        raw = super().extractfile(member)
-        if raw is not None:
-            self._last_peek = _HeaderPeekStream(raw, peek_size=512)
-            return self._last_peek
-        return None
+    def makefile(self, tarinfo: tarfile.TarInfo, targetpath: str) -> None:
+        orig_fileobj = self.fileobj
+        peek = _HeaderPeekStream(orig_fileobj, peek_size=512)
+        self.fileobj = peek  # type: ignore[assignment]
+        try:
+            super().makefile(tarinfo, targetpath)
+        finally:
+            self.fileobj = orig_fileobj
 
-    def _extract_member(
-        self,
-        tarinfo: tarfile.TarInfo,
-        targetpath: str,
-        *args: Any,
-        **kwargs: Any,
-    ) -> None:
-        super()._extract_member(tarinfo, targetpath, *args, **kwargs)
-        if not tarinfo.isfile():
-            # Directories, links and devices are left as the "data" filter decided
-            return
-        # Header of the member just written, captured by extractfile() above. Consumed, so
-        # that a member not going through it cannot be classified with the previous one.
-        peek, self._last_peek = self._last_peek, None
-        header = peek.header if peek is not None else b""
         extracted = Path(targetpath)
-        classification = Unpacker._classify_extracted_file(header, extracted.name, extracted)
+        try:
+            classification = Unpacker.classify_file(
+                extracted, extracted.name, peek.header
+            )
+        except Exception:
+            extracted.unlink(missing_ok=True)
+            raise
         if classification is None:
             extracted.unlink(missing_ok=True)
             logger.info("NOT EXTRACTED '%s' ", str(extracted))
@@ -391,9 +388,7 @@ class Unpacker(object):
     """
 
     ACCEPTED_MIME_TYPES: Set[str] = set(DEFAULT_MIMETYPES)
-    ARCHIVE_EXTENSIONS: Set[str] = {
-        an_ext.lower() for an_ext in DEFAULT_ARCHIVES
-    }
+    ARCHIVE_EXTENSIONS: Set[str] = {an_ext.lower() for an_ext in DEFAULT_ARCHIVES}
     ERROR_FILE_SUFFIX = ".unpack_error.log"
 
     def __init__(
@@ -483,6 +478,9 @@ class Unpacker(object):
         else:
             archive.extractall(path.as_posix())
 
+        logger.info(
+            "Extracted archive '%s' embeds %s", archive_path, archive.embedded_archives
+        )
         # Unpack nested archives collected during extraction (no second pass or type re-detection)
         for entry_idx, (compressed_path, kind) in enumerate(archive.embedded_archives):
             if top_level:
@@ -499,8 +497,8 @@ class Unpacker(object):
             self._status_entries_done(nb_entries, nb_entries)
 
     @staticmethod
-    def detect_known_mime(head: bytes) -> Optional[str]:
-        """Fast mime type from first 16 bytes"""
+    def _mime_from_header(head: bytes) -> Optional[str]:
+        """Fast mime type from first 512 bytes"""
         if not head:
             return None
 
@@ -528,11 +526,15 @@ class Unpacker(object):
         if head.startswith(b"\xfd7zXZ\x00"):
             return "application/x-xz"
 
-        return None
+        # 2. Fallback to magic_rs on the already-read 512-byte buffer (no file re-open)
+        try:
+            return from_bytes(head).mime_type()
+        except (CantMatchTypeError, Exception):
+            return None
 
     @classmethod
-    def _classify_extracted_file(
-        cls, header: bytes, filename: str, filepath: Path
+    def classify_file(
+        cls, filepath: Path, filename: str, header: Optional[bytes] = None
     ) -> MemberClassification:
         """
         Classify a newly extracted regular file, from its first bytes when enough:
@@ -543,65 +545,33 @@ class Unpacker(object):
         name = filename.rsplit("/", 1)[-1].lower()
         parts = name.rsplit(".", 2)
         ext = parts[-1] if len(parts) >= 2 else ""
-        archive_ext = bool(ext) and (
-            ext in cls.ARCHIVE_EXTENSIONS or (len(parts) == 3 and f"{parts[1]}.{ext}" in cls.ARCHIVE_EXTENSIONS)
-        )
 
-        mime_type = cls.detect_known_mime(header)
-        if archive_ext and mime_type in ARCHIVE_MIME_TYPES:
+        if ext in TEXT_EXTENSIONS:
+            return "accepted"
+
+        if header is None:
+            try:
+                with open(filepath, "rb") as f:
+                    header = f.read(512)
+            except OSError:
+                return None
+
+        archive_ext = bool(ext) and (
+            ext in cls.ARCHIVE_EXTENSIONS
+            or (len(parts) == 3 and f"{parts[1]}.{ext}" in cls.ARCHIVE_EXTENSIONS)
+        )
+        mime_type = cls._mime_from_header(header)
+        if archive_ext and (
+            mime_type in ARCHIVE_MIME_TYPES
+            or mime_type is None  # Empty tars have no signature
+        ):
             # A compressed member is for unpacking, not to be kept as a file
             kind = cls.detect_archive_type(filepath, header=header)
             if kind is not None:
                 return kind
-        if mime_type is not None:
-            # Binary type known from the header: settled, no need to look further
-            return "accepted" if mime_type in cls.ACCEPTED_MIME_TYPES else None
 
-        # Header unknown: the extension tells, as some formats have no magic bytes
-        if archive_ext:
-            kind = cls.detect_archive_type(filepath, header=header)
-            if kind is not None:
-                return kind
-        if ext in TEXT_EXTENSIONS:
-            return "accepted"
-
-        # Neither the header nor the extension told the type: ask magic, as before.
-        if cls.magic_mime(filepath) in cls.ACCEPTED_MIME_TYPES:
-            return "accepted"
-        return None
-
-    @staticmethod
-    def magic_mime(filepath: Path) -> Optional[str]:
-        """Mime type of filepath, from its content. None if unknown."""
-        try:
-            return from_path(str(filepath)).mime_type()
-        except (CantMatchTypeError, Exception):
-            return None
-
-    @staticmethod
-    def get_file_info(filename: str, path: Path) -> Tuple[str, Path, Optional[str]]:
-        # Lowercase, extensions are compared case-insensitively
-        file_ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
-        filepath = path / filename
-        if filepath.is_dir():
-            return file_ext, filepath, None
-        if file_ext in TEXT_EXTENSIONS:
-            return file_ext, filepath, TEXT_EXTENSIONS[file_ext]
-        try:
-            py_magic = from_path(str(filepath))
-            mime_type = py_magic.mime_type()
-        except (CantMatchTypeError, Exception):
-            mime_type = None
-
-        return file_ext, filepath, mime_type
-
-    @classmethod
-    def _has_accepted_format(cls, filepath: Union[Path, str]) -> bool:
-        p = Path(filepath)
-        file_ext = p.name.rsplit(".", 1)[-1].lower() if "." in p.name else ""
-        if file_ext in TEXT_EXTENSIONS:
-            return True
-        return cls.magic_mime(p) in cls.ACCEPTED_MIME_TYPES
+        # Binary type known from the header: settled, no need to look further
+        return "accepted" if mime_type in cls.ACCEPTED_MIME_TYPES else None
 
     def unpack_zip(self, input_path: Path, path: Path) -> None:
         try:
@@ -822,13 +792,13 @@ class Unpacker(object):
     ) -> Optional[ArchiveKind]:
         """
         Single-open, 512-byte magic-byte detection returning 'zip', 'tar', 'gz', or None.
-        A recognised but truncated stream still gets its kind, so that reading it raises
+        A recognized but truncated stream still gets its kind, so that reading it raises
         the proper corruption error instead of it being kept as a plain file.
         Accepts optional header bytes if the first 512 bytes have already been read.
         """
         try:
             head = header
-            if head is None:
+            if not head:
                 with open(path, "rb") as f:
                     head = f.read(512)
             if len(head) < 2:
@@ -875,21 +845,20 @@ class Unpacker(object):
         archive_name = compressed_path.name
         self._reset_unpack_budget()
         self._status_fields = {}
-        kind = self.detect_archive_type(compressed_path)
+        kind = self.classify_file(compressed_path, archive_name)
         if kind is None:
-            # Not an archive: validate format directly without re-probing archive types
-            if not self._has_accepted_format(compressed_path):
-                compressed_path.unlink(missing_ok=True)
-                logger.info(
-                    "File format not accepted '%s' '%s' , user_id '%s'",
-                    str(to_path),
-                    str(compressed_path),
-                    str(self.user_id),
-                )
-                self.list_errors.update({"Not accepted": str(compressed_path)})
-                e = FileTypeRefusedException()
-                self._report_failure(to_path, archive_name, e)
-                raise e
+            compressed_path.unlink(missing_ok=True)
+            logger.info(
+                "File format not accepted '%s' '%s' , user_id '%s'",
+                str(to_path),
+                str(compressed_path),
+                str(self.user_id),
+            )
+            self.list_errors.update({"Not accepted": str(compressed_path)})
+            e = FileTypeRefusedException()
+            self._report_failure(to_path, archive_name, e)
+            raise e
+        elif kind == "accepted":
             self._status(
                 state="done",
                 name=archive_name,
@@ -898,43 +867,44 @@ class Unpacker(object):
             )
             self._error_file(to_path, archive_name).unlink(missing_ok=True)
             return
-
-        self._status(state="unpacking", name=archive_name, percent=0)
-        staging = self._new_staging_dir(to_path, compressed_path)
-        # If this process dies meanwhile, the next one to start cleans up
-        with registered(
-            self.registry_dir,
-            {
-                "staging": str(staging.absolute()),
-                "parent": str(to_path.absolute()),
-                "name": archive_name,
-                "user_id": self.user_id,
-                "upload_id": self.upload_id,
-            },
-        ):
-            try:
+        else:
+            # Archive
+            self._status(state="unpacking", name=archive_name, percent=0)
+            staging = self._new_staging_dir(to_path, compressed_path)
+            # If this process dies meanwhile, the next one to start cleans up
+            with registered(
+                self.registry_dir,
+                {
+                    "staging": str(staging.absolute()),
+                    "parent": str(to_path.absolute()),
+                    "name": archive_name,
+                    "user_id": self.user_id,
+                    "upload_id": self.upload_id,
+                },
+            ):
                 try:
-                    relative = compressed_path.relative_to(to_path)
-                except ValueError:
-                    relative = Path(archive_name)
-                # Same relative position, so the same layout as without staging
-                staged_archive = staging / relative
-                staged_archive.parent.mkdir(parents=True, exist_ok=True)
-                shutil.move(compressed_path, staged_archive)
-                self._dispatch_nested(staged_archive, staging, kind=kind)
-                published = self._publish(staging, to_path)
-            except Exception as e:
-                shutil.rmtree(staging, ignore_errors=True)
-                compressed_path.unlink(missing_ok=True)
-                self._report_failure(to_path, archive_name, e)
-                raise
-        self._status(
-            state="done",
-            percent=100,
-            result_paths=self._relative_paths(to_path, published),
-        )
-        # A previous failure of the same archive is not relevant anymore
-        self._error_file(to_path, archive_name).unlink(missing_ok=True)
+                    try:
+                        relative = compressed_path.relative_to(to_path)
+                    except ValueError:
+                        relative = Path(archive_name)
+                    # Same relative position, so the same layout as without staging
+                    staged_archive = staging / relative
+                    staged_archive.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.move(compressed_path, staged_archive)
+                    self._dispatch_nested(staged_archive, staging, kind=kind)
+                    published = self._publish(staging, to_path)
+                except Exception as e:
+                    shutil.rmtree(staging, ignore_errors=True)
+                    compressed_path.unlink(missing_ok=True)
+                    self._report_failure(to_path, archive_name, e)
+                    raise
+            self._status(
+                state="done",
+                percent=100,
+                result_paths=self._relative_paths(to_path, published),
+            )
+            # A previous failure of the same archive is not relevant anymore
+            self._error_file(to_path, archive_name).unlink(missing_ok=True)
 
     def _relative_paths(self, parent: Path, names: List[str]) -> List[str]:
         """Paths of names in parent, relative to the user root, as My Files shows them"""
@@ -966,17 +936,11 @@ class Unpacker(object):
         kind: Optional[ArchiveKind] = None,
     ) -> None:
         if kind is None:
-            kind = self.detect_archive_type(compressed_path)
-        if kind == "zip":
+            kind = self.classify_file(compressed_path, compressed_path.name)
+        if kind in ("zip", "tar", "gz"):
             with self._one_level_deeper():
-                self.unpack_zip(compressed_path, to_path)
-        elif kind == "tar":
-            with self._one_level_deeper():
-                self.unpack_tar(compressed_path, to_path)
-        elif kind == "gz":
-            with self._one_level_deeper():
-                self.unpack_gz(compressed_path, to_path)
-        elif not self._has_accepted_format(compressed_path):
+                getattr(self, f"unpack_{kind}")(compressed_path, to_path)
+        elif kind is None:
             os.remove(compressed_path)
             logger.info(
                 "File format not accepted '%s' '%s' , user_id '%s'",
