@@ -276,7 +276,7 @@ class FilteredTarFile(tarfile.TarFile):
     ) -> "FilteredTarFile":
         return super().open(*args, **kwargs)  # type: ignore[call-overload, no-any-return]
 
-    def makefile(self, tarinfo: tarfile.TarInfo, targetpath: str) -> None:
+    def makefile(self, tarinfo, targetpath) -> None:
         orig_fileobj = self.fileobj
         peek = _HeaderPeekStream(orig_fileobj, peek_size=512)
         self.fileobj = peek  # type: ignore[assignment]
@@ -285,7 +285,7 @@ class FilteredTarFile(tarfile.TarFile):
         finally:
             self.fileobj = orig_fileobj
 
-        extracted = Path(targetpath)
+        extracted = Path(os.fsdecode(targetpath))
         try:
             classification = Unpacker.classify_file(
                 extracted, extracted.name, peek.header
@@ -933,7 +933,7 @@ class Unpacker(object):
         self,
         compressed_path: Path,
         to_path: Path,
-        kind: Optional[ArchiveKind] = None,
+        kind: MemberClassification = None,
     ) -> None:
         if kind is None:
             kind = self.classify_file(compressed_path, compressed_path.name)
