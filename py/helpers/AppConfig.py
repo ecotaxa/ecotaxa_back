@@ -94,6 +94,9 @@ class ConfigKey(StrEnum):
     CORS_ALLOWED_ORIGIN_REGEX = "CORS_ALLOWED_ORIGIN_REGEX"
     # Disk space / Unpack
     UNPACK_MIN_FREE_DISK = "UNPACK_MIN_FREE_DISK"
+    MAX_UNPACK_ENTRIES = "MAX_UNPACK_ENTRIES"
+    MAX_UNPACKED_SIZE = "MAX_UNPACKED_SIZE"
+    MAX_UNPACK_DEPTH = "MAX_UNPACK_DEPTH"
     # Server & Logging
     APP_PORT = "APP_PORT"
     NO_TIME_LOG = "NO_TIME_LOG"
@@ -279,43 +282,6 @@ class Config(object):
     def get_max_upload_size(self) -> int:
         return int(self._get(ConfigKey.MAX_UPLOAD_SIZE, "665600"))
 
-    # The unpack limits below are all off (0) when absent from config.ini
-
-    def get_accepted_mime_types(self) -> List[str]:
-        ret = self._get(ConfigKey.ACCEPTED_MIME_TYPES, self.DEFAULT_MIMETYPES)
-        mimes = [r.strip() for r in ret.split(",")]
-        return mimes
-    def get_max_unpacked_size(self) -> int:
-        """Max total size (bytes) of an upload once unpacked, nested archives included. 0: no limit."""
-        return int(self._get("MAX_UNPACKED_SIZE", "0") or 0)
-
-    def get_max_unpack_depth(self) -> int:
-        """Max nesting level of archives in an upload, the uploaded archive being 1. 0: no limit."""
-        return int(self._get("MAX_UNPACK_DEPTH", "0") or 0)
-
-    def get_archive_extensions(self) -> List[str]:
-        ret = self._get(ConfigKey.ARCHIVE_EXTENSIONS, self.DEFAULT_ARCHIVES)
-        extensions = [r.strip() for r in ret.split(",")]
-        return extensions
-    def get_max_unpack_entries(self) -> int:
-        """Max number of entries in an upload once unpacked, nested archives included. 0: no limit."""
-        return int(self._get("MAX_UNPACK_ENTRIES", "0") or 0)
-
-    def get_unpack_min_free_disk(self) -> Tuple[Optional[float], Optional[int]]:
-        """
-        Free disk space that unpacking must leave, either a percentage of the disk, e.g. "10%",
-        returned as (ratio, None), or a number of bytes, returned as (None, bytes).
-        0 or 0%: no check of free disk space.
-        """
-        val = (self._get("UNPACK_MIN_FREE_DISK", "0") or "0").strip()
-        if val.endswith("%"):
-            percent = float(val[:-1])
-            assert 0 <= percent < 100, "UNPACK_MIN_FREE_DISK percentage must be in [0, 100["
-            return percent / 100, None
-        nb_bytes = int(val)
-        assert nb_bytes >= 0, "UNPACK_MIN_FREE_DISK must be >= 0"
-        return None, nb_bytes
-
     def get_cors_allowed_origins(self) -> List[str]:
         # Exact origins (scheme://host[:port]) of third-party browser apps allowed to read API responses, or '*' for any
         ret = self._get(ConfigKey.CORS_ALLOWED_ORIGINS, "")
@@ -403,6 +369,34 @@ class Config(object):
         raise ValueError(
             f"Inconsistent OpenID configuration. Missing: {', '.join(missing)}"
         )
+
+    # The unpack limits below are all off (0) when absent from config.ini
+    def get_max_unpacked_size(self) -> int:
+        """Max total size (bytes) of an upload once unpacked, nested archives included. 0: no limit."""
+        return int(self._get(ConfigKey.MAX_UNPACKED_SIZE, "0") or 0)
+
+    def get_max_unpack_depth(self) -> int:
+        """Max nesting level of archives in an upload, the uploaded archive being 1. 0: no limit."""
+        return int(self._get(ConfigKey.MAX_UNPACK_DEPTH, "0") or 0)
+
+    def get_max_unpack_entries(self) -> int:
+        """Max number of entries in an upload once unpacked, nested archives included. 0: no limit."""
+        return int(self._get(ConfigKey.MAX_UNPACK_ENTRIES, "0") or 0)
+
+    def get_unpack_min_free_disk(self) -> Tuple[Optional[float], Optional[int]]:
+        """
+        Free disk space that unpacking must leave, either a percentage of the disk, e.g. "10%",
+        returned as (ratio, None), or a number of bytes, returned as (None, bytes).
+        0 or 0%: no check of free disk space.
+        """
+        val = (self._get(ConfigKey.UNPACK_MIN_FREE_DISK, "0") or "0").strip()
+        if val.endswith("%"):
+            percent = float(val[:-1])
+            assert 0 <= percent < 100, f"{ConfigKey.UNPACK_MIN_FREE_DISK} percentage must be in [0, 100["
+            return percent / 100, None
+        nb_bytes = int(val)
+        assert nb_bytes >= 0, "{ConfigKey.UNPACK_MIN_FREE_DISK} must be >= 0"
+        return None, nb_bytes
 
     def validate(self):
         """
