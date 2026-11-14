@@ -16,8 +16,20 @@ import time
 import uuid
 import zipfile
 import zlib
+from functools import partial
 from pathlib import Path
-from typing import Any, Callable, Dict, Generator, List, Optional, Set, Tuple, Union
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Generator,
+    List,
+    Literal,
+    Optional,
+    Set,
+    Tuple,
+    Union,
+)
 
 from magic_rs import CantMatchTypeError, from_path
 
@@ -31,7 +43,6 @@ from helpers.httpexception import (
     DETAIL_CORRUPT_ARCHIVE,
     DETAIL_EMPTY_ARCHIVE,
     DETAIL_FILE_TYPE_NOT_ACCEPTED,
-    DETAIL_NOTHING_DONE,
     DETAIL_UNPACK_INTERRUPTED,
     DETAIL_UNPACK_NO_DISK_SPACE,
     DETAIL_UNPACK_TOO_DEEP,
@@ -40,6 +51,9 @@ from helpers.httpexception import (
 )
 
 logger = get_logger(__name__)
+
+ArchiveKind = Literal["zip", "tar", "gz"]
+MemberClassification = Optional[Union[ArchiveKind, Literal["accepted"]]]
 
 BUFFER_SIZE = 1024 * 1024
 PROGRESS_PREFIX = "⌛"
@@ -58,6 +72,14 @@ CORRUPT_ARCHIVE_EXCEPTIONS = (
     gzip.BadGzipFile,
     EOFError,
 )
+
+# What a compressed member can be recognized as, from its first bytes
+ARCHIVE_MIME_TYPES = {
+    "application/zip",
+    "application/gzip",
+    "application/x-bzip2",
+    "application/x-xz",
+}
 
 # TUS upload ids are uuid4().hex
 _UPLOAD_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
@@ -132,71 +154,130 @@ def get_tus_files_dir() -> str:
     return str(tus_dir)
 
 
+class _HeaderPeekStream:
+    """Wrap a binary stream to peek at first bytes without slowing down subsequent reads."""
+
+    def __init__(self, source, peek_size: int = 512):
+        self._source = source
+        self._peek_size = peek_size
+        self.header = b""
+
+    def read(self, size: int = -1) -> bytes:
+        chunk = self._source.read(size)
+        if chunk:
+            needed = self._peek_size - len(self.header)
+            if needed > 0:
+                self.header += chunk[:needed]
+            # Once the header is complete (true after the 1st read() in 99.9% of cases),
+            # bypass this Python wrapper for all subsequent reads on this file.
+            if len(self.header) >= self._peek_size or size == -1:
+                self.read = self._source.read  # type:ignore
+        return chunk
+
+    def __enter__(self):
+        self._source.__enter__()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        return self._source.__exit__(exc_type, exc_val, exc_tb)
+
+    def __getattr__(self, name):
+        return getattr(self._source, name)
+
+
 class FilteredZipFile(zipfile.ZipFile):
     """
     Subclass of ZipFile that filters extracted members during extract routines
-    and collects embedded archives.
+    and collects embedded archives along with their detected type.
     """
 
     def __init__(
         self,
         *args: Any,
-        filter_func: Callable[[str, Path], bool],
-        is_embedded_archive: Callable[[str, Path], bool],
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
-        self.filter_func = filter_func
-        self.is_embedded_archive = is_embedded_archive
-        self.embedded_archives: List[Path] = []
+        self.embedded_archives: List[Tuple[Path, ArchiveKind]] = []
+        self._last_peek: Optional[_HeaderPeekStream] = None
+
+    def open(self, name, mode="r", pwd=None, *, force_zip64=False):
+        raw = super().open(name, mode=mode, pwd=pwd, force_zip64=force_zip64)
+        if mode == "r":
+            self._last_peek = _HeaderPeekStream(raw, peek_size=512)
+            return self._last_peek
+        return raw
 
     def _extract_member(  # type: ignore[misc]
         self,
-        member: Union[str, zipfile.ZipInfo],
+        member: Union[str, zipfile.ZipInfo],  # In our case it's always str
         targetpath: str,
         pwd: Optional[bytes] = None,
     ) -> str:
         extracted_str: str = super()._extract_member(member, targetpath, pwd)  # type: ignore[misc]
         member_name = member.filename if isinstance(member, zipfile.ZipInfo) else member
-        extracted_path = Path(extracted_str)
-        if not self.filter_func(member_name, extracted_path):
-            if extracted_path.is_file():
-                extracted_path.unlink(missing_ok=True)
-                logger.info("NOT EXTRACTED '%s' ", str(extracted_path))
-        elif self.is_embedded_archive(member_name, extracted_path):
-            self.embedded_archives.append(extracted_path)
+        if self.getinfo(member_name).is_dir():
+            return extracted_str
+        # Header of the member just written, captured by open() above. Consumed, so that a
+        # member not going through open() cannot be classified with the previous one.
+        peek, self._last_peek = self._last_peek, None
+        header = peek.header if peek is not None else b""
+        extracted = Path(extracted_str)
+        classification = Unpacker._classify_extracted_file(header, extracted.name, extracted)
+        if classification is None:
+            extracted.unlink(missing_ok=True)
+            logger.info("NOT EXTRACTED '%s' ", str(extracted_str))
+        elif classification != "accepted":
+            self.embedded_archives.append((extracted, classification))
         return extracted_str
+
+    @staticmethod
+    def get_unique_root(info_list) -> Optional[str]:
+        ret: Optional[str] = None
+        for info in info_list:
+            name = info.filename
+            if name.startswith("__MACOSX/"):
+                continue
+            top, sep, _ = name.partition("/")
+            if not top or top == ".DS_Store":
+                continue
+            if not sep and not info.is_dir():
+                return None  # File at root level
+            if ret is None:
+                ret = top
+            elif top != ret:
+                return None
+        return ret
 
 
 class FilteredTarFile(tarfile.TarFile):
     """
     Subclass of TarFile that filters extracted members during extract routines
-    and collects embedded archives.
+    and collects embedded archives along with their detected type.
     """
 
     def __init__(
         self,
         *args: Any,
-        filter_func: Callable[[str, Path], bool],
-        is_embedded_archive: Callable[[str, Path], bool],
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
-        self.filter_func = filter_func
-        self.is_embedded_archive = is_embedded_archive
-        self.embedded_archives: List[Path] = []
+        self.embedded_archives: List[Tuple[Path, ArchiveKind]] = []
+        self._last_peek: Optional[_HeaderPeekStream] = None
 
     @classmethod
     def open(  # type: ignore[override]
         cls,
         *args: Any,
-        filter_func: Callable[[str, Path], bool],
-        is_embedded_archive: Callable[[str, Path], bool],
         **kwargs: Any,
     ) -> "FilteredTarFile":
-        kwargs["filter_func"] = filter_func
-        kwargs["is_embedded_archive"] = is_embedded_archive
         return super().open(*args, **kwargs)  # type: ignore[call-overload, no-any-return]
+
+    def extractfile(self, member):
+        raw = super().extractfile(member)
+        if raw is not None:
+            self._last_peek = _HeaderPeekStream(raw, peek_size=512)
+            return self._last_peek
+        return None
 
     def _extract_member(
         self,
@@ -206,13 +287,38 @@ class FilteredTarFile(tarfile.TarFile):
         **kwargs: Any,
     ) -> None:
         super()._extract_member(tarinfo, targetpath, *args, **kwargs)
-        extracted_path = Path(targetpath)
-        if not self.filter_func(tarinfo.name, extracted_path):
-            if extracted_path.is_file():
-                extracted_path.unlink(missing_ok=True)
-                logger.info("NOT EXTRACTED '%s' ", str(extracted_path))
-        elif self.is_embedded_archive(tarinfo.name, extracted_path):
-            self.embedded_archives.append(extracted_path)
+        if not tarinfo.isfile():
+            # Directories, links and devices are left as the "data" filter decided
+            return
+        # Header of the member just written, captured by extractfile() above. Consumed, so
+        # that a member not going through it cannot be classified with the previous one.
+        peek, self._last_peek = self._last_peek, None
+        header = peek.header if peek is not None else b""
+        extracted = Path(targetpath)
+        classification = Unpacker._classify_extracted_file(header, extracted.name, extracted)
+        if classification is None:
+            extracted.unlink(missing_ok=True)
+            logger.info("NOT EXTRACTED '%s' ", str(extracted))
+        elif classification != "accepted":
+            self.embedded_archives.append((extracted, classification))
+
+    @staticmethod
+    def get_unique_root(member_list) -> Optional[str]:
+        ret: Optional[str] = None
+        for member in member_list:
+            name = member.name.removeprefix("./")
+            if not name:
+                continue
+            top, sep, _ = name.partition("/")
+            if not top or top == ".DS_Store" or top.startswith("._"):
+                continue
+            if not sep and not member.isdir():
+                return None  # File at root level
+            if ret is None:
+                ret = top
+            elif top != ret:
+                return None
+        return ret
 
 
 class UnpackStatus(object):
@@ -284,6 +390,10 @@ class Unpacker(object):
     checking limits, filtering entries, and reporting progress and errors.
     """
 
+    ACCEPTED_MIME_TYPES: Set[str] = set(DEFAULT_MIMETYPES)
+    ARCHIVE_EXTENSIONS: Set[str] = {
+        an_ext.lower() for an_ext in DEFAULT_ARCHIVES
+    }
     ERROR_FILE_SUFFIX = ".unpack_error.log"
 
     def __init__(
@@ -293,10 +403,6 @@ class Unpacker(object):
         list_errors: Dict[str, str],
         registry_dir: Path,
     ):
-        self.accepted_mime_types: Set[str] = set(DEFAULT_MIMETYPES)
-        self.archive_extensions: Set[str] = {
-            an_ext.lower() for an_ext in DEFAULT_ARCHIVES
-        }
         self.user_id = user_id
         self._root_path = root_path
         self.list_errors: Dict[str, str] = list_errors
@@ -336,42 +442,36 @@ class Unpacker(object):
         :param archive: An open ZipFile or TarFile archive instance.
         :param filepath: Full path of the archive file.
         :param path: Target directory Path where archive contents are to be extracted.
-        :return: Relative subfolder path derived from the archive file name.
         """
-        # Retrieve member file names based on archive type
+        # Retrieve member file names and declared size in a single pass
         if isinstance(archive, zipfile.ZipFile):
-            filenames = archive.namelist()
+            info_list = archive.infolist()
+            declared_size = sum(info.file_size for info in info_list)
+            nb_entries = len(info_list)
+            get_unique_root = partial(FilteredZipFile.get_unique_root, info_list)
         else:
-            filenames = archive.getnames()
-        if len(filenames) == 0:
+            member_list = archive.getmembers()
+            declared_size = sum(member.size for member in member_list)
+            nb_entries = len(member_list)
+            get_unique_root = partial(FilteredTarFile.get_unique_root, member_list)
+
+        if nb_entries == 0:
             raise EmptyArchiveException()
+
         # Check limits from what the archive declares, before writing anything
-        if isinstance(archive, zipfile.ZipFile):
-            declared_size = sum(an_info.file_size for an_info in archive.infolist())
-        else:
-            declared_size = sum(a_member.size for a_member in archive.getmembers())
-        self._consume_unpack_budget(len(filenames), declared_size, path)
+        self._consume_unpack_budget(nb_entries, declared_size, path)
         top_level = self._unpack_depth == 1
         if top_level:
-            self._status(entries_total=len(filenames), bytes_declared=declared_size)
+            self._status(entries_total=nb_entries, bytes_declared=declared_size)
 
         # The archive's own name, without its (last) extension, e.g. "inner" for sub/inner.zip
         archive_path = Path(filepath)
-        own_name = ".".join(archive_path.name.split(".")[:-1])
-        # macOS zips add __MACOSX/ entries, they don't tell if the content is wrapped
-        checked = [a_name for a_name in filenames if not a_name.startswith("__MACOSX/")]
+        own_name = archive_path.stem
         # Extract next to the archive, into a folder with its name unless all entries
         # are already in such a folder. So nothing goes outside that folder.
         if own_name == "temp" and archive_path.parent == path:
             pass  # Zipfile sent by client, its content goes directly into path
-        elif (
-            own_name != ""
-            and len(checked) > 0
-            and all(
-                a_name == own_name or a_name.startswith(own_name + "/")
-                for a_name in checked
-            )
-        ):
+        elif get_unique_root() == own_name:
             path = archive_path.parent  # Already wrapped
         else:
             path = archive_path.parent / own_name
@@ -383,57 +483,106 @@ class Unpacker(object):
         else:
             archive.extractall(path.as_posix())
 
-        # Unpack nested archives collected during extraction (no second pass required)
-        for entry_idx, compressed_path in enumerate(archive.embedded_archives):
+        # Unpack nested archives collected during extraction (no second pass or type re-detection)
+        for entry_idx, (compressed_path, kind) in enumerate(archive.embedded_archives):
             if top_level:
-                self._status_entries_done(entry_idx, len(filenames))
+                self._status_entries_done(entry_idx, nb_entries)
             if not compressed_path.exists():
                 continue
             try:
-                self._dispatch_nested(compressed_path, path)
+                self._dispatch_nested(compressed_path, path, kind=kind)
             except EmptyArchiveException:
                 # Nothing to keep from it, and it was removed. Not worth failing the whole upload.
                 logger.info("Empty nested archive '%s' removed", compressed_path)
 
         if top_level:
-            self._status_entries_done(len(filenames), len(filenames))
+            self._status_entries_done(nb_entries, nb_entries)
 
-    def _is_accepted_extracted_file(self, filename: str, filepath: Path) -> bool:
-        if filepath.is_dir():
-            return True
-        if self._is_nested_archive(filename, filepath):
-            return True
-        file_ext, _, mime_type = self.get_file_info(filepath.name, filepath.parent)
-        if file_ext in TEXT_EXTENSIONS:
-            return True
-        if mime_type in self.accepted_mime_types:
-            return True
-        return False
+    @staticmethod
+    def detect_known_mime(head: bytes) -> Optional[str]:
+        """Fast mime type from first 16 bytes"""
+        if not head:
+            return None
 
-    def _is_nested_archive(self, filename: str, filepath: Path) -> bool:
+        # Images
+        if head.startswith(b"\xff\xd8\xff"):
+            return "image/jpeg"
+        if head.startswith(b"\x89PNG\r\n\x1a\n"):
+            return "image/png"
+        if head.startswith((b"GIF87a", b"GIF89a")):
+            return "image/gif"
+        if head.startswith((b"II*\x00", b"MM\x00*")):
+            return "image/tiff"
+        if len(head) >= 12 and head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+            return "image/webp"
+        if head.startswith(b"BM"):
+            return "image/bmp"
+
+        # Archives / compressed
+        if head.startswith((b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08")):
+            return "application/zip"
+        if head.startswith(b"\x1f\x8b"):
+            return "application/gzip"
+        if head.startswith(b"BZh"):
+            return "application/x-bzip2"
+        if head.startswith(b"\xfd7zXZ\x00"):
+            return "application/x-xz"
+
+        return None
+
+    @classmethod
+    def _classify_extracted_file(
+        cls, header: bytes, filename: str, filepath: Path
+    ) -> MemberClassification:
         """
-        Is the archive member an archive to unpack: its extension, possibly compound like
-        "tar.gz" ("tgz" being "tar.gz"), is a configured archive one, and its content is an archive.
+        Classify a newly extracted regular file, from its first bytes when enough:
+        - Returns 'zip', 'tar', or 'gz' if it is a nested archive to unpack.
+        - Returns 'accepted' if it is an accepted non-archive file.
+        - Returns None if the file format is refused and should be deleted.
         """
-        parts = filename.lower().rsplit("/", 1)[-1].split(".")
-        if len(parts) < 2:
-            return False
-        candidates = [parts[-1]]
-        if len(parts) >= 3:
-            candidates.append(parts[-2] + "." + parts[-1])
-        if parts[-1] == "tgz":
-            candidates.append("tar.gz")
-        if not any(c in self.archive_extensions for c in candidates):
-            return False
-        if not filepath.is_file():
-            return False
-        return self.is_compressed(filepath)
+        name = filename.rsplit("/", 1)[-1].lower()
+        parts = name.rsplit(".", 2)
+        ext = parts[-1] if len(parts) >= 2 else ""
+        archive_ext = bool(ext) and (
+            ext in cls.ARCHIVE_EXTENSIONS or (len(parts) == 3 and f"{parts[1]}.{ext}" in cls.ARCHIVE_EXTENSIONS)
+        )
+
+        mime_type = cls.detect_known_mime(header)
+        if archive_ext and mime_type in ARCHIVE_MIME_TYPES:
+            # A compressed member is for unpacking, not to be kept as a file
+            kind = cls.detect_archive_type(filepath, header=header)
+            if kind is not None:
+                return kind
+        if mime_type is not None:
+            # Binary type known from the header: settled, no need to look further
+            return "accepted" if mime_type in cls.ACCEPTED_MIME_TYPES else None
+
+        # Header unknown: the extension tells, as some formats have no magic bytes
+        if archive_ext:
+            kind = cls.detect_archive_type(filepath, header=header)
+            if kind is not None:
+                return kind
+        if ext in TEXT_EXTENSIONS:
+            return "accepted"
+
+        # Neither the header nor the extension told the type: ask magic, as before.
+        if cls.magic_mime(filepath) in cls.ACCEPTED_MIME_TYPES:
+            return "accepted"
+        return None
+
+    @staticmethod
+    def magic_mime(filepath: Path) -> Optional[str]:
+        """Mime type of filepath, from its content. None if unknown."""
+        try:
+            return from_path(str(filepath)).mime_type()
+        except (CantMatchTypeError, Exception):
+            return None
 
     @staticmethod
     def get_file_info(filename: str, path: Path) -> Tuple[str, Path, Optional[str]]:
         # Lowercase, extensions are compared case-insensitively
-        file_ext = filename.split(".")[-1].lower()
-        filepath = path.joinpath(filename)
+        file_ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+        filepath = path / filename
         if filepath.is_dir():
             return file_ext, filepath, None
         if file_ext in TEXT_EXTENSIONS:
@@ -446,12 +595,13 @@ class Unpacker(object):
 
         return file_ext, filepath, mime_type
 
-    def _has_accepted_format(self, filepath: Union[Path, str]) -> bool:
+    @classmethod
+    def _has_accepted_format(cls, filepath: Union[Path, str]) -> bool:
         p = Path(filepath)
-        file_ext, _, mime_type = self.get_file_info(p.name, p.parent)
-        if file_ext in TEXT_EXTENSIONS or mime_type in self.accepted_mime_types:
+        file_ext = p.name.rsplit(".", 1)[-1].lower() if "." in p.name else ""
+        if file_ext in TEXT_EXTENSIONS:
             return True
-        return False
+        return cls.magic_mime(p) in cls.ACCEPTED_MIME_TYPES
 
     def unpack_zip(self, input_path: Path, path: Path) -> None:
         try:
@@ -459,8 +609,6 @@ class Unpacker(object):
                 input_path,
                 "r",
                 allowZip64=True,
-                filter_func=self._is_accepted_extracted_file,
-                is_embedded_archive=self._is_nested_archive,
             ) as archive:
                 self.extract_archive(archive, str(input_path), path)
         except Exception as e:
@@ -473,8 +621,6 @@ class Unpacker(object):
             with FilteredTarFile.open(
                 input_path,
                 "r",
-                filter_func=self._is_accepted_extracted_file,
-                is_embedded_archive=self._is_nested_archive,
             ) as archive:
                 self.extract_archive(archive, str(input_path), path)
         except Exception as e:
@@ -584,31 +730,28 @@ class Unpacker(object):
     @classmethod
     def _publish(cls, staging: Path, parent: Path) -> List[str]:
         """
-        Move the content of the staging directory into parent, merging into existing directories.
-        Return the published names.
+        Move the content of the staging directory into parent, replacing whatever was already
+        there with the same name: an upload replaces what it is uploaded over, it does not
+        merge into it. Return the published names.
         """
         published = list(staging.iterdir())
         for an_entry in published:
-            cls._move_merging(an_entry, parent / an_entry.name)
+            cls._replace(an_entry, parent / an_entry.name)
         staging.rmdir()
         return sorted(an_entry.name for an_entry in published)
 
-    @classmethod
-    def _move_merging(cls, src: Path, dst: Path) -> None:
-        src_is_dir = src.is_dir() and not src.is_symlink()
-        dst_is_dir = dst.is_dir() and not dst.is_symlink()
-        if not dst.exists() and not dst.is_symlink():
-            src.rename(dst)
-        elif src_is_dir and dst_is_dir:
-            for a_child in list(src.iterdir()):
-                cls._move_merging(a_child, dst / a_child.name)
-            src.rmdir()
-        elif not src_is_dir and not dst_is_dir:
-            # File (or link) over file (or link): replace, as extractall does
-            src.replace(dst)
-        else:
-            logger.error("Cannot publish %s over %s, not the same kind", src, dst)
-            raise UnprocessableEntityException(DETAIL_NOTHING_DONE)
+    @staticmethod
+    def _replace(src: Path, dst: Path) -> None:
+        """
+        Put src at dst, removing whatever was at dst first. One rename in the common case:
+        merging file by file is what made unpacks slow on archives with many entries.
+        """
+        if dst.is_symlink() or dst.exists():
+            if dst.is_dir() and not dst.is_symlink():
+                shutil.rmtree(dst)
+            else:
+                dst.unlink()
+        src.rename(dst)
 
     @classmethod
     def _error_file(cls, parent: Path, archive_name: str) -> Path:
@@ -673,28 +816,54 @@ class Unpacker(object):
         except Exception as e2:
             logger.error("Could not report unpack failure of %s: %s", file_name, e2)
 
-    @staticmethod
-    def _is_tar(filepath: str) -> bool:
-        """tarfile.is_tarfile, but also False when the content is a corrupt compressed stream"""
-        try:
-            return tarfile.is_tarfile(filepath)
-        except (EOFError, zlib.error, gzip.BadGzipFile):
-            return False
-
-    @staticmethod
-    def _is_gz(filepath: str) -> bool:
-        with open(filepath, "rb") as f:
-            signature = f.read(2)
-        return signature == b"\x1f\x8b"
-
     @classmethod
-    def is_compressed(cls, path: Path) -> bool:
-        posix_path = path.as_posix()
-        return (
-            zipfile.is_zipfile(posix_path)
-            or cls._is_tar(posix_path)
-            or cls._is_gz(posix_path)
-        )
+    def detect_archive_type(
+        cls, path: Path, header: Optional[bytes] = None
+    ) -> Optional[ArchiveKind]:
+        """
+        Single-open, 512-byte magic-byte detection returning 'zip', 'tar', 'gz', or None.
+        A recognised but truncated stream still gets its kind, so that reading it raises
+        the proper corruption error instead of it being kept as a plain file.
+        Accepts optional header bytes if the first 512 bytes have already been read.
+        """
+        try:
+            head = header
+            if head is None:
+                with open(path, "rb") as f:
+                    head = f.read(512)
+            if len(head) < 2:
+                return None
+            # Uncompressed tar ('ustar' at offset 257)
+            if len(head) >= 262 and head[257:262] == b"ustar":
+                return "tar"
+            # Gzip (.gz, .tgz, .tar.gz): distinguish tar.gz from plain .gz
+            if head[:2] == b"\x1f\x8b":
+                try:
+                    if tarfile.is_tarfile(path):
+                        return "tar"
+                except (EOFError, zlib.error, gzip.BadGzipFile):
+                    # Truncated or corrupt: let the gunzip step report it as corrupt
+                    return "gz"
+                return "gz"
+            # Bzip2 / XZ (always tar in EcoTaxa)
+            if head[:3] == b"BZh" or head[:6] == b"\xfd7zXZ\x00":
+                try:
+                    return "tar" if tarfile.is_tarfile(path) else None
+                except (EOFError, zlib.error, gzip.BadGzipFile):
+                    # Truncated or corrupt: let the tar step report it as corrupt
+                    return "tar"
+            # Zip
+            if head[:4] in (b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08"):
+                return "zip"
+            # Fallback for edge cases (old V7 tar without 'ustar' or SFX zip)
+            if zipfile.is_zipfile(path):
+                return "zip"
+            try:
+                return "tar" if tarfile.is_tarfile(path) else None
+            except (EOFError, zlib.error, gzip.BadGzipFile):
+                return None
+        except OSError:
+            return None
 
     def dispatch_unpack(self, compressed_path: Path, to_path: Path) -> None:
         """
@@ -706,10 +875,18 @@ class Unpacker(object):
         archive_name = compressed_path.name
         self._reset_unpack_budget()
         self._status_fields = {}
-        if not self.is_compressed(compressed_path):
-            self._dispatch_nested(compressed_path, to_path)
-            if not compressed_path.exists():
-                # Removed by the format check
+        kind = self.detect_archive_type(compressed_path)
+        if kind is None:
+            # Not an archive: validate format directly without re-probing archive types
+            if not self._has_accepted_format(compressed_path):
+                compressed_path.unlink(missing_ok=True)
+                logger.info(
+                    "File format not accepted '%s' '%s' , user_id '%s'",
+                    str(to_path),
+                    str(compressed_path),
+                    str(self.user_id),
+                )
+                self.list_errors.update({"Not accepted": str(compressed_path)})
                 e = FileTypeRefusedException()
                 self._report_failure(to_path, archive_name, e)
                 raise e
@@ -721,6 +898,7 @@ class Unpacker(object):
             )
             self._error_file(to_path, archive_name).unlink(missing_ok=True)
             return
+
         self._status(state="unpacking", name=archive_name, percent=0)
         staging = self._new_staging_dir(to_path, compressed_path)
         # If this process dies meanwhile, the next one to start cleans up
@@ -743,7 +921,7 @@ class Unpacker(object):
                 staged_archive = staging / relative
                 staged_archive.parent.mkdir(parents=True, exist_ok=True)
                 shutil.move(compressed_path, staged_archive)
-                self._dispatch_nested(staged_archive, staging)
+                self._dispatch_nested(staged_archive, staging, kind=kind)
                 published = self._publish(staging, to_path)
             except Exception as e:
                 shutil.rmtree(staging, ignore_errors=True)
@@ -776,14 +954,26 @@ class Unpacker(object):
                 ret.append(a_name)
         return ret
 
-    def _dispatch_nested(self, compressed_path: Path, to_path: Path) -> None:
-        if zipfile.is_zipfile(compressed_path.as_posix()):
+    @classmethod
+    def is_compressed(cls, path: Path) -> bool:
+        """Returns True if path is a compressed file, whatever its name"""
+        return cls.detect_archive_type(path) is not None
+
+    def _dispatch_nested(
+        self,
+        compressed_path: Path,
+        to_path: Path,
+        kind: Optional[ArchiveKind] = None,
+    ) -> None:
+        if kind is None:
+            kind = self.detect_archive_type(compressed_path)
+        if kind == "zip":
             with self._one_level_deeper():
                 self.unpack_zip(compressed_path, to_path)
-        elif self._is_tar(compressed_path.as_posix()):
+        elif kind == "tar":
             with self._one_level_deeper():
                 self.unpack_tar(compressed_path, to_path)
-        elif self._is_gz(compressed_path.as_posix()):
+        elif kind == "gz":
             with self._one_level_deeper():
                 self.unpack_gz(compressed_path, to_path)
         elif not self._has_accepted_format(compressed_path):

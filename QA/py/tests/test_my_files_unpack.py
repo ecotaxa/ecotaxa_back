@@ -78,12 +78,12 @@ def test_zip_onto_existing_folder(tmp_path):
         parent, "name.zip", zip_bytes({"a.tsv": TSV, "img/x.png": PNG_1X1})
     )
     make_user_dir(root).unpacker.dispatch_unpack(archive, parent)
+    # An upload replaces the folder it is uploaded over, it does not merge into it
     assert tree(parent) == [
         "name/",
         "name/a.tsv",
         "name/img/",
         "name/img/x.png",
-        "name/old.tsv",
     ]
     assert (parent / "name" / "a.tsv").read_bytes() == TSV
 
@@ -102,7 +102,6 @@ from helpers.CustomException import UnprocessableEntityException
 from helpers.httpexception import (
     DETAIL_CORRUPT_ARCHIVE,
     DETAIL_ARCHIVE_MEMBER_REFUSED,
-    DETAIL_NOTHING_DONE,
 )
 
 
@@ -162,18 +161,19 @@ def test_failure_during_type_check(tmp_path, monkeypatch):
         "name.zip",
         zip_bytes({"a.tsv": TSV, "b.tsv": TSV, "c.tsv": TSV}),
     )
-    orig = Unpacker.get_file_info
+    unpacker = make_user_dir(root).unpacker
+    orig = Unpacker._classify_extracted_file
     calls = []
 
-    def failing(filename, path):
+    def failing(header, filename, filepath):
         calls.append(filename)
         if len(calls) == 2:
             raise OSError("No space left on device")
-        return orig(filename, path)
+        return orig(header, filename, filepath)
 
-    monkeypatch.setattr(Unpacker, "get_file_info", staticmethod(failing))
+    monkeypatch.setattr(Unpacker, "_classify_extracted_file", failing)
     with pytest.raises(OSError):
-        make_user_dir(root).unpacker.dispatch_unpack(archive, parent)
+        unpacker.dispatch_unpack(archive, parent)
     _nothing_left(parent)
 
 
@@ -226,11 +226,9 @@ def test_dir_over_file_collision(tmp_path):
     root, parent = _setup(tmp_path)
     (parent / "name").write_bytes(TSV)
     archive = _upload(parent, "name.zip", zip_bytes({"a.tsv": TSV}))
-    with pytest.raises(UnprocessableEntityException) as exc:
-        make_user_dir(root).unpacker.dispatch_unpack(archive, parent)
-    assert exc.value.message == DETAIL_NOTHING_DONE
-    assert tree(parent) == ["name"]
-    assert (parent / "name").read_bytes() == TSV
+    # An upload replaces whatever was at its destination, whatever the kind
+    make_user_dir(root).unpacker.dispatch_unpack(archive, parent)
+    assert tree(parent) == ["name/", "name/a.tsv"]
 
 
 #
@@ -480,18 +478,6 @@ def test_nested_compressed_tar(tmp_path, name, mode, folder):
         "name/" + folder + "/",
         "name/" + folder + "/a.tsv",
     ]
-
-
-def test_nested_archive_type_not_configured(tmp_path):
-    root, parent = _setup(tmp_path)
-    archive = _upload(
-        parent, "name.zip", zip_bytes({"a.tsv": TSV, "in.tar.bz2": _a_tar("w:bz2")})
-    )
-    user_dir = make_user_dir(root)
-    user_dir.unpacker.archive_extensions = ["zip", "tar", "gz"]
-    user_dir.unpacker.dispatch_unpack(archive, parent)
-    # Not a configured archive type, and its MIME type is not accepted
-    assert tree(parent) == ["name/", "name/a.tsv"]
 
 
 def test_nested_fake_tgz_removed(tmp_path):
@@ -826,3 +812,45 @@ def test_zero_depth_means_no_check(tmp_path):
     archive = _upload(parent, "name.zip", _nested_zips(8))
     _limited(root, max_unpack_depth=0).unpacker.dispatch_unpack(archive, parent)
     assert "name/in/in/in/in/in/in/in/x.tsv" in tree(parent)
+
+
+def test_detect_archive_type_with_and_without_header(tmp_path):
+    zip_file = tmp_path / "sample.zip"
+    zip_file.write_bytes(zip_bytes({"a.tsv": TSV}))
+    zip_head = zip_file.read_bytes()[:512]
+
+    # Without header argument (reads from disk)
+    assert Unpacker.detect_archive_type(zip_file) == "zip"
+    # With header argument (512 bytes read already)
+    assert Unpacker.detect_archive_type(zip_file, header=zip_head) == "zip"
+
+    # Tar archive
+    tar_file = tmp_path / "sample.tar"
+    with tarfile.open(tar_file, "w") as tar:
+        info = tarfile.TarInfo("a.tsv")
+        info.size = len(TSV)
+        tar.addfile(info, io.BytesIO(TSV))
+    tar_head = tar_file.read_bytes()[:512]
+    assert Unpacker.detect_archive_type(tar_file) == "tar"
+    assert Unpacker.detect_archive_type(tar_file, header=tar_head) == "tar"
+
+    # Gzip archive
+    gz_file = tmp_path / "sample.tsv.gz"
+    gz_file.write_bytes(gzip.compress(TSV))
+    gz_head = gz_file.read_bytes()[:512]
+    assert Unpacker.detect_archive_type(gz_file) == "gz"
+    assert Unpacker.detect_archive_type(gz_file, header=gz_head) == "gz"
+
+    # Tar.gz archive
+    targz_file = tmp_path / "sample.tar.gz"
+    targz_file.write_bytes(_a_tar("w:gz"))
+    targz_head = targz_file.read_bytes()[:512]
+    assert Unpacker.detect_archive_type(targz_file) == "tar"
+    assert Unpacker.detect_archive_type(targz_file, header=targz_head) == "tar"
+
+    # Non-archive file
+    tsv_file = tmp_path / "sample.tsv"
+    tsv_file.write_bytes(TSV)
+    tsv_head = tsv_file.read_bytes()[:512]
+    assert Unpacker.detect_archive_type(tsv_file) is None
+    assert Unpacker.detect_archive_type(tsv_file, header=tsv_head) is None
