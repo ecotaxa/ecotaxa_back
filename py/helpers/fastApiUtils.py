@@ -257,18 +257,6 @@ def build_serializer(salt: bytes = FLASK_SALT) -> URLSafeTimedSerializer:
     return _serializers[salt]
 
 
-def access_ttl() -> int:
-    return int(Config().get_cnf("ACCESS_TOKEN_TTL") or 3600)
-
-
-def refresh_ttl() -> int:
-    return int(Config().get_cnf("REFRESH_TOKEN_TTL") or MAX_TOKEN_AGE)
-
-
-def legacy_tokens_on() -> bool:
-    return (Config().get_cnf("LEGACY_TOKENS") or "on") == "on"
-
-
 def issue_access_token(user_id: int) -> str:
     return build_serializer(ACCESS_SALT).dumps({"user_id": user_id})
 
@@ -290,12 +278,14 @@ def _get_current_user(token, source: Optional[str] = None) -> int:  # pragma: no
     Not reasonable to test automatically, so excluded from code coverage measurement.
     """
     try:
-        payload = build_serializer(ACCESS_SALT).loads(token, max_age=access_ttl())
+        payload = build_serializer(ACCESS_SALT).loads(
+            token, max_age=Config().get_access_token_ttl()
+        )
         ret = _user_id_from(payload, ("user_id",))
     except (SignatureExpired, BadSignature):
         # recent Flask sets _user_id, legacy /login sets user_id
         keys: Tuple[str, ...] = ("_user_id", "user_id")
-        if not legacy_tokens_on() and source != "cookie":
+        if not Config().get_legacy_tokens_on() and source != "cookie":
             keys = ("_user_id",)
         try:
             payload = build_serializer().loads(token, max_age=MAX_TOKEN_AGE)

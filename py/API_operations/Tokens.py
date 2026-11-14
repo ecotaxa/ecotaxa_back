@@ -18,8 +18,6 @@ from DB.User import User, UserStatus, UserRefreshToken
 from DB.helpers.ORM import Session
 from helpers import DateTime
 from helpers.fastApiUtils import (
-    access_ttl,
-    refresh_ttl,
     issue_access_token,
     credentials_exception,
 )
@@ -125,22 +123,22 @@ class RefreshTokenService(Service):
             token_hash=_hash(token),
             family_id=family_id,
             created_at=now,
-            expires_at=now + timedelta(seconds=refresh_ttl()),
+            expires_at=now + timedelta(seconds=self.config.get_refresh_token_ttl()),
             client_info=(client_info or "")[:255] or None,
         )
         self.session.add(row)
         self.session.flush()
         ret = TokenRsp(
             access_token=issue_access_token(user_id),
-            expires_in=access_ttl(),
+            expires_in=self.config.get_access_token_ttl(),
             refresh_token=token,
-            refresh_expires_in=refresh_ttl(),
+            refresh_expires_in=self.config.get_refresh_token_ttl(),
         )
         return ret, row
 
     def _revoke_oldest_families(self, user_id: int) -> None:
         """Leave room for a new family. A family has at most one live token."""
-        max_families = int(self.config.get_cnf("MAX_REFRESH_FAMILIES") or 10)
+        max_families = self.config.get_max_refresh_families()
         now = _now()
         to_revoke = self.session.scalars(
             select(UserRefreshToken.family_id)

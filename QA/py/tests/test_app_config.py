@@ -1,7 +1,8 @@
 import os
+from enum import StrEnum
 
 import pytest
-from helpers.AppConfig import Config
+from helpers.AppConfig import Config, ConfigKey
 
 
 # Helper to create a dummy config file
@@ -181,7 +182,7 @@ def test_config_no_env_key_defaults_to_config_ini(tmp_path, mocker):
     os.chdir(tmp_path)
     try:
         cfg = Config()
-        assert cfg.get_cnf("SOME_KEY") == "some_value"
+        assert cfg._get("SOME_KEY") == "some_value"
     finally:
         os.chdir(cwd)
 
@@ -288,7 +289,7 @@ def test_config_singleton_same_instance(tmp_path, mocker):
     cfg1 = Config()
     cfg2 = Config()
     assert cfg1 is cfg2
-    assert cfg1.get_cnf("SOME_KEY") == "some_value"
+    assert cfg1._get("SOME_KEY") == "some_value"
 
 
 def test_config_reset_allows_reinit(tmp_path, mocker):
@@ -297,7 +298,7 @@ def test_config_reset_allows_reinit(tmp_path, mocker):
     mocker.patch.dict(os.environ, {"APP_CONFIG": str(config_path1)})
 
     cfg1 = Config()
-    assert cfg1.get_cnf("KEY") == "value1"
+    assert cfg1._get("KEY") == "value1"
 
     config_path2 = tmp_path / "config2.ini"
     create_config_file(config_path2, {"KEY": "value2"})
@@ -306,7 +307,7 @@ def test_config_reset_allows_reinit(tmp_path, mocker):
     Config.reset()
     cfg2 = Config()
     assert cfg2 is not cfg1
-    assert cfg2.get_cnf("KEY") == "value2"
+    assert cfg2._get("KEY") == "value2"
 
 
 
@@ -381,3 +382,126 @@ def test_config_cors_invalid(
     cfg = Config()
     with pytest.raises(AssertionError, match=expected_error):
         cfg.validate()
+
+
+def test_config_list_cnf_all_env(tmp_path, mocker):
+    non_existent_config = tmp_path / "nonexistent.ini"
+    env_vars = {
+        "APP_CONFIG": str(non_existent_config),
+        "APPMANAGER_EMAIL": "admin@example.com",
+        "APPMANAGER_NAME": "Admin Name",
+        "VAULT_DIR": "/tmp/vault",
+        "SECRET_KEY": "supersecret",
+        "CUSTOM_ENV_KEY": "some_value",
+    }
+    mocker.patch.dict(os.environ, env_vars, clear=False)
+
+    cfg = Config()
+    keys = cfg.list_cnf()
+
+    # Known keys in env should be listed
+    assert "APPMANAGER_EMAIL" in keys
+    assert "APPMANAGER_NAME" in keys
+    assert "VAULT_DIR" in keys
+    assert "SECRET_KEY" in keys
+    # Key not set in env should not be listed
+    assert "FTPEXPORTAREA" not in keys
+    assert "NONEXISTENT_KEY" not in keys
+
+    # _get and methods should retrieve values using exact key
+    assert cfg._get("APPMANAGER_EMAIL") == "admin@example.com"
+    assert cfg._get("VAULT_DIR") == "/tmp/vault"
+    assert cfg.get_app_manager() == ("Admin Name", "admin@example.com")
+    assert cfg.vault_dir() == "/tmp/vault"
+    assert cfg.secret_key() == "supersecret"
+
+
+def test_config_list_cnf_mixed_file_and_env(tmp_path, mocker):
+    config_path = tmp_path / "config.ini"
+    create_config_file(
+        config_path,
+        {
+            "FILE_ONLY_KEY": "from_file",
+            "OVERRIDDEN_KEY": "from_file",
+            "VAULT_DIR": "/vault/from/file",
+        },
+    )
+    mocker.patch.dict(
+        os.environ,
+        {
+            "APP_CONFIG": str(config_path),
+            "OVERRIDDEN_KEY": "from_env",
+            "JOBS_DIR": "/jobs/from/env",
+        },
+        clear=False,
+    )
+
+    cfg = Config()
+    keys = cfg.list_cnf()
+
+    assert "file_only_key" in keys
+    assert "vault_dir" in keys
+    assert "JOBS_DIR" in keys
+
+    assert cfg._get("FILE_ONLY_KEY") == "from_file"
+    assert cfg._get("OVERRIDDEN_KEY") == "from_env"
+    assert cfg.vault_dir() == "/vault/from/file"
+    assert cfg.jobs_dir() == "/jobs/from/env"
+
+
+def test_config_key_enum_values():
+    assert issubclass(ConfigKey, StrEnum)
+    assert ConfigKey.DB_USER == "DB_USER"
+    assert ConfigKey.VAULT_DIR == "VAULT_DIR"
+    assert ConfigKey.SECRET_KEY == "SECRET_KEY"
+    assert isinstance(ConfigKey.VAULT_DIR, str)
+
+
+def test_config_get_with_config_key_enum(tmp_path, mocker):
+    non_existent_config = tmp_path / "nonexistent.ini"
+    env_vars = {
+        "APP_CONFIG": str(non_existent_config),
+        "VAULT_DIR": "/custom/vault/path",
+        "APPMANAGER_EMAIL": "manager@domain.test",
+        "MODELSAREA": "/custom/models/path",
+        "TAXOSERVER_INSTANCE_ID": "42",
+        "TAXOSERVER_SHARED_SECRET": "mysecret",
+        "INSTANCE_ID": "EcoTaxa.Test",
+        "MAX_REFRESH_FAMILIES": "15",
+        "SECURITY_PASSWORD_HASH": "pbkdf2_sha256",
+        "SECURITY_PASSWORD_SALT": "mysalt",
+        "ACCESS_TOKEN_TTL": "1800",
+        "REFRESH_TOKEN_TTL": "7200",
+        "LEGACY_TOKENS": "off",
+        "APP_PORT": "9000",
+        "NO_TIME_LOG": "1",
+    }
+    mocker.patch.dict(os.environ, env_vars, clear=False)
+
+    cfg = Config()
+    assert cfg._get(ConfigKey.VAULT_DIR) == "/custom/vault/path"
+    assert cfg._get(ConfigKey.APPMANAGER_EMAIL) == "manager@domain.test"
+    assert ConfigKey.VAULT_DIR in cfg.list_cnf()
+    assert ConfigKey.APPMANAGER_EMAIL in cfg.list_cnf()
+
+    assert cfg.models_dir() == "/custom/models/path"
+    assert cfg.get_taxoserver_instance_id() == "42"
+    assert cfg.get_taxoserver_shared_secret() == "mysecret"
+    assert cfg.get_instance_id() == "EcoTaxa.Test"
+    assert cfg.get_max_refresh_families() == 15
+    assert cfg.get_security_password_hash() == "pbkdf2_sha256"
+    assert cfg.get_security_password_salt() == "mysalt"
+    assert cfg.get_access_token_ttl() == 1800
+    assert cfg.get_refresh_token_ttl() == 7200
+    assert cfg.get_legacy_tokens_on() is False
+    assert cfg.get_app_port() == 9000
+    assert cfg.get_no_time_log() is True
+
+
+def test_config_app_port_and_no_time_log_defaults(tmp_path, mocker):
+    non_existent_config = tmp_path / "nonexistent.ini"
+    mocker.patch.dict(os.environ, {"APP_CONFIG": str(non_existent_config)}, clear=True)
+
+    cfg = Config()
+    assert cfg.get_app_port() == 8000
+    assert cfg.get_no_time_log() is False

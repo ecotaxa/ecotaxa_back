@@ -807,6 +807,7 @@ class DarwinCoreExport(JobServiceBase):
                     val[1].taxo_id for val in added_occurences.values()
                 }
                 nb_added = len(added_occurences)
+                by_ml_added_occurences: WoRMSAggregT = {}
                 if self.include_predicted:
                     by_ml_added_occurences = self.add_occurrences_for_sample(
                         sample=a_sample, arch=arch, event_id=event_id, predicted=True
@@ -830,11 +831,19 @@ class DarwinCoreExport(JobServiceBase):
                     )
                 # Taxa-level eMoFs
                 added_emofs = self.add_occurrence_eMoFs_for_sample(
-                    sample=a_sample, arch=arch, event_id=event_id, predicted=False
+                    sample=a_sample,
+                    arch=arch,
+                    event_id=event_id,
+                    predicted=False,
+                    occurrences=added_occurences,
                 )
                 if self.include_predicted:
                     _ = self.add_occurrence_eMoFs_for_sample(
-                        sample=a_sample, arch=arch, event_id=event_id, predicted=True
+                        sample=a_sample,
+                        arch=arch,
+                        event_id=event_id,
+                        predicted=True,
+                        occurrences=by_ml_added_occurences,
                     )
                 # Ensure EMOFs (in recast space) are also covered in occurrences (so far in raw space)
                 self.cover_EMOF_in_occurrences(
@@ -1288,11 +1297,19 @@ class DarwinCoreExport(JobServiceBase):
         return ret, not_found
 
     def add_occurrence_eMoFs_for_sample(
-        self, sample: Sample, arch: DwC_Archive, event_id: str, predicted: bool
+        self,
+        sample: Sample,
+        arch: DwC_Archive,
+        event_id: str,
+        predicted: bool,
+        occurrences: WoRMSAggregT,
     ) -> WoRMSAggregT:
         """
         Add DwC occurrence eMoFs, for given sample, into the archive. A single line per WoRMS taxon.
         Note: We're in recast-ed taxo "space".
+        :param occurrences: The occurrences already produced for this sample & predicted flag.
+            eMoFs for a WoRMS taxon present there reuse its occurrenceID, as the EcoTaxa IDs
+            used for building the occurrenceID can differ b/w occurrence & eMoF recasts.
         If 'predicted' is set, do the computations on predicted (but not validated) objects.
         Otherwise, use human-validated objects.
         """
@@ -1322,6 +1339,10 @@ class DarwinCoreExport(JobServiceBase):
         # Loop over WoRMS taxa
         for a_lsid, for_lsid in by_abundance_desc.items():
             occurrence_id, aggreg_for_lsid, worms = for_lsid
+            same_taxon_occ = occurrences.get(a_lsid)
+            if same_taxon_occ is not None and same_taxon_occ[0] != occurrence_id:
+                occurrence_id = same_taxon_occ[0]
+                by_abundance_desc[a_lsid] = (occurrence_id, aggreg_for_lsid, worms)
             self.add_eMoFs_for_occurrence(
                 arch=arch,
                 event_id=event_id,

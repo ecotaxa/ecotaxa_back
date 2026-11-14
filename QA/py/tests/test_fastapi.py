@@ -202,6 +202,46 @@ def test_status(fastapi):
     assert "FTPEXPORTAREA" in response.content.decode("utf-8")
 
 
+def test_status_pure_env_config(fastapi, mocker, tmp_path):
+    # Test /status when config is injected only via env vars and config.ini is empty
+    import os
+    from helpers.AppConfig import Config
+
+    non_existent_config = tmp_path / "empty.ini"
+    env_vars = {
+        "APP_CONFIG": str(non_existent_config),
+        "APPMANAGER_EMAIL": "envadmin@test.org",
+        "APPMANAGER_NAME": "Env Administrator",
+        "VAULT_DIR": str(tmp_path / "vault"),
+        "SECRET_KEY": "secret_key_from_env",
+    }
+    mocker.patch.dict(os.environ, env_vars, clear=False)
+    Config.reset()
+    try:
+        url = "/status"
+        response = fastapi.get(url)
+        assert response.status_code == status.HTTP_200_OK
+        assert response.text == "UP!"
+
+        response = fastapi.get(url, headers=USER_AUTH)
+        assert response.status_code == status.HTTP_200_OK
+        content = response.content.decode("utf-8")
+        assert "APPMANAGER_EMAIL: envadmin@test.org" in content
+        assert "APPMANAGER_NAME: Env Administrator" in content
+        # User should not see admin config
+        assert "SECRET_KEY" not in content
+
+        response = fastapi.get(url, headers=ADMIN_AUTH)
+        assert response.status_code == status.HTTP_200_OK
+        admin_content = response.content.decode("utf-8")
+        assert "APPMANAGER_EMAIL: envadmin@test.org" in content
+        assert "SECRET_KEY: *************" in admin_content
+        assert "VAULT_DIR" in admin_content
+        assert "Paths:" in admin_content
+    finally:
+        Config.reset()
+
+
 PRJ_CREATE_URL = "/projects/create"
 
 
