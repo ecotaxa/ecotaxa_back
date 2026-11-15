@@ -172,11 +172,11 @@ def test_failure_during_type_check(tmp_path, monkeypatch):
     orig = Unpacker.classify_file
     calls = []
 
-    def failing(cls, filepath: Path, filename: str, header: bytes | None = None):
-        calls.append(filename)
+    def failing(cls, filepath: Path, header: bytes | None = None):
+        calls.append(filepath)
         if len(calls) == 2:
             raise OSError("No space left on device")
-        return orig(filepath, filename, header)
+        return orig(filepath, header)
 
     monkeypatch.setattr(Unpacker, "classify_file", failing)
     with pytest.raises(OSError):

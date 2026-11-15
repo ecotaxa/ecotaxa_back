@@ -11,7 +11,8 @@ from starlette.datastructures import UploadFile
 
 from DB.User import UserIDT
 from FS.CommonDir import CommonFolder, DirEntryT
-from FS.Unpack import Unpacker, _log_exception_throw, get_tus_files_dir, sweep_stale
+from FS.Unpack import Unpacker, _log_exception_throw, sweep_stale
+from FS.Uploads import get_tus_files_dir
 from helpers.AppConfig import Config
 from helpers.CustomException import UnprocessableEntityException
 from helpers.httpexception import DETAIL_FILE_PROTECTED, DETAIL_NOTHING_DONE

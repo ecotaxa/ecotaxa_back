@@ -31,10 +31,11 @@ from typing import (
     Union,
 )
 
-from magic_rs import CantMatchTypeError, from_bytes
+from magic_rs import from_bytes
 
 from API_models.constants import DEFAULT_ARCHIVES, DEFAULT_MIMETYPES
 from DB.User import UserIDT
+from FS.Uploads import get_tus_files_dir
 from helpers.AppConfig import Config
 from helpers.CustomException import BaseAppException, UnprocessableEntityException
 from helpers.DynamicLogs import get_logger
@@ -58,11 +59,7 @@ MemberClassification = Optional[Union[ArchiveKind, Literal["accepted"]]]
 BUFFER_SIZE = 1024 * 1024
 PROGRESS_PREFIX = "⌛"
 # Additional accepted tabular/text formats, by extension, as magic detection can't type them
-TEXT_EXTENSIONS = {
-    "csv": "text/csv",
-    "txt": "text/plain",
-    "tsv": "text/tab-separated-values",
-}
+TEXT_EXTENSIONS = {"csv", "txt", "tsv"}
 
 # What a broken archive, sent by the user, raises while being read
 CORRUPT_ARCHIVE_EXCEPTIONS = (
@@ -144,17 +141,6 @@ def _log_exception_throw(e: Exception, context: Optional[str] = None) -> None:
     raise e
 
 
-def get_tus_files_dir() -> str:
-    """
-    Get the directory where uploaded files (via TUS) are stored.
-    Use a subfolder of the users files area.
-    """
-    base_dir = Config().get_users_files_dir()
-    tus_dir = Path(base_dir, "tus_uploads")
-    tus_dir.mkdir(parents=True, exist_ok=True)
-    return str(tus_dir)
-
-
 class _HeaderPeekStream:
     """Wrap a binary stream to peek at first bytes without slowing down subsequent reads."""
 
@@ -215,16 +201,15 @@ class FilteredZipFile(zipfile.ZipFile):
         pwd: Optional[bytes] = None,
     ) -> str:
         extracted_str: str = super()._extract_member(member, targetpath, pwd)  # type: ignore[misc]
-        member_name = member.filename if isinstance(member, zipfile.ZipInfo) else member
-        if self.getinfo(member_name).is_dir():
+        extracted = Path(extracted_str)
+        if extracted.is_dir():
             return extracted_str
         # Header of the member just written, captured by open() above. Consumed, so that a
         # member not going through open() cannot be classified with the previous one.
         peek, self._last_peek = self._last_peek, None
         header = peek.header if peek is not None else b""
-        extracted = Path(extracted_str)
         try:
-            classification = Unpacker.classify_file(extracted, extracted.name, header)
+            classification = Unpacker.classify_file(extracted, header)
         except Exception:
             extracted.unlink(missing_ok=True)
             raise
@@ -287,9 +272,7 @@ class FilteredTarFile(tarfile.TarFile):
 
         extracted = Path(os.fsdecode(targetpath))
         try:
-            classification = Unpacker.classify_file(
-                extracted, extracted.name, peek.header
-            )
+            classification = Unpacker.classify_file(extracted, peek.header)
         except Exception:
             extracted.unlink(missing_ok=True)
             raise
@@ -478,9 +461,6 @@ class Unpacker(object):
         else:
             archive.extractall(path.as_posix())
 
-        logger.info(
-            "Extracted archive '%s' embeds %s", archive_path, archive.embedded_archives
-        )
         # Unpack nested archives collected during extraction (no second pass or type re-detection)
         for entry_idx, (compressed_path, kind) in enumerate(archive.embedded_archives):
             if top_level:
@@ -526,15 +506,15 @@ class Unpacker(object):
         if head.startswith(b"\xfd7zXZ\x00"):
             return "application/x-xz"
 
-        # 2. Fallback to magic_rs on the already-read 512-byte buffer (no file re-open)
+        # Fallback to magic_rs on the already-read 512-byte buffer (no file re-open)
         try:
             return from_bytes(head).mime_type()
-        except (CantMatchTypeError, Exception):
+        except Exception:
             return None
 
     @classmethod
     def classify_file(
-        cls, filepath: Path, filename: str, header: Optional[bytes] = None
+        cls, filepath: Path, header: Optional[bytes] = None
     ) -> MemberClassification:
         """
         Classify a newly extracted regular file, from its first bytes when enough:
@@ -542,7 +522,7 @@ class Unpacker(object):
         - Returns 'accepted' if it is an accepted non-archive file.
         - Returns None if the file format is refused and should be deleted.
         """
-        name = filename.rsplit("/", 1)[-1].lower()
+        name = filepath.name.lower()
         parts = name.rsplit(".", 2)
         ext = parts[-1] if len(parts) >= 2 else ""
 
@@ -735,9 +715,8 @@ class Unpacker(object):
         """
         if isinstance(e, BaseAppException):
             code, reason = e.status_code, e.message
-            if self._root_path is not None:
-                for a_root in (str(self._root_path.absolute()), str(self._root_path)):
-                    reason = reason.replace(a_root, "")
+            for a_root in (str(self._root_path.absolute()), str(self._root_path)):
+                reason = reason.replace(a_root, "")
         else:
             code, reason = 500, "unexpected server error"
         if isinstance(e, FileTypeRefusedException):
@@ -803,9 +782,9 @@ class Unpacker(object):
                     head = f.read(512)
             if len(head) < 2:
                 return None
-            # Uncompressed tar ('ustar' at offset 257)
-            if len(head) >= 262 and head[257:262] == b"ustar":
-                return "tar"
+            # Zip
+            if head[:4] in (b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08"):
+                return "zip"
             # Gzip (.gz, .tgz, .tar.gz): distinguish tar.gz from plain .gz
             if head[:2] == b"\x1f\x8b":
                 try:
@@ -815,16 +794,23 @@ class Unpacker(object):
                     # Truncated or corrupt: let the gunzip step report it as corrupt
                     return "gz"
                 return "gz"
-            # Bzip2 / XZ (always tar in EcoTaxa)
-            if head[:3] == b"BZh" or head[:6] == b"\xfd7zXZ\x00":
+            # Bzip2 (always tar in EcoTaxa)
+            if head[:3] == b"BZh":
                 try:
                     return "tar" if tarfile.is_tarfile(path) else None
                 except (EOFError, zlib.error, gzip.BadGzipFile):
                     # Truncated or corrupt: let the tar step report it as corrupt
                     return "tar"
-            # Zip
-            if head[:4] in (b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08"):
-                return "zip"
+            # XZ (always tar in EcoTaxa)
+            if head[:6] == b"\xfd7zXZ\x00":
+                try:
+                    return "tar" if tarfile.is_tarfile(path) else None
+                except (EOFError, zlib.error, gzip.BadGzipFile):
+                    # Truncated or corrupt: let the tar step report it as corrupt
+                    return "tar"
+            # Uncompressed tar ('ustar' at offset 257)
+            if len(head) >= 262 and head[257:262] == b"ustar":
+                return "tar"
             # Fallback for edge cases (old V7 tar without 'ustar' or SFX zip)
             if zipfile.is_zipfile(path):
                 return "zip"
@@ -845,7 +831,7 @@ class Unpacker(object):
         archive_name = compressed_path.name
         self._reset_unpack_budget()
         self._status_fields = {}
-        kind = self.classify_file(compressed_path, archive_name)
+        kind = self.classify_file(compressed_path)
         if kind is None:
             compressed_path.unlink(missing_ok=True)
             logger.info(
@@ -911,15 +897,12 @@ class Unpacker(object):
         ret = []
         for a_name in names:
             try:
-                if self._root_path is not None:
-                    ret.append(
-                        (parent / a_name)
-                        .absolute()
-                        .relative_to(self._root_path.absolute())
-                        .as_posix()
-                    )
-                else:
-                    ret.append(a_name)
+                ret.append(
+                    (parent / a_name)
+                    .absolute()
+                    .relative_to(self._root_path.absolute())
+                    .as_posix()
+                )
             except ValueError:
                 ret.append(a_name)
         return ret
@@ -936,7 +919,7 @@ class Unpacker(object):
         kind: MemberClassification = None,
     ) -> None:
         if kind is None:
-            kind = self.classify_file(compressed_path, compressed_path.name)
+            kind = self.classify_file(compressed_path)
         if kind in ("zip", "tar", "gz"):
             with self._one_level_deeper():
                 getattr(self, f"unpack_{kind}")(compressed_path, to_path)
@@ -968,7 +951,7 @@ def registered(
             registry_dir.mkdir(parents=True, exist_ok=True)
             fd, tmp_name = tempfile.mkstemp(dir=registry_dir, suffix=TMP_SUFFIX)
             fcntl.flock(fd, fcntl.LOCK_EX)
-            data = dict(info, pid=os.getpid(), started=_now())
+            data = dict(info, pid=os.getpid())
             os.write(fd, json.dumps(data).encode("utf-8"))
             # Published locked and complete, the lock follows the inode
             entry = registry_dir / (uuid.uuid4().hex + SUFFIX)
@@ -1097,7 +1080,3 @@ def _clean_up(info: Dict[str, Any], users_files_dir: Path) -> None:
             logger.error(
                 "Could not set status of interrupted unpack %s: %s", upload_id, e
             )
-
-
-def _now() -> str:
-    return datetime.datetime.now(datetime.timezone.utc).isoformat()

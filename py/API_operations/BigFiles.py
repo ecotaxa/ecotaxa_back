@@ -15,7 +15,8 @@ from tuspyserver.lock import acquire_upload_lock
 from tuspyserver.storage.local import LocalFileStorage
 
 from FS.Unpack import UnpackStatus, Unpacker
-from FS.UserFilesDir import UserFilesDirectory, get_tus_files_dir
+from FS.Uploads import get_tus_files_dir
+from FS.UserFilesDir import UserFilesDirectory
 from helpers.AppConfig import Config
 from helpers.CustomException import BaseAppException, UnprocessableEntityException
 from helpers.DynamicLogs import get_logger

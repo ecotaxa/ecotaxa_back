@@ -34,7 +34,8 @@ from DB.helpers import Result
 from DB.helpers import Session
 from DB.helpers.Direct import text
 from FS.TempDirForTasks import TempDirForTasks
-from FS.UserFilesDir import UserFilesDirectory, get_tus_files_dir
+from FS.Uploads import get_tus_files_dir
+from FS.UserFilesDir import UserFilesDirectory
 from helpers.DynamicLogs import get_logger, LogsSwitcher
 
 logger = get_logger(__name__)
