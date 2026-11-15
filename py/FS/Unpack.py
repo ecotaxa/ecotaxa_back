@@ -95,6 +95,8 @@ TMP_GRACE = 60
 _LIVE: Set[str] = set()
 # The HTTP status of an interrupted unpacking, for status polling
 INTERRUPTED_STATUS_CODE = 500
+# Minimum delay between two visible status changes, unless the state changes
+MIN_STATUS_INTERVAL = 1
 
 
 class EmptyArchiveException(UnprocessableEntityException):
@@ -209,13 +211,13 @@ class FilteredZipFile(_NewEntryReporter, zipfile.ZipFile):
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
-        self._last_peek: Optional[_HeaderPeekStream] = None
+        self._peek: _HeaderPeekStream = _HeaderPeekStream(None)
 
     def open(self, name, mode="r", pwd=None, *, force_zip64=False):
         raw = super().open(name, mode=mode, pwd=pwd, force_zip64=force_zip64)
         if mode == "r":
-            self._last_peek = _HeaderPeekStream(raw)
-            return self._last_peek
+            self._peek.reset(raw)
+            return self._peek
         return raw
 
     def _extract_member(  # type: ignore[misc]
@@ -230,10 +232,7 @@ class FilteredZipFile(_NewEntryReporter, zipfile.ZipFile):
         if extracted_is_dir:
             header = b""
         else:
-            # Header of the member just written, captured by open() above. Consumed, so that a
-            # member not going through open() cannot be classified with the previous one.
-            peek, self._last_peek = self._last_peek, None
-            header = peek.header if peek is not None else b""
+            header, self._peek.header = self._peek.header, b""
         self._notify_new_entry(extracted, header, not extracted_is_dir)
         return extracted_str
 
@@ -268,31 +267,22 @@ class FilteredTarFile(_NewEntryReporter, tarfile.TarFile):
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
-        # First bytes of the member being written, captured by makefile() below
-        self._entry_header = b""
-        # One peek stream for all the members, reused rather than allocated per member
-        self._peek: Optional[_HeaderPeekStream] = None
+        self._peek: _HeaderPeekStream = _HeaderPeekStream(None)
 
     def _extract_member(self, tarinfo, targetpath, *args, **kwargs) -> None:
-        self._entry_header = b""
         super()._extract_member(tarinfo, targetpath, *args, **kwargs)
-        header, self._entry_header = self._entry_header, b""
+        header, self._peek.header = self._peek.header, b""
         # Only regular files are checked for their format, not dirs and links
         self._notify_new_entry(Path(os.fsdecode(targetpath)), header, tarinfo.isreg())
 
     def makefile(self, tarinfo, targetpath) -> None:
         orig_fileobj = self.fileobj
-        if self._peek is None:
-            self._peek = _HeaderPeekStream(orig_fileobj)
-        else:
-            self._peek.reset(orig_fileobj)
-        peek = self._peek
-        self.fileobj = peek  # type: ignore[assignment]
+        self._peek.reset(orig_fileobj)
+        self.fileobj = self._peek  # type: ignore[assignment]
         try:
             super().makefile(tarinfo, targetpath)
         finally:
             self.fileobj = orig_fileobj
-        self._entry_header = peek.header
 
     @staticmethod
     def get_unique_root(member_list) -> Optional[str]:
@@ -319,8 +309,6 @@ class UnpackStatus(object):
     """
 
     SUFFIX = ".unpack.json"
-    # Minimum delay between two writes, unless the state changes
-    MIN_INTERVAL = 1
 
     def __init__(self, upload_id: str, user_id: int, name: str):
         self.path = self.path_for(upload_id)
@@ -336,11 +324,11 @@ class UnpackStatus(object):
 
     def update(self, fields: Dict[str, Any]) -> None:
         """
-        Write the status, at most every MIN_INTERVAL seconds unless the state changes. Never raises.
+        Write the status, at most every MIN_STATUS_INTERVAL seconds unless the state changes. Never raises.
         """
         state = fields.get("state")
         now = time.monotonic()
-        if state == self._last_state and now - self._last_write < self.MIN_INTERVAL:
+        if state == self._last_state and now - self._last_write < MIN_STATUS_INTERVAL:
             return
         data = dict(self.base)
         data.update(fields)
@@ -785,7 +773,7 @@ class Unpacker(object):
             return
         self._status_fields.update(fields)
         try:
-            self.status_reporter(dict(self._status_fields))
+            self.status_reporter(self._status_fields)
         except Exception as e:
             logger.error("Could not report unpack status: %s", e)
 

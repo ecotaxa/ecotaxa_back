@@ -255,7 +255,7 @@ def test_tus_unpack_status_while_unpacking(fastapi, monkeypatch):
     from FS.Unpack import UnpackStatus
 
     status_obj = UnpackStatus("1" * 32, 3, "x.zip")
-    monkeypatch.setattr(UnpackStatus, "MIN_INTERVAL", 0)
+    monkeypatch.setattr("FS.Unpack.MIN_STATUS_INTERVAL", 0)
     from tests.credentials import CREATOR_USER_ID
 
     status_obj.base["user_id"] = CREATOR_USER_ID

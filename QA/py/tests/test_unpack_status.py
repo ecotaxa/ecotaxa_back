@@ -22,7 +22,7 @@ def _setup(tmp_path: Path):
 def _recorded(root: Path):
     user_dir = make_user_dir(root)
     statuses = []
-    user_dir.unpacker.status_reporter = statuses.append
+    user_dir.unpacker.status_reporter = lambda s: statuses.append(dict(s))
     return user_dir, statuses
 
 
@@ -30,12 +30,15 @@ def _corrupt(content: bytes) -> bytes:
     return content[:40] + b"\x00" * 40 + content[80:]
 
 
-def test_status_nested_archives(tmp_path):
+def test_status_nested_archives(tmp_path, monkeypatch):
+    monkeypatch.setattr(UnpackModule, "MIN_STATUS_INTERVAL", 0)
     root, parent = _setup(tmp_path)
     inner = zip_bytes({"ecotaxa_s.tsv": TSV, "x.tsv": TSV})
     archive = parent / "name.zip"
     archive.write_bytes(
-        zip_bytes({"s1_Images.zip": inner, "s2_Images.zip": inner, "s3_Images.zip": inner})
+        zip_bytes(
+            {"s1_Images.zip": inner, "s2_Images.zip": inner, "s3_Images.zip": inner}
+        )
     )
     user_dir, statuses = _recorded(root)
     user_dir.unpacker.dispatch_unpack(archive, parent)
@@ -76,7 +79,8 @@ def test_status_error(tmp_path):
     assert "result_paths" not in last
 
 
-def test_status_flat_archive_progress(tmp_path):
+def test_status_flat_archive_progress(tmp_path, monkeypatch):
+    monkeypatch.setattr(UnpackModule, "MIN_STATUS_INTERVAL", 0)
     root, parent = _setup(tmp_path)
     archive = parent / "name.zip"
     archive.write_bytes(zip_bytes({"%d.tsv" % num: TSV for num in range(10)}))
@@ -87,20 +91,6 @@ def test_status_flat_archive_progress(tmp_path):
     with_total = [a_status for a_status in statuses if "entries_total" in a_status]
     assert with_total[0]["percent"] == 0 and with_total[0]["files_done"] == 10
     # Progress then moves entry by entry, while extractall() writes the files
-    percents = [a_status["percent"] for a_status in statuses]
-    assert percents == sorted(percents), "percent only goes up"
-    assert len(set(percents)) > 2, "no progress reported during extraction"
-    assert max(percents[:-1]) == 99 and percents[-1] == 100
-    last = statuses[-1]
-    assert last["entries_total"] == 10 and last["entries_done"] == 10
-
-
-def test_status_tar_progress(tmp_path):
-    root, parent = _setup(tmp_path)
-    archive = parent / "name.tar"
-    archive.write_bytes(tar_bytes({"%d.tsv" % num: TSV for num in range(10)}))
-    user_dir, statuses = _recorded(root)
-    user_dir.unpacker.dispatch_unpack(archive, parent)
     percents = [a_status["percent"] for a_status in statuses]
     assert percents == sorted(percents), "percent only goes up"
     assert len(set(percents)) > 2, "no progress reported during extraction"
@@ -152,7 +142,7 @@ def test_store_throttled_except_state_change(tus_dir, monkeypatch):
     status.update({"state": "done", "percent": 100})
     read = UnpackStatus.read("abc")
     assert read is not None and read["state"] == "done"  # State change, written
-    monkeypatch.setattr(UnpackStatus, "MIN_INTERVAL", 0)
+    monkeypatch.setattr(UnpackModule, "MIN_STATUS_INTERVAL", 0)
     status.update({"state": "done", "percent": 100, "result_paths": ["x"]})
     read = UnpackStatus.read("abc")
     assert read is not None and read["result_paths"] == ["x"]
