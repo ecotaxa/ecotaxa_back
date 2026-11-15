@@ -55,6 +55,9 @@ logger = get_logger(__name__)
 
 ArchiveKind = Literal["zip", "tar", "gz"]
 MemberClassification = Optional[Union[ArchiveKind, Literal["accepted"]]]
+# Called once per extracted entry, with its path, its first bytes when known,
+# and whether it is a regular file to check
+NewEntryCallback = Callable[[Path, bytes, bool], None]
 
 BUFFER_SIZE = 1024 * 1024
 PROGRESS_PREFIX = "⌛"
@@ -149,6 +152,13 @@ class _HeaderPeekStream:
         self._peek_size = peek_size
         self.header = b""
 
+    def reset(self, source) -> None:
+        """Reuse this wrapper on the next file of the same archive, or on another stream."""
+        self._source = source
+        self.header = b""
+        # Undo the read() bypass installed once the header was complete
+        self.__dict__.pop("read", None)
+
     def read(self, size: int = -1) -> bytes:
         chunk = self._source.read(size)
         if chunk:
@@ -172,10 +182,25 @@ class _HeaderPeekStream:
         return getattr(self._source, name)
 
 
-class FilteredZipFile(zipfile.ZipFile):
+class _NewEntryReporter(object):
     """
-    Subclass of ZipFile that filters extracted members during extract routines
-    and collects embedded archives along with their detected type.
+    Part common to the filtered archive classes: tell, through on_new_entry, each entry
+    just written. The callback is in charge of what to keep, refusing and collecting
+    embedded archives, it is not duplicated for each archive format.
+    It must be set before extraction.
+    """
+
+    on_new_entry: Optional[NewEntryCallback] = None
+
+    def _notify_new_entry(self, path: Path, header: bytes, is_file: bool) -> None:
+        if self.on_new_entry is not None:
+            self.on_new_entry(path, header, is_file)
+
+
+class FilteredZipFile(_NewEntryReporter, zipfile.ZipFile):
+    """
+    Subclass of ZipFile that reports each extracted member to an on_new_entry
+    callback, along with its first bytes.
     """
 
     def __init__(
@@ -184,13 +209,12 @@ class FilteredZipFile(zipfile.ZipFile):
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
-        self.embedded_archives: List[Tuple[Path, ArchiveKind]] = []
         self._last_peek: Optional[_HeaderPeekStream] = None
 
     def open(self, name, mode="r", pwd=None, *, force_zip64=False):
         raw = super().open(name, mode=mode, pwd=pwd, force_zip64=force_zip64)
         if mode == "r":
-            self._last_peek = _HeaderPeekStream(raw, peek_size=512)
+            self._last_peek = _HeaderPeekStream(raw)
             return self._last_peek
         return raw
 
@@ -202,22 +226,15 @@ class FilteredZipFile(zipfile.ZipFile):
     ) -> str:
         extracted_str: str = super()._extract_member(member, targetpath, pwd)  # type: ignore[misc]
         extracted = Path(extracted_str)
-        if extracted.is_dir():
-            return extracted_str
-        # Header of the member just written, captured by open() above. Consumed, so that a
-        # member not going through open() cannot be classified with the previous one.
-        peek, self._last_peek = self._last_peek, None
-        header = peek.header if peek is not None else b""
-        try:
-            classification = Unpacker.classify_file(extracted, header)
-        except Exception:
-            extracted.unlink(missing_ok=True)
-            raise
-        if classification is None:
-            extracted.unlink(missing_ok=True)
-            logger.info("NOT EXTRACTED '%s' ", str(extracted_str))
-        elif classification != "accepted":
-            self.embedded_archives.append((extracted, classification))
+        extracted_is_dir = extracted.is_dir()
+        if extracted_is_dir:
+            header = b""
+        else:
+            # Header of the member just written, captured by open() above. Consumed, so that a
+            # member not going through open() cannot be classified with the previous one.
+            peek, self._last_peek = self._last_peek, None
+            header = peek.header if peek is not None else b""
+        self._notify_new_entry(extracted, header, not extracted_is_dir)
         return extracted_str
 
     @staticmethod
@@ -239,10 +256,10 @@ class FilteredZipFile(zipfile.ZipFile):
         return ret
 
 
-class FilteredTarFile(tarfile.TarFile):
+class FilteredTarFile(_NewEntryReporter, tarfile.TarFile):
     """
-    Subclass of TarFile that filters extracted members during extract routines
-    and collects embedded archives along with their detected type.
+    Subclass of TarFile that reports each extracted member to an on_new_entry
+    callback, along with its first bytes.
     """
 
     def __init__(
@@ -251,36 +268,31 @@ class FilteredTarFile(tarfile.TarFile):
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
-        self.embedded_archives: List[Tuple[Path, ArchiveKind]] = []
+        # First bytes of the member being written, captured by makefile() below
+        self._entry_header = b""
+        # One peek stream for all the members, reused rather than allocated per member
+        self._peek: Optional[_HeaderPeekStream] = None
 
-    @classmethod
-    def open(  # type: ignore[override]
-        cls,
-        *args: Any,
-        **kwargs: Any,
-    ) -> "FilteredTarFile":
-        return super().open(*args, **kwargs)  # type: ignore[call-overload, no-any-return]
+    def _extract_member(self, tarinfo, targetpath, *args, **kwargs) -> None:
+        self._entry_header = b""
+        super()._extract_member(tarinfo, targetpath, *args, **kwargs)
+        header, self._entry_header = self._entry_header, b""
+        # Only regular files are checked for their format, not dirs and links
+        self._notify_new_entry(Path(os.fsdecode(targetpath)), header, tarinfo.isreg())
 
     def makefile(self, tarinfo, targetpath) -> None:
         orig_fileobj = self.fileobj
-        peek = _HeaderPeekStream(orig_fileobj, peek_size=512)
+        if self._peek is None:
+            self._peek = _HeaderPeekStream(orig_fileobj)
+        else:
+            self._peek.reset(orig_fileobj)
+        peek = self._peek
         self.fileobj = peek  # type: ignore[assignment]
         try:
             super().makefile(tarinfo, targetpath)
         finally:
             self.fileobj = orig_fileobj
-
-        extracted = Path(os.fsdecode(targetpath))
-        try:
-            classification = Unpacker.classify_file(extracted, peek.header)
-        except Exception:
-            extracted.unlink(missing_ok=True)
-            raise
-        if classification is None:
-            extracted.unlink(missing_ok=True)
-            logger.info("NOT EXTRACTED '%s' ", str(extracted))
-        elif classification != "accepted":
-            self.embedded_archives.append((extracted, classification))
+        self._entry_header = peek.header
 
     @staticmethod
     def get_unique_root(member_list) -> Optional[str]:
@@ -308,7 +320,7 @@ class UnpackStatus(object):
 
     SUFFIX = ".unpack.json"
     # Minimum delay between two writes, unless the state changes
-    MIN_INTERVAL = 0.5
+    MIN_INTERVAL = 1
 
     def __init__(self, upload_id: str, user_id: int, name: str):
         self.path = self.path_for(upload_id)
@@ -438,9 +450,8 @@ class Unpacker(object):
 
         # Check limits from what the archive declares, before writing anything
         self._consume_unpack_budget(nb_entries, declared_size, path)
-        top_level = self._unpack_depth == 1
-        if top_level:
-            self._status(entries_total=nb_entries, bytes_declared=declared_size)
+        if self._unpack_depth == 1:
+            self._status(bytes_declared=declared_size)
 
         # The archive's own name, without its (last) extension, e.g. "inner" for sub/inner.zip
         archive_path = Path(filepath)
@@ -454,17 +465,19 @@ class Unpacker(object):
         else:
             path = archive_path.parent / own_name
 
-        # Extract all files and directories into the target path
-        if isinstance(archive, tarfile.TarFile):
+        # Extract all files and directories into the target path.
+        # Each entry written is reported, at every depth: progress is reported there, and
+        # what depends on the entry's format is decided there (keep, refuse, or unpack later).
+        embedded: List[Tuple[Path, ArchiveKind]] = []
+        archive.on_new_entry = partial(self._on_new_entry, embedded)
+        if isinstance(archive, zipfile.ZipFile):
+            archive.extractall(path.as_posix())
+        else:
             # No absolute paths, no escape out of path, no links outside, no devices
             archive.extractall(path.as_posix(), filter="data")
-        else:
-            archive.extractall(path.as_posix())
 
-        # Unpack nested archives collected during extraction (no second pass or type re-detection)
-        for entry_idx, (compressed_path, kind) in enumerate(archive.embedded_archives):
-            if top_level:
-                self._status_entries_done(entry_idx, nb_entries)
+        # Unpack nested archives collected during extraction
+        for compressed_path, kind in embedded:
             if not compressed_path.exists():
                 continue
             try:
@@ -473,8 +486,31 @@ class Unpacker(object):
                 # Nothing to keep from it, and it was removed. Not worth failing the whole upload.
                 logger.info("Empty nested archive '%s' removed", compressed_path)
 
-        if top_level:
-            self._status_entries_done(nb_entries, nb_entries)
+    def _on_new_entry(
+        self,
+        embedded: List[Tuple[Path, ArchiveKind]],
+        path: Path,
+        header: bytes,
+        is_file: bool,
+    ) -> None:
+        """
+        One entry written by an archive: report progress, then decide what to do with it
+        from its format, i.e. keep it, refuse it (removed), or unpack it later as a nested
+        archive.
+        """
+        self._entry_done()
+        if not is_file:
+            return
+        try:
+            classification = self.classify_file(path, header)
+        except Exception:
+            path.unlink(missing_ok=True)
+            raise
+        if classification is None:
+            path.unlink(missing_ok=True)
+            logger.info("NOT EXTRACTED '%s' ", str(path))
+        elif classification != "accepted":
+            embedded.append((path, classification))
 
     @staticmethod
     def _mime_from_header(head: bytes) -> Optional[str]:
@@ -592,6 +628,7 @@ class Unpacker(object):
                         break
                     self._consume_unpack_budget(0, len(chunk), path)
                     f_out.write(chunk)
+            self._entry_done()
             self._dispatch_nested(path / decompressed_path.name, path)
         except Exception as e:
             if decompressed_path.exists():
@@ -603,6 +640,7 @@ class Unpacker(object):
     def _reset_unpack_budget(self) -> None:
         self._unpacked_size = 0
         self._unpacked_entries = 0
+        self._entries_done = 0
         self._unpack_depth = 0
         self._bytes_since_last_disk_check = 0
 
@@ -632,7 +670,13 @@ class Unpacker(object):
                 % (DETAIL_UNPACK_TOO_MANY_ENTRIES, self.max_unpack_entries)
             )
         self._unpacked_size += size
-        self._status(files_done=self._unpacked_entries, bytes_done=self._unpacked_size)
+        self._status(
+            files_done=self._unpacked_entries,
+            bytes_done=self._unpacked_size,
+            entries_total=self._unpacked_entries,
+            entries_done=self._entries_done,
+            percent=self._entries_progress(),
+        )
         if 0 < self.max_unpacked_size < self._unpacked_size:
             raise UnprocessableEntityException(
                 "%s (max. %d bytes)" % (DETAIL_UNPACK_TOO_LARGE, self.max_unpacked_size)
@@ -745,10 +789,20 @@ class Unpacker(object):
         except Exception as e:
             logger.error("Could not report unpack status: %s", e)
 
-    def _status_entries_done(self, done: int, total: int) -> None:
+    def _entries_progress(self) -> int:
         # 100 only once published
-        percent = min(99, 100 * done // total) if total else 0
-        self._status(entries_done=done, percent=percent)
+        if not self._unpacked_entries:
+            return 0
+        return min(99, 100 * self._entries_done // self._unpacked_entries)
+
+    def _entry_done(self) -> None:
+        """One entry extracted. A nested archive opening can make the percent go down."""
+        self._entries_done += 1
+        self._status(
+            entries_total=self._unpacked_entries,
+            entries_done=self._entries_done,
+            percent=self._entries_progress(),
+        )
 
     def _report(self, parent: Path, file_name: str, text: str) -> None:
         """

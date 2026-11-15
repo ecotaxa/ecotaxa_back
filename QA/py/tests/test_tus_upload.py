@@ -211,7 +211,7 @@ def test_tus_unpack_status(fastapi):
     assert got["state"] == "done" and got["percent"] == 100
     assert got["name"] == "st.zip"
     assert got["result_paths"] == ["st_dir/st"]
-    assert got["entries_total"] == 2 and got["files_done"] == 3
+    assert got["entries_total"] == 3 and got["files_done"] == 3
     assert "Retry-After" not in rsp.headers
     assert "user_id" not in got
     # Corrupt archive

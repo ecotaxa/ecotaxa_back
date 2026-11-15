@@ -1,7 +1,7 @@
 #
 # Status of an upload unpacking, as reported while unpacking, and its shared store.
-# No entry-by-entry extraction: progress moves only between archives and during
-# the per-entry check after extractall().
+# Progress moves entry by entry, and the target grows when a nested archive is opened,
+# so the percent can go down.
 #
 from pathlib import Path
 
@@ -9,7 +9,7 @@ import pytest
 
 import FS.Unpack as UnpackModule
 from FS.Unpack import UnpackStatus
-from tests.userfiles_helpers import make_user_dir, zip_bytes, tree, TSV
+from tests.userfiles_helpers import make_user_dir, tar_bytes, zip_bytes, tree, TSV
 
 
 def _setup(tmp_path: Path):
@@ -43,13 +43,14 @@ def test_status_nested_archives(tmp_path):
     assert states[0] == "unpacking" and states[-1] == "done"
     assert set(states[:-1]) == {"unpacking"}
     percents = [a_status["percent"] for a_status in statuses]
-    assert percents == sorted(percents), "percent only goes up"
+    # Nested archives add their entries to the target, so the percent can go down
     assert percents[-1] == 100 and max(percents[:-1]) < 100
-    # Moves between the nested archives
     assert len(set(percents)) >= 4
+    assert any(after < before for before, after in zip(percents, percents[1:]))
     last = statuses[-1]
     assert last["name"] == "name.zip"
-    assert last["entries_total"] == 3 and last["entries_done"] == 3
+    # 3 entries in the upload, then 2 more for each nested archive opened
+    assert last["entries_total"] == 9 and last["entries_done"] == 9
     # 3 entries in the upload, 2 in each nested archive
     assert last["files_done"] == 3 + 3 * 2
     assert last["bytes_done"] == 3 * len(inner) + 3 * 2 * len(TSV)
@@ -75,17 +76,37 @@ def test_status_error(tmp_path):
     assert "result_paths" not in last
 
 
-def test_status_flat_archive_limit(tmp_path):
+def test_status_flat_archive_progress(tmp_path):
     root, parent = _setup(tmp_path)
     archive = parent / "name.zip"
     archive.write_bytes(zip_bytes({"%d.tsv" % num: TSV for num in range(10)}))
     user_dir, statuses = _recorded(root)
     user_dir.unpacker.dispatch_unpack(archive, parent)
-    # The first statuses after reading the headers: all files are counted (declared),
-    # but the percent is still 0, extractall() gives no progress
+    # The first status after reading the headers: all files are counted (declared),
+    # but nothing is extracted yet, so the percent is still 0
     with_total = [a_status for a_status in statuses if "entries_total" in a_status]
     assert with_total[0]["percent"] == 0 and with_total[0]["files_done"] == 10
-    assert statuses[-1]["percent"] == 100
+    # Progress then moves entry by entry, while extractall() writes the files
+    percents = [a_status["percent"] for a_status in statuses]
+    assert percents == sorted(percents), "percent only goes up"
+    assert len(set(percents)) > 2, "no progress reported during extraction"
+    assert max(percents[:-1]) == 99 and percents[-1] == 100
+    last = statuses[-1]
+    assert last["entries_total"] == 10 and last["entries_done"] == 10
+
+
+def test_status_tar_progress(tmp_path):
+    root, parent = _setup(tmp_path)
+    archive = parent / "name.tar"
+    archive.write_bytes(tar_bytes({"%d.tsv" % num: TSV for num in range(10)}))
+    user_dir, statuses = _recorded(root)
+    user_dir.unpacker.dispatch_unpack(archive, parent)
+    percents = [a_status["percent"] for a_status in statuses]
+    assert percents == sorted(percents), "percent only goes up"
+    assert len(set(percents)) > 2, "no progress reported during extraction"
+    assert max(percents[:-1]) == 99 and percents[-1] == 100
+    last = statuses[-1]
+    assert last["entries_total"] == 10 and last["entries_done"] == 10
 
 
 def test_no_reporter_no_status(tmp_path):

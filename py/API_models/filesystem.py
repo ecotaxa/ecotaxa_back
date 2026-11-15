@@ -68,21 +68,23 @@ class UnpackStatusModel(BaseModel):
     percent: int = Field(
         default=0,
         title="Percent",
-        description="Progress, 0 to 100. Counts the entries of the uploaded archive checked or, "
-        "for nested archives, unpacked. It does not move while the files of an archive are written, "
-        "so for one big archive without nested ones it stays low, then jumps to 100.",
+        description="Progress, 0 to 100, entries done out of entries total. It moves while "
+        "entries are extracted, and may go down when a nested archive adds its own entries to "
+        "the total. It stays below 100 until the result is published.",
         examples=[42],
     )
     entries_done: Optional[int] = Field(
         default=None,
         title="Entries done",
-        description="Entries of the uploaded archive done.",
+        description="Entries extracted so far, in the uploaded archive and the nested archives "
+        "opened so far.",
         examples=[420],
     )
     entries_total: Optional[int] = Field(
         default=None,
         title="Entries total",
-        description="Entries of the uploaded archive, once its headers are read.",
+        description="Entries of the archives opened so far, nested archives included. Grows "
+        "when a nested archive is opened.",
         examples=[1000],
     )
     files_done: Optional[int] = Field(
