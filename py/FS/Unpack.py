@@ -166,7 +166,9 @@ class _HeaderPeekStream:
         if chunk:
             needed = self._peek_size - len(self.header)
             if needed > 0:
-                self.header += chunk[:needed]
+                self.header = (
+                    chunk[:needed] if not self.header else self.header + chunk[:needed]
+                )
             # Once the header is complete (true after the 1st read() in 99.9% of cases),
             # bypass this Python wrapper for all subsequent reads on this file.
             if len(self.header) >= self._peek_size or size == -1:
