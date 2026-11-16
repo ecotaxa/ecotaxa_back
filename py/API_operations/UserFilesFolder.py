@@ -100,6 +100,12 @@ class UserFilesFolderService(Service):
             sub_path = "/"
         _: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
         sub_path = self._can_use_dir_throw(sub_path)
+        # The content of an archive extraction in progress is not final, don't show it
+        if any(a_part.startswith(PROGRESS_PREFIX) for a_part in sub_path.split(ospath.sep)):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail={"message": DETAIL_EXTRACTION_IN_PROGRESS, "state": "unpacking"},
+            )
         folder = UserFilesDirectory(current_user_id)
         return self.list_and_format(folder, sub_path)
 

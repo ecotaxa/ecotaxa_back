@@ -388,6 +388,20 @@ def test_file_operations_refuse_extraction_in_progress(fastapi):
     api_remove_user_file(fastapi, "free", CREATOR_AUTH)
 
 
+def test_list_refuses_extraction_in_progress(fastapi):
+    """The content of a folder still being unpacked is not listed, its state is told instead."""
+    from FS.Unpack import PROGRESS_PREFIX
+    from helpers.httpexception import DETAIL_EXTRACTION_IN_PROGRESS
+
+    for a_path in (PROGRESS_PREFIX + "name", "sub/" + PROGRESS_PREFIX + "name/x"):
+        rsp = fastapi.get(MY_FILES_URL + a_path, headers=CREATOR_AUTH)
+        assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT, rsp.text
+        assert rsp.json()["detail"] == {
+            "message": DETAIL_EXTRACTION_IN_PROGRESS,
+            "state": "unpacking",
+        }
+
+
 def test_upload_empty_archive(fastapi, tmp_path):
     """An empty archive is refused with a clear message."""
     from helpers.httpexception import DETAIL_EMPTY_ARCHIVE
