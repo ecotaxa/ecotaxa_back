@@ -11,7 +11,13 @@ from starlette.datastructures import UploadFile
 
 from DB.User import UserIDT
 from FS.CommonDir import CommonFolder, DirEntryT
-from FS.Unpack import PROGRESS_PREFIX, Unpacker, _log_exception_throw, sweep_stale
+from FS.Unpack import (
+    PROGRESS_PREFIX,
+    Unpacker,
+    _log_exception_throw,
+    active_stagings,
+    sweep_stale,
+)
 from FS.Uploads import get_tus_files_dir
 from helpers.AppConfig import Config
 from helpers.CustomException import UnprocessableEntityException
@@ -94,13 +100,17 @@ class UserFilesDirectory(object):
 
     def has_extraction_in_progress(self, path: str) -> bool:
         """
-        Whether the folder at path holds, at any depth, an archive extraction in progress,
-        i.e. a staging folder that the extraction will publish into its parent when done.
+        Whether the folder at path holds, at any depth, an archive extraction registered
+        as in progress, i.e. a staging folder that the extraction will publish into its
+        parent when done. From the registry, not a walk of the folder which can be big.
         """
-        abs_path: Path = self._root_path.joinpath(path.lstrip(os.path.sep))
+        abs_path: Path = self._root_path.joinpath(path.lstrip(os.path.sep)).absolute()
         if not abs_path.is_dir() or abs_path.is_symlink():
             return False
-        return any(True for _ in abs_path.rglob(PROGRESS_PREFIX + "*"))
+        return any(
+            a_staging == abs_path or abs_path in a_staging.parents
+            for a_staging in active_stagings(get_unpack_registry_dir())
+        )
 
     def _no_extraction_inside_throw(self, path: str) -> None:
         """Moving or removing such a folder would take the extraction in progress away"""

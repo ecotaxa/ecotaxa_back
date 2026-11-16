@@ -1008,6 +1008,26 @@ def registered(
             os.close(fd)
 
 
+def active_stagings(registry_dir: Path) -> List[Path]:
+    """
+    The staging folders of the unpackings registered as in progress. Best effort: an
+    unreadable entry, or one being written, is ignored.
+    """
+    ret: List[Path] = []
+    try:
+        entries = list(registry_dir.glob("*" + SUFFIX))
+    except OSError:
+        return ret
+    for an_entry in entries:
+        try:
+            staging = json.loads(an_entry.read_text()).get("staging")
+        except (OSError, ValueError, AttributeError):
+            continue
+        if staging:
+            ret.append(Path(staging))
+    return ret
+
+
 def sweep_stale(registry_dir: Path, users_files_dir: Path) -> int:
     """
     Clean up after the unpackings of dead processes: remove their staging folder, tell the

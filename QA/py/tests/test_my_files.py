@@ -4,11 +4,12 @@
 #
 # Exhibit some not-so-intuitive behavior of /my_files and associated upload
 #
+import contextlib
 import pathlib
 import shutil
 import time
 import zipfile
-from typing import Dict
+from typing import Dict, Generator
 
 import pytest
 from starlette import status
@@ -441,14 +442,31 @@ def test_list_hides_extraction_in_progress(fastapi):
         shutil.rmtree(parent, ignore_errors=True)
 
 
-def _with_staging(*parts: str) -> pathlib.Path:
-    """Make <root>/parts.../⌛name in the creator's My Files, return <root>/parts[0]"""
-    from FS.Unpack import PROGRESS_PREFIX
-    from FS.UserFilesDir import UserFilesDirectory
+@contextlib.contextmanager
+def _with_staging(*parts: str) -> Generator[pathlib.Path, None, None]:
+    """
+    While in the block, an extraction in progress in <root>/parts.../⌛name of the
+    creator's My Files: its staging folder, registered as a real extraction does.
+    Yield <root>/parts[0], removed after.
+    """
+    from FS.Unpack import PROGRESS_PREFIX, registered
+    from FS.UserFilesDir import UserFilesDirectory, get_unpack_registry_dir
 
     root = UserFilesDirectory(CREATOR_USER_ID)._root_path
-    root.joinpath(*parts, PROGRESS_PREFIX + "name").mkdir(parents=True, exist_ok=True)
-    return root / parts[0]
+    staging = root.joinpath(*parts, PROGRESS_PREFIX + "name")
+    staging.mkdir(parents=True, exist_ok=True)
+    info = {
+        "staging": str(staging.absolute()),
+        "parent": str(staging.parent.absolute()),
+        "name": "name.zip",
+        "user_id": CREATOR_USER_ID,
+        "upload_id": None,
+    }
+    try:
+        with registered(get_unpack_registry_dir(), info):
+            yield root / parts[0]
+    finally:
+        shutil.rmtree(root / parts[0], ignore_errors=True)
 
 
 def test_import_refuses_parent_of_extraction_in_progress(fastapi):
@@ -456,8 +474,7 @@ def test_import_refuses_parent_of_extraction_in_progress(fastapi):
     from helpers.httpexception import DETAIL_EXTRACTION_IN_PROGRESS
 
     prj_id = create_project(CREATOR_USER_ID, "Import parent of unpacking")
-    top = _with_staging("gp_unpack", "parent")
-    try:
+    with _with_staging("gp_unpack", "parent") as top:
         for a_source in ("gp_unpack", "gp_unpack/parent"):
             rsp = api_file_import(
                 fastapi, prj_id, {"source_path": a_source}, auth=CREATOR_AUTH
@@ -472,8 +489,6 @@ def test_import_refuses_parent_of_extraction_in_progress(fastapi):
             assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT, rsp.text
             assert DETAIL_EXTRACTION_IN_PROGRESS in rsp.text
         assert top.joinpath("parent").is_dir()
-    finally:
-        shutil.rmtree(top, ignore_errors=True)
 
 
 def test_import_keeps_source_with_new_extraction(fastapi):
@@ -481,24 +496,20 @@ def test_import_keeps_source_with_new_extraction(fastapi):
     from types import SimpleNamespace
     from API_operations.imports.ImportBase import ImportServiceBase
 
-    top = _with_staging("kept_src")
-    try:
+    with _with_staging("kept_src") as top:
         job = SimpleNamespace(
             from_myfiles=CREATOR_USER_ID, req=SimpleNamespace(source_path="kept_src")
         )
         ImportServiceBase.remove_source_path(job)  # type: ignore[arg-type]
         assert top.is_dir()
         assert len(list(top.iterdir())) == 1
-    finally:
-        shutil.rmtree(top, ignore_errors=True)
 
 
 def test_file_operations_refuse_parent_of_extraction_in_progress(fastapi):
     """No move or removal of a folder holding an extraction in progress; '*' leaves it."""
     from helpers.httpexception import DETAIL_EXTRACTION_IN_PROGRESS
 
-    top = _with_staging("gp_ops", "parent")
-    try:
+    with _with_staging("gp_ops", "parent") as top:
         for rsp in (
             api_move_user_file(fastapi, "gp_ops", "gp_renamed", CREATOR_AUTH),
             api_move_user_file(fastapi, "gp_ops/parent", "elsewhere", CREATOR_AUTH),
@@ -509,8 +520,21 @@ def test_file_operations_refuse_parent_of_extraction_in_progress(fastapi):
             assert DETAIL_EXTRACTION_IN_PROGRESS in rsp.text
         assert api_remove_user_file(fastapi, "*", CREATOR_AUTH).status_code == 200
         assert len(list(top.joinpath("parent").iterdir())) == 1
+
+
+def test_orphan_staging_does_not_block(fastapi):
+    """A '⌛' folder no extraction has registered (dead process, not swept yet) blocks nothing."""
+    from FS.Unpack import PROGRESS_PREFIX
+    from FS.UserFilesDir import UserFilesDirectory
+
+    root = UserFilesDirectory(CREATOR_USER_ID)._root_path
+    root.joinpath("orphan_ops", PROGRESS_PREFIX + "name").mkdir(parents=True, exist_ok=True)
+    try:
+        rsp = api_move_user_file(fastapi, "orphan_ops", "orphan_moved", CREATOR_AUTH)
+        assert rsp.status_code == status.HTTP_200_OK, rsp.text
     finally:
-        shutil.rmtree(top, ignore_errors=True)
+        shutil.rmtree(root / "orphan_ops", ignore_errors=True)
+        shutil.rmtree(root / "orphan_moved", ignore_errors=True)
 
 
 def test_upload_empty_archive(fastapi, tmp_path):
