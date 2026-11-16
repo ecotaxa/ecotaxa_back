@@ -3,6 +3,7 @@
 # Copyright (C) 2015-2026  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 import base64
+from pathlib import Path
 from typing import Dict
 
 from starlette import status
@@ -190,6 +191,58 @@ def _zip(members: Dict[str, bytes]) -> bytes:
         for name, content in members.items():
             z.writestr(name, content)
     return buf.getvalue()
+
+
+def test_tus_upload_claim_once(tmp_path, monkeypatch):
+    """The claim of an upload is atomic and exclusive, until released."""
+    import FS.Uploads as Uploads
+
+    monkeypatch.setattr(Uploads, "get_tus_files_dir", lambda: str(tmp_path))
+    claim = Uploads.claim_upload("a" * 32)
+    assert claim is not None and claim.exists()
+    assert Uploads.claim_upload("a" * 32) is None
+    other = Uploads.claim_upload("b" * 32)
+    assert other is not None and other != claim
+    Uploads.release_claim(claim)
+    assert not claim.exists()
+    assert Uploads.claim_upload("a" * 32) is not None
+
+
+def test_tus_complete_hook_runs_once(fastapi, monkeypatch):
+    """
+    A PATCH adding no byte, at the final offset, makes tuspyserver call the completion
+    hook again. The upload must still be treated only once.
+    """
+    from API_operations import BigFiles
+    from FS.Uploads import CLAIM_SUFFIX, get_tus_files_dir
+
+    calls = []
+    original = BigFiles._start_unpack
+
+    async def counting_start(*args, **kwargs):
+        calls.append(args)
+        return await original(*args, **kwargs)
+
+    monkeypatch.setattr(BigFiles, "_start_unpack", counting_start)
+    api_remove_user_file(fastapi, "*", CREATOR_AUTH)
+    content = _zip({"ecotaxa_s1.tsv": b"object_id\n[t]\nobj1\n"})
+    upload_id = _tus_upload(fastapi, content, "claimed.zip", "claimed")
+    assert len(calls) == 1
+
+    res = fastapi.patch(
+        TUS_UPLOAD_URL + upload_id,
+        headers={
+            "Tus-Resumable": TUS_VERSION,
+            "Content-Type": "application/offset+octet-stream",
+            "Upload-Offset": str(len(content)),
+            **CREATOR_AUTH,
+        },
+        content=b"",
+    )
+    assert res.status_code == status.HTTP_204_NO_CONTENT, res.text
+    assert len(calls) == 1
+    assert (Path(get_tus_files_dir()) / (upload_id + CLAIM_SUFFIX)).exists()
+    api_remove_user_file(fastapi, "*", CREATOR_AUTH)
 
 
 def _status_of(fastapi, upload_id: str, auth=CREATOR_AUTH):

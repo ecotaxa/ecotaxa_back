@@ -15,7 +15,7 @@ from tuspyserver.lock import acquire_upload_lock
 from tuspyserver.storage.local import LocalFileStorage
 
 from FS.Unpack import UnpackStatus, Unpacker
-from FS.Uploads import get_tus_files_dir
+from FS.Uploads import claim_upload, get_tus_files_dir, release_claim
 from FS.UserFilesDir import UserFilesDirectory
 from helpers.AppConfig import Config
 from helpers.CustomException import BaseAppException, UnprocessableEntityException
@@ -141,6 +141,14 @@ async def on_tus_upload_complete(
     else:
         # Ensure no directory traversal
         original_name = os.path.basename(original_name)
+    claim = claim_upload(tus_path.name)
+    if claim is None:
+        # tuspyserver called the hook again for an empty PATCH at the final offset
+        logger.info(
+            "TUS upload %s was already treated, ignoring a duplicate completion",
+            tus_path.name,
+        )
+        return
     user_dir: Optional[UserFilesDirectory] = None
     try:
 
@@ -197,6 +205,8 @@ async def on_tus_upload_complete(
                 "TUS file upload complete: moved %s to %s", file_path, dest_path
             )
     except Exception as e:
+        # Allow a retry, the upload was not (or not fully) treated
+        release_claim(claim)
         # tuspyserver lets it through, so it is the response to the last PATCH
         logger.error(
             "Error in on_tus_upload_complete: %s",
