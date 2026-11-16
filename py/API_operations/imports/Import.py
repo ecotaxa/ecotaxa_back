@@ -67,6 +67,7 @@ class FileImport(ImportServiceBase):
         """
         # Security check
         RightsBO.user_wants(self.session, current_user_id, Action.ANNOTATE, self.prj_id)
+        self._no_extraction_inside_throw(current_user_id)
         # OK, go background straight away
         self.create_job(self.JOB_TYPE, current_user_id)
         ret = ImportRsp(job_id=self.job_id)

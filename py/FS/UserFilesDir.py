@@ -11,11 +11,15 @@ from starlette.datastructures import UploadFile
 
 from DB.User import UserIDT
 from FS.CommonDir import CommonFolder, DirEntryT
-from FS.Unpack import Unpacker, _log_exception_throw, sweep_stale
+from FS.Unpack import PROGRESS_PREFIX, Unpacker, _log_exception_throw, sweep_stale
 from FS.Uploads import get_tus_files_dir
 from helpers.AppConfig import Config
 from helpers.CustomException import UnprocessableEntityException
-from helpers.httpexception import DETAIL_FILE_PROTECTED, DETAIL_NOTHING_DONE
+from helpers.httpexception import (
+    DETAIL_EXTRACTION_IN_PROGRESS,
+    DETAIL_FILE_PROTECTED,
+    DETAIL_NOTHING_DONE,
+)
 
 BUFFER_SIZE = 1024 * 1024
 
@@ -88,9 +92,25 @@ class UserFilesDirectory(object):
             path.lstrip(os.path.sep)
         ) == self._root_path.joinpath(self.trash_directory)
 
+    def has_extraction_in_progress(self, path: str) -> bool:
+        """
+        Whether the folder at path holds, at any depth, an archive extraction in progress,
+        i.e. a staging folder that the extraction will publish into its parent when done.
+        """
+        abs_path: Path = self._root_path.joinpath(path.lstrip(os.path.sep))
+        if not abs_path.is_dir() or abs_path.is_symlink():
+            return False
+        return any(True for _ in abs_path.rglob(PROGRESS_PREFIX + "*"))
+
+    def _no_extraction_inside_throw(self, path: str) -> None:
+        """Moving or removing such a folder would take the extraction in progress away"""
+        if self.has_extraction_in_progress(path):
+            raise UnprocessableEntityException(DETAIL_EXTRACTION_IN_PROGRESS)
+
     def move(self, source_name: str, dest_name: str) -> str:
         self._is_trash_dir_throw(source_name)
         self._is_trash_dir_throw(dest_name)
+        self._no_extraction_inside_throw(source_name)
         source_path: Path = self._root_path.joinpath(source_name.lstrip(os.path.sep))
         dest_path: Path = self._root_path.joinpath(dest_name.lstrip(os.path.sep))
         self.ensure_exists(dest_path.parent)
@@ -115,6 +135,10 @@ class UserFilesDirectory(object):
                 pathtoremove = self._root_path.joinpath(path)
                 path += os.path.sep
             for item in os.listdir(pathtoremove):
+                if item.startswith(PROGRESS_PREFIX) or self.has_extraction_in_progress(
+                    path + item
+                ):
+                    continue  # An extraction in progress stays where it is
                 if (
                     pathtoremove.joinpath(item).is_file()
                     or item != self.trash_directory
@@ -122,6 +146,7 @@ class UserFilesDirectory(object):
                     self.remove(path + item)
             return
         self._is_trash_dir_throw(path)
+        self._no_extraction_inside_throw(path)
         source_path: Path = self._root_path.joinpath(path.lstrip(os.path.sep))
         # send to trash if not in trash
         if not path.startswith(self.trash_directory + os.path.sep):

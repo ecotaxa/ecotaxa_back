@@ -418,6 +418,78 @@ def test_list_hides_extraction_in_progress(fastapi):
         shutil.rmtree(parent, ignore_errors=True)
 
 
+def _with_staging(*parts: str) -> pathlib.Path:
+    """Make <root>/parts.../⌛name in the creator's My Files, return <root>/parts[0]"""
+    from FS.Unpack import PROGRESS_PREFIX
+    from FS.UserFilesDir import UserFilesDirectory
+
+    root = UserFilesDirectory(CREATOR_USER_ID)._root_path
+    root.joinpath(*parts, PROGRESS_PREFIX + "name").mkdir(parents=True, exist_ok=True)
+    return root / parts[0]
+
+
+def test_import_refuses_parent_of_extraction_in_progress(fastapi):
+    """No import from a folder holding, at any depth, an extraction in progress."""
+    from helpers.httpexception import DETAIL_EXTRACTION_IN_PROGRESS
+
+    prj_id = create_project(CREATOR_USER_ID, "Import parent of unpacking")
+    top = _with_staging("gp_unpack", "parent")
+    try:
+        for a_source in ("gp_unpack", "gp_unpack/parent"):
+            rsp = api_file_import(
+                fastapi, prj_id, {"source_path": a_source}, auth=CREATOR_AUTH
+            )
+            assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT, rsp.text
+            assert DETAIL_EXTRACTION_IN_PROGRESS in rsp.text
+            rsp = fastapi.post(
+                "/simple_import/%d?dry_run=False" % prj_id,
+                headers=CREATOR_AUTH,
+                json={"source_path": a_source, "values": {}},
+            )
+            assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT, rsp.text
+            assert DETAIL_EXTRACTION_IN_PROGRESS in rsp.text
+        assert top.joinpath("parent").is_dir()
+    finally:
+        shutil.rmtree(top, ignore_errors=True)
+
+
+def test_import_keeps_source_with_new_extraction(fastapi):
+    """After an import, a source folder where an extraction started meanwhile is not trashed."""
+    from types import SimpleNamespace
+    from API_operations.imports.ImportBase import ImportServiceBase
+
+    top = _with_staging("kept_src")
+    try:
+        job = SimpleNamespace(
+            from_myfiles=CREATOR_USER_ID, req=SimpleNamespace(source_path="kept_src")
+        )
+        ImportServiceBase.remove_source_path(job)  # type: ignore[arg-type]
+        assert top.is_dir()
+        assert len(list(top.iterdir())) == 1
+    finally:
+        shutil.rmtree(top, ignore_errors=True)
+
+
+def test_file_operations_refuse_parent_of_extraction_in_progress(fastapi):
+    """No move or removal of a folder holding an extraction in progress; '*' leaves it."""
+    from helpers.httpexception import DETAIL_EXTRACTION_IN_PROGRESS
+
+    top = _with_staging("gp_ops", "parent")
+    try:
+        for rsp in (
+            api_move_user_file(fastapi, "gp_ops", "gp_renamed", CREATOR_AUTH),
+            api_move_user_file(fastapi, "gp_ops/parent", "elsewhere", CREATOR_AUTH),
+            api_remove_user_file(fastapi, "gp_ops", CREATOR_AUTH),
+            api_remove_user_file(fastapi, "gp_ops/parent", CREATOR_AUTH),
+        ):
+            assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT, rsp.text
+            assert DETAIL_EXTRACTION_IN_PROGRESS in rsp.text
+        assert api_remove_user_file(fastapi, "*", CREATOR_AUTH).status_code == 200
+        assert len(list(top.joinpath("parent").iterdir())) == 1
+    finally:
+        shutil.rmtree(top, ignore_errors=True)
+
+
 def test_upload_empty_archive(fastapi, tmp_path):
     """An empty archive is refused with a clear message."""
     from helpers.httpexception import DETAIL_EMPTY_ARCHIVE
