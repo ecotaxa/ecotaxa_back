@@ -402,6 +402,22 @@ def test_list_refuses_extraction_in_progress(fastapi):
         }
 
 
+def test_list_hides_extraction_in_progress(fastapi):
+    """A folder still being unpacked is not in the listing of its parent."""
+    from FS.Unpack import PROGRESS_PREFIX
+    from FS.UserFilesDir import UserFilesDirectory
+
+    parent = UserFilesDirectory(CREATOR_USER_ID)._root_path / "with_staging"
+    (parent / (PROGRESS_PREFIX + "name")).mkdir(parents=True, exist_ok=True)
+    (parent / "done").mkdir(exist_ok=True)
+    try:
+        rsp = fastapi.get(MY_FILES_URL + "with_staging", headers=CREATOR_AUTH)
+        assert rsp.status_code == status.HTTP_200_OK, rsp.text
+        assert [an_entry["name"] for an_entry in rsp.json()["entries"]] == ["done"]
+    finally:
+        shutil.rmtree(parent, ignore_errors=True)
+
+
 def test_upload_empty_archive(fastapi, tmp_path):
     """An empty archive is refused with a clear message."""
     from helpers.httpexception import DETAIL_EMPTY_ARCHIVE

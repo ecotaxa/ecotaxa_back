@@ -123,10 +123,12 @@ class UserFilesFolderService(Service):
         except Exception as e:
             raise HTTPException(status_code=500, detail=DETAIL_UNKNOWN_ERROR)
 
-        # Format data to return
+        # Format data to return. An archive extraction in progress is not shown, its
+        # result appears once complete.
         entries = [
             DirectoryEntryModel(name=a_name, type=a_type, size=a_size, mtime=a_mtime)
             for (a_name, a_type, a_size, a_mtime) in listing
+            if not a_name.startswith(PROGRESS_PREFIX)
         ]
         return DirectoryModel(path=sub_path, entries=entries)
 
