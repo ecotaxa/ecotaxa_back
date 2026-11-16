@@ -388,6 +388,29 @@ def test_file_operations_refuse_extraction_in_progress(fastapi):
     api_remove_user_file(fastapi, "free", CREATOR_AUTH)
 
 
+def test_trash_keeps_same_names(fastapi):
+    """Trashing a name already in trash keeps both, the new one under a free name."""
+    trash_dir_name = f"trash.{CREATOR_USER_ID}"
+    api_remove_user_file(fastapi, f"{trash_dir_name}/dup", CREATOR_AUTH)
+    api_remove_user_file(fastapi, f"{trash_dir_name}/dup (2)", CREATOR_AUTH)
+    for a_sub in ("first", "second"):
+        assert api_create_user_file(fastapi, f"dup/{a_sub}", CREATOR_AUTH).status_code == 200
+        rsp = api_remove_user_file(fastapi, "dup", CREATOR_AUTH)
+        assert rsp.status_code == status.HTTP_200_OK, rsp.text
+
+    def names_in(sub_path):
+        rsp = fastapi.get(MY_FILES_URL + sub_path, headers=CREATOR_AUTH)
+        assert rsp.status_code == status.HTTP_200_OK, rsp.text
+        return sorted(an_entry["name"] for an_entry in rsp.json()["entries"])
+
+    in_trash = names_in(trash_dir_name)
+    assert "dup" in in_trash and "dup (2)" in in_trash
+    assert names_in(f"{trash_dir_name}/dup") == ["first"]
+    assert names_in(f"{trash_dir_name}/dup (2)") == ["second"]
+    api_remove_user_file(fastapi, f"{trash_dir_name}/dup", CREATOR_AUTH)
+    api_remove_user_file(fastapi, f"{trash_dir_name}/dup (2)", CREATOR_AUTH)
+
+
 def test_list_refuses_extraction_in_progress(fastapi):
     """The content of a folder still being unpacked is not listed, its state is told instead."""
     from FS.Unpack import PROGRESS_PREFIX

@@ -150,18 +150,36 @@ class UserFilesDirectory(object):
         source_path: Path = self._root_path.joinpath(path.lstrip(os.path.sep))
         # send to trash if not in trash
         if not path.startswith(self.trash_directory + os.path.sep):
-            trash_path = self._root_path.joinpath(self.trash_directory, path)
-            if os.path.exists(trash_path):
-                # raise UnprocessableEntityException(DETAIL_SAME_NAME_IN_TRASH)
-                self._remove_definitely(trash_path)
+            # Same name already in trash: keep both, the new one under a free name.
+            # Also no slow deletion of a big folder there.
+            trash_path = self._free_trash_path(
+                self._root_path.joinpath(self.trash_directory, path.lstrip(os.path.sep))
+            )
             try:
                 self.ensure_exists(self._root_path.joinpath(self.trash_directory))
-                self.move(path, self.trash_directory + os.path.sep + path)
+                self.move(path, str(trash_path.relative_to(self._root_path)))
             except Exception as e:
                 _log_exception_throw(e, f"trashing {path}")
 
         else:
             self._remove_definitely(source_path)
+
+    @staticmethod
+    def _free_trash_path(trash_path: Path) -> Path:
+        """trash_path if free, else 'name (2)', 'name (3)'... in the same folder"""
+        if not (trash_path.exists() or trash_path.is_symlink()):
+            return trash_path
+        stem, suffix = (
+            (trash_path.name, "")
+            if trash_path.is_dir()
+            else (trash_path.stem, trash_path.suffix)
+        )
+        num = 2
+        while True:
+            candidate = trash_path.with_name("%s (%d)%s" % (stem, num, suffix))
+            if not (candidate.exists() or candidate.is_symlink()):
+                return candidate
+            num += 1
 
     @staticmethod
     def _remove_definitely(source_path: Path):
