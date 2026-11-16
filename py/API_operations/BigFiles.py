@@ -67,10 +67,6 @@ async def _background_unpack(
         raise
 
 
-# Wait for this long (s) max, to give impression it's sync for small archives
-UNPACK_SYNC_WAIT: float = 120
-
-
 def _forget_task(task: asyncio.Task[None]) -> None:
     background_tasks.discard(task)
     if not task.cancelled():
@@ -107,7 +103,9 @@ async def _start_unpack(
     logger.info("TUS file upload complete: uncompressing into %s ", dest_dir)
     try:
         # Shield: on timeout, wait_for cancels only the shield, the unpack goes on
-        await asyncio.wait_for(asyncio.shield(task), timeout=UNPACK_SYNC_WAIT)
+        await asyncio.wait_for(
+            asyncio.shield(task), timeout=Config().get_unpack_sync_wait()
+        )
         logger.info("TUS file upload unpack done into %s ", dest_dir)
     except TimeoutError:
         logger.info("TUS file upload unpack CONTINUES into %s ", dest_dir)

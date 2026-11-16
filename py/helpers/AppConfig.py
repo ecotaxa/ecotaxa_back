@@ -97,6 +97,7 @@ class ConfigKey(StrEnum):
     MAX_UNPACK_ENTRIES = "MAX_UNPACK_ENTRIES"
     MAX_UNPACKED_SIZE = "MAX_UNPACKED_SIZE"
     MAX_UNPACK_DEPTH = "MAX_UNPACK_DEPTH"
+    UNPACK_SYNC_WAIT = "UNPACK_SYNC_WAIT"
     # Server & Logging
     APP_PORT = "APP_PORT"
     NO_TIME_LOG = "NO_TIME_LOG"
@@ -392,11 +393,20 @@ class Config(object):
         val = (self._get(ConfigKey.UNPACK_MIN_FREE_DISK, "0") or "0").strip()
         if val.endswith("%"):
             percent = float(val[:-1])
-            assert 0 <= percent < 100, f"{ConfigKey.UNPACK_MIN_FREE_DISK} percentage must be in [0, 100["
+            assert (
+                0 <= percent < 100
+            ), f"{ConfigKey.UNPACK_MIN_FREE_DISK} percentage must be in [0, 100["
             return percent / 100, None
         nb_bytes = int(val)
         assert nb_bytes >= 0, "{ConfigKey.UNPACK_MIN_FREE_DISK} must be >= 0"
         return None, nb_bytes
+
+    def get_unpack_sync_wait(self) -> float:
+        """
+        Wait for this long (in seconds) max on upload finish, to give impression it's synchronous for small archives.
+        After timeout, unpacking continues in the background. Default: 80 (s).
+        """
+        return float(self._get(ConfigKey.UNPACK_SYNC_WAIT, "80") or 80)
 
     def validate(self):
         """
@@ -457,6 +467,7 @@ class Config(object):
         assert self.get_max_unpack_depth() >= 0, "MAX_UNPACK_DEPTH must be >= 0"
         assert self.get_max_unpack_entries() >= 0, "MAX_UNPACK_ENTRIES must be >= 0"
         self.get_unpack_min_free_disk()
+        assert self.get_unpack_sync_wait() >= 0, "UNPACK_SYNC_WAIT must be >= 0"
         self.get_taxoserver_url()
         self.get_openid_config()
         self.get_openid_require_verified_email()

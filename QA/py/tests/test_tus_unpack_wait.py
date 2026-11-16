@@ -47,8 +47,8 @@ class FakeUserDir:
 
 
 @pytest.fixture
-def short_wait(bigfiles, monkeypatch):
-    monkeypatch.setattr(bigfiles, "UNPACK_SYNC_WAIT", 0.1)
+def short_wait(monkeypatch):
+    monkeypatch.setenv("UNPACK_SYNC_WAIT", "0.1")
 
 
 @pytest.fixture
