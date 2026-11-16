@@ -2,7 +2,12 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2021  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from API_models.constants import Constants, FORMULAE
+from API_models.constants import (
+    Constants,
+    FORMULAE,
+    DEFAULT_ARCHIVES,
+    DEFAULT_MIMETYPES,
+)
 from BO.DataLicense import AccessLevelEnum
 from DB.helpers.Postgres import text
 from ..helpers.Service import Service
@@ -33,6 +38,6 @@ class ConstantsService(Service):
         ret.taxoserver_url = self.config.get_taxoserver_url()
         client_id, _, _ = self.config.get_openid_config()
         ret.openid_configured = client_id is not None
-        ret.accepted_mime_types = self.config.get_accepted_mime_types()
-        ret.archive_extensions = self.config.get_archive_extensions()
+        ret.accepted_mime_types = DEFAULT_MIMETYPES
+        ret.archive_extensions = DEFAULT_ARCHIVES
         return ret

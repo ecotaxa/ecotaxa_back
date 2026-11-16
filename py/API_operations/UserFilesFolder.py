@@ -69,7 +69,11 @@ class UserFilesFolderService(Service):
         logger.info("Adding '%s' ('%s') for '%s'", path, file_name, current_user.name)
 
         folder = UserFilesDirectory(current_user_id)
-        ret = await folder.add_file(file_name, path, file)
+        try:
+            ret = await folder.add_file(file_name, path, file)
+        except BaseAppException as e:
+            code, message = folder.unpacker.unpack_failure(file_name, e)
+            raise HTTPException(status_code=code, detail=message)
         return ret
 
     def list(self, sub_path: str, current_user_id: UserIDT) -> DirectoryModel:

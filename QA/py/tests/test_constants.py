@@ -42,6 +42,7 @@ def test_used_constants(fastapi):
         "tar",
         "gzip",
         "tar.gz",
+        "tgz",
         "tar.bz2",
         "tar.xz",
         "gz",

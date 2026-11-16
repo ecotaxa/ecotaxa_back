@@ -94,6 +94,10 @@ class ConfigKey(StrEnum):
     CORS_ALLOWED_ORIGIN_REGEX = "CORS_ALLOWED_ORIGIN_REGEX"
     # Disk space / Unpack
     UNPACK_MIN_FREE_DISK = "UNPACK_MIN_FREE_DISK"
+    MAX_UNPACK_ENTRIES = "MAX_UNPACK_ENTRIES"
+    MAX_UNPACKED_SIZE = "MAX_UNPACKED_SIZE"
+    MAX_UNPACK_DEPTH = "MAX_UNPACK_DEPTH"
+    UNPACK_SYNC_WAIT = "UNPACK_SYNC_WAIT"
     # Server & Logging
     APP_PORT = "APP_PORT"
     NO_TIME_LOG = "NO_TIME_LOG"
@@ -279,20 +283,6 @@ class Config(object):
     def get_max_upload_size(self) -> int:
         return int(self._get(ConfigKey.MAX_UPLOAD_SIZE, "665600"))
 
-    DEFAULT_MIMETYPES = "application/zip,application/gzip,application/x-tar,text/plain,text/csv,text/tab-separated-values,image/jpeg,image/png,image/x-png,image/gif,image/tiff"
-
-    def get_accepted_mime_types(self) -> List[str]:
-        ret = self._get(ConfigKey.ACCEPTED_MIME_TYPES, self.DEFAULT_MIMETYPES)
-        mimes = [r.strip() for r in ret.split(",")]
-        return mimes
-
-    DEFAULT_ARCHIVES = "zip,tar,gzip,tar.gz,tar.bz2,tar.xz,gz"
-
-    def get_archive_extensions(self) -> List[str]:
-        ret = self._get(ConfigKey.ARCHIVE_EXTENSIONS, self.DEFAULT_ARCHIVES)
-        extensions = [r.strip() for r in ret.split(",")]
-        return extensions
-
     def get_cors_allowed_origins(self) -> List[str]:
         # Exact origins (scheme://host[:port]) of third-party browser apps allowed to read API responses, or '*' for any
         ret = self._get(ConfigKey.CORS_ALLOWED_ORIGINS, "")
@@ -381,6 +371,43 @@ class Config(object):
             f"Inconsistent OpenID configuration. Missing: {', '.join(missing)}"
         )
 
+    # The unpack limits below are all off (0) when absent from config.ini
+    def get_max_unpacked_size(self) -> int:
+        """Max total size (bytes) of an upload once unpacked, nested archives included. 0: no limit."""
+        return int(self._get(ConfigKey.MAX_UNPACKED_SIZE, "0") or 0)
+
+    def get_max_unpack_depth(self) -> int:
+        """Max nesting level of archives in an upload, the uploaded archive being 1. 0: no limit."""
+        return int(self._get(ConfigKey.MAX_UNPACK_DEPTH, "0") or 0)
+
+    def get_max_unpack_entries(self) -> int:
+        """Max number of entries in an upload once unpacked, nested archives included. 0: no limit."""
+        return int(self._get(ConfigKey.MAX_UNPACK_ENTRIES, "0") or 0)
+
+    def get_unpack_min_free_disk(self) -> Tuple[Optional[float], Optional[int]]:
+        """
+        Free disk space that unpacking must leave, either a percentage of the disk, e.g. "10%",
+        returned as (ratio, None), or a number of bytes, returned as (None, bytes).
+        0 or 0%: no check of free disk space.
+        """
+        val = (self._get(ConfigKey.UNPACK_MIN_FREE_DISK, "0") or "0").strip()
+        if val.endswith("%"):
+            percent = float(val[:-1])
+            assert (
+                0 <= percent < 100
+            ), f"{ConfigKey.UNPACK_MIN_FREE_DISK} percentage must be in [0, 100["
+            return percent / 100, None
+        nb_bytes = int(val)
+        assert nb_bytes >= 0, "{ConfigKey.UNPACK_MIN_FREE_DISK} must be >= 0"
+        return None, nb_bytes
+
+    def get_unpack_sync_wait(self) -> float:
+        """
+        Wait for this long (in seconds) max on upload finish, to give impression it's synchronous for small archives.
+        After timeout, unpacking continues in the background. Default: 80 (s).
+        """
+        return float(self._get(ConfigKey.UNPACK_SYNC_WAIT, "80") or 80)
+
     def validate(self):
         """
         Read all configuration values to ensure they are present and valid.
@@ -436,11 +463,14 @@ class Config(object):
         self.get_time_to_live()
         self.get_max_captcha_token_length()
         self.get_max_upload_size()
+        assert self.get_max_unpacked_size() >= 0, "MAX_UNPACKED_SIZE must be >= 0"
+        assert self.get_max_unpack_depth() >= 0, "MAX_UNPACK_DEPTH must be >= 0"
+        assert self.get_max_unpack_entries() >= 0, "MAX_UNPACK_ENTRIES must be >= 0"
+        self.get_unpack_min_free_disk()
+        assert self.get_unpack_sync_wait() >= 0, "UNPACK_SYNC_WAIT must be >= 0"
         self.get_taxoserver_url()
         self.get_openid_config()
         self.get_openid_require_verified_email()
-        self.get_accepted_mime_types()
-        self.get_archive_extensions()
         self.get_cors_allowed_origins()
         cors_origin_regex = self.get_cors_allowed_origin_regex()
         if cors_origin_regex is not None:

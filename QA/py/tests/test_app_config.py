@@ -310,7 +310,6 @@ def test_config_reset_allows_reinit(tmp_path, mocker):
     assert cfg2._get("KEY") == "value2"
 
 
-
 @pytest.fixture
 def no_cors_env(mocker):
     # fastapi_fixture sets them in env for test_cors.py, and env has priority over the file.
@@ -475,6 +474,7 @@ def test_config_get_with_config_key_enum(tmp_path, mocker):
         "LEGACY_TOKENS": "off",
         "APP_PORT": "9000",
         "NO_TIME_LOG": "1",
+        "UNPACK_SYNC_WAIT": "45.5",
     }
     mocker.patch.dict(os.environ, env_vars, clear=False)
 
@@ -483,6 +483,7 @@ def test_config_get_with_config_key_enum(tmp_path, mocker):
     assert cfg._get(ConfigKey.APPMANAGER_EMAIL) == "manager@domain.test"
     assert ConfigKey.VAULT_DIR in cfg.list_cnf()
     assert ConfigKey.APPMANAGER_EMAIL in cfg.list_cnf()
+    assert ConfigKey.UNPACK_SYNC_WAIT in cfg.list_cnf()
 
     assert cfg.models_dir() == "/custom/models/path"
     assert cfg.get_taxoserver_instance_id() == "42"
@@ -496,6 +497,7 @@ def test_config_get_with_config_key_enum(tmp_path, mocker):
     assert cfg.get_legacy_tokens_on() is False
     assert cfg.get_app_port() == 9000
     assert cfg.get_no_time_log() is True
+    assert cfg.get_unpack_sync_wait() == 45.5
 
 
 def test_config_app_port_and_no_time_log_defaults(tmp_path, mocker):
@@ -505,3 +507,18 @@ def test_config_app_port_and_no_time_log_defaults(tmp_path, mocker):
     cfg = Config()
     assert cfg.get_app_port() == 8000
     assert cfg.get_no_time_log() is False
+    assert cfg.get_unpack_sync_wait() == 80.0
+
+
+def test_config_validate_unpack_sync_wait_negative(
+    tmp_path, base_config, mocker, mock_socket
+):
+    config_path = tmp_path / "config.ini"
+    content = base_config.copy()
+    content.update({"UNPACK_SYNC_WAIT": "-5"})
+    create_config_file(config_path, content)
+    mocker.patch.dict(os.environ, {"APP_CONFIG": str(config_path)})
+
+    cfg = Config()
+    with pytest.raises(AssertionError, match="UNPACK_SYNC_WAIT must be >= 0"):
+        cfg.validate()

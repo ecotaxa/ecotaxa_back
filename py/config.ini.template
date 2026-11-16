@@ -82,13 +82,22 @@ SERVERURL = https://localfronturl:5001
 USERSFILESAREA = /eco_users_files
 # max upload file size in bytes
 MAX_UPLOAD_SIZE = 681574400
+# Limits of an upload once unpacked, nested archives included. Absent or 0: no limit / no check.
+# max total size in bytes, e.g. 10 x MAX_UPLOAD_SIZE
+#MAX_UNPACKED_SIZE = 6815744000
+# max nesting level of archives, the uploaded archive being 1, e.g. 5 (UVP6 needs 2)
+#MAX_UNPACK_DEPTH = 5
+# max number of files
+#MAX_UNPACK_ENTRIES = 1000000
+# free space that unpacking must leave on the users files disk, a percentage of the disk ("10%") or bytes.
+# Unpacking is refused otherwise.
+#UNPACK_MIN_FREE_DISK = 10%
+# Wait for this long (in seconds) max on upload finish, to give the impression it's synchronous for small archives.
+# After timeout, unpacking continues in the background. Default: 80. Tune if your proxy allows larger/smaller PATCH calls.
+#UNPACK_SYNC_WAIT = 80
 # number of days before deleting my files directories
 TIMETOLIVE = 60
 
-# accepted mime types
-ACCEPTED_MIME_TYPES = application/zip,application/gzip,application/x-tar,text/plain,text/csv,text/tab-separated-values,image/jpeg,image/png,image/x-png,image/gif,image/tiff
-#archive extensions
-ARCHIVE_EXTENSIONS = zip,tar,gzip,tar.gz,tar.bz2,tar.xz,gz
 # OpenID Connect configuration
 OPENID_CLIENT_ID =
 OPENID_CLIENT_SECRET =

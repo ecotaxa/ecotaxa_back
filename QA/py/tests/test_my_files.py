@@ -4,12 +4,10 @@
 #
 # Exhibit some not-so-intuitive behavior of /my_files and associated upload
 #
-import gzip
 import pathlib
 import shutil
 import time
 import zipfile
-import zlib
 from typing import Dict
 
 import pytest
@@ -116,8 +114,8 @@ def test_my_files(fastapi, tstlogs, title):
         "cont.tar",
         "cont.gz",
         "cont.zip",
-        # "ecotaxa_b_da_19.tsv.gz", # TODO: Is removed after decomp, magic_rs does not know
-        # "ecotaxa_b_da_19.csv.gz",
+        "ecotaxa_b_da_19.tsv.gz",
+        "ecotaxa_b_da_19.csv.gz",
         "x2EA0yD7AwC7h13F.png.gz",
     ],
 )
@@ -259,6 +257,8 @@ def test_my_files_error_cases(fastapi, tmp_path):
     - Move to existing target (place already taken by an existing file or directory)
     - Move file to existing dir (where target dir already contains the item)
     """
+    from helpers.httpexception import DETAIL_CORRUPT_ARCHIVE
+
     # Clean user files first
     api_remove_user_file(fastapi, "*", CREATOR_AUTH)
 
@@ -273,13 +273,15 @@ def test_my_files_error_cases(fastapi, tmp_path):
     corrupted_zip = tmp_path / "corrupted.zip"
     corrupted_zip.write_bytes(zip_bytes[:30] + b"\x00" * 20 + zip_bytes[50:])
     with open(corrupted_zip, "rb") as fin:
-        with pytest.raises(zipfile.BadZipFile):
-            fastapi.post(
-                MY_FILES_URL,
-                headers=CREATOR_AUTH,
-                data={"path": "corrupted.zip"},
-                files={"file": fin},
-            )
+        rsp = fastapi.post(
+            MY_FILES_URL,
+            headers=CREATOR_AUTH,
+            data={"path": "corrupted.zip"},
+            files={"file": fin},
+        )
+    # A corrupt archive is the user's problem: 422, not a server error
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT, rsp.text
+    assert DETAIL_CORRUPT_ARCHIVE in rsp.text
 
     # Corrupted gzip archive: valid 2-byte header \x1f\x8b so _is_gz is True, but corrupted gzip stream
     corrupted_gz = tmp_path / "corrupted.tsv.gz"
@@ -287,13 +289,15 @@ def test_my_files_error_cases(fastapi, tmp_path):
         b"\x1f\x8b\x08\x00corrupted_gzip_content_not_valid_gzip_stream"
     )
     with open(corrupted_gz, "rb") as fin:
-        with pytest.raises((gzip.BadGzipFile, zlib.error)):
-            fastapi.post(
-                MY_FILES_URL,
-                headers=CREATOR_AUTH,
-                data={"path": "corrupted.tsv.gz"},
-                files={"file": fin},
-            )
+        rsp = fastapi.post(
+            MY_FILES_URL,
+            headers=CREATOR_AUTH,
+            data={"path": "corrupted.tsv.gz"},
+            files={"file": fin},
+        )
+    # A corrupt archive is the user's problem: 422, not a server error
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT, rsp.text
+    assert DETAIL_CORRUPT_ARCHIVE in rsp.text
 
     # 2. Try to delete / move the trash directory or manipulate protected trash
     trash_dir_name = f"trash.{CREATOR_USER_ID}"
@@ -349,3 +353,170 @@ def test_my_files_error_cases(fastapi, tmp_path):
 
     # Clean up after test
     api_remove_user_file(fastapi, "*", CREATOR_AUTH)
+
+
+def test_import_refuses_extraction_in_progress(fastapi):
+    """An import from a folder still being unpacked (staging '⌛' folder) is refused."""
+    from FS.Unpack import PROGRESS_PREFIX
+    from helpers.httpexception import DETAIL_EXTRACTION_IN_PROGRESS
+
+    prj_id = create_project(CREATOR_USER_ID, "Import while unpacking")
+    for a_path in (PROGRESS_PREFIX + "name", "sub/" + PROGRESS_PREFIX + "name/x"):
+        rsp = api_file_import(
+            fastapi, prj_id, {"source_path": a_path}, auth=CREATOR_AUTH
+        )
+        assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT, rsp.text
+        assert DETAIL_EXTRACTION_IN_PROGRESS in rsp.text
+
+
+def test_upload_empty_archive(fastapi, tmp_path):
+    """An empty archive is refused with a clear message."""
+    from helpers.httpexception import DETAIL_EMPTY_ARCHIVE
+
+    empty = tmp_path / "empty.zip"
+    zipfile.ZipFile(empty, "w").close()
+    with open(empty, "rb") as fin:
+        rsp = fastapi.post(
+            MY_FILES_URL,
+            headers=CREATOR_AUTH,
+            data={"path": "test_empty/empty.zip"},
+            files={"file": fin},
+        )
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT, rsp.text
+    assert DETAIL_EMPTY_ARCHIVE in rsp.text
+    list_rsp = fastapi.get(MY_FILES_URL + SEPARATOR + "test_empty", headers=CREATOR_AUTH)
+    assert list_rsp.status_code == 200
+    assert list_rsp.json()["entries"] == []
+    api_remove_user_file(fastapi, "*", CREATOR_AUTH)
+
+
+def test_upload_refused_plain_file(fastapi, tmp_path):
+    """A plain file of a refused type is a 422 with a clear message, and is not kept."""
+    evil = tmp_path / "evil.bin"
+    evil.write_bytes(b"\x7fELF\x02\x01" + b"\x00" * 64)
+    with open(evil, "rb") as fin:
+        rsp = fastapi.post(
+            MY_FILES_URL,
+            headers=CREATOR_AUTH,
+            data={"path": "test_evil/evil.bin"},
+            files={"file": fin},
+        )
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT, rsp.text
+    assert rsp.json()["detail"] == "Upload of 'evil.bin' refused: File type not accepted"
+    list_rsp = fastapi.get(MY_FILES_URL + SEPARATOR + "test_evil", headers=CREATOR_AUTH)
+    assert list_rsp.json()["entries"] == []
+    api_remove_user_file(fastapi, "*", CREATOR_AUTH)
+
+
+def test_upload_corrupt_archive(fastapi, tmp_path):
+    """A corrupt archive is refused with a 422, not a 500."""
+    from helpers.httpexception import DETAIL_CORRUPT_ARCHIVE
+
+    good = tmp_path / "good.zip"
+    with zipfile.ZipFile(good, "w") as z:
+        z.writestr("a.tsv", "object_id\n[t]\n" + "obj\n" * 200)
+    content = good.read_bytes()
+    corrupt = tmp_path / "corrupt.zip"
+    corrupt.write_bytes(content[:40] + b"\x00" * 40 + content[80:])
+    with open(corrupt, "rb") as fin:
+        rsp = fastapi.post(
+            MY_FILES_URL,
+            headers=CREATOR_AUTH,
+            data={"path": "test_corrupt/corrupt.zip"},
+            files={"file": fin},
+        )
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT, rsp.text
+    assert DETAIL_CORRUPT_ARCHIVE in rsp.text
+    list_rsp = fastapi.get(MY_FILES_URL + SEPARATOR + "test_corrupt", headers=CREATOR_AUTH)
+    assert list_rsp.json()["entries"] == []
+    api_remove_user_file(fastapi, "*", CREATOR_AUTH)
+
+
+def _post_zip(fastapi, tmp_path, content: str, dest: str):
+    archive = tmp_path / "big.zip"
+    with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as z:
+        z.writestr("a.tsv", content)
+    with open(archive, "rb") as fin:
+        return fastapi.post(
+            MY_FILES_URL,
+            headers=CREATOR_AUTH,
+            data={"path": dest + "/big.zip"},
+            files={"file": fin},
+        )
+
+
+def test_upload_unpack_limits(fastapi, tmp_path, monkeypatch):
+    """Limits once unpacked: 422 when too large, 507 when the disk would be (almost) full."""
+    from collections import namedtuple
+
+    import FS.Unpack as UnpackModule
+    from helpers.AppConfig import Config
+    from helpers.httpexception import (
+        DETAIL_UNPACK_TOO_LARGE,
+        DETAIL_UNPACK_NO_DISK_SPACE,
+    )
+
+    content = "object_id\n[t]\n" + "obj\n" * 50_000
+    monkeypatch.setattr(Config, "get_max_unpacked_size", lambda self: 10_000)
+    rsp = _post_zip(fastapi, tmp_path, content, "test_limits")
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT, rsp.text
+    assert DETAIL_UNPACK_TOO_LARGE in rsp.text
+
+    monkeypatch.setattr(Config, "get_max_unpacked_size", lambda self: 10**9)
+    monkeypatch.setattr(Config, "get_unpack_min_free_disk", lambda self: (0.1, None))
+    Usage = namedtuple("Usage", "total used free")
+    monkeypatch.setattr(
+        UnpackModule.shutil, "disk_usage", lambda path: Usage(10**6, 9 * 10**5, 10**5)
+    )
+    rsp = _post_zip(fastapi, tmp_path, content, "test_limits")
+    assert rsp.status_code == 507, rsp.text
+    assert DETAIL_UNPACK_NO_DISK_SPACE in rsp.text
+
+    list_rsp = fastapi.get(MY_FILES_URL + SEPARATOR + "test_limits", headers=CREATOR_AUTH)
+    assert list_rsp.json()["entries"] == []
+    api_remove_user_file(fastapi, "*", CREATOR_AUTH)
+
+
+def test_config_zero_unpack_limits(monkeypatch):
+    """Unpack limits are 0, i.e. no limit, when absent, and 0 is a valid value."""
+    from helpers.AppConfig import Config
+
+    conf = Config()
+    # Absent from config.ini: 0, no limit
+    for a_key in ("MAX_UNPACKED_SIZE", "MAX_UNPACK_ENTRIES", "MAX_UNPACK_DEPTH"):
+        monkeypatch.delenv(a_key, raising=False)
+    monkeypatch.setattr(conf.parser, "get", lambda key, default=None: default)
+    assert conf.get_max_unpacked_size() == 0
+    assert conf.get_max_unpack_entries() == 0
+    assert conf.get_max_unpack_depth() == 0
+    # Environment overrides config.ini
+    monkeypatch.setenv("MAX_UNPACKED_SIZE", "0")
+    monkeypatch.setenv("MAX_UNPACK_ENTRIES", "0")
+    monkeypatch.setenv("MAX_UNPACK_DEPTH", "0")
+    assert conf.get_max_unpacked_size() == 0
+    assert conf.get_max_unpack_entries() == 0
+    assert conf.get_max_unpack_depth() == 0
+    monkeypatch.setenv("MAX_UNPACK_DEPTH", "3")
+    assert conf.get_max_unpack_depth() == 3
+
+
+def test_config_unpack_min_free_disk(monkeypatch):
+    """UNPACK_MIN_FREE_DISK is a percentage of the disk, or bytes, 0 meaning no check."""
+    from helpers.AppConfig import Config
+
+    conf = Config()
+    monkeypatch.delenv("UNPACK_MIN_FREE_DISK", raising=False)
+    monkeypatch.setattr(conf.parser, "get", lambda key, default=None: default)
+    assert conf.get_unpack_min_free_disk() == (None, 0)  # Default: no check
+    for val, expected in (
+        ("5%", (0.05, None)),
+        ("0%", (0.0, None)),
+        ("50000000000", (None, 50000000000)),
+        ("0", (None, 0)),
+    ):
+        monkeypatch.setenv("UNPACK_MIN_FREE_DISK", val)
+        assert conf.get_unpack_min_free_disk() == expected
+    for wrong in ("150%", "-1", "lots"):
+        monkeypatch.setenv("UNPACK_MIN_FREE_DISK", wrong)
+        with pytest.raises((AssertionError, ValueError)):
+            conf.get_unpack_min_free_disk()

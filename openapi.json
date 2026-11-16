@@ -7015,6 +7015,57 @@
         }
       }
     },
+    "/user_files/unpack_status/{upload_id}":{
+      "get":{
+        "tags":[
+          "MyFiles"
+        ],
+        "summary":"Get Unpack Status",
+        "description":"**Status of the unpacking of an archive uploaded with TUS.** Poll it until state is 'done',\nor an error is returned. While unpacking, the Retry-After header suggests when to ask again.\n\nIf the upload failed, answers its HTTP error, with why nothing was kept as detail:\n422 for a refused upload (corrupt or empty archive, limit reached, file type not accepted),\n507 when the server has not enough disk space, 500 for other server errors.",
+        "operationId":"get_unpack_status",
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ],
+        "parameters":[
+          {
+            "name":"upload_id",
+            "in":"path",
+            "required":true,
+            "schema":{
+              "type":"string",
+              "description":"The TUS upload id, i.e. the last part of the Location returned when the upload was created.",
+              "title":"Upload Id",
+              "example":"fd8d989adda14069ba8495a71af1d6b8"
+            },
+            "description":"The TUS upload id, i.e. the last part of the Location returned when the upload was created."
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/UnpackStatusModel"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/user_files/{sub_path}":{
       "get":{
         "tags":[
@@ -8633,7 +8684,19 @@
             "type":"array",
             "title":"Accepted mime types",
             "description":"File import and My Files, list of accepted mime types",
-            "default":[]
+            "default":[
+              "application/zip",
+              "application/gzip",
+              "application/x-tar",
+              "text/plain",
+              "text/csv",
+              "text/tab-separated-values",
+              "image/jpeg",
+              "image/png",
+              "image/x-png",
+              "image/gif",
+              "image/tiff"
+            ]
           },
           "archive_extensions":{
             "items":{
@@ -8642,7 +8705,16 @@
             "type":"array",
             "title":"Accepted archive extensions",
             "description":"File import and My Files, list of accepted archive extensions",
-            "default":[]
+            "default":[
+              "zip",
+              "tar",
+              "gzip",
+              "tar.gz",
+              "tgz",
+              "tar.bz2",
+              "tar.xz",
+              "gz"
+            ]
           },
           "all_in_one":{
             "type":"boolean",
@@ -12568,6 +12640,90 @@
           "refresh_expires_in"
         ],
         "title":"Token response Model"
+      },
+      "UnpackStatusModel":{
+        "properties":{
+          "state":{
+            "type":"string",
+            "title":"State",
+            "description":"'unpacking', then 'done'.",
+            "example":"unpacking"
+          },
+          "name":{
+            "type":"string",
+            "title":"Name",
+            "description":"Uploaded file name.",
+            "example":"b_da_19.zip"
+          },
+          "percent":{
+            "type":"integer",
+            "title":"Percent",
+            "description":"Progress, 0 to 100, entries done out of entries total. It moves while entries are extracted, and may go down when a nested archive adds its own entries to the total. It stays below 100 until the result is published.",
+            "default":0,
+            "example":42
+          },
+          "entries_done":{
+            "title":"Entries done",
+            "description":"Entries extracted so far, in the uploaded archive and the nested archives opened so far.",
+            "example":420,
+            "type":"integer",
+            "nullable":true
+          },
+          "entries_total":{
+            "title":"Entries total",
+            "description":"Entries of the archives opened so far, nested archives included. Grows when a nested archive is opened.",
+            "example":1000,
+            "type":"integer",
+            "nullable":true
+          },
+          "files_done":{
+            "title":"Files done",
+            "description":"Files unpacked so far, nested archives included.",
+            "example":12000,
+            "type":"integer",
+            "nullable":true
+          },
+          "bytes_done":{
+            "title":"Bytes done",
+            "description":"Bytes unpacked so far, nested archives included.",
+            "example":123456789,
+            "type":"integer",
+            "nullable":true
+          },
+          "bytes_declared":{
+            "title":"Bytes declared",
+            "description":"Uncompressed size declared by the uploaded archive, nested archives not included.",
+            "example":223456789,
+            "type":"integer",
+            "nullable":true
+          },
+          "result_paths":{
+            "title":"Result paths",
+            "description":"When done, where the result is in My Files.",
+            "example":[
+              "my_folder/b_da_19"
+            ],
+            "items":{
+              "type":"string"
+            },
+            "type":"array",
+            "nullable":true
+          },
+          "updated":{
+            "type":"string",
+            "title":"Updated",
+            "description":"Last update, UTC ISO format.",
+            "example":"2026-11-12T14:00:00.123456+00:00"
+          }
+        },
+        "type":"object",
+        "required":[
+          "state",
+          "name",
+          "updated"
+        ],
+        "title":"UnpackStatusModel",
+        "description":"Status of the unpacking of an archive uploaded with TUS, to poll until state is 'done'.\nA failure is not a status, but the HTTP error of the poll."
       },
       "UserActivateReq":{
         "properties":{
