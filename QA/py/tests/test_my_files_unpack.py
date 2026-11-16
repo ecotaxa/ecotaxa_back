@@ -85,12 +85,13 @@ def test_zip_onto_existing_folder(tmp_path):
         parent, "name.zip", zip_bytes({"a.tsv": TSV, "img/x.png": PNG_1X1})
     )
     make_user_dir(root).unpacker.dispatch_unpack(archive, parent)
-    # An upload replaces the folder it is uploaded over, it does not merge into it
+    # An upload merges into the folder it is uploaded over: added, overwritten, kept
     assert tree(parent) == [
         "name/",
         "name/a.tsv",
         "name/img/",
         "name/img/x.png",
+        "name/old.tsv",
     ]
     assert (parent / "name" / "a.tsv").read_bytes() == TSV
 
@@ -227,6 +228,36 @@ def test_staging_name_taken(tmp_path):
         PROGRESS_PREFIX + "name/",
         PROGRESS_PREFIX + "name/other.tsv",
     ]
+
+
+@pytest.mark.parametrize("background", [False, True])
+@pytest.mark.parametrize("with_dir_entry", [False, True])
+def test_folder_with_zip_onto_existing_folder(tmp_path, background, with_dir_entry):
+    # The client zips a dropped folder toto/ containing tata.zip, over an existing toto/tata/
+    root, parent = _setup(tmp_path)
+    (parent / "toto" / "tata").mkdir(parents=True)
+    (parent / "toto" / "tata" / "old.png").write_bytes(PNG_1X1)
+    (parent / "toto" / "tata" / "x.png").write_bytes(b"replaced\n")
+    (parent / "toto" / "other.tsv").write_bytes(TSV)
+    inner = zip_bytes({"x.png": PNG_1X1, "y.png": PNG_1X1})
+    members = {"toto/tata.zip": inner}
+    if with_dir_entry:
+        members = {"toto/": b"", **members}
+    archive = _upload(parent, "toto.zip", zip_bytes(members))
+    user_dir = make_user_dir(root)
+    if background:
+        user_dir.unpacker.switch_to_background()
+    user_dir.unpacker.dispatch_unpack(archive, parent)
+    # Merged at every level: other.tsv and old.png kept, x.png overwritten, y.png added
+    assert tree(parent) == [
+        "toto/",
+        "toto/other.tsv",
+        "toto/tata/",
+        "toto/tata/old.png",
+        "toto/tata/x.png",
+        "toto/tata/y.png",
+    ]
+    assert (parent / "toto" / "tata" / "x.png").read_bytes() == PNG_1X1
 
 
 def test_dir_over_file_collision(tmp_path):

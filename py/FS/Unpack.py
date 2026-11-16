@@ -714,21 +714,39 @@ class Unpacker(object):
     @classmethod
     def _publish(cls, staging: Path, parent: Path) -> List[str]:
         """
-        Move the content of the staging directory into parent, replacing whatever was already
-        there with the same name: an upload replaces what it is uploaded over, it does not
-        merge into it. Return the published names.
+        Move the content of the staging directory into parent, merged into what is already
+        there: new entries are added, same-name ones overwritten, others kept.
+        Return the published names.
         """
         published = list(staging.iterdir())
         for an_entry in published:
-            cls._replace(an_entry, parent / an_entry.name)
+            cls._merge(an_entry, parent / an_entry.name)
         staging.rmdir()
         return sorted(an_entry.name for an_entry in published)
+
+    @classmethod
+    def _merge(cls, src: Path, dst: Path) -> None:
+        """
+        Put src at dst, merging into an existing directory: new entries are added,
+        same-name ones overwritten, others kept. One rename when dst is absent.
+        """
+        if (
+            src.is_dir()
+            and not src.is_symlink()
+            and dst.is_dir()
+            and not dst.is_symlink()
+        ):
+            for a_child in list(src.iterdir()):
+                cls._merge(a_child, dst / a_child.name)
+            src.rmdir()
+        else:
+            cls._replace(src, dst)
 
     @staticmethod
     def _replace(src: Path, dst: Path) -> None:
         """
-        Put src at dst, removing whatever was at dst first. One rename in the common case:
-        merging file by file is what made unpacks slow on archives with many entries.
+        Put src at dst, removing whatever was at dst first, e.g. a file where a directory
+        comes. One rename: merging only goes down existing directories, see _merge.
         """
         if dst.is_symlink() or dst.exists():
             if dst.is_dir() and not dst.is_symlink():
