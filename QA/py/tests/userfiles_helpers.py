@@ -32,7 +32,6 @@ def make_user_dir(root: Path) -> UserFilesDirectory:
     unpacker.list_errors = {}
     unpacker._root_path = root
     unpacker.compressed_origin = None
-    unpacker.report_to_file = False
     # Limits, generous by default, tests lower them
     unpacker.max_unpacked_size = 10**12
     unpacker.max_unpack_depth = 5

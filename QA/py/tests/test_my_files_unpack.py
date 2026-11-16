@@ -185,22 +185,32 @@ def test_failure_during_type_check(tmp_path, monkeypatch):
     _nothing_left(parent)
 
 
+def _failure_log(user_dir) -> str:
+    """The log of the last failure, as the unpack status tells it"""
+    return user_dir.unpacker._status_fields["log"]
+
+
+def _recording(user_dir):
+    user_dir.unpacker.status_reporter = lambda status: None
+    return user_dir
+
+
 def test_background_failure_reported(tmp_path):
     root, parent = _setup(tmp_path)
     archive = _upload(parent, "name.zip", _corrupt_zip())
-    user_dir = make_user_dir(root)
-    user_dir.unpacker.switch_to_background()
+    user_dir = _recording(make_user_dir(root))
     with pytest.raises(UnprocessableEntityException):
         user_dir.unpacker.dispatch_unpack(archive, parent)
-    assert tree(parent) == ["name.zip.unpack_error.log"]
-    report = (parent / "name.zip.unpack_error.log").read_text()
+    # Reported in the status only, no file left
+    assert tree(parent) == []
+    report = _failure_log(user_dir)
     assert (
         "Extraction of 'name.zip' failed, nothing was kept: " + DETAIL_CORRUPT_ARCHIVE
         in report
     )
     assert "Exception" not in report
     assert str(root) not in report
-    # A later successful upload of the same name removes the report
+    # A later upload of the same name works
     archive = _upload(parent, "name.zip", zip_bytes({"a.tsv": TSV}))
     user_dir.unpacker.dispatch_unpack(archive, parent)
     assert tree(parent) == ["name/", "name/a.tsv"]
@@ -246,7 +256,7 @@ def test_folder_with_zip_onto_existing_folder(tmp_path, background, with_dir_ent
     archive = _upload(parent, "toto.zip", zip_bytes(members))
     user_dir = make_user_dir(root)
     if background:
-        user_dir.unpacker.switch_to_background()
+        _recording(user_dir)
     user_dir.unpacker.dispatch_unpack(archive, parent)
     # Merged at every level: other.tsv and old.png kept, x.png overwritten, y.png added
     assert tree(parent) == [
@@ -317,13 +327,11 @@ def test_plain_upload_refused(tmp_path):
 def test_plain_upload_refused_reported_in_background(tmp_path):
     root, parent = _setup(tmp_path)
     upload = _upload(parent, "evil.bin", b"\x7fELF\x02\x01")
-    user_dir = make_user_dir(root)
-    user_dir.unpacker.switch_to_background()
+    user_dir = _recording(make_user_dir(root))
     with pytest.raises(FileTypeRefusedException):
         user_dir.unpacker.dispatch_unpack(upload, parent)
-    error_file = "evil.bin.unpack_error.log"
-    assert tree(parent) == [error_file]
-    report = (parent / error_file).read_text()
+    assert tree(parent) == []
+    report = _failure_log(user_dir)
     assert "Upload of 'evil.bin' refused: " + DETAIL_FILE_TYPE_NOT_ACCEPTED in report
     assert str(root) not in report
 
@@ -367,14 +375,11 @@ def test_empty_archive_refused(tmp_path, kind):
 def test_empty_archive_reported_in_background(tmp_path):
     root, parent = _setup(tmp_path)
     archive = _empty_archive(parent, "zip")
-    user_dir = make_user_dir(root)
-    user_dir.unpacker.switch_to_background()
+    user_dir = _recording(make_user_dir(root))
     with pytest.raises(EmptyArchiveException):
         user_dir.unpacker.dispatch_unpack(archive, parent)
-    error_file = "name.zip" + Unpacker.ERROR_FILE_SUFFIX
-    assert tree(parent) == [error_file]
-    report = (parent / error_file).read_text()
-    assert "nothing was kept: " + DETAIL_EMPTY_ARCHIVE in report
+    assert tree(parent) == []
+    assert "nothing was kept: " + DETAIL_EMPTY_ARCHIVE in _failure_log(user_dir)
 
 
 def test_empty_nested_archive_dropped(tmp_path):
@@ -710,13 +715,11 @@ def test_disk_space(tmp_path, monkeypatch):
 def test_limit_reported_in_background(tmp_path):
     root, parent = _setup(tmp_path)
     archive = _upload(parent, "name.zip", _deflated_zip(b"\x00" * 100_000))
-    user_dir = _limited(root, max_unpacked_size=50_000)
-    user_dir.unpacker.switch_to_background()
+    user_dir = _recording(_limited(root, max_unpacked_size=50_000))
     with pytest.raises(UnprocessableEntityException):
         user_dir.unpacker.dispatch_unpack(archive, parent)
-    error_file = "name.zip" + Unpacker.ERROR_FILE_SUFFIX
-    assert tree(parent) == [error_file]
-    assert DETAIL_UNPACK_TOO_LARGE in (parent / error_file).read_text()
+    assert tree(parent) == []
+    assert DETAIL_UNPACK_TOO_LARGE in _failure_log(user_dir)
 
 
 def test_budget_is_per_upload(tmp_path):

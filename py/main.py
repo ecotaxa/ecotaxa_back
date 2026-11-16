@@ -4156,7 +4156,9 @@ def get_unpack_status(
     if unpack_status.get("state") == "error":
         raise HTTPException(
             status_code=unpack_status.get("status_code", 422),
-            detail=unpack_status.get("message", DETAIL_UNKNOWN_ERROR),
+            # The dated log written next to the upload, else the message
+            detail=unpack_status.get("log")
+            or unpack_status.get("message", DETAIL_UNKNOWN_ERROR),
         )
     if unpack_status.get("state") == "unpacking":
         response.headers["Retry-After"] = "2"

@@ -36,9 +36,6 @@ class FakeUserDir:
         self.status_reporter = None
         self.unpacker = self
 
-    def switch_to_background(self):
-        pass
-
     def dispatch_unpack(self, compressed_path: Path, to_path: Path) -> None:
         time.sleep(self.duration)
         if self.fail:

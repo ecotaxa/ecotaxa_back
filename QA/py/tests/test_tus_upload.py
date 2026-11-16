@@ -160,7 +160,7 @@ def _names_in(fastapi, folder: str):
 def test_tus_upload_plain_files(fastapi):
     """
     Files which are not archives go through the same type check as archive members:
-    text data is kept, other unaccepted types are removed, with an explanation file.
+    text data is kept, other unaccepted types are removed, explained in the status.
     """
     api_remove_user_file(fastapi, "*", CREATOR_AUTH)
     _tus_upload(fastapi, b"object_id\n[t]\nobj1\n", "ecotaxa_a.tsv", "plain/x")
@@ -172,11 +172,23 @@ def test_tus_upload_plain_files(fastapi):
         expected=status.HTTP_422_UNPROCESSABLE_CONTENT,
     )
     assert _tus_upload.last_detail == "Upload of 'evil.bin' refused: File type not accepted"
-    assert _names_in(fastapi, "plain") == [
-        "ecotaxa_a.tsv",
-        "evil.bin.unpack_error.log",
-    ]
+    assert _names_in(fastapi, "plain") == ["ecotaxa_a.tsv"]
     api_remove_user_file(fastapi, "*", CREATOR_AUTH)
+
+
+def test_tus_upload_refuses_extraction_in_progress(fastapi):
+    """No upload into a folder still being unpacked (staging '⌛' folder)"""
+    from FS.Unpack import PROGRESS_PREFIX
+    from helpers.httpexception import DETAIL_EXTRACTION_IN_PROGRESS
+
+    _tus_upload(
+        fastapi,
+        b"object_id\n[t]\nobj1\n",
+        "ecotaxa_a.tsv",
+        "sub/" + PROGRESS_PREFIX + "name/ecotaxa_a.tsv",
+        expected=status.HTTP_422_UNPROCESSABLE_CONTENT,
+    )
+    assert DETAIL_EXTRACTION_IN_PROGRESS in _tus_upload.last_detail
 
 
 UNPACK_STATUS_URL = "/user_files/unpack_status/{upload_id}"
@@ -281,7 +293,8 @@ def test_tus_unpack_status(fastapi):
     )
     rsp = _status_of(fastapi, upload_id)
     assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
-    assert rsp.json()["detail"] == _tus_upload.last_detail
+    # The status tells the dated log of the failure
+    assert rsp.json()["detail"].endswith(" UTC " + _tus_upload.last_detail)
     # Not archives
     upload_id = _tus_upload(fastapi, tsv, "ecotaxa_p.tsv", "st_dir/x")
     got = _status_of(fastapi, upload_id).json()
@@ -295,7 +308,9 @@ def test_tus_unpack_status(fastapi):
     )
     rsp = _status_of(fastapi, upload_id)
     assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
-    assert rsp.json()["detail"] == "Upload of 'e.bin' refused: File type not accepted"
+    assert rsp.json()["detail"].endswith(
+        " UTC Upload of 'e.bin' refused: File type not accepted"
+    )
     # Another user, an unknown or invalid id: 404
     assert _status_of(fastapi, upload_id, USER_AUTH).status_code == 404
     assert _status_of(fastapi, "0" * 32).status_code == 404

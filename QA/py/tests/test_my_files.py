@@ -369,6 +369,25 @@ def test_import_refuses_extraction_in_progress(fastapi):
         assert DETAIL_EXTRACTION_IN_PROGRESS in rsp.text
 
 
+def test_file_operations_refuse_extraction_in_progress(fastapi):
+    """No create, remove, move or rename in, of, or into a folder still being unpacked."""
+    from FS.Unpack import PROGRESS_PREFIX
+    from helpers.httpexception import DETAIL_EXTRACTION_IN_PROGRESS
+
+    staging = PROGRESS_PREFIX + "name"
+    assert api_create_user_file(fastapi, "free", CREATOR_AUTH).status_code == 200
+    for rsp in (
+        api_create_user_file(fastapi, staging + "/new", CREATOR_AUTH),
+        api_remove_user_file(fastapi, staging, CREATOR_AUTH),
+        api_remove_user_file(fastapi, "sub/" + staging + "/x", CREATOR_AUTH),
+        api_move_user_file(fastapi, staging, "renamed", CREATOR_AUTH),
+        api_move_user_file(fastapi, "free", staging + "/free", CREATOR_AUTH),
+    ):
+        assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT, rsp.text
+        assert DETAIL_EXTRACTION_IN_PROGRESS in rsp.text
+    api_remove_user_file(fastapi, "free", CREATOR_AUTH)
+
+
 def test_upload_empty_archive(fastapi, tmp_path):
     """An empty archive is refused with a clear message."""
     from helpers.httpexception import DETAIL_EMPTY_ARCHIVE

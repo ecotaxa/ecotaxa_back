@@ -374,7 +374,6 @@ class Unpacker(object):
 
     ACCEPTED_MIME_TYPES: Set[str] = set(DEFAULT_MIMETYPES)
     ARCHIVE_EXTENSIONS: Set[str] = {an_ext.lower() for an_ext in DEFAULT_ARCHIVES}
-    ERROR_FILE_SUFFIX = ".unpack_error.log"
 
     def __init__(
         self,
@@ -387,8 +386,6 @@ class Unpacker(object):
         self._root_path = root_path
         self.list_errors: Dict[str, str] = list_errors
         self.compressed_origin: Optional[Path] = None
-        # When set, an unpack failure is reported in a file next to the archive
-        self.report_to_file = False
         # Where unpackings in progress are registered, to clean up after a restart
         self.registry_dir = registry_dir
         # The TUS upload being unpacked, if any
@@ -405,11 +402,6 @@ class Unpacker(object):
         # Optional, called with the unpack status as it changes, see _status
         self.status_reporter: Optional[Callable[[Dict[str, Any]], None]] = None
         self._status_fields: Dict[str, Any] = {}
-
-    def switch_to_background(self) -> None:
-        """Future unpacking operations run in background, nobody gets their exceptions,
-        so report failures to the user in an error file."""
-        self.report_to_file = True
 
     def extract_archive(
         self, archive: FilteredZipFile | FilteredTarFile, filepath: str, path: Path
@@ -755,10 +747,6 @@ class Unpacker(object):
                 dst.unlink()
         src.rename(dst)
 
-    @classmethod
-    def _error_file(cls, parent: Path, archive_name: str) -> Path:
-        return parent / (archive_name + cls.ERROR_FILE_SUFFIX)
-
     def unpack_failure(self, name: str, e: Exception) -> Tuple[int, str]:
         """
         The HTTP status code and the message, for the user, of e raised while unpacking
@@ -777,12 +765,14 @@ class Unpacker(object):
 
     def _report_failure(self, parent: Path, archive_name: str, e: Exception) -> None:
         """
-        Tell, in the status and if in background in a file, why the upload produced nothing.
+        Tell, in the status, why the upload produced nothing: the message, and dated as log.
         Never raises.
         """
         code, message = self.unpack_failure(archive_name, e)
-        self._report(parent, archive_name, "{when} UTC %s\n" % message)
-        self._status(state="error", status_code=code, message=message)
+        when = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        log = "%s UTC %s" % (when, message)
+        logger.info("Unpack failure in %s: %s", parent, log)
+        self._status(state="error", status_code=code, message=message, log=log)
 
     def _status(self, **fields: Any) -> None:
         """
@@ -811,21 +801,6 @@ class Unpacker(object):
             entries_done=self._entries_done,
             percent=self._entries_progress(),
         )
-
-    def _report(self, parent: Path, file_name: str, text: str) -> None:
-        """
-        If in background, write text, with {when} replaced, into the error file for file_name.
-        Never raises.
-        """
-        if not self.report_to_file:
-            return
-        try:
-            when = datetime.datetime.now(datetime.timezone.utc).strftime(
-                "%Y-%m-%d %H:%M:%S"
-            )
-            self._error_file(parent, file_name).write_text(text.replace("{when}", when))
-        except Exception as e2:
-            logger.error("Could not report unpack failure of %s: %s", file_name, e2)
 
     @classmethod
     def detect_archive_type(
@@ -913,7 +888,6 @@ class Unpacker(object):
                 percent=100,
                 result_paths=self._relative_paths(to_path, [archive_name]),
             )
-            self._error_file(to_path, archive_name).unlink(missing_ok=True)
             return
         else:
             # Archive
@@ -951,8 +925,6 @@ class Unpacker(object):
                 percent=100,
                 result_paths=self._relative_paths(to_path, published),
             )
-            # A previous failure of the same archive is not relevant anymore
-            self._error_file(to_path, archive_name).unlink(missing_ok=True)
 
     def _relative_paths(self, parent: Path, names: List[str]) -> List[str]:
         """Paths of names in parent, relative to the user root, as My Files shows them"""
@@ -1105,7 +1077,6 @@ def _clean_up(info: Dict[str, Any], users_files_dir: Path) -> None:
     """The unpacking described by info was interrupted, undo and report it"""
     name = str(info.get("name", "?"))
     staging = Path(str(info.get("staging", "")))
-    parent = Path(str(info.get("parent", "")))
     logger.warning(
         "Unpacking of %s by process %s was interrupted", info, info.get("pid")
     )
@@ -1118,16 +1089,8 @@ def _clean_up(info: Dict[str, Any], users_files_dir: Path) -> None:
         name,
         DETAIL_UNPACK_INTERRUPTED,
     )
-    if parent.is_dir() and _inside(parent, users_files_dir):
-        when = datetime.datetime.now(datetime.timezone.utc).strftime(
-            "%Y-%m-%d %H:%M:%S"
-        )
-        try:
-            Unpacker._error_file(parent, name).write_text(
-                "%s UTC %s\n" % (when, message)
-            )
-        except OSError as e:
-            logger.error("Could not report interrupted unpack of %s: %s", name, e)
+    when = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    log = "%s UTC %s" % (when, message)
     upload_id = info.get("upload_id")
     if upload_id:
         try:
@@ -1136,6 +1099,7 @@ def _clean_up(info: Dict[str, Any], users_files_dir: Path) -> None:
                     "state": "error",
                     "status_code": INTERRUPTED_STATUS_CODE,
                     "message": message,
+                    "log": log,
                 }
             )
         except Exception as e:

@@ -143,14 +143,14 @@ def test_dead_owner_cleaned_up(dirs):
     proc.wait(10)
     assert len(_entries(registry)) == 1
     assert Unpack.sweep_stale(registry, users) == 1
-    error_file = "x.zip" + Unpacker.ERROR_FILE_SUFFIX
-    assert tree(parent) == [error_file]
+    # Reported in the status only, no file left
+    assert tree(parent) == []
     message = "Extraction of 'x.zip' failed, nothing was kept: " + DETAIL_UNPACK_INTERRUPTED
-    assert message in (parent / error_file).read_text()
     status = UnpackStatus.read(UPLOAD_ID)
     assert status is not None
     assert status["state"] == "error" and status["status_code"] == 500
     assert status["message"] == message and status["user_id"] == 1
+    assert status["log"].endswith(" UTC " + message)
     assert _entries(registry) == []
     # Nothing more to do
     assert Unpack.sweep_stale(registry, users) == 0

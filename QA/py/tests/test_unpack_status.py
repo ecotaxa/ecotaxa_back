@@ -3,6 +3,7 @@
 # Progress moves entry by entry, and the target grows when a nested archive is opened,
 # so the percent can go down.
 #
+import re
 from pathlib import Path
 
 import pytest
@@ -76,6 +77,9 @@ def test_status_error(tmp_path):
         "Extraction of 'name.zip' failed, nothing was kept: Archive is corrupt"
     )
     assert str(root) not in last["message"]
+    # The log, as written in the error file: dated message
+    assert last["log"].endswith(" UTC " + last["message"])
+    assert re.match(r"\d{4}-\d\d-\d\d \d\d:\d\d:\d\d UTC ", last["log"])
     assert "result_paths" not in last
 
 

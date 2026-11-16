@@ -14,14 +14,14 @@ from tuspyserver.file import _validate_uid_within_dir
 from tuspyserver.lock import acquire_upload_lock
 from tuspyserver.storage.local import LocalFileStorage
 
-from FS.Unpack import UnpackStatus, Unpacker
+from FS.Unpack import UnpackStatus, Unpacker, PROGRESS_PREFIX
 from FS.Uploads import claim_upload, get_tus_files_dir, release_claim
 from FS.UserFilesDir import UserFilesDirectory
 from helpers.AppConfig import Config
 from helpers.CustomException import BaseAppException, UnprocessableEntityException
 from helpers.DynamicLogs import get_logger
 from helpers.fastApiUtils import get_current_user
-from helpers.httpexception import DETAIL_UNKNOWN_ERROR
+from helpers.httpexception import DETAIL_UNKNOWN_ERROR, DETAIL_EXTRACTION_IN_PROGRESS
 
 TUS_PREFIX = "/user_files/upload"
 
@@ -47,7 +47,6 @@ async def _background_unpack(
     user_dir: UserFilesDirectory, file_path: Path, dest_dir: Path
 ) -> None:
     try:
-        user_dir.unpacker.switch_to_background()
         await asyncio.to_thread(
             user_dir.unpacker.dispatch_unpack,
             compressed_path=file_path,
@@ -195,11 +194,10 @@ async def on_tus_upload_complete(
                 )
             shutil.move(tus_path, str(dest_path))
             # Keep policy to exclude unwanted files, on the moved file, in its directory.
-            # The client may be gone, so report a refusal to the user in a file too.
+            # The client may be gone, so report a refusal to the user in the status too.
             status = _new_status(tus_path.name, current_user_id, dest_path.name)
             if status is not None:
                 user_dir.unpacker.status_reporter = status.update
-            user_dir.unpacker.switch_to_background()
             user_dir.unpacker.dispatch_unpack(dest_path, dest_dir)
             logger.info(
                 "TUS file upload complete: moved %s to %s", file_path, dest_path
@@ -264,6 +262,9 @@ def destination_directory(
             logger.warning(
                 "TUS upload rejected path traversal attempt: %s", client_path
             )
+        elif any(a_part.startswith(PROGRESS_PREFIX) for a_part in parts):
+            # Not into an archive extraction in progress, its content is not final
+            raise UnprocessableEntityException(DETAIL_EXTRACTION_IN_PROGRESS)
         elif parts:
             dest_dir = dest_dir.joinpath(*parts)
     user_dir.ensure_exists(dest_dir)
