@@ -490,7 +490,8 @@ class NightlyJobService(JobServiceBase):
             + self.trashdirpattern
             + "*"
             + os.path.sep
-            + "*"
+            + "*",
+            include_hidden=True,  # Trashed dot files too, nobody else removes them
         ):
             item = Path(entry)
             tf = int(os.path.getctime(item))

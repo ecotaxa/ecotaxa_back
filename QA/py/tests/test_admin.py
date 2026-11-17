@@ -111,10 +111,22 @@ def create_fake_users_directories(monkeypatch):
     old_trash_file.write_text("trashed file")
     os.utime(old_trash_file, (old_trash_time, old_trash_time))
 
+    # Hidden ones too
+    old_hidden_trash_file = trash_dir / ".old_hidden_file"
+    old_hidden_trash_file.write_text("trashed hidden file")
+    os.utime(old_hidden_trash_file, (old_trash_time, old_trash_time))
+    old_hidden_trash_dir = trash_dir / ".old_hidden_dir"
+    old_hidden_trash_dir.mkdir(parents=True, exist_ok=True)
+    (old_hidden_trash_dir / "sub.txt").write_text("trashed in hidden dir")
+    _set_tree_mtime(old_hidden_trash_dir, old_trash_time)
+
     # 5. Recent trash item (should NOT be removed)
     recent_trash_file = trash_dir / "recent_trash_file.txt"
     recent_trash_file.write_text("recent trashed file")
     os.utime(recent_trash_file, (recent_trash_time, recent_trash_time))
+    recent_hidden_trash_file = trash_dir / ".recent_hidden_file"
+    recent_hidden_trash_file.write_text("recent trashed hidden file")
+    os.utime(recent_hidden_trash_file, (recent_trash_time, recent_trash_time))
 
     # 6. TUS uploads directory (old should be removed, recent should NOT be removed)
     tus_dir = Path(get_tus_files_dir())
@@ -169,6 +181,9 @@ def create_fake_users_directories(monkeypatch):
     live_staging_old = _staging(user_dir / (PROGRESS_PREFIX + "live_old"), old_time)
 
     return {
+        "old_hidden_trash_file": old_hidden_trash_file,
+        "old_hidden_trash_dir": old_hidden_trash_dir,
+        "recent_hidden_trash_file": recent_hidden_trash_file,
         "orphan_staging_old": orphan_staging_old,
         "orphan_staging_recent": orphan_staging_recent,
         "live_staging_old": live_staging_old,
@@ -253,6 +268,7 @@ def test_nightly_job(fastapi, caplog, tstlogs, mock_taxoserver, monkeypatch):
     assert recent_trash_file.exists()
     assert recent_tus_file.exists()
     _check_tus_infos(fake_dirs)
+    _check_hidden_trash(fake_dirs)
     # Archive extraction folders: the orphan one goes once old, the registered one stays
     assert not fake_dirs["orphan_staging_old"].exists()
     assert fake_dirs["orphan_staging_recent"].exists()
@@ -270,6 +286,8 @@ def test_nightly_job(fastapi, caplog, tstlogs, mock_taxoserver, monkeypatch):
     assert "old_tus_upload.tmp" in maintenance_log_content
     assert fake_dirs["old_orphan_info"].name in maintenance_log_content
     assert PROGRESS_PREFIX + "orphan_old" in maintenance_log_content
+    assert ".old_hidden_file" in maintenance_log_content
+    assert ".old_hidden_dir" in maintenance_log_content
 
     # Second cleanup must do nothing
     log = do_nightly(fastapi)
@@ -288,6 +306,7 @@ def test_nightly_job(fastapi, caplog, tstlogs, mock_taxoserver, monkeypatch):
     assert recent_tus_file.exists()
     _check_tus_infos(fake_dirs)
 
+    _check_hidden_trash(fake_dirs)
     # Not registered anymore, all old: an orphan now
     assert not live_staging_old.exists()
     assert fake_dirs["orphan_staging_recent"].exists()
@@ -308,3 +327,10 @@ def _check_tus_infos(fake_dirs) -> None:
     # Upload removed by age, its metadata in the same run
     assert not fake_dirs["old_payload"].exists()
     assert not fake_dirs["old_info_old_payload"].exists()
+
+
+def _check_hidden_trash(fake_dirs) -> None:
+    """Hidden trash entries go as the others, once old"""
+    assert not fake_dirs["old_hidden_trash_file"].exists()
+    assert not fake_dirs["old_hidden_trash_dir"].exists()
+    assert fake_dirs["recent_hidden_trash_file"].exists()
