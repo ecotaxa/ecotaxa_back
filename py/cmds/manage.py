@@ -137,7 +137,8 @@ TEMPLATE=template0 LC_CTYPE='C' LC_COLLATE='C' CONNECTION LIMIT=-1
 @db_app.command(help="Create the DB, i.e. empty shell with no table inside.")
 def create(user: str = "postgres", password: str = "", db_name: str = ""):
     super_conn = Service.build_super_connection(app_config, user, password)
-    db_create_sql = CREATE_DB_SQL % (db_name, app_config.get_cnf("DB_USER"))
+    db_user, _ = app_config.get_db_credentials()
+    db_create_sql = CREATE_DB_SQL % (db_name, db_user)
     try:
         super_conn.exec_outside_transaction(db_create_sql)
     except:

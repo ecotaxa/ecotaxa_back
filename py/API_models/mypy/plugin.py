@@ -86,7 +86,7 @@ def _dataclass_2_pydantic_class_maker_callback(
         except ValueError:
             pass
 
-    class_name = data_class_type_info.name + ("Model" if with_suffix else "")
+    class_name = ctx.name or (data_class_type_info.name + ("Model" if with_suffix else ""))
     _add_pydantic_clone(ctx, class_name, pydantic_model_type_info, col_types)
 
 

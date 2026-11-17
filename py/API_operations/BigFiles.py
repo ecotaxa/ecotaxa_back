@@ -8,16 +8,25 @@ import shutil
 from pathlib import Path
 from typing import Callable, Dict, Any, Set, Optional
 
-from fastapi import Depends, Request
+from fastapi import Depends, HTTPException, Request
 from tuspyserver import create_tus_router
 from tuspyserver.file import _validate_uid_within_dir
 from tuspyserver.lock import acquire_upload_lock
 from tuspyserver.storage.local import LocalFileStorage
 
+from FS.Unpack import UnpackStatus, Unpacker, PROGRESS_PREFIX
+from FS.Uploads import (
+    claim_upload,
+    get_tus_files_dir,
+    get_tus_info_dir,
+    release_claim,
+)
 from FS.UserFilesDir import UserFilesDirectory
 from helpers.AppConfig import Config
+from helpers.CustomException import BaseAppException, UnprocessableEntityException
 from helpers.DynamicLogs import get_logger
 from helpers.fastApiUtils import get_current_user
+from helpers.httpexception import DETAIL_UNKNOWN_ERROR, DETAIL_EXTRACTION_IN_PROGRESS
 
 TUS_PREFIX = "/user_files/upload"
 
@@ -25,17 +34,6 @@ TUS_PREFIX = "/user_files/upload"
 logger = get_logger(__name__)
 
 background_tasks: Set[asyncio.Task[Any]] = set()
-
-
-def get_tus_files_dir() -> str:
-    """
-    Get the directory where big files are stored.
-    Use a subfolder of the users files area.
-    """
-    base_dir = Config().get_users_files_dir()
-    tus_dir = Path(base_dir, "tus_uploads")
-    tus_dir.mkdir(parents=True, exist_ok=True)
-    return str(tus_dir)
 
 
 async def tus_auth(
@@ -54,16 +52,77 @@ async def _background_unpack(
     user_dir: UserFilesDirectory, file_path: Path, dest_dir: Path
 ) -> None:
     try:
-        user_dir.switch_to_progress_marking()
         await asyncio.to_thread(
-            user_dir.dispatch_unpack, compressed_path=file_path, to_path=dest_dir
+            user_dir.unpacker.dispatch_unpack,
+            compressed_path=file_path,
+            to_path=dest_dir,
         )
         logger.info("Done unpacking %s in background", file_path)
+    except asyncio.CancelledError:
+        # e.g. server shutdown. The unpacking thread itself cannot be stopped.
+        logger.warning(
+            "Unpacking %s in background was cancelled, thread may continue", file_path
+        )
+        raise
     except Exception as e:
         logger.error(
             "Error unpacking %s in background: %s", file_path, str(e), exc_info=True
         )
         raise
+
+
+def _forget_task(task: asyncio.Task[None]) -> None:
+    background_tasks.discard(task)
+    if not task.cancelled():
+        # Mark the exception, if any, as retrieved: it was logged by _background_unpack,
+        # and after the sync wait nobody awaits the task.
+        task.exception()
+
+
+async def _start_unpack(
+    user_dir: UserFilesDirectory,
+    tus_path: Path,
+    dest_path: Path,
+    dest_dir: Path,
+    name: str,
+    user_id: int = -1,
+) -> asyncio.Task[None]:
+    """
+    Start unpacking dest_path into dest_dir in background, and wait a bit for it.
+    The status, for polling, is keyed by the TUS upload id, i.e. tus_path name.
+    A failure during the wait is raised.
+    """
+    user_dir.unpacker.upload_id = tus_path.name
+    status = _new_status(tus_path.name, user_id, name)
+    if status is not None:
+        # Before the task, so a poll right after the last PATCH finds it
+        status.update({"state": "unpacking", "percent": 0})
+        user_dir.unpacker.status_reporter = status.update
+    task = asyncio.create_task(
+        _background_unpack(user_dir, dest_path, dest_dir),
+        name=f"unpack_{name}",
+    )
+    background_tasks.add(task)
+    task.add_done_callback(_forget_task)
+    logger.info("TUS file upload complete: uncompressing into %s ", dest_dir)
+    try:
+        # Shield: on timeout, wait_for cancels only the shield, the unpack goes on
+        await asyncio.wait_for(
+            asyncio.shield(task), timeout=Config().get_unpack_sync_wait()
+        )
+        logger.info("TUS file upload unpack done into %s ", dest_dir)
+    except TimeoutError:
+        logger.info("TUS file upload unpack CONTINUES into %s ", dest_dir)
+    return task
+
+
+def _new_status(upload_id: str, user_id: int, name: str) -> Optional[UnpackStatus]:
+    """Best effort, a status problem must not prevent the unpacking"""
+    try:
+        return UnpackStatus(upload_id, user_id, name)
+    except Exception as e:
+        logger.error("No unpack status for %s: %s", upload_id, e)
+        return None
 
 
 async def on_tus_upload_complete(
@@ -78,37 +137,49 @@ async def on_tus_upload_complete(
         current_user_id,
         metadata,
     )
+    # e.g. /mnt/tus_uploads/fd8d989adda14069ba8495a71af1d6b8
+    tus_path = Path(file_path)
+    original_name = metadata.get("filename")
+    if original_name is None:
+        original_name = tus_path.name  # Hum, unlikely
+    else:
+        # Ensure no directory traversal
+        original_name = os.path.basename(original_name)
+    claim = claim_upload(tus_path.name)
+    if claim is None:
+        # tuspyserver called the hook again for an empty PATCH at the final offset
+        logger.info(
+            "TUS upload %s was already treated, ignoring a duplicate completion",
+            tus_path.name,
+        )
+        return
+    user_dir: Optional[UserFilesDirectory] = None
     try:
-        # e.g. /mnt/tus_uploads/fd8d989adda14069ba8495a71af1d6b8
-        tus_path = Path(file_path)
-
-        # metadata contains 'filename' if provided by client (Upload-Metadata header)
-        original_name = metadata.get("filename")
-        if original_name is None:
-            original_name = tus_path.name  # Hum, unlikely
-        else:
-            # Ensure no directory traversal
-            original_name = os.path.basename(original_name)
 
         user_dir = UserFilesDirectory(current_user_id)
         dest_dir = destination_directory(user_dir, metadata.get("path"))
         dest_path = dest_dir / original_name
 
-        if user_dir.is_compressed(tus_path):
-            tus_path = tus_path.rename(dest_path)
-            task = asyncio.create_task(
-                _background_unpack(user_dir, tus_path, dest_dir.absolute()),
-                name=f"unpack_{original_name}",
-            )
-            background_tasks.add(task)
-            task.add_done_callback(background_tasks.discard)
-            logger.info("TUS file upload complete: uncompressing into %s ", dest_dir)
+        if Unpacker.is_compressed(tus_path):
+            # Link destination, we have the upload from 2 inodes now.
             try:
-                # Wait for 2 minutes max, to give impression it's sync for small archives
-                await asyncio.wait_for(task, timeout=120)
-                logger.info("TUS file upload unpack done into %s ", dest_dir)
-            except TimeoutError:
-                logger.info("TUS file upload unpack CONTINUES into %s ", dest_dir)
+                os.link(tus_path, dest_path)
+            except FileExistsError:
+                # Already there
+                if dest_path.is_dir():
+                    raise UnprocessableEntityException(
+                        "A folder named '%s' is already there" % original_name
+                    )
+                dest_path.unlink(missing_ok=True)
+                os.link(tus_path, dest_path)
+            await _start_unpack(
+                user_dir,
+                tus_path,
+                dest_path,
+                dest_dir.absolute(),
+                original_name,
+                current_user_id,
+            )
         else:
             # Plain uncompressed file case, should not happen with EcoTaxa client which always sends a zip
             stem = Path(original_name).stem
@@ -127,15 +198,56 @@ async def on_tus_upload_complete(
                     "Destination file %s already exists, overwriting", dest_path
                 )
             shutil.move(tus_path, str(dest_path))
-            # Keep policy to exclude unwanted files.
-            user_dir.dispatch_unpack(tus_path, dest_path)
+            # Keep policy to exclude unwanted files, on the moved file, in its directory.
+            # The client may be gone, so report a refusal to the user in the status too.
+            status = _new_status(tus_path.name, current_user_id, dest_path.name)
+            if status is not None:
+                user_dir.unpacker.status_reporter = status.update
+            user_dir.unpacker.dispatch_unpack(dest_path, dest_dir)
             logger.info(
                 "TUS file upload complete: moved %s to %s", file_path, dest_path
             )
     except Exception as e:
-        logger.error("Error in on_tus_upload_complete: %s", str(e))
-        # Depending on tuspyserver, raising here might or might not be handled.
-        # But we should at least log it.
+        # Allow a retry, the upload was not (or not fully) treated
+        release_claim(claim)
+        # tuspyserver lets it through, so it is the response to the last PATCH
+        logger.error(
+            "Error in on_tus_upload_complete: %s",
+            str(e),
+            exc_info=not isinstance(e, BaseAppException),
+        )
+        raise _upload_failure(
+            user_dir, tus_path.name, current_user_id, original_name, e
+        )
+
+
+def _upload_failure(
+    user_dir: Optional[UserFilesDirectory],
+    upload_id: str,
+    user_id: int,
+    name: str,
+    e: Exception,
+) -> HTTPException:
+    """
+    The HTTP error for e, raised while treating the upload. Unless the unpacking already did,
+    record it in the upload status, for polling.
+    """
+    if user_dir is not None:
+        code, message = user_dir.unpacker.unpack_failure(name, e)
+    elif isinstance(e, BaseAppException):
+        code, message = e.status_code, e.message
+    else:
+        code, message = 500, DETAIL_UNKNOWN_ERROR
+    previous = UnpackStatus.read(upload_id)
+    if previous is not None and previous.get("state") == "error":
+        # Recorded by the unpacking, same answer
+        code = previous.get("status_code", code)
+        message = previous.get("message", message)
+    else:
+        status = _new_status(upload_id, user_id, name)
+        if status is not None:
+            status.update({"state": "error", "status_code": code, "message": message})
+    return HTTPException(status_code=code, detail=message)
 
 
 def destination_directory(
@@ -155,6 +267,9 @@ def destination_directory(
             logger.warning(
                 "TUS upload rejected path traversal attempt: %s", client_path
             )
+        elif any(a_part.startswith(PROGRESS_PREFIX) for a_part in parts):
+            # Not into an archive extraction in progress, its content is not final
+            raise UnprocessableEntityException(DETAIL_EXTRACTION_IN_PROGRESS)
         elif parts:
             dest_dir = dest_dir.joinpath(*parts)
     user_dir.ensure_exists(dest_dir)
@@ -168,7 +283,6 @@ async def get_on_complete_handler(
     Dependency that returns the completion handler with the current user id.
     """
     current_user_id = getattr(request.state, "current_user_id", None)
-    logger.info("get_on_complete_handler: current_user_id=%s", current_user_id)
     if current_user_id is None:
         # This should not happen if tus_auth was called
         logger.error(
@@ -216,7 +330,7 @@ class SplitLocalFileStorage(LocalFileStorage):
 
 hybrid_storage = SplitLocalFileStorage(
     files_dir=get_tus_files_dir(),
-    info_dir="/tmp/tus_info_scratch",
+    info_dir=get_tus_info_dir(),
 )
 
 

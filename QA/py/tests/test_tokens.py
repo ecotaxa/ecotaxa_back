@@ -12,6 +12,7 @@ from API_models.crud import UserModelWithRights
 from API_operations.CRUD.Users import UserService
 from API_operations.Tokens import RefreshTokenService, _now
 from DB.User import User, UserStatus, UserRefreshToken
+from helpers.AppConfig import Config
 from helpers import fastApiUtils
 from tests.credentials import ADMIN_USER_ID
 from tests.test_fastapi import USER_ME_URL
@@ -75,7 +76,7 @@ def test_access_token(database, client, monkeypatch):
     rsp = _me(client, pair["refresh_token"])
     assert rsp.status_code == status.HTTP_401_UNAUTHORIZED
     # Expired
-    monkeypatch.setattr(fastApiUtils, "access_ttl", lambda: -1)
+    monkeypatch.setattr(Config, "get_access_token_ttl", lambda self: -1)
     rsp = _me(client, pair["access_token"])
     assert rsp.status_code == status.HTTP_401_UNAUTHORIZED
 
@@ -179,7 +180,7 @@ def test_legacy_tokens(database, client, monkeypatch):
     legacy = rsp.json()
     assert _me(client, legacy).status_code == status.HTTP_200_OK
     flask_cookie = fastApiUtils.build_serializer().dumps({"_user_id": ADMIN_USER_ID})
-    monkeypatch.setattr(fastApiUtils, "legacy_tokens_on", lambda: False)
+    monkeypatch.setattr(Config, "get_legacy_tokens_on", lambda self: False)
     assert _me(client, legacy).status_code == status.HTTP_401_UNAUTHORIZED
     # The front session cookie still works
     client.cookies.set("session", flask_cookie)

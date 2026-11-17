@@ -319,3 +319,43 @@ def regrant_if_needed(fastapi, prj_id, who):
         url = PROJECT_UPDATE_URL.format(project_id=prj_id)
         rsp = fastapi.put(url, headers=ADMIN_AUTH, json=prj_json)
         assert rsp.status_code == status.HTTP_200_OK
+
+
+def test_collection_remove_project_keeps_other_collections(fastapi):
+    """Removing a project from one collection must not unlink it from others."""
+    who = ADMIN_AUTH
+    prj1 = do_test_import(fastapi, "Coll remove prj 1", instrument="Other scanner")
+    prj2 = do_test_import(fastapi, "Coll remove prj 2", instrument="Other scanner")
+
+    coll_ids = []
+    for title in ("Coll remove A", "Coll remove B"):
+        rsp = fastapi.post(
+            COLLECTION_CREATE_URL,
+            headers=who,
+            json={"title": title, "project_ids": [prj1, prj2]},
+        )
+        assert rsp.status_code == status.HTTP_200_OK
+        coll_ids.append(rsp.json())
+    coll_a, coll_b = coll_ids
+
+    # Remove prj1 from A only
+    rsp = fastapi.patch(
+        COLLECTION_UPDATE_URL.format(collection_id=coll_a),
+        headers=who,
+        json={"project_ids": [prj2]},
+    )
+    assert rsp.status_code == status.HTTP_200_OK
+
+    def coll_projects(coll_id):
+        rsp = fastapi.get(COLLECTION_QUERY_URL.format(collection_id=coll_id), headers=who)
+        assert rsp.status_code == status.HTTP_200_OK
+        return rsp.json()["project_ids"]
+
+    assert coll_projects(coll_a) == [prj2]
+    assert coll_projects(coll_b) == sorted([prj1, prj2])
+    rsp = fastapi.get(PROJECT_COLLECTIONS_URL.format(project_id=prj1), headers=who)
+    assert [c["id"] for c in rsp.json()] == [coll_b]
+
+    for coll_id in coll_ids:
+        rsp = fastapi.delete(COLLECTION_DELETE_URL.format(collection_id=coll_id), headers=who)
+        assert rsp.status_code == status.HTTP_200_OK

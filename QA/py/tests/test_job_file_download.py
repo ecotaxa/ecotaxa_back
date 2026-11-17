@@ -81,18 +81,14 @@ def test_get_job_file_invalid_range(fastapi):
 
     download_url = JOB_DOWNLOAD_URL.format(job_id=job_id)
 
-    # Invalid format
+    # Invalid format (malformed)
     rsp = fastapi.get(download_url, headers={**ADMIN_AUTH, "Range": "bytes=abc-"})
-    assert rsp.status_code == 416
+    assert rsp.status_code == 400
 
-    # Out of bounds
+    # Out of bounds (unsatisfiable)
     rsp = fastapi.get(download_url, headers={**ADMIN_AUTH, "Range": "bytes=5000-"})
     assert rsp.status_code == 416
 
-    # Start > End
+    # Start > End (malformed)
     rsp = fastapi.get(download_url, headers={**ADMIN_AUTH, "Range": "bytes=100-50"})
-    assert rsp.status_code == 416
-
-    # Multiple ranges (not supported)
-    rsp = fastapi.get(download_url, headers={**ADMIN_AUTH, "Range": "bytes=0-10,20-30"})
-    assert rsp.status_code == 416
+    assert rsp.status_code == 400

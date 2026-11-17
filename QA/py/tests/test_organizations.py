@@ -79,6 +79,12 @@ def test_organization_crud(fastapi):
     assert org["directories"] == "edmo:5678"
 
 
+def test_organizations_list_unauthorized(fastapi):
+    # Without a token: refused, was a 500 (no RightsThrower around the rights check)
+    rsp = fastapi.get(ORGANIZATIONS_LIST_URL)
+    assert rsp.status_code == status.HTTP_403_FORBIDDEN
+
+
 def test_organization_create_unauthorized(fastapi):
     # Unlogged user without registration token cannot create organization
     org_data = {"id": -1, "name": "Unauthorized Org", "directories": None}
@@ -104,6 +110,12 @@ def test_organization_create_registration_token(fastapi, monkeypatch):
         ORGANIZATION_CREATE_URL, params={"token": "bogus"}, json=org_data
     )
     assert rsp.status_code == status.HTTP_403_FORBIDDEN
+    # Token for another action is not a registration one
+    token = UserValidation()._generate_token(
+        "new@plankton.org", action=ActivationType.update.value
+    )
+    rsp = fastapi.post(ORGANIZATION_CREATE_URL, params={"token": token}, json=org_data)
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     # Unlogged user creating an account, with the token sent by email
     token = UserValidation()._generate_token(
         "new@plankton.org", action=ActivationType.create.value
@@ -136,6 +148,70 @@ def test_organization_create_invalid(fastapi):
     # Try to create another one with same name
     rsp = fastapi.post(ORGANIZATION_CREATE_URL, headers=ADMIN_AUTH, json=org_data)
     assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+
+def _org_found(fastapi, name) -> bool:
+    rsp = fastapi.get(ORGANIZATIONS_SEARCH_URL, params={"name": name})
+    assert rsp.status_code == status.HTTP_200_OK
+    return [org["name"] for org in rsp.json()] == [name]
+
+
+def _create(fastapi, name, **kwargs) -> int:
+    org_data = {"id": -1, "name": name, "directories": None}
+    rsp = fastapi.post(ORGANIZATION_CREATE_URL, json=org_data, **kwargs)
+    assert rsp.status_code == status.HTTP_200_OK, rsp.text
+    return rsp.json()
+
+
+def test_organization_create_replaces_unused(fastapi):
+    from tests.test_users_with_validation import create_db_user
+
+    # An ordinary user creates one organization per profile update:
+    # a new one replaces the one created before and still unused
+    _create(fastapi, "First Choice Org", headers=USER_AUTH)
+    _create(fastapi, "Second Choice Org", headers=USER_AUTH)
+    assert not _org_found(fastapi, "First Choice Org")
+    assert _org_found(fastapi, "Second Choice Org")
+    # The same name again is not a conflict with the replaced one
+    _create(fastapi, "Second Choice Org", headers=USER_AUTH)
+    assert _org_found(fastapi, "Second Choice Org")
+    # Once used by a person, it stays, and a new one can be created
+    create_db_user(
+        email="second_choice@plankton.org",
+        name="Second Choice User",
+        organisation="Second Choice Org",
+    )
+    _create(fastapi, "Third Choice Org", headers=USER_AUTH)
+    assert _org_found(fastapi, "Second Choice Org")
+    assert _org_found(fastapi, "Third Choice Org")
+
+
+def test_organization_create_admin_not_replaced(fastapi):
+    _create(fastapi, "Admin First Org", headers=ADMIN_AUTH)
+    _create(fastapi, "Admin Second Org", headers=ADMIN_AUTH)
+    assert _org_found(fastapi, "Admin First Org")
+    assert _org_found(fastapi, "Admin Second Org")
+
+
+def test_organization_create_registration_replaces_unused(fastapi, monkeypatch):
+    from API_operations.helpers.UserValidation import UserValidation, ActivationType
+    from tests.test_users_with_validation import set_config_on
+
+    set_config_on(monkeypatch)
+    validation = UserValidation()
+    token = validation._generate_token(
+        "Registrant@Plankton.org", action=ActivationType.create.value
+    )
+    _create(fastapi, "Registrant First Org", params={"token": token})
+    _create(fastapi, "Registrant Second Org", params={"token": token})
+    assert not _org_found(fastapi, "Registrant First Org")
+    assert _org_found(fastapi, "Registrant Second Org")
+    # Another registrant does not replace it
+    other_token = validation._generate_token(
+        "other_registrant@plankton.org", action=ActivationType.create.value
+    )
+    _create(fastapi, "Other Registrant Org", params={"token": other_token})
+    assert _org_found(fastapi, "Registrant Second Org")
 
 
 def _created_org(fastapi, org_data):
@@ -247,6 +323,12 @@ def test_organizations_edmo_search_registration_token(fastapi, mocker, monkeypat
     validation = UserValidation()
     params["token"] = validation._generate_token(
         "new@plankton.org", id=ORDINARY_USER_USER_ID, action=ActivationType.update.value
+    )
+    rsp = fastapi.get(ORGANIZATIONS_EDMO_SEARCH_URL, params=params)
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    # Token without user id but for another action is not a registration one either
+    params["token"] = validation._generate_token(
+        "new@plankton.org", action=ActivationType.update.value
     )
     rsp = fastapi.get(ORGANIZATIONS_EDMO_SEARCH_URL, params=params)
     assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT

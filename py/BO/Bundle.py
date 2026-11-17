@@ -7,9 +7,8 @@ import random
 import shutil
 import zipfile
 from pathlib import Path
-
 # noinspection PyPackageRequirements
-from typing import Callable, List, Dict, Tuple, Generator, Set
+from typing import Callable, List, Dict, Tuple, Generator
 
 from BO.TSVFile import TSVFile
 from BO.Taxonomy import TaxonomyBO
@@ -24,6 +23,7 @@ from DB.Acquisition import Acquisition
 from DB.Project import ProjectIDT, Project
 from DB.Sample import Sample
 from DB.helpers import Session
+from DB.helpers.Caches import RanksPerObject
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
 
@@ -51,37 +51,41 @@ class InBundle(object):
         self.user_loc = user_loc
         # Compute the files we have to process.
         self.possible_files: List[Path] = []
-        nb_files = 0
-
-        def one_more() -> None:
-            nonlocal nb_files
-            nb_files += 1
-            if nb_files > self.MAX_FILES:
-                raise ImportError(
-                    "You tried to import too many files, max. is %d" % self.MAX_FILES
-                )
-
+        # File names are matched case-insensitively, e.g. ecotaxa_x.TSV or b_Images.ZIP
         for a_filter in self.TSV_FILTERS:
-            for a_file in self.path.glob(a_filter):
+            for a_file in self.path.glob(a_filter, case_sensitive=False):
                 self.possible_files.append(a_file)
-                one_more()
         self.possible_files.sort()
-        bundles = list(self.path.glob(self.UVP6_FILTER))
-        for bundle_dir in self.path.glob(self.UVP6_DIRS_FILTER):
+        bundles = list(self.path.glob(self.UVP6_FILTER, case_sensitive=False))
+        for bundle_dir in self.path.glob(self.UVP6_DIRS_FILTER, case_sensitive=False):
             if not bundle_dir.is_dir():
                 continue
-            tsv_file = bundle_dir / ("ecotaxa_" + bundle_dir.name[:-7] + ".tsv")
-            if not tsv_file.exists():
+            expected_tsv = ("ecotaxa_" + bundle_dir.name[:-7] + ".tsv").lower()
+            tsv_file = next(
+                (
+                    a_file
+                    for a_file in self.possible_files
+                    if a_file.parent == bundle_dir
+                    and a_file.name.lower() == expected_tsv
+                ),
+                None,
+            )
+            if tsv_file is None:
                 continue
             self.possible_files.remove(tsv_file)
             bundles.append(bundle_dir)
+        # Count once, after UVP6 dirs' TSVs were removed, so that a UVP6 sample
+        # counts for 1, be it a *Images.zip or an *Images directory
+        if len(self.possible_files) + len(bundles) > self.MAX_FILES:
+            raise ImportError(
+                "You tried to import too many files, max. is %d" % self.MAX_FILES
+            )
         self.sub_bundles: List[UVP6Bundle] = []
         for a_bundle in bundles:
             bundle_loc = str(a_bundle.relative_to(self.path))
             self.sub_bundles.append(
                 UVP6Bundle(a_bundle, user_loc + "/" + bundle_loc, temp_dir)
             )
-            one_more()
 
     def possible_files_as_posix(self) -> Generator[str, None, None]:
         """
@@ -191,7 +195,7 @@ class InBundle(object):
     @staticmethod
     def fetch_existing_ranks(
         session: Session, prj_id: ProjectIDT
-    ) -> Dict[int, Set[int]]:
+    ) -> RanksPerObject[int]:
         """
         Get existing image ranks from the project
         """
@@ -354,7 +358,7 @@ class InBundle(object):
         """
         ret: List[Path] = []
         for a_filter in self.IMAGE_FILTERS:
-            ret.extend(self.path.glob(a_filter))
+            ret.extend(self.path.glob(a_filter, case_sensitive=False))
         # Images are duplicated in a hidden folder for .zips coming from OsX
         ret = [
             a_file.relative_to(self.path)
@@ -389,10 +393,12 @@ class UVP6Bundle(InBundle):
         # might be write-protected
         sample_dir = temp_dir / name_no_zip
         tsv_file = "ecotaxa_" + sample_id + ".tsv"
-        sample_tsv = sample_dir / tsv_file
         if sample_dir.exists():
             # Target directory exists, e.g. from step1 if we're in step2
-            if not sample_tsv.exists():  # pragma: no cover
+            if not any(
+                a_file.name.lower() == tsv_file.lower()
+                for a_file in sample_dir.iterdir()
+            ):  # pragma: no cover
                 # There was an incorrect unzipping before, as we miss the main TSV
                 shutil.rmtree(sample_dir.as_posix())
         if not sample_dir.exists():

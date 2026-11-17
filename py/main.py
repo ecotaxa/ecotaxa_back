@@ -4,18 +4,18 @@
 #
 # Based on https://fastapi.tiangolo.com/
 #
+import asyncio
 import os
 import re
 import time
 from contextlib import asynccontextmanager
 from dataclasses import asdict
-from logging import INFO
+from logging import ERROR
 from typing import Union, Tuple, List, Dict, Any, cast
 
 from fastapi import (
     FastAPI,
     Request,
-    Header,
     Response,
     status,
     Depends,
@@ -26,10 +26,11 @@ from fastapi import (
     Form,
     Body,
     Path,
+    APIRouter,
 )
 from fastapi.exceptions import RequestValidationError
 from fastapi.logger import logger as fastapi_logger
-from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.responses import FileResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -71,7 +72,7 @@ from API_models.exports import (
     SummaryExportReq,
     BackupExportReq,
 )
-from API_models.filesystem import DirectoryModel
+from API_models.filesystem import DirectoryModel, UnpackStatusModel
 from API_models.filters import Optional, ProjectFilters, ProjectFiltersDict
 from API_models.helpers.Introspect import plain_columns
 from API_models.imports import ImportReq, SimpleImportRsp, SimpleImportReq, ImportRsp
@@ -112,6 +113,8 @@ from API_models.taxonomy import (
     TaxonomyRecastReq,
 )
 from API_operations.BigFiles import create_big_files_router, TUS_PREFIX
+from FS.Unpack import UnpackStatus
+from FS.UserFilesDir import sweep_stale_unpacks
 from API_operations.CRUD.Collections import CollectionsService
 from API_operations.CRUD.Constants import ConstantsService
 from API_operations.CRUD.Guests import GuestService
@@ -190,8 +193,10 @@ from helpers.fastApiUtils import (
     MyORJSONResponse,
     ValidityThrower,
     adjust_if_ranged,
+    regular_mem_cleanup,
 )
 from helpers.login import LoginService
+from helpers.httpexception import DETAIL_UNKNOWN_ERROR
 from helpers.pydantic import sort_and_prune
 
 # from fastapi.middleware.gzip import GZipMiddleware
@@ -199,14 +204,14 @@ from helpers.pydantic import sort_and_prune
 logger = get_logger(__name__)
 # TODO: A nicer API doc, see https://github.com/tiangolo/fastapi/issues/1140
 
-fastapi_logger.setLevel(INFO)
+fastapi_logger.setLevel(ERROR)
 
 api_logger = get_api_logger()
 
 
 app = FastAPI(
     title="EcoTaxa",
-    version="0.0.54",
+    version="0.0.55",
     # openapi URL as seen from navigator, this is included when /docs is required
     # which serves swagger-ui JS app. Stay in /api sub-path.
     openapi_url="/api/openapi.json",
@@ -215,12 +220,14 @@ app = FastAPI(
         {"url": "/", "description": "Local access"},
     ],
     default_response_class=MyORJSONResponse,
-    # For later: Root path is in fact _removed_ from incoming requests, so not relevant here
+    docs_url="/api/docs",
+    redoc_url="/api/redoc",
 )
 
 init_openid()
 
 app.include_router(openid_router)
+app.include_router(openid_router, prefix="/api")
 
 app.add_middleware(
     SessionMiddleware,
@@ -293,12 +300,11 @@ CRSF_header = {
     f"blob: data: {CDNs};frame-ancestors 'self';form-action 'self';"
 }
 
-# Establish second routes via /api to same app
-app.mount("/api", app)
+app_router = APIRouter()
 
 
 # noinspection PyUnusedLocal
-@app.post(
+@app_router.post(
     "/login",
     operation_id="login",
     tags=["authentification"],
@@ -329,7 +335,7 @@ def login(params: LoginReq = Body(...)) -> str:
     return str(ret)
 
 
-@app.post(
+@app_router.post(
     "/token",
     operation_id="token",
     tags=["authentification"],
@@ -353,7 +359,7 @@ def token(request: Request, form: OAuth2PasswordRequestForm = Depends()) -> Toke
         return rts.issue(user.id, request.headers.get("user-agent"))
 
 
-@app.post(
+@app_router.post(
     "/token/refresh",
     operation_id="refresh_token",
     tags=["authentification"],
@@ -370,7 +376,7 @@ def refresh_token(request: Request, params: RefreshReq = Body(...)) -> TokenRsp:
         return rts.rotate(params.refresh_token, request.headers.get("user-agent"))
 
 
-@app.post(
+@app_router.post(
     "/token/revoke",
     operation_id="revoke_token",
     tags=["authentification"],
@@ -385,7 +391,7 @@ def revoke_token(params: RefreshReq = Body(...)) -> None:
         rts.revoke(params.refresh_token)
 
 
-@app.get(
+@app_router.get(
     "/users",
     operation_id="get_users",
     tags=["users"],
@@ -418,7 +424,7 @@ def get_users(
         return sce.list(current_user, usr_ids, fields=fields)
 
 
-@app.get(
+@app_router.get(
     "/users/me",
     operation_id="show_current_user",
     tags=["users"],
@@ -434,7 +440,7 @@ def show_current_user(
         return sce.get_full_by_id(current_user, current_user)
 
 
-@app.put(
+@app_router.put(
     "/users/{user_id}",
     operation_id="update_user",
     tags=["users"],
@@ -463,7 +469,7 @@ def update_user(
         ssce.wait()
 
 
-@app.post(
+@app_router.post(
     "/users/create",
     operation_id="create_user",
     tags=["users"],
@@ -502,7 +508,7 @@ def create_user(
         ssce.wait()
 
 
-@app.get(
+@app_router.get(
     "/users/my_preferences/{project_id}",
     operation_id="get_current_user_prefs",
     tags=["users"],
@@ -539,7 +545,7 @@ def get_current_user_prefs(
             return sce.get_preferences_per_project(current_user, project_id, key)
 
 
-@app.put(
+@app_router.put(
     "/users/my_preferences/{project_id}",
     operation_id="set_current_user_prefs",
     tags=["users"],
@@ -578,7 +584,7 @@ def set_current_user_prefs(
         return sce.set_preferences_per_project(current_user, project_id, key, value)
 
 
-@app.get(
+@app_router.get(
     "/users/search",
     operation_id="search_user",
     tags=["users"],
@@ -601,7 +607,7 @@ def search_user(
     return ret
 
 
-@app.get(
+@app_router.get(
     "/users/admins",
     operation_id="get_users_admins",
     tags=["users"],
@@ -617,7 +623,7 @@ def get_users_admins() -> List[User]:
     return ret
 
 
-@app.get(
+@app_router.get(
     "/users/user_admins",
     operation_id="get_admin_users",
     tags=["users"],
@@ -633,7 +639,7 @@ def get_admin_users(current_user: int = Depends(get_current_user)) -> List[User]
     return ret
 
 
-@app.get(
+@app_router.get(
     "/users/{user_id}",
     operation_id="get_user",
     tags=["users"],
@@ -656,7 +662,7 @@ def get_user(
 
 
 #  activate a new user if external validation is on
-@app.post(
+@app_router.post(
     "/users/activate/{user_id}/{status}",
     operation_id="activate_user",
     tags=["users"],
@@ -703,7 +709,7 @@ def activate_user(
 
 
 # forgotten password - send a reset request mail
-@app.post(
+@app_router.post(
     "/users/reset_user_password",
     operation_id="reset_user_password",
     tags=["users"],
@@ -744,7 +750,7 @@ def reset_user_password(
 # ######################## END OF USER
 
 
-@app.get(
+@app_router.get(
     "/organizations/search",
     operation_id="search_organizations",
     tags=["organizations"],
@@ -779,7 +785,7 @@ def search_organizations(
     return org_names
 
 
-@app.get(
+@app_router.get(
     "/organizations/edmo_search",
     operation_id="search_edmo_organizations",
     tags=["organizations"],
@@ -812,7 +818,7 @@ def search_edmo_organizations(
     return [EDMOOrganizationModel(code=org.code, name=org.name) for org in found]
 
 
-@app.get(
+@app_router.get(
     "/organizations",
     operation_id="get_organizations",
     tags=["organizations"],
@@ -846,11 +852,12 @@ def get_organizations(
     """
     with OrganizationService() as sce:
         org_ids = _split_num_list(ids)
-        organizations = sce.list(current_user, org_ids)
+        with RightsThrower():
+            organizations = sce.list(current_user, org_ids)
     return organizations
 
 
-@app.post(
+@app_router.post(
     "/organizations/create",
     operation_id="create_organization",
     tags=["organizations"],
@@ -869,9 +876,12 @@ def create_organization(
     **Create a new organization**, return **NULL upon success.**
 
     🔒 Depending on logged user, different authorizations apply:
-    - An administrator or user administrator or logged project manager can create an organization.
-    - An ordinary logged user cannot create another organization this way.
-    - An unlogged user creating an account can, with the token received by email.
+    - An administrator or user administrator can create organizations.
+    - Any other logged user can create one, e.g. when updating one's profile.
+    - An unlogged user creating an account can create one, with the token received by email.
+
+    For these last two, an organization they created before and that no person nor collection uses yet
+    is replaced by the new one.
     """
     with OrganizationService() as sce:
         with ValidityThrower(), RightsThrower():
@@ -881,7 +891,7 @@ def create_organization(
     return org
 
 
-@app.put(
+@app_router.put(
     "/organizations/{organization_id}",
     operation_id="update_organization",
     tags=["organizations"],
@@ -908,7 +918,7 @@ def update_organization(
 # ######################## END OF ORGANIZATIONS
 
 
-@app.get(
+@app_router.get(
     "/guests",
     operation_id="get_guests",
     tags=["guests"],
@@ -941,7 +951,7 @@ def get_guests(
         return sce.list(current_user, guest_ids, fields=fields)
 
 
-@app.post(
+@app_router.post(
     "/guests/create",
     operation_id="create_guest",
     tags=["guests"],
@@ -967,7 +977,7 @@ def create_guest(
     return new_guest
 
 
-@app.put(
+@app_router.put(
     "/guests/{guest_id}",
     operation_id="update_guest",
     tags=["guests"],
@@ -991,7 +1001,7 @@ def update_guest(
             sce.update_guest(current_user, guest_id, guest)
 
 
-@app.get(
+@app_router.get(
     "/guests/search",
     operation_id="search_guest",
     tags=["guests"],
@@ -1025,7 +1035,7 @@ def search_guest(
     return ret
 
 
-@app.get(
+@app_router.get(
     "/guests/{guest_id}",
     operation_id="get_guest",
     tags=["guests"],
@@ -1057,7 +1067,7 @@ def get_guest(
 # ######################## END OF PERSONS
 
 
-@app.post(
+@app_router.post(
     "/collections/create",
     operation_id="create_collection",
     tags=["collections"],
@@ -1081,7 +1091,7 @@ def create_collection(
     return ret
 
 
-@app.get(
+@app_router.get(
     "/collections",
     operation_id="list_collections",
     tags=["collections"],
@@ -1113,7 +1123,7 @@ def list_collections(
     return matching_collections
 
 
-@app.get(
+@app_router.get(
     "/collections/search",
     operation_id="search_collections",
     tags=["collections"],
@@ -1145,7 +1155,7 @@ def search_collections(
     return matching_collections
 
 
-@app.get(
+@app_router.get(
     "/collections/by_title",
     operation_id="collection_by_title",
     tags=["collections"],
@@ -1172,7 +1182,7 @@ def collection_by_title(
     return matching_collection
 
 
-@app.get(
+@app_router.get(
     "/collections/by_short_title",
     operation_id="collection_by_short_title",
     tags=["collections"],
@@ -1199,7 +1209,7 @@ def collection_by_short_title(
     return matching_collection
 
 
-@app.get(
+@app_router.get(
     "/collections/aggregated_projects_properties",
     operation_id="collection_aggregated_projects_properties",
     tags=["collections"],
@@ -1230,7 +1240,7 @@ def collection_aggregated_projects_properties(
     return ret
 
 
-@app.get(
+@app_router.get(
     "/collections/{collection_id}",
     operation_id="get_collection",
     tags=["collections"],
@@ -1259,7 +1269,7 @@ def get_collection(
         return present_collection
 
 
-@app.put(
+@app_router.put(
     "/collections/{collection_id}",
     operation_id="update_collection",
     tags=["collections"],
@@ -1288,7 +1298,7 @@ def update_collection(
             sce.update(current_user, collection_id, collection_update)
 
 
-@app.patch(
+@app_router.patch(
     "/collections/{collection_id}",
     operation_id="patch_collection",
     tags=["collections"],
@@ -1317,7 +1327,7 @@ def patch_collection(
             sce.update(current_user, collection_id, collection_update)
 
 
-@app.post(
+@app_router.post(
     "/collections/export/darwin_core",
     operation_id="darwin_core_format_export",
     tags=["collections"],
@@ -1350,7 +1360,7 @@ def darwin_core_format_export(
             return sce.run()
 
 
-@app.delete(
+@app_router.delete(
     "/collections/{collection_id}",
     operation_id="erase_collection",
     tags=["collections"],
@@ -1393,14 +1403,14 @@ project_model_columns = plain_columns(ProjectModel)
 
 # TODO JCE - description
 # TODO TODO TODO: No verification of GET query parameters by FastAPI. pydantic does POST models OK.
-@app.get(
+@app_router.get(
     "/projects",
     operation_id="list_projects",
     tags=["projects"],
     response_model=List[ProjectModel],
     response_class=MyORJSONResponse,
 )
-async def list_projects(
+def list_projects(
     current_user: Optional[int] = Depends(get_optional_current_user),
     project_ids: Optional[str] = Query(
         default=None,
@@ -1468,14 +1478,14 @@ async def list_projects(
     return MyORJSONResponse(ret)
 
 
-@app.get(
+@app_router.get(
     "/projects/search",
     operation_id="search_projects",
     tags=["projects"],
     response_model=List[ProjectModel],
     response_class=MyORJSONResponse,
 )
-async def search_projects(  # MyORJSONResponse -> JSONResponse -> Response -> await
+def search_projects(
     current_user: Optional[int] = Depends(get_optional_current_user),
     also_others: bool = Query(
         default=False,
@@ -1565,7 +1575,7 @@ async def search_projects(  # MyORJSONResponse -> JSONResponse -> Response -> aw
     return MyORJSONResponse(ret)
 
 
-@app.post(
+@app_router.post(
     "/projects/create",
     operation_id="create_project",
     tags=["projects"],
@@ -1592,7 +1602,7 @@ def create_project(
     return ret
 
 
-@app.post(
+@app_router.post(
     "/projects/{project_id}/subset",
     operation_id="project_subset",
     tags=["projects"],
@@ -1618,7 +1628,7 @@ def project_subset(
     return ret
 
 
-@app.get(
+@app_router.get(
     "/projects/{project_id}",
     operation_id="project_query",
     tags=["projects"],
@@ -1646,7 +1656,7 @@ def project_query(
         return ret
 
 
-@app.get(
+@app_router.get(
     "/projects/{project_id}/collections",
     operation_id="project_collections",
     tags=["projects"],
@@ -1667,14 +1677,14 @@ def project_collections(
         return ret
 
 
-@app.get(
+@app_router.get(
     "/project_set/taxo_stats",
     operation_id="project_set_get_stats",
     tags=["projects"],
     response_model=List[ProjectTaxoStatsModel],
     response_class=MyORJSONResponse,  # Force the ORJSON encoder
 )
-async def project_set_get_stats(  # MyORJSONResponse -> JSONResponse -> Response -> await
+def project_set_get_stats(
     ids: str = Query(
         ...,
         title="Ids",
@@ -1704,7 +1714,7 @@ async def project_set_get_stats(  # MyORJSONResponse -> JSONResponse -> Response
     return MyORJSONResponse(ret)
 
 
-@app.get(
+@app_router.get(
     "/project_set/user_stats",
     operation_id="project_set_get_user_stats",
     tags=["projects"],
@@ -1753,7 +1763,7 @@ def project_set_get_user_stats(
         return ret
 
 
-@app.get(
+@app_router.get(
     "/project_set/column_stats",
     operation_id="project_set_get_column_stats",
     tags=["projects"],
@@ -1822,7 +1832,7 @@ def project_set_get_column_stats(
         return ret
 
 
-@app.post(
+@app_router.post(
     "/projects/{project_id}/dump",
     operation_id="project_dump",
     tags=["projects"],
@@ -1846,7 +1856,7 @@ def project_dump(
         return sce.run(sys.stdout)
 
 
-@app.post(
+@app_router.post(
     "/projects/{project_id}/merge",
     operation_id="project_merge",
     tags=["projects"],
@@ -1883,7 +1893,7 @@ def project_merge(
             return sce.run(current_user)
 
 
-@app.get(
+@app_router.get(
     "/projects/{project_id}/check",
     operation_id="project_check",
     tags=["projects"],
@@ -1918,7 +1928,7 @@ def project_check(
             return sce.run(current_user)
 
 
-@app.get(
+@app_router.get(
     "/projects/{project_id}/stats",
     operation_id="project_stats",
     tags=["projects"],
@@ -1966,7 +1976,7 @@ def project_stats(
             return sce.run(current_user)
 
 
-@app.post(
+@app_router.post(
     "/projects/{project_id}/recompute_geo",
     operation_id="project_recompute_geography",
     tags=["projects"],
@@ -1990,7 +2000,7 @@ def project_recompute_geography(
             sce.recompute_geo(current_user, project_id)
 
 
-@app.post(
+@app_router.post(
     "/projects/{project_id}/recompute_sunpos",
     operation_id="project_recompute_sunpos",
     tags=["projects"],
@@ -2014,7 +2024,7 @@ def project_recompute_sunpos(
             return sce.recompute_sunpos(current_user, project_id)
 
 
-@app.post(
+@app_router.post(
     "/file_import/{project_id}",
     operation_id="import_file",
     tags=["projects"],
@@ -2036,7 +2046,7 @@ def import_file(
     return ret
 
 
-@app.post(
+@app_router.post(
     "/simple_import/{project_id}",
     operation_id="simple_import",
     tags=["projects"],
@@ -2064,7 +2074,7 @@ def simple_import(
     return ret
 
 
-@app.delete(
+@app_router.delete(
     "/projects/{project_id}",
     operation_id="erase_project",
     tags=["projects"],
@@ -2097,7 +2107,7 @@ def erase_project(
             return sce.delete(current_user, project_id, only_objects)
 
 
-@app.put(
+@app_router.put(
     "/projects/{project_id}",
     operation_id="update_project",
     tags=["projects"],
@@ -2126,7 +2136,7 @@ def update_project(
         ssce.wait()
 
 
-@app.patch(
+@app_router.patch(
     "/projects/{project_id}",
     operation_id="patch_project",
     tags=["projects"],
@@ -2154,7 +2164,7 @@ def patch_project(
         ssce.wait()
 
 
-@app.put(
+@app_router.put(
     "/projects/{project_id}/prediction_settings",
     operation_id="set_project_predict_settings",
     tags=["projects"],
@@ -2188,7 +2198,7 @@ def set_project_predict_settings(
 # ######################## END OF PROJECT
 
 
-@app.post(
+@app_router.post(
     "/object_set/{project_id}/similarity_search/{object_id}",
     operation_id="get_object_set_similarity_search",
     tags=["objects"],
@@ -2215,12 +2225,13 @@ def object_similarity_search(
     Returns, in given project, the objects matching the filter and similar to the queried one.
     """
     with SimilaritySearchForProject(project_id, object_id, filters.base(), size) as sce:
-        sim_search_rsp = sce.similarity_search(current_user)
+        with RightsThrower():
+            sim_search_rsp = sce.similarity_search(current_user)
 
     return sim_search_rsp
 
 
-@app.get(
+@app_router.get(
     "/samples/search",
     operation_id="samples_search",
     tags=["samples"],
@@ -2251,7 +2262,7 @@ def samples_search(
         return [SampleModel.model_validate(sam) for sam in ret]
 
 
-@app.get(
+@app_router.get(
     "/sample_set/taxo_stats",
     operation_id="sample_set_get_stats",
     tags=["samples"],
@@ -2296,7 +2307,7 @@ def sample_set_get_stats(
         return ret
 
 
-@app.post(
+@app_router.post(
     "/sample_set/update",
     operation_id="update_samples",
     tags=["samples"],
@@ -2320,7 +2331,7 @@ def update_samples(
             )
 
 
-@app.get(
+@app_router.get(
     "/sample/{sample_id}",
     operation_id="sample_query",
     tags=["samples"],
@@ -2346,7 +2357,7 @@ def sample_query(
 # ######################## END OF SAMPLE
 
 
-@app.get(
+@app_router.get(
     "/acquisitions/search",
     operation_id="acquisitions_search",
     tags=["acquisitions"],
@@ -2367,7 +2378,7 @@ def acquisitions_search(
         return [AcquisitionModel.model_validate(acq) for acq in ret]
 
 
-@app.post(
+@app_router.post(
     "/acquisition_set/update",
     operation_id="update_acquisitions",
     tags=["acquisitions"],
@@ -2389,7 +2400,7 @@ def update_acquisitions(
             )
 
 
-@app.get(
+@app_router.get(
     "/acquisition/{acquisition_id}",
     operation_id="acquisition_query",
     tags=["acquisitions"],
@@ -2417,7 +2428,7 @@ def acquisition_query(
 # ######################## END OF ACQUISITION
 
 
-@app.get(
+@app_router.get(
     "/instruments/",
     operation_id="instrument_query",
     tags=["instruments"],
@@ -2449,7 +2460,7 @@ def instrument_query(
         return ret
 
 
-@app.get(
+@app_router.get(
     "/instruments/cnn_networks",
     operation_id="instrument_cnn_networks",
     tags=["instruments"],
@@ -2486,7 +2497,7 @@ def instrument_cnn_networks(
 # ######################## END OF INSTRUMENT
 
 
-@app.post(
+@app_router.post(
     "/process_set/update",
     operation_id="update_processes",
     tags=["processes"],
@@ -2508,7 +2519,7 @@ def update_processes(
             )
 
 
-@app.get(
+@app_router.get(
     "/process/{process_id}",
     operation_id="process_query",
     tags=["processes"],
@@ -2541,15 +2552,14 @@ def process_query(
 # TODO /query pas bon!
 
 
-@app.post(
+@app_router.post(
     "/object_set/{project_id}/query",
     operation_id="get_object_set",
     tags=["objects"],
     response_model=ObjectSetQueryRsp,
     response_class=MyORJSONResponse,  # Force the ORJSON encoder
 )
-async def get_object_set(
-    # MyORJSONResponse -> JSONResponse -> Response -> await
+def get_object_set(
     project_id: int = Path(
         ..., description="Internal, numeric id of the project.", examples=[1]
     ),
@@ -2656,7 +2666,7 @@ If no **unique order** is specified, the result can vary for same call and condi
     return MyORJSONResponse(rsp)
 
 
-@app.post(
+@app_router.post(
     "/object_set/{project_id:int}/summary",
     operation_id="get_object_set_summary",
     tags=["objects"],
@@ -2698,7 +2708,7 @@ def get_object_set_summary(
         return rsp
 
 
-@app.post(
+@app_router.post(
     "/object_set/{project_id}/reset_to_predicted",
     operation_id="reset_object_set_to_predicted",
     tags=["objects"],
@@ -2722,7 +2732,7 @@ def force_object_set_to_predicted(
             return sce.force_to_predicted(current_user, project_id, filters.base())
 
 
-@app.post(
+@app_router.post(
     "/object_set/{project_id}/revert_to_history",
     operation_id="revert_object_set_to_history",
     tags=["objects"],
@@ -2765,7 +2775,7 @@ def revert_object_set_to_history(
     return ret
 
 
-@app.post(
+@app_router.post(
     "/object_set/{project_id}/reclassify",
     operation_id="reclassify_object_set",
     tags=["objects"],
@@ -2806,7 +2816,7 @@ def reclassify_object_set(
         return nb_impacted
 
 
-@app.post(
+@app_router.post(
     "/object_set/update",
     operation_id="update_object_set",
     tags=["objects"],
@@ -2831,7 +2841,7 @@ def update_object_set(
             )
 
 
-@app.post(
+@app_router.post(
     "/object_set/classify",
     operation_id="classify_object_set",
     tags=["objects"],
@@ -2870,7 +2880,7 @@ def classify_object_set(
         return ret
 
 
-@app.post(
+@app_router.post(
     "/object_set/classify_auto",
     operation_id="classify_auto_object_set",
     tags=["objects"],
@@ -2894,7 +2904,7 @@ def classify_auto_object_set(
     return classify_auto_mult_object_set(req2, current_user)
 
 
-@app.post(
+@app_router.post(
     "/object_set/classify_auto_multiple",
     operation_id="classify_auto_mult_object_set",
     tags=["objects"],
@@ -2932,14 +2942,14 @@ def classify_auto_mult_object_set(
 
 
 # TODO: For small lists we could have a GET
-@app.post(
+@app_router.post(
     "/object_set/parents",
     operation_id="query_object_set_parents",
     tags=["objects"],
     response_model=ObjectSetQueryRsp,
     response_class=MyORJSONResponse,  # Force the ORJSON encoder
 )
-async def query_object_set_parents(  # MyORJSONResponse -> JSONResponse -> Response -> await
+def query_object_set_parents(
     object_ids: ObjectIDListT = Body(
         ...,
         title="Object IDs list",
@@ -2963,7 +2973,7 @@ async def query_object_set_parents(  # MyORJSONResponse -> JSONResponse -> Respo
     return rsp
 
 
-@app.post(
+@app_router.post(
     "/object_set/export",
     operation_id="export_object_set",
     tags=["objects"],
@@ -2987,7 +2997,7 @@ def export_object_set(
     return rsp
 
 
-@app.post(
+@app_router.post(
     "/object_set/export/general",
     operation_id="export_object_set_general",
     tags=["objects"],
@@ -3009,7 +3019,7 @@ def export_object_set_general(
     return rsp
 
 
-@app.post(
+@app_router.post(
     "/object_set/export/summary",
     operation_id="export_object_set_summary",
     tags=["objects"],
@@ -3031,7 +3041,7 @@ def export_object_set_summary(
     return rsp
 
 
-@app.post(
+@app_router.post(
     "/object_set/export/backup",
     operation_id="export_object_set_backup",
     tags=["objects"],
@@ -3054,7 +3064,7 @@ def export_object_set_backup(
     return rsp
 
 
-@app.post(
+@app_router.post(
     "/object_set/predict",
     operation_id="predict_object_set",
     tags=["objects"],
@@ -3074,7 +3084,7 @@ def predict_object_set(
     return rsp
 
 
-@app.post(
+@app_router.post(
     "/object_set/predictions",
     operation_id="object_set_predictions",
     tags=["objects"],
@@ -3098,7 +3108,7 @@ def query_object_set_predictions(
     return rsp
 
 
-@app.delete(
+@app_router.delete(
     "/object_set/",
     operation_id="erase_object_set",
     tags=["objects"],
@@ -3125,7 +3135,7 @@ def erase_object_set(
             return sce.delete(current_user, object_ids)
 
 
-@app.get(
+@app_router.get(
     "/object/{object_id}",
     operation_id="object_query",
     tags=["object"],
@@ -3150,7 +3160,7 @@ def object_query(
         return ret
 
 
-@app.get(
+@app_router.get(
     "/object/{object_id}/history",
     operation_id="object_query_history",
     tags=["object"],
@@ -3208,7 +3218,7 @@ def object_query_history(
 # ######################## END OF OBJECT
 
 
-@app.get(
+@app_router.get(
     "/taxa",
     operation_id="query_root_taxa",
     tags=["Taxonomy Tree"],
@@ -3223,7 +3233,7 @@ def query_root_taxa() -> List[TaxonBO]:
         return ret
 
 
-@app.get(
+@app_router.get(
     "/taxa/status",
     operation_id="taxa_tree_status",
     tags=["Taxonomy Tree"],
@@ -3242,7 +3252,7 @@ def taxa_tree_status(
         )
 
 
-@app.get(
+@app_router.get(
     "/taxa/reclassification_stats",
     operation_id="reclassif_stats",
     tags=["Taxonomy Tree"],
@@ -3285,7 +3295,7 @@ def reclassif_stats(
         description="String containing the list of one or more taxa id separated by non-num char.",
         examples=["12876"],
     ),
-    current_user: Optional[int] = Depends(get_optional_current_user),
+    current_user: int = Depends(get_current_user),
 ) -> List[TaxonBO]:
     """
     Dig into reclassification logs and, for each input category id, **determine the most chosen target category,
@@ -3302,7 +3312,7 @@ def reclassif_stats(
 
 
 # TODO JCE
-@app.get(
+@app_router.get(
     "/taxa/reclassification_history/{project_id}",
     operation_id="reclassif_project_stats",
     tags=["Taxonomy Tree"],
@@ -3323,7 +3333,7 @@ def reclassif_project_stats(
     return ret
 
 
-@app.get(
+@app_router.get(
     "/taxon/{taxon_id}",
     operation_id="query_taxa",
     tags=["Taxonomy Tree"],
@@ -3373,7 +3383,7 @@ def query_taxa(
     return ret
 
 
-@app.get(
+@app_router.get(
     "/taxon/{taxon_id}/usage",
     operation_id="query_taxa_usage",
     tags=["Taxonomy Tree"],
@@ -3397,7 +3407,7 @@ def query_taxa_usage(
     return ret
 
 
-@app.get(
+@app_router.get(
     "/taxon_set/search",
     operation_id="search_taxa",
     tags=["Taxonomy Tree"],
@@ -3434,14 +3444,14 @@ def search_taxa(
     return ret
 
 
-@app.get(
+@app_router.get(
     "/taxon_set/query",
     operation_id="query_taxa_set",
     tags=["Taxonomy Tree"],
     response_model=List[TaxonModel],
     response_class=MyORJSONResponse,  # Force the ORJSON encoder
 )
-async def query_taxa_set(  # MyORJSONResponse -> JSONResponse -> Response -> await
+def query_taxa_set(
     ids: str = Query(
         ...,
         title="Ids",
@@ -3459,14 +3469,14 @@ async def query_taxa_set(  # MyORJSONResponse -> JSONResponse -> Response -> awa
     return MyORJSONResponse(ret)
 
 
-@app.get(
+@app_router.get(
     "/taxon_set/wormsification",
     operation_id="wormsification_taxa_set",
     tags=["Taxonomy Tree"],
     response_model=Dict[str, TaxonModel],
     response_class=MyORJSONResponse,  # Force the ORJSON encoder
 )
-def wormsification_taxa_set(  # MyORJSONResponse -> JSONResponse -> Response -> await
+def wormsification_taxa_set(
     ids: str = Query(
         ...,
         title="Ids",
@@ -3485,7 +3495,7 @@ def wormsification_taxa_set(  # MyORJSONResponse -> JSONResponse -> Response -> 
     return MyORJSONResponse(ret)
 
 
-@app.get(
+@app_router.get(
     "/taxon/central/{taxon_id}",
     operation_id="get_taxon_in_central",
     tags=["Taxonomy Tree"],
@@ -3509,7 +3519,9 @@ def get_taxon_in_central(
 # TODO JCE - examples description
 # Below pragma is because we need the same params as EcoTaxoServer, but we just relay them
 # noinspection PyUnusedLocal
-@app.put("/taxon/central", operation_id="add_taxon_in_central", tags=["Taxonomy Tree"])
+@app_router.put(
+    "/taxon/central", operation_id="add_taxon_in_central", tags=["Taxonomy Tree"]
+)
 def add_taxon_in_central(
     request: Request,  # injected by FastAPI
     name: str = Query(
@@ -3561,7 +3573,7 @@ def add_taxon_in_central(
         return sce.add_taxon(current_user, params)
 
 
-@app.get(
+@app_router.get(
     "/taxa/stats/push_to_central",
     operation_id="push_taxa_stats_in_central",
     tags=["Taxonomy Tree"],
@@ -3576,7 +3588,7 @@ def push_taxa_stats_in_central(
         return sce.push_stats()
 
 
-@app.get(
+@app_router.get(
     "/taxa/pull_from_central",
     operation_id="pull_taxa_update_from_central",
     tags=["Taxonomy Tree"],
@@ -3594,7 +3606,7 @@ def pull_taxa_update_from_central(
     return ret
 
 
-@app.get(
+@app_router.get(
     "/worms/{aphia_id}",
     operation_id="query_taxa_in_worms",
     tags=["Taxonomy Tree"],
@@ -3614,7 +3626,7 @@ def query_taxa_in_worms(
     return None
 
 
-@app.get(
+@app_router.get(
     "/searchworms/{name}",
     operation_id="search_worms_name",
     tags=["Taxonomy Tree"],
@@ -3632,7 +3644,7 @@ def search_worms_name(
     return ret
 
 
-@app.post(
+@app_router.post(
     "/addworms/",
     operation_id="add_worms_taxon",
     tags=["Taxonomy Tree"],
@@ -3650,7 +3662,7 @@ def add_worms_taxon(
             return sce.add_worms_taxon(taxon.aphia_id, _current_user)
 
 
-@app.put(
+@app_router.put(
     "/taxo_recast",
     operation_id="update_taxonomy_recast",
     tags=["Taxonomy Tree"],
@@ -3669,7 +3681,7 @@ def update_taxonomy_recast(
             sce.update_taxonomy_recast(current_user, recast)
 
 
-@app.get(
+@app_router.get(
     "/taxo_recast",
     operation_id="get_taxonomy_recast",
     tags=["Taxonomy Tree"],
@@ -3709,7 +3721,7 @@ def get_taxonomy_recast(
     return ret
 
 
-@app.get(
+@app_router.get(
     "/taxo_recast/search",
     operation_id="search_taxonomy_recast",
     tags=["Taxonomy Tree"],
@@ -3747,7 +3759,7 @@ def search_taxonomy_recast(
     return ret
 
 
-@app.get(
+@app_router.get(
     "/taxo_worms",
     operation_id="get_taxonomy_worms",
     tags=["Taxonomy Tree"],
@@ -3777,7 +3789,7 @@ def get_taxonomy_worms(
 # ######################## END OF TAXA_REF
 
 
-@app.get(
+@app_router.get(
     "/admin/images/{project_id}/digest",
     operation_id="digest_project_images",
     tags=["WIP"],
@@ -3801,7 +3813,7 @@ def digest_project_images(
     return ret
 
 
-@app.get(
+@app_router.get(
     "/admin/images/cleanup1",
     operation_id="cleanup_images_1",
     tags=["WIP"],
@@ -3827,7 +3839,7 @@ def cleanup_images_1(
     return ret
 
 
-@app.get(
+@app_router.get(
     "/admin/nightly",
     operation_id="nightly_maintenance",
     tags=["WIP"],
@@ -3844,30 +3856,30 @@ def nightly_maintenance(current_user: int = Depends(get_current_user)) -> int:
     return ret
 
 
-@app.get(
+@app_router.get(
     "/admin/monitor",
     operation_id="activity_monitor",
     tags=["MONITOR"],
     include_in_schema=False,
     response_model=str,
 )
-async def activity_monitor(
+def activity_monitor(
     _current_user: int = Depends(get_current_user),
-) -> FileResponse:  # async due to FileResponse
+) -> FileResponse:
     """
     Return some API endpoints activity log
     """
     return FileResponse(str(MONITOR_LOG_PATH))
 
 
-@app.get(
+@app_router.get(
     "/admin/db/query",
     operation_id="db_direct_query",
     tags=["admin"],
     include_in_schema=True,
     response_class=MyORJSONResponse,
 )
-async def direct_db_query(  # MyORJSONResponse -> JSONResponse -> Response -> await
+def direct_db_query(
     q: str = Query(
         ...,
         title="Query",
@@ -3890,7 +3902,7 @@ async def direct_db_query(  # MyORJSONResponse -> JSONResponse -> Response -> aw
 # ######################## END OF ADMIN
 
 
-@app.get(
+@app_router.get(
     "/jobs/", operation_id="list_jobs", tags=["jobs"], response_model=List[JobModel]
 )
 def list_jobs(
@@ -3924,7 +3936,7 @@ def list_jobs(
     return ret
 
 
-@app.get(
+@app_router.get(
     "/jobs/{job_id}/", operation_id="get_job", tags=["jobs"], response_model=JobModel
 )
 def get_job(
@@ -3944,7 +3956,7 @@ def get_job(
     return ret
 
 
-@app.post(
+@app_router.post(
     "/jobs/{job_id}/answer",
     operation_id="reply_job_question",
     tags=["jobs"],
@@ -3976,7 +3988,7 @@ def reply_job_question(
             sce.reply(current_user, job_id, reply)
 
 
-@app.get(
+@app_router.get(
     "/jobs/{job_id}/restart",
     operation_id="restart_job",
     tags=["jobs"],
@@ -4002,8 +4014,8 @@ def restart_job(
             sce.restart(current_user, job_id)
 
 
-@app.get("/jobs/{job_id}/log", operation_id="get_job_log_file", tags=["jobs"])
-async def get_job_log_file(  # async due to FileResponse
+@app_router.get("/jobs/{job_id}/log", operation_id="get_job_log_file", tags=["jobs"])
+def get_job_log_file(
     job_id: int = Path(
         ...,
         description="Internal, the unique numeric id of this job.",
@@ -4022,7 +4034,7 @@ async def get_job_log_file(  # async due to FileResponse
     return FileResponse(str(path))
 
 
-@app.get(
+@app_router.get(
     "/jobs/{job_id}/file",
     operation_id="get_job_file",
     tags=["jobs"],
@@ -4033,15 +4045,14 @@ async def get_job_log_file(  # async due to FileResponse
         }
     },
 )
-async def get_job_file(  # async due to StreamingResponse
+def get_job_file(
     job_id: int = Path(
         ...,
         description="Internal, the unique numeric id of this job.",
         examples=[47445],
     ),
     current_user: int = Depends(get_current_user),
-    range_header: Optional[str] = Header(None, alias="Range"),
-) -> StreamingResponse:
+) -> FileResponse:
     """
     **Return the file produced by given job.**
 
@@ -4049,22 +4060,15 @@ async def get_job_file(  # async due to StreamingResponse
     """
     with JobCRUDService() as sce:
         with RightsThrower():
-            file_like, file_name, media_type = sce.get_file_stream(current_user, job_id)
-    headers = {
-        "content-disposition": 'attachment; filename="' + file_name + '"',
-        "content-length": str(file_like.size()),
-        "accept-ranges": "bytes",
-    }
-    status_code = adjust_if_ranged(range_header, file_like, headers)
-    return StreamingResponse(
-        content=file_like,
-        status_code=status_code,
-        headers=headers,
+            file_path, file_name, media_type = sce.get_file(current_user, job_id)
+    return FileResponse(
+        path=file_path,
+        filename=file_name,
         media_type=media_type,
     )
 
 
-@app.delete(
+@app_router.delete(
     "/jobs/{job_id}",
     operation_id="erase_job",
     tags=["jobs"],
@@ -4096,7 +4100,7 @@ def erase_job(
 
 
 # ####################### START OF COMMON FILES
-@app.get(
+@app_router.get(
     "/common_files/",
     operation_id="list_common_files",
     tags=["CommonFiles"],
@@ -4124,7 +4128,53 @@ def list_common_files(
 
 # ######################## END OF COMMON FILES
 # ######################## START OF USERS FILES
-@app.get(
+# Before list_user_files, which would take the path for a sub_path
+@app_router.get(
+    "/user_files/unpack_status/{upload_id}",
+    operation_id="get_unpack_status",
+    tags=["MyFiles"],
+    response_model=UnpackStatusModel,
+)
+def get_unpack_status(
+    response: Response,
+    upload_id: str = Path(
+        ...,
+        description="The TUS upload id, i.e. the last part of the Location returned when the upload was created.",
+        examples=["fd8d989adda14069ba8495a71af1d6b8"],
+    ),
+    current_user: int = Depends(get_current_user),
+) -> UnpackStatusModel:
+    """
+    **Status of the unpacking of an archive uploaded with TUS.** Poll it until state is 'done',
+    or an error is returned. While unpacking, the Retry-After header suggests when to ask again.
+
+    If the upload failed, answers its HTTP error, with why nothing was kept as detail:
+    422 for a refused upload (corrupt or empty archive, limit reached, file type not accepted),
+    507 when the server has not enough disk space, 500 for other server errors.
+    """
+    unpack_status = UnpackStatus.read(upload_id)
+    # Same answer for another user's upload, not to tell it exists
+    if unpack_status is None or unpack_status.get("user_id") != current_user:
+        raise HTTPException(status_code=404, detail="Not found")
+    if unpack_status.get("state") == "error":
+        raise HTTPException(
+            status_code=unpack_status.get("status_code", 422),
+            # The dated log written next to the upload, else the message
+            detail=unpack_status.get("log")
+            or unpack_status.get("message", DETAIL_UNKNOWN_ERROR),
+        )
+    if unpack_status.get("state") == "unpacking":
+        response.headers["Retry-After"] = "2"
+    return UnpackStatusModel(
+        **{
+            a_key: a_val
+            for a_key, a_val in unpack_status.items()
+            if a_key in UnpackStatusModel.model_fields
+        }
+    )
+
+
+@app_router.get(
     "/user_files/{sub_path:path}",
     operation_id="list_user_files",
     tags=["MyFiles"],
@@ -4146,7 +4196,7 @@ def list_user_files(
     return file_list
 
 
-@app.post(
+@app_router.post(
     "/user_files/",
     operation_id="post_user_file",
     tags=["MyFiles"],
@@ -4189,7 +4239,7 @@ async def put_user_file(  # async due to await file store
     return file_name
 
 
-@app.post(
+@app_router.post(
     "/user_files/mv/",
     operation_id="move_user_file",
     tags=["MyFiles"],
@@ -4204,7 +4254,7 @@ async def put_user_file(  # async due to await file store
     },
     response_model=str,
 )
-def move_user_file(  # async due to await file move
+def move_user_file(
     source_path: str = Form(
         title="Source Path",
         description="The  path of the file or directory to be moved.",
@@ -4229,7 +4279,7 @@ def move_user_file(  # async due to await file move
     return dest_path
 
 
-@app.post(
+@app_router.post(
     "/user_files/rm/",
     operation_id="remove_user_file",
     tags=["MyFiles"],
@@ -4254,7 +4304,7 @@ def remove_user_file(
     return 1
 
 
-@app.post(
+@app_router.post(
     "/user_files/create/",
     operation_id="create_user_file",
     tags=["MyFiles"],
@@ -4269,7 +4319,7 @@ def remove_user_file(
     },
     response_model=str,
 )
-async def create_user_file(  # async due to await file store
+def create_user_file(
     source_path: str = Form(
         title="Source Path",
         description="The path of the directory to be created.",
@@ -4336,7 +4386,7 @@ Paths:
   /plankton_rw/ftp_plankton/Ecotaxa_Exported_data (from ftpexportarea): OK"""
 
 
-@app.get(
+@app_router.get(
     "/status",
     operation_id="system_status",
     tags=["WIP"],
@@ -4356,7 +4406,7 @@ def system_status(
 # ######################## END OF WIP
 
 
-@app.get("/error", operation_id="system_error", tags=["misc"])
+@app_router.get("/error", operation_id="system_error", tags=["misc"])
 def system_error(_current_user: int = Depends(get_current_user)) -> None:
     """
     **Return a 500 internal error**, on purpose so the stack trace is visible and client
@@ -4366,7 +4416,7 @@ def system_error(_current_user: int = Depends(get_current_user)) -> None:
         assert False
 
 
-@app.get(
+@app_router.get(
     "/noop",
     operation_id="do_nothing",
     tags=["misc"],
@@ -4378,9 +4428,11 @@ def do_nothing(_current_user: int = Depends(get_current_user)):
 
     It's also used for exporting models we need on client side.
     """
+    # The response model is only there for the OpenAPI schema: answer null without validating it
+    return JSONResponse(content=None)
 
 
-@app.get(
+@app_router.get(
     "/constants", operation_id="used_constants", tags=["misc"], response_model=Constants
 )
 def used_constants() -> Constants:
@@ -4393,7 +4445,7 @@ def used_constants() -> Constants:
         return sce.get()
 
 
-@app.get(
+@app_router.get(
     "/ml_models",
     operation_id="query_ml_models",
     tags=["misc"],
@@ -4408,7 +4460,7 @@ def query_ml_models() -> List[MLModel]:
     return [MLModel(name=a_model) for a_model in models]
 
 
-@app.get(
+@app_router.get(
     "/migrated_ids",
     operation_id="get_migrated_ids",
     tags=["misc"],
@@ -4454,13 +4506,13 @@ def get_migrated_ids(
 # ######################## END OF MISC
 
 
-@app.get(
+@app_router.get(
     "/vault/{dir_id}/{img_in_dir}",
     operation_id="get_image",
     tags=["image"],
     include_in_schema=False,
 )
-async def get_image(  # async due to StreamingResponse
+def get_image(
     dir_id: str = Path(
         ...,
         description="Internal, image directory ID, 0-padded if < 1000.",
@@ -4469,19 +4521,18 @@ async def get_image(  # async due to StreamingResponse
     img_in_dir: str = Path(
         ..., description="Internal, image path in directory.", examples=["0075.jpg"]
     ),
-) -> StreamingResponse:
+) -> FileResponse:
     """
     Stream a vault image by its ref.
     """
     with ImageService() as sce:
-        file_like, length, media_type = sce.get_stream(dir_id, img_in_dir)
-    headers = {"content-length": str(length)}
-    return StreamingResponse(file_like, headers=headers, media_type=media_type)
+        file_path, media_type = sce.get_file(dir_id, img_in_dir)
+    return FileResponse(file_path, media_type=media_type)
 
 
 # ######################## END OF MISC
 
-# @app.get("/loadtest", tags=['WIP'], include_in_schema=False)
+# @router.get("/loadtest", tags=['WIP'], include_in_schema=False)
 # def load_test() -> Response:
 #     """
 #         Simulate load with various response time. The Service() gets a session from the DB pool.
@@ -4492,6 +4543,9 @@ async def get_image(  # async due to StreamingResponse
 #     import time
 #     time.sleep(random()/10)
 #     return Response(sce.run(), media_type="text/plain")
+
+app.include_router(app_router)
+app.include_router(app_router, prefix="/api")
 
 
 # Instrument a bit
@@ -4508,14 +4562,17 @@ async def timing_middleware(request: Request, call_next):
         if endpoint and hasattr(endpoint, "__name__")
         else request.url.path
     )
+    user_id = getattr(request.state, "current_user_id", None)
+    user_str = f" | U:{user_id}" if user_id is not None else ""
     logger.info(
-        "%s %s %d | W:%.1fms C:%.1fms | %s ",
+        "%s %s %d | W:%.1fms C:%.1fms | %s%s",
         request.method,
         request.url.path,
         response.status_code,
         wall_ms,
         cpu_ms,
         func_name,
+        user_str,
     )
     return response
 
@@ -4559,8 +4616,18 @@ async def lifespan(app: FastAPI):
     with ConstantsService() as sce:
         sce.config.validate()
 
+    # Unpackings interrupted by a restart left staging folders in users files
+    try:
+        nb_swept = await asyncio.to_thread(sweep_stale_unpacks)
+        if nb_swept:
+            logger.warning("Cleaned up %d interrupted unpacking(s)", nb_swept)
+    except Exception as e:
+        logger.error("Could not clean up interrupted unpackings: %s", e)
+
     # The router for big files needs a valid USERSFILESAREA config
-    app.include_router(create_big_files_router())
+    big_files_router = create_big_files_router()
+    app.include_router(big_files_router)
+    app.include_router(big_files_router, prefix="/api")
 
     # ResourceCleaner runs on all processes (leaders and followers) for periodic idle maintenance
     # (connection pool expiration & memory cleanup).

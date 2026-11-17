@@ -13,14 +13,13 @@ class SavedModels(object):
     They also need temporary storage while they build.
     """
 
-    MODELS_CONFIG_KEY = "MODELSAREA"
     PRFX = "io_"
     DIM_REDUCER_FILE = "dim_reducer.pickle"
     CROP_FILE = "crop.txt"
     FEATURE_EXTRACTOR_DIR = "feature_extractor"
 
     def __init__(self, config: Any):
-        base_path = config.get_cnf(self.MODELS_CONFIG_KEY)
+        base_path = config.models_dir()
         base_path = base_path.strip("'")
         self.path: Path = Path(base_path)
 

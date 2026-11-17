@@ -7,13 +7,18 @@ import zipfile
 from abc import ABC
 from typing import Union, Optional
 
+from fastapi import HTTPException
+from starlette import status
+
 from API_models.imports import ImportReq, SimpleImportReq
 from API_operations.helpers.JobService import JobServiceOnProjectBase, ArgsDict
 from DB.User import UserIDT
 from FS.CommonDir import CommonFolder
+from FS.Unpack import PROGRESS_PREFIX
 from FS.UserFilesDir import UserFilesDirectory
 from FS.Vault import Vault
 from helpers.DynamicLogs import get_logger
+from helpers.httpexception import DETAIL_EXTRACTION_IN_PROGRESS
 
 logger = get_logger(__name__)
 
@@ -30,6 +35,15 @@ class ImportServiceBase(JobServiceOnProjectBase, ABC):
         super().__init__(prj_id)
         """ The project ID to import into """
         self.req = req
+        # An archive is being unpacked there, content is incomplete
+        if any(
+            a_part.startswith(PROGRESS_PREFIX)
+            for a_part in req.source_path.split(os.path.sep)
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=DETAIL_EXTRACTION_IN_PROGRESS,
+            )
         # From legacy code, vault and temptask are in src directory
         self.vault = Vault(self.config.vault_dir())
 
@@ -38,10 +52,24 @@ class ImportServiceBase(JobServiceOnProjectBase, ABC):
         args["req"] = self.req.model_dump()
         return args
 
+    def _no_extraction_inside_throw(self, owner_id: UserIDT) -> None:
+        """
+        Refuse an import from a My Files folder holding an archive extraction in progress:
+        its partial content would be imported, and the folder, extraction included, trashed after.
+        """
+        if UserFilesDirectory(owner_id).has_extraction_in_progress(self.req.source_path):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=DETAIL_EXTRACTION_IN_PROGRESS,
+            )
+
     def unzip_if_needed(self, owner_id: UserIDT) -> str:
         """
         If a .zip was sent, unzip it. Otherwise, it is assumed that we point to an import directory.
         """
+        # Again in the job, an extraction may have started since the request
+        if UserFilesDirectory(owner_id).has_extraction_in_progress(self.req.source_path):
+            raise Exception(DETAIL_EXTRACTION_IN_PROGRESS)
         source_dir_or_zip = self.req.source_path
         my_files_source_dir = UserFilesDirectory(owner_id)._root_path.joinpath(
             source_dir_or_zip.lstrip(os.path.sep)
@@ -73,6 +101,14 @@ class ImportServiceBase(JobServiceOnProjectBase, ABC):
             self.req.source_path.lstrip(os.path.sep)
         )
         assert ".." not in str(self.req.source_path), "Forbidden"
+        folder = UserFilesDirectory(self.from_myfiles)
+        if folder.has_extraction_in_progress(self.req.source_path):
+            # Started during the import, the folder stays with its extraction
+            logger.warning(
+                "Kept source %s: archive extraction in progress inside",
+                self.req.source_path,
+            )
+            return
         if my_files_source_dir.exists():
-            UserFilesDirectory(self.from_myfiles).remove(self.req.source_path)
+            folder.remove(self.req.source_path)
             logger.info("Moved to Trash: " + self.req.source_path)

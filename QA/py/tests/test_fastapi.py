@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import status
 from fastapi.testclient import TestClient
 
@@ -177,6 +179,13 @@ def test_error(fastapi):
     assert "--- BACK-END ---" in response.content.decode("utf-8")
 
 
+def test_noop(fastapi):
+    # Only there for the models in the OpenAPI schema: answers null, was a 500 (response validation)
+    response = fastapi.get("/noop", headers=USER_AUTH)
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() is None
+
+
 def test_status(fastapi):
     # We need a test client which does not catch exceptions
     url = "/status"
@@ -191,6 +200,46 @@ def test_status(fastapi):
     assert response.status_code == status.HTTP_200_OK
     # Random check of an admin entry
     assert "FTPEXPORTAREA" in response.content.decode("utf-8")
+
+
+def test_status_pure_env_config(fastapi, mocker, tmp_path):
+    # Test /status when config is injected only via env vars and config.ini is empty
+    import os
+    from helpers.AppConfig import Config
+
+    non_existent_config = tmp_path / "empty.ini"
+    env_vars = {
+        "APP_CONFIG": str(non_existent_config),
+        "APPMANAGER_EMAIL": "envadmin@test.org",
+        "APPMANAGER_NAME": "Env Administrator",
+        "VAULT_DIR": str(tmp_path / "vault"),
+        "SECRET_KEY": "secret_key_from_env",
+    }
+    mocker.patch.dict(os.environ, env_vars, clear=False)
+    Config.reset()
+    try:
+        url = "/status"
+        response = fastapi.get(url)
+        assert response.status_code == status.HTTP_200_OK
+        assert response.text == "UP!"
+
+        response = fastapi.get(url, headers=USER_AUTH)
+        assert response.status_code == status.HTTP_200_OK
+        content = response.content.decode("utf-8")
+        assert "APPMANAGER_EMAIL: envadmin@test.org" in content
+        assert "APPMANAGER_NAME: Env Administrator" in content
+        # User should not see admin config
+        assert "SECRET_KEY" not in content
+
+        response = fastapi.get(url, headers=ADMIN_AUTH)
+        assert response.status_code == status.HTTP_200_OK
+        admin_content = response.content.decode("utf-8")
+        assert "APPMANAGER_EMAIL: envadmin@test.org" in content
+        assert "SECRET_KEY: *************" in admin_content
+        assert "VAULT_DIR" in admin_content
+        assert "Paths:" in admin_content
+    finally:
+        Config.reset()
 
 
 PRJ_CREATE_URL = "/projects/create"
@@ -217,3 +266,37 @@ def test_user_prefs(fastapi):
     assert response.json() is None
     response = fastapi.get(get_url % (prj_id, "usr2"), headers=USER2_AUTH)
     assert response.json() == ""
+
+
+def test_timing_middleware_log(fastapi, caplog, monkeypatch):
+    import main
+
+    monkeypatch.setattr(main.logger, "propagate", True)
+    monkeypatch.setattr(main.logger, "level", logging.INFO)
+    caplog.set_level(logging.INFO)
+
+    # 1. Unauthenticated request
+    fastapi.get("/status")
+    status_logs = [
+        rec.message
+        for rec in caplog.records
+        if rec.name == "main" and "/status" in rec.message
+    ]
+    assert status_logs, "Expected timing middleware log for /status"
+    status_log = status_logs[-1]
+    assert "GET /status 200" in status_log
+    assert "| W:" in status_log
+    assert "C:" in status_log
+    assert "| U:" not in status_log
+
+    # 2. Authenticated request
+    fastapi.get("/users/me", headers=ADMIN_AUTH)
+    auth_logs = [
+        rec.message
+        for rec in caplog.records
+        if rec.name == "main" and "/users/me" in rec.message
+    ]
+    assert auth_logs, "Expected timing middleware log for /users/me"
+    auth_log = auth_logs[-1]
+    assert "GET /users/me 200" in auth_log
+    assert f"| U:{ADMIN_USER_ID}" in auth_log

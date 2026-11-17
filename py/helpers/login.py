@@ -19,6 +19,7 @@ from API_operations.helpers.Service import Service
 from BO.Rights import NOT_AUTHORIZED
 from BO.User import UserBO
 from DB.User import User, UserStatus, UserQuality
+from helpers.AppConfig import ConfigKey
 from helpers.fastApiUtils import build_serializer
 
 NOT_AUTHORIZED_MAIL = "__id____" + NOT_AUTHORIZED
@@ -33,7 +34,7 @@ class LoginService(Service):
     def __init__(self) -> None:
         super().__init__()
         # Hashing algos
-        pw_hash = self.config.get_cnf("SECURITY_PASSWORD_HASH")
+        pw_hash = self.config.get_security_password_hash()
         assert pw_hash is not None, "SECURITY_PASSWORD_HASH not set!"
         schemes = [pw_hash, "plaintext"]
         deprecated = ["auto"]
@@ -41,7 +42,7 @@ class LoginService(Service):
             schemes=schemes, default=pw_hash, deprecated=deprecated
         )
         # Hashing config
-        self.password_salt = self.config.get_cnf("SECURITY_PASSWORD_SALT")
+        self.password_salt = self.config.get_security_password_salt()
         self.password_hash = None
 
     def validate_login(self, username: str, password: str) -> Union[str, bytes]:
@@ -123,9 +124,6 @@ class LoginService(Service):
             password = self.get_hmac(password).decode("ascii")
 
         return self.pwd_context.hash(password)
-        #     **self.config.get_cnf('PASSWORD_HASH_OPTIONS', default={}).get(
-        #         self.password_hash, {})
-        # )
 
     def get_hmac(self, password):
         """Returns a Base64 encoded HMAC+SHA512 of the password signed with
@@ -160,7 +158,7 @@ class LoginService(Service):
     def use_double_hash(self, password_hash=None) -> bool:
         """Return a bool indicating whether a password should be hashed twice."""
         single_hash = (
-            "PASSWORD_SINGLE_HASH" in self.config.list_cnf()
+            ConfigKey.PASSWORD_SINGLE_HASH in self.config.list_cnf()
         )  # Not the case in EcoTaxa config
         if single_hash and self.password_salt:
             raise RuntimeError(

@@ -13,9 +13,8 @@ import sys
 import time
 import traceback
 from contextlib import AbstractContextManager
-from os import fstat
 from os.path import dirname
-from typing import Any, Optional, Dict, List, Type, Union, BinaryIO, Tuple
+from typing import Any, Optional, Dict, List, Type, Union, Tuple
 
 import orjson
 from fastapi import FastAPI, Depends, HTTPException
@@ -156,6 +155,12 @@ def dump_openapi(app: FastAPI, main_path: str):  # pragma: no cover
     try:
         openapi = app.openapi()
         openapi["openapi"] = "3.0.2"
+        # Exclude mirrored /api paths
+        openapi["paths"] = {
+            path: spec
+            for path, spec in openapi["paths"].items()
+            if not (path == "/api" or path.startswith("/api/"))
+        }
         adapt_openapi_31_to_30(openapi["components"]["schemas"])
         adapt_openapi_31_to_30(openapi["paths"])
         app.openapi_schema = openapi
@@ -252,18 +257,6 @@ def build_serializer(salt: bytes = FLASK_SALT) -> URLSafeTimedSerializer:
     return _serializers[salt]
 
 
-def access_ttl() -> int:
-    return int(Config().get_cnf("ACCESS_TOKEN_TTL") or 3600)
-
-
-def refresh_ttl() -> int:
-    return int(Config().get_cnf("REFRESH_TOKEN_TTL") or MAX_TOKEN_AGE)
-
-
-def legacy_tokens_on() -> bool:
-    return (Config().get_cnf("LEGACY_TOKENS") or "on") == "on"
-
-
 def issue_access_token(user_id: int) -> str:
     return build_serializer(ACCESS_SALT).dumps({"user_id": user_id})
 
@@ -285,12 +278,14 @@ def _get_current_user(token, source: Optional[str] = None) -> int:  # pragma: no
     Not reasonable to test automatically, so excluded from code coverage measurement.
     """
     try:
-        payload = build_serializer(ACCESS_SALT).loads(token, max_age=access_ttl())
+        payload = build_serializer(ACCESS_SALT).loads(
+            token, max_age=Config().get_access_token_ttl()
+        )
         ret = _user_id_from(payload, ("user_id",))
     except (SignatureExpired, BadSignature):
         # recent Flask sets _user_id, legacy /login sets user_id
         keys: Tuple[str, ...] = ("_user_id", "user_id")
-        if not legacy_tokens_on() and source != "cookie":
+        if not Config().get_legacy_tokens_on() and source != "cookie":
             keys = ("_user_id",)
         try:
             payload = build_serializer().loads(token, max_age=MAX_TOKEN_AGE)
@@ -312,7 +307,9 @@ async def get_optional_current_user(
     if token is None:
         return None
     try:
-        return _get_current_user(token, getattr(request.state, "auth_source", None))
+        user_id = _get_current_user(token, getattr(request.state, "auth_source", None))
+        request.state.current_user_id = user_id
+        return user_id
     except HTTPException:
         return None
 
@@ -321,7 +318,9 @@ async def get_current_user(request: Request, token: str = Depends(mixed_scheme))
     """
     Just relay the call to the private def above.
     """
-    return _get_current_user(token, getattr(request.state, "auth_source", None))
+    user_id = _get_current_user(token, getattr(request.state, "auth_source", None))
+    request.state.current_user_id = user_id
+    return user_id
 
 
 def _forbidden_exception():
@@ -446,69 +445,6 @@ class MyORJSONResponse(JSONResponse):
             return bytes()
 
 
-def _get_range_header(range_header: str, file_size: int) -> Tuple[int, int]:
-    def _invalid_range():
-        return HTTPException(
-            status.HTTP_416_RANGE_NOT_SATISFIABLE,
-            detail=f"Invalid/unsupported request range (Range:{range_header!r})",
-        )
-
-    try:
-        h = range_header.replace("bytes=", "").split("-", 1)
-        start = int(h[0]) if h[0] != "" else 0
-        end = (
-            int(h[1]) if h[1] != "" else file_size
-        )  # We don't accept multiple ranges, this would raise in case
-        if end != file_size:
-            # We don't do chunked response, so it's 'all until the end' or nothing
-            int("foo")
-    except ValueError:
-        raise _invalid_range()
-
-    if start > end or start < 0 or end > file_size:
-        raise _invalid_range()
-    return start, end - 1 if end == file_size else end
-
-
-CHUNK_SIZE = 64 * 1024
-
-
-class AutoCloseBinaryIO(object):
-    """
-    An IO object which closes its underlying file pointer when going out of scope.
-    """
-
-    def __init__(self, path: str):
-        self.fd: BinaryIO = open(path, "rb")
-
-    def size(self) -> int:
-        return fstat(self.fd.fileno()).st_size
-
-    def seek(self, offset: int):
-        return self.fd.seek(offset)
-
-    def read(self, size: int = -1) -> bytes:
-        if self.fd is None:
-            return b""
-        return self.fd.read(size)
-
-    def __iter__(self):  # Comply with StreamingResponse interface
-        return self
-
-    def __next__(self):  # Comply with StreamingResponse interface
-        chunk = self.read(CHUNK_SIZE)
-        if not chunk:
-            if self.fd is not None:
-                self.fd.close()
-                self.fd = None
-            raise StopIteration()
-        return chunk
-
-    def __del__(self):
-        if hasattr(self, "fd") and self.fd is not None:
-            self.fd.close()
-
-
 last_mem_cleanup = time.time()
 
 
@@ -530,23 +466,6 @@ def regular_mem_cleanup():
 def _trim_memory() -> int:
     libc = ctypes.CDLL("libc.so.6")
     return libc.malloc_trim(0)
-
-
-def adjust_if_ranged(
-    range_hdr: Optional[str],
-    content: AutoCloseBinaryIO,
-    headers: dict,
-) -> int:
-    status_code = status.HTTP_200_OK
-    if range_hdr is not None:
-        file_size = content.size()
-        start, end = _get_range_header(range_hdr, file_size)
-        left_size = end - start + 1
-        headers["content-length"] = str(left_size)
-        headers["content-range"] = f"bytes {start}-{end}/{file_size}"
-        content.seek(start)
-        status_code = status.HTTP_206_PARTIAL_CONTENT
-    return status_code
 
 
 class SuppressNoResponseReturnedMiddleware(BaseHTTPMiddleware):

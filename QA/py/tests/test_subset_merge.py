@@ -35,7 +35,6 @@ from DB.Project import Project
 from deepdiff import DeepDiff
 
 # noinspection PyUnresolvedReferences
-from ordered_set import OrderedSet
 from starlette import status
 
 from tests.credentials import CREATOR_AUTH, CREATOR_USER_ID

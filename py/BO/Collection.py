@@ -376,7 +376,8 @@ class CollectionBO(object):
         ]
         if len(to_remove) > 0:
             session.query(CollectionProject).filter(
-                CollectionProject.project_id.in_(to_remove)
+                CollectionProject.collection_id == self._collection.id,
+                CollectionProject.project_id.in_(to_remove),
             ).delete()
         if len(to_add):
             res = self._add_composing_projects(session, to_add)

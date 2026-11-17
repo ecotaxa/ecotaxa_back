@@ -318,7 +318,18 @@ class ProjectsService(Service):
         """
         Read classification statistics for these projects.
         """
-        # No security barrier because there is no private information inside
+        # Security barrier. Stats are not an access to each project: keep recent projects.
+        for prj_id in prj_ids:
+            if current_user_id is None:
+                RightsBO.anonymous_wants(self.ro_session, Action.READ, prj_id)
+            else:
+                RightsBO.user_wants(
+                    self.ro_session,
+                    current_user_id,
+                    Action.READ,
+                    prj_id,
+                    update_preference=False,
+                )
         return ProjectBO.read_taxo_stats(self.session, prj_ids, taxa_ids)
 
     def read_user_stats(
@@ -352,7 +363,15 @@ class ProjectsService(Service):
         """
         Read data statistics for these projects, optionally using a limit and filtering categories.
         """
-        # No security barrier because there is no private information inside
+        # Security barrier. Stats are not an access to each project: keep recent projects.
+        for prj_id in prj_ids:
+            RightsBO.user_wants(
+                self.ro_session,
+                current_user_id,
+                Action.READ,
+                prj_id,
+                update_preference=False,
+            )
         learning_set = LimitedInCategoriesProjectSet(
             self.session, prj_ids, column_names, random_limit, categories
         )
@@ -367,5 +386,15 @@ class ProjectsService(Service):
         """
         Read classification statistics for these projects.
         """
-        # add security barrier ?
+        # Security barrier
+        if current_user_id is None:
+            RightsBO.anonymous_wants(self.ro_session, Action.READ, projid)
+        else:
+            RightsBO.user_wants(
+                self.ro_session,
+                current_user_id,
+                Action.READ,
+                projid,
+                update_preference=False,
+            )
         return ProjectBO.in_collections(self.ro_session, projid)

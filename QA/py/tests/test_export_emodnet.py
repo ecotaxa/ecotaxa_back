@@ -480,6 +480,108 @@ def test_emodnet_export_recast2(
     unzip_and_check(rsp.content, with_recast_zip2(prj_id, prj_id2), admin_or_creator)
 
 
+def _read_tsv(zip_content: bytes, name: str) -> List[Dict[str, str]]:
+    with ZipFile(BytesIO(zip_content)).open(name) as fd:
+        lines = fd.read().decode("utf-8").splitlines()
+    hdr = lines[0].split("\t")
+    return [dict(zip(hdr, a_line.split("\t"))) for a_line in lines[1:]]
+
+
+def test_emodnet_export_recast_occurrence_only(
+    fastapi, exportable_collection, admin_or_creator, fixed_date
+):
+    """
+    A taxon recast for occurrences but not for eMoFs: the eMoFs must point to the
+    occurrence of the same WoRMS taxon, and no extra occurrence must be created.
+    """
+    coll_id = exportable_collection["id"]
+    occ_recast = {
+        "from_to": {
+            "84963": 1,
+            "85011": 1,
+            "85012": 1,
+            "85078": 1,
+            "92731": 56693,
+            "45072": 45072,
+            "56693": 56693,
+            "78418": 45072,  # Oncaeidae -> Cyclopoida, for occurrences only
+        },
+        "doc": {},
+    }
+    emof_recast = {
+        "from_to": dict(occ_recast["from_to"], **{"78418": 78418}),
+        "doc": {},
+    }
+
+    def put_recast(operation: RecastOperation, recast: Dict) -> None:
+        recastreq = {
+            "target_id": coll_id,
+            "operation": operation.value,
+            "recast": recast,
+            "is_collection": True,
+        }
+        rsp = fastapi.put(TAXORECAST_URL, json=recastreq, headers=ADMIN_AUTH)
+        assert rsp.status_code == status.HTTP_200_OK
+
+    def get_recast(operation: RecastOperation) -> Dict:
+        payload = {
+            "target_id": int(coll_id),
+            "operation": operation.value,
+            "is_collection": True,
+        }
+        rsp = fastapi.get(TAXORECAST_URL, headers=ADMIN_AUTH, params=payload)
+        assert rsp.status_code == status.HTTP_200_OK
+        return rsp.json()
+
+    # The collection is shared b/w tests, restore its recasts afterward
+    prev_occ = get_recast(RecastOperation.dwca_export_occurrence)
+    prev_emof = get_recast(RecastOperation.dwca_export_emof)
+    put_recast(RecastOperation.dwca_export_occurrence, occ_recast)
+    put_recast(RecastOperation.dwca_export_emof, emof_recast)
+    try:
+        req = _req_tmpl.copy()
+        req.update(
+            {
+                "collection_id": coll_id,
+                "include_predicted": True,
+                "with_computations": ["ABO"],
+            }
+        )
+        job_id = export_collection(fastapi, req, ADMIN_AUTH)
+        api_check_job_ok(fastapi, job_id)
+        dl_url = JOB_DOWNLOAD_URL.format(job_id=job_id)
+        rsp = fastapi.get(dl_url, headers=ADMIN_AUTH)
+    finally:
+        put_recast(RecastOperation.dwca_export_occurrence, prev_occ)
+        # No eMoF recast means the occurrence one is used, so it's equivalent
+        put_recast(RecastOperation.dwca_export_emof, prev_emof or prev_occ)
+
+    occurrences = _read_tsv(rsp.content, "occurrence.txt")
+    emofs = _read_tsv(rsp.content, "extendedmeasurementorfact.txt")
+    # Oncaeidae is recast away for occurrences
+    assert not [o for o in occurrences if o["scientificName"] == "Oncaeidae"]
+    # A single occurrence per (event, WoRMS taxon, validation status)
+    occ_keys = [
+        (o["eventID"], o["scientificNameID"], o["identificationVerificationStatus"])
+        for o in occurrences
+    ]
+    assert len(occ_keys) == len(set(occ_keys)), occurrences
+    # No occurrence created only for covering eMoFs, i.e. without validation status
+    assert all(o["identificationVerificationStatus"] for o in occurrences)
+    # Each taxon-level eMoF points to an occurrence, and each occurrence has a count
+    occ_ids = {o["occurrenceID"] for o in occurrences}
+    counts = [
+        e
+        for e in emofs
+        if e["occurrenceID"] and e["measurementType"].startswith("Count")
+    ]
+    assert {e["occurrenceID"] for e in counts} == occ_ids
+    # Sample n1 has both Oncaeidae (2) and Cyclopoida (1), n5 only Oncaeidae
+    by_occ = {e["occurrenceID"]: e["measurementValue"] for e in counts}
+    assert by_occ["m106_mn01_n1_sml_45072"] == "3"
+    assert "m106_mn04_n5_sml_45072" in by_occ
+
+
 def test_permalink_query(fastapi, exportable_collection, admin_or_creator):
     coll_title = exportable_collection["title"]
     url_query_back = COLLECTION_QUERY_BY_TITLE_URL.format(title=coll_title)
