@@ -2,14 +2,15 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-from typing import List, TYPE_CHECKING, Dict, Set
+from typing import List, TYPE_CHECKING, Dict
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session, mapped_column
 
 from BO.DataLicense import AccessLevelEnum
 from DB.helpers import SQL
-from DB.helpers.ORM import Model, Mapped
+from DB.helpers.Caches import RanksPerObject
+from DB.helpers.ORM import Model, Mapped, select
 
 if TYPE_CHECKING:
     from .Sample import Sample
@@ -113,24 +114,35 @@ class Project(Model):
         qry = qry.join(Acquisition).join(Sample).join(Project)
         qry = qry.filter(Project.projid.__eq__(prj_id))
         qry = qry.filter(ObjectHeader.objid.op("<@")(func.obj_in_prj(prj_id)))
-        qry = qry.yield_per(SQL.DB_CHUNK_SIZE)
+        qry = qry.yield_per(SQL.DB_CHUNK_SIZE * 20)  # 2 columns
         ret = {orig_id: objid for orig_id, objid in qry}
         return ret
 
     @classmethod
     def fetch_existing_ranks(
         cls, session: Session, prj_id: ProjectIDT
-    ) -> Dict[int, Set[int]]:
+    ) -> RanksPerObject:
+        """
+        Image ranks per object, compact form @see RanksPerObject.
+        """
         from .Relations import ObjectHeader, Sample, Image, Acquisition
 
-        ret: Dict[int, Set[int]] = {}
-        qry = session.query(Image.objid, Image.imgrank)
-        qry = qry.join(ObjectHeader).join(Acquisition).join(Sample).join(Project)
-        qry = qry.filter(ObjectHeader.objid.op("<@")(func.obj_in_prj(prj_id)))
-        qry = qry.filter(Project.projid == prj_id)
-        qry = qry.yield_per(SQL.DB_CHUNK_SIZE)
-        for objid, imgrank in qry:
-            ret.setdefault(objid, set()).add(imgrank)
+        ret = RanksPerObject()
+        stmt = (
+            select(Image.objid, Image.imgrank)
+            .join(ObjectHeader)
+            .join(Acquisition)
+            .join(Sample)
+            .join(Project)
+            .where(
+                ObjectHeader.objid.op("<@")(func.obj_in_prj(prj_id)),
+                Project.projid == prj_id,
+            )
+            .execution_options(yield_per=SQL.DB_CHUNK_SIZE * 20)  # 2 columns
+        )
+        add_rank = ret.add
+        for objid, imgrank in session.execute(stmt).tuples():
+            add_rank(objid, imgrank)
         return ret
 
 

@@ -173,7 +173,8 @@ class JsonDumper(Service):
         with CodeTimer("Get IDs:", logger):
             res: Result = self.session.execute(
                 text(sql).execution_options(
-                    stream_results=True, max_row_buffer=SQL.DB_CHUNK_SIZE
+                    stream_results=True,
+                    max_row_buffer=SQL.DB_CHUNK_SIZE * 40,  # 1 column
                 ),
                 params,
             )

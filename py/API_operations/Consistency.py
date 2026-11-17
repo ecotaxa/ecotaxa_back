@@ -75,7 +75,7 @@ class ProjectConsistencyChecker(Service):
 
         qry = qry.filter(Project.projid == self.prj_id)
         qry = qry.filter(ObjectHeader.acquisid != ObjectFields.acquis_id)
-        qry = qry.yield_per(SQL.DB_CHUNK_SIZE)
+        qry = qry.yield_per(SQL.DB_CHUNK_SIZE * 40)  # 1 column
         broken = [objid for objid, in qry]
         if len(broken) > 0:
             return ["acquisid mirror broken", broken]

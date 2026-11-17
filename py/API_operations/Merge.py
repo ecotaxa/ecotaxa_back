@@ -213,7 +213,7 @@ class MergeService(Service):
             .join(Sample)
             .filter(Sample.projid == prj_id)
             .filter(not_(ObjectHeader.objid.op("<@")(func.obj_in_prj(prj_id))))
-            .yield_per(SQL.DB_CHUNK_SIZE)
+            .yield_per(SQL.DB_CHUNK_SIZE * 40)  # 1 column
         )
         new_obj_id = ObjectHeader.get_next_pk(session, prj_id)
         obj_updates = []

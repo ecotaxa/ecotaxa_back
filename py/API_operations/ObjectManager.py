@@ -146,7 +146,8 @@ class ObjectManager(Service):
         with CodeTimer("Query: SQL: %s PARAMS: %s: " % (sql, params), logger, 1):
             res: Result = self.ro_session.execute(
                 text(sql).execution_options(
-                    stream_results=True, max_row_buffer=SQL.DB_CHUNK_SIZE
+                    stream_results=True,
+                    max_row_buffer=SQL.DB_CHUNK_SIZE * 10,  # 4 columns + extras
                 ),
                 params,
             )
@@ -283,7 +284,7 @@ class ObjectManager(Service):
 
         res: Result = self.ro_session.execute(
             text(sql).execution_options(
-                stream_results=True, max_row_buffer=SQL.DB_CHUNK_SIZE
+                stream_results=True, max_row_buffer=SQL.DB_CHUNK_SIZE * 10  # 4 columns
             ),
             params,
         )

@@ -65,7 +65,7 @@ class ImageManagerService(Service):
         )
         qry = qry.filter(ImageFile.imgid.is_(None))
         qry = qry.limit(max_digests)
-        qry = qry.yield_per(SQL.DB_CHUNK_SIZE)
+        qry = qry.yield_per(SQL.DB_CHUNK_SIZE * 20)  # 2 columns
         cnt = 0
         with CodeTimer("Files without md5, query '%s':" % str(qry), logger):
             obj_imgs_without_images = [rec for rec in qry]
@@ -100,7 +100,7 @@ class ImageManagerService(Service):
                 miss_qry = miss_qry.filter(Project.projid == prj_id)
             # On purpose, no "order by" clause. Results are random, but sorting takes a while on lots of images
             miss_qry = miss_qry.limit(left_for_unknown)
-            miss_qry = miss_qry.yield_per(SQL.DB_CHUNK_SIZE)
+            miss_qry = miss_qry.yield_per(SQL.DB_CHUNK_SIZE * 20)  # 2 columns
             with CodeTimer(
                 "Files with unknown state, query '%s':" % str(miss_qry), logger
             ):

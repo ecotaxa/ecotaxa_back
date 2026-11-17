@@ -15,6 +15,9 @@ SQLParamDict = Dict[str, Union[int, float, Decimal, str, List[int], List[str]]]
 
 # Number of rows fetched at once when streaming large SQL results
 # (SQLAlchemy yield_per / stream_results max_row_buffer).
+# It is calibrated for wide rows (10K x tens of columns). For resultsets with
+# only a few columns, use a multiple of it (e.g. *20 for 2 columns) so that the
+# amount of data fetched per chunk stays comparable.
 DB_CHUNK_SIZE = 10000
 
 # Not completely exact but good enough

@@ -951,7 +951,8 @@ class ProjectBO(object):
         with CodeTimer("Projects.projects_for_user query (ids):", logger):
             res: Result = session.execute(
                 text(sql).execution_options(
-                    stream_results=True, max_row_buffer=SQL.DB_CHUNK_SIZE
+                    stream_results=True,
+                    max_row_buffer=SQL.DB_CHUNK_SIZE * 40,  # 1 column
                 ),
                 sql_params,
             )
@@ -1176,7 +1177,7 @@ class ProjectBO(object):
             Sample,
             and_(Sample.sampleid == Acquisition.acq_sample_id, Sample.projid == prj_id),
         )
-        qry = qry.yield_per(SQL.DB_CHUNK_SIZE)
+        qry = qry.yield_per(SQL.DB_CHUNK_SIZE * 40)  # 1 column
         return [an_id for an_id, in qry]
 
     @classmethod

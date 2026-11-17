@@ -10,7 +10,6 @@ from sqlalchemy import func
 
 from DB import Session
 from DB.Acquisition import Acquisition, AcquisitionOrigIDT
-from DB.Object import ObjectHeader, ObjectIDT
 from DB.Process import Process, ProcessOrigIDT
 from DB.Project import ProjectIDT
 from DB.Sample import Sample, SampleOrigIDT
@@ -32,11 +31,13 @@ class ProjectTopology(object):
     Rule #4 is not (as of v2.5.0) present yet in DB, due to previous versions of the app.
     For later when #544 is done:
          - orig_id AKA object_id must become unique per project.
+
+    For now, only the sample/acquisition/process relations are kept: objects are not
+    needed to check the topology, and keeping their (big) per-acquisition sets
+    is expensive on large projects.
     """
 
     def __init__(self) -> None:
-        # Every object has a path
-        self.paths: Dict[SampleOrigIDT, Dict[AcquisitionOrigIDT, Set[ObjectIDT]]] = {}
         # Each acquisition (as identified by its orig_id) has a parent, but eventually several of them.
         self.acquisition_parents: Dict[AcquisitionOrigIDT, Set[SampleOrigIDT]] = {}
         # Each acquisition has a child process.
@@ -44,57 +45,39 @@ class ProjectTopology(object):
 
     def read_from_db(self, session: Session, prj_id: ProjectIDT):
         """
-        Read the project topology from DB.
+        Read the project topology from DB, i.e. the sample/acquisition/process
+        relations, one row per relation instead of one per object.
         """
         stmt = (
             select(
                 Sample.orig_id,
                 Acquisition.orig_id,
                 Process.orig_id,
-                ObjectHeader.objid,
             )
             .select_from(Sample)
             .join(Sample.all_acquisitions)
             .join(Acquisition.process)
-            .join(Acquisition.all_objects)
             .where(
                 Sample.projid == prj_id,
                 Acquisition.acquisid.op("<@")(func.acq_in_prj(prj_id)),
-                ObjectHeader.objid.op("<@")(func.obj_in_prj(prj_id)),
             )
-            .execution_options(yield_per=SQL.DB_CHUNK_SIZE)
+            .distinct()
+            .execution_options(yield_per=SQL.DB_CHUNK_SIZE * 10)  # 3 columns
         )
-
-        sam_orig_id: str
-        acq_orig_id: str
-        prc_orig_id: str
-        objid: ObjectIDT
-        for sam_orig_id, acq_orig_id, prc_orig_id, objid in session.execute(stmt):
-            # Get/create acquisitions for this sample
-            objs_for_acquisition = self.add_association(sam_orig_id, acq_orig_id)
-            # Store twin process
+        for sam_orig_id, acq_orig_id, prc_orig_id in session.execute(stmt):
+            self.add_association(sam_orig_id, acq_orig_id)
             if prc_orig_id is not None:
                 self.acquisition_child[acq_orig_id] = prc_orig_id
-            # Store objects for acquisition
-            objs_for_acquisition.add(objid)
 
     def add_association(
         self, sample_orig_id: SampleOrigIDT, acquisition_orig_id: AcquisitionOrigIDT
-    ):
+    ) -> None:
         """
         Add the given association while keeping structures in sync.
         """
-        acqs_for_sample = self.paths.setdefault(sample_orig_id, {})
-        # Store new acquisition...
-        if acquisition_orig_id not in acqs_for_sample:
-            acqs_for_sample[acquisition_orig_id] = set()
-            # ...and the association with its parent sample
-            parent_samples = self.acquisition_parents.setdefault(
-                acquisition_orig_id, set()
-            )
-            parent_samples.add(sample_orig_id)
-        objs_for_acquisition = acqs_for_sample[acquisition_orig_id]
-        return objs_for_acquisition
+        self.acquisition_parents.setdefault(acquisition_orig_id, set()).add(
+            sample_orig_id
+        )
 
     def evaluate_add_association(
         self, sample_orig_id: SampleOrigIDT, acquisition_orig_id: AcquisitionOrigIDT

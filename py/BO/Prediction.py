@@ -10,7 +10,6 @@
 from typing import Dict
 
 import numpy as np  # type: ignore
-
 from sqlalchemy import func
 
 from DB.Acquisition import Acquisition
@@ -98,7 +97,7 @@ class DeepFeatures(object):
         qry = qry.filter(ObjectCNNFeatureVector.objcnnid == None)  # SQLAlchemy
         if not fast:
             qry = qry.order_by(ObjectHeader.objid, Image.imgrank)
-            qry = qry.yield_per(SQL.DB_CHUNK_SIZE)
+            qry = qry.yield_per(SQL.DB_CHUNK_SIZE * 10)  # 3 columns
         if fast:
             # We don't need the whole list to check that some are missing
             qry = qry.limit(10)

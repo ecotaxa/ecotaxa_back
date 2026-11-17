@@ -162,6 +162,8 @@ class FileImport(ImportServiceBase):
             }
             self.set_job_to_ask(self.MISSING_INFO_MESSAGE, question_data)
         else:
+            # Release the validation-only structures before the real phase builds its own big indexes
+            del diag, how
             self.do_real()
 
     def _collect_existing_and_validate(

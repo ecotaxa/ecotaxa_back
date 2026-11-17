@@ -51,7 +51,7 @@ class Image(Model):
         )
         res: Result = session.execute(
             sql.execution_options(
-                stream_results=True, max_row_buffer=SQL.DB_CHUNK_SIZE
+                stream_results=True, max_row_buffer=SQL.DB_CHUNK_SIZE * 40  # 1 column
             ),
             {"prj": prj_id},
         )

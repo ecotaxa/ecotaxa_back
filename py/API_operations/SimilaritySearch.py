@@ -101,7 +101,7 @@ class SimilaritySearchForProject(Service):
         self.ro_session.execute(text("SET LOCAL ivfflat.probes = 10"))
         result = self.ro_session.execute(
             text(query).execution_options(
-                stream_results=True, max_row_buffer=SQL.DB_CHUNK_SIZE
+                stream_results=True, max_row_buffer=SQL.DB_CHUNK_SIZE * 20  # 2 columns
             ),
             params,
         ).mappings()

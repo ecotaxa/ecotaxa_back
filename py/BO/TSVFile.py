@@ -302,7 +302,6 @@ class TSVFile(object):
                     how.existing_objects[object_head_to_write.orig_id] = (
                         object_head_to_write.objid
                     )
-                    how.image_ranks_per_obj[object_head_to_write.objid] = set()
                 else:
                     # The key already exists with same value, checked in @see self.create_or_link_slaves
                     pass
@@ -930,7 +929,7 @@ class TSVFile(object):
             img_file_path = self.path_for_image(image_to_write.orig_file_name)
 
         sub_path = where.vault.store_image(img_file_path, image_to_write.imgid)
-        present_ranks = how.image_ranks_per_obj.setdefault(image_to_write.objid, set())
+        present_ranks = how.image_ranks_per_obj.ranks_of(image_to_write.objid)
         if image_to_write.get("imgrank") is None:
             self.compute_rank(image_to_write, present_ranks)
         else:
@@ -945,7 +944,7 @@ class TSVFile(object):
                     tsv_rank,
                     image_to_write.imgrank,
                 )
-        present_ranks.add(image_to_write.imgrank)
+        how.image_ranks_per_obj.add(image_to_write.objid, image_to_write.imgrank)
 
         err = ImageBO.dimensions_and_resize(
             how.max_dim, where.vault, sub_path, image_to_write

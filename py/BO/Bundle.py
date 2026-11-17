@@ -9,7 +9,7 @@ import zipfile
 from pathlib import Path
 
 # noinspection PyPackageRequirements
-from typing import Callable, List, Dict, Tuple, Generator, Set
+from typing import Callable, List, Dict, Tuple, Generator
 
 from BO.TSVFile import TSVFile
 from BO.Taxonomy import TaxonomyBO
@@ -24,6 +24,7 @@ from DB.Acquisition import Acquisition
 from DB.Project import ProjectIDT, Project
 from DB.Sample import Sample
 from DB.helpers import Session
+from DB.helpers.Caches import RanksPerObject
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
 
@@ -193,9 +194,7 @@ class InBundle(object):
             return Project.fetch_existing_objects(session, prj_id)
 
     @staticmethod
-    def fetch_existing_ranks(
-        session: Session, prj_id: ProjectIDT
-    ) -> Dict[int, Set[int]]:
+    def fetch_existing_ranks(session: Session, prj_id: ProjectIDT) -> RanksPerObject:
         """
         Get existing image ranks from the project
         """

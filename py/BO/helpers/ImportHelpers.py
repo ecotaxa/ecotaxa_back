@@ -13,6 +13,7 @@ from BO.Vignette import VignetteMaker
 from DB.Acquisition import Acquisition
 from DB.Sample import Sample
 from DB.User import UserIDT
+from DB.helpers.Caches import RanksPerObject
 from DB.helpers.DBWriter import DBWriter
 from FS.Vault import Vault
 from helpers import DateTime
@@ -103,9 +104,9 @@ class ImportHow(object):
         self.existing_acquisitions: Dict[Tuple[str, str], Acquisition] = {}
         # e.g. { 'm106_mn01_n1_sml_409': 1455263 }
         self.existing_objects: Dict[str, int] = {}
-        # The generated/from TSV image ranks.
-        # e.g. { 1455263 : { 1, 2} }
-        self.image_ranks_per_obj: Dict[int, Set[int]] = {}
+        # The generated/from TSV image ranks, compact per object.
+        # e.g. 1455263 -> {1, 2} or 636800034 -> 1
+        self.image_ranks_per_obj: RanksPerObject = RanksPerObject()
         # Updated during RealImport
         self.loaded_files = loaded_files
         # For UVP6 vignetting

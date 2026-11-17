@@ -526,7 +526,7 @@ class EnumeratedObjectSet(MappedTable):
         qry = qry.join(Acquisition)
         qry = qry.join(ObjectHeader)
         qry = qry.filter(ObjectHeader.objid == any_(self.object_ids))
-        qry = qry.yield_per(SQL.DB_CHUNK_SIZE)
+        qry = qry.yield_per(SQL.DB_CHUNK_SIZE * 40)  # 1 column
         with CodeTimer("Prjs for %d objs: " % len(self.object_ids), logger):
             return [an_id for an_id, in qry]
 
@@ -611,7 +611,7 @@ class EnumeratedObjectSet(MappedTable):
         )
         qry = qry.filter(ObjectHeader.objid == any_(self.object_ids))
         qry = qry.filter(ObjectHeader.classif_qual.in_(MANUAL_STATES_TEXT))
-        qry = qry.yield_per(SQL.DB_CHUNK_SIZE)
+        qry = qry.yield_per(SQL.DB_CHUNK_SIZE * 20)  # 2 columns
         # A bit dirty but fast
         prev_nb_objs = len(self.object_ids)
         new_objects_ids = []
@@ -792,7 +792,7 @@ class EnumeratedObjectSet(MappedTable):
             ObjectHeader.objid == subq_alias.c.objid,
             isouter=(from_user_id is None),
         )
-        qry = qry.execution_options(yield_per=SQL.DB_CHUNK_SIZE)
+        qry = qry.execution_options(yield_per=SQL.DB_CHUNK_SIZE * 5)  # 8 columns
         if from_user_id is not None:
             # If taking history from a user, don't apply to the objects he/she classified
             # in last already.
@@ -1148,7 +1148,7 @@ class EnumeratedObjectSet(MappedTable):
             ObjectHeader.classif_score,
         ).with_for_update(key_share=True)
         qry = qry.where(ObjectHeader.objid == any_(self.object_ids))
-        qry = qry.execution_options(yield_per=SQL.DB_CHUNK_SIZE)
+        qry = qry.execution_options(yield_per=SQL.DB_CHUNK_SIZE * 5)  # 6 columns
         logger.info("Fetch with lock: %s", qry)
         res: Result = self.session.execute(qry)
         prev = {rec["objid"]: rec for rec in res.mappings()}
