@@ -189,12 +189,12 @@ def _failing_publish(monkeypatch, then=None):
     """The publish fails when moving z.tsv, after then(src) if given"""
     orig = Unpacker._move
 
-    def failing(src: Path, dst: Path, moves) -> None:
+    def failing(src: Path, dst: Path, journal) -> None:
         if src.name == "z.tsv":
             if then is not None:
                 then(src)
             raise OSError("Permission denied")
-        orig(src, dst, moves)
+        orig(src, dst, journal)
 
     monkeypatch.setattr(Unpacker, "_move", staticmethod(failing))
 

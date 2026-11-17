@@ -23,6 +23,7 @@ from typing import (
     Callable,
     Dict,
     Generator,
+    IO,
     List,
     Literal,
     Optional,
@@ -112,6 +113,16 @@ class InsufficientStorageException(BaseAppException):
 
     def __init__(self, message: str):
         super().__init__(message, status_code=507)
+
+
+# A publish keeps aside what it replaces, and journals its moves, next to the staging
+# directory, never inside: the archive content there could fake a journal
+JOURNAL, PUBLISHED = "moves.jsonl", "published"
+
+
+def _backup_of(staging: Path) -> Path:
+    """Where the publish of staging keeps what it replaces, and its journal"""
+    return staging.with_name(staging.name + "~replaced")
 
 
 class PartialPublishException(BaseAppException):
@@ -716,27 +727,26 @@ class Unpacker(object):
         """
         Move the content of the staging directory into parent, merged into what is
         already there: new entries are added, same-name ones replaced, others kept.
-        All or nothing: replaced entries are kept aside until the end, and on failure
-        each move is undone.
-        Return the published names.
+        All or nothing: each move is journaled before it is done, and undone on failure,
+        here or by the sweep after a kill, see _undo. Return the published names.
         """
         published = list(staging.iterdir())
-        # Created after the listing, so not published
-        backup = cls._new_staging_dir(staging, Path("replaced"))
-        moves: List[Tuple[Path, Path]] = []
-        try:
-            for an_entry in published:
-                cls._merge(an_entry, parent / an_entry.name, backup, moves)
-        except Exception:
-            cls._undo(moves)
-            raise
-        shutil.rmtree(staging)  # With the replaced entries
+        backup = _backup_of(staging)
+        backup.mkdir()
+        with open(backup / JOURNAL, "a") as journal:
+            try:
+                for an_entry in published:
+                    cls._merge(an_entry, parent / an_entry.name, backup, journal)
+            except Exception:
+                cls._undo(backup / JOURNAL)
+                raise
+        (backup / JOURNAL).rename(backup / PUBLISHED)  # Done, nothing to undo from here
+        shutil.rmtree(staging)
+        shutil.rmtree(backup)  # What was replaced
         return sorted(an_entry.name for an_entry in published)
 
     @classmethod
-    def _merge(
-        cls, src: Path, dst: Path, backup: Path, moves: List[Tuple[Path, Path]]
-    ) -> None:
+    def _merge(cls, src: Path, dst: Path, backup: Path, journal: IO[str]) -> None:
         """
         Put src at dst, merging into an existing directory: new entries are added,
         same-name ones replaced, others kept. One rename when dst is absent.
@@ -748,34 +758,43 @@ class Unpacker(object):
             and not dst.is_symlink()
         ):
             for a_child in list(src.iterdir()):
-                cls._merge(a_child, dst / a_child.name, backup, moves)
+                cls._merge(a_child, dst / a_child.name, backup, journal)
             src.rmdir()
         else:
-            cls._replace(src, dst, backup, moves)
+            cls._replace(src, dst, backup, journal)
 
     @classmethod
-    def _replace(
-        cls, src: Path, dst: Path, backup: Path, moves: List[Tuple[Path, Path]]
-    ) -> None:
+    def _replace(cls, src: Path, dst: Path, backup: Path, journal: IO[str]) -> None:
         """
         Put src at dst, moving whatever was at dst into backup first, e.g. a file where
         a directory comes. Merging only goes down existing directories, see _merge.
         """
         if dst.is_symlink() or dst.exists():
-            cls._move(dst, backup / str(len(moves)), moves)
-        cls._move(src, dst, moves)
+            cls._move(dst, backup / uuid.uuid4().hex, journal)
+        cls._move(src, dst, journal)
 
     @staticmethod
-    def _move(src: Path, dst: Path, moves: List[Tuple[Path, Path]]) -> None:
-        """A rename, recorded for undoing it"""
+    def _move(src: Path, dst: Path, journal: IO[str]) -> None:
+        """A rename, journaled before it is done"""
+        journal.write(json.dumps([str(src), str(dst)]) + "\n")
+        journal.flush()
+        os.fsync(journal.fileno())
         src.rename(dst)
-        moves.append((src, dst))
 
     @staticmethod
-    def _undo(moves: List[Tuple[Path, Path]]) -> None:
-        """Undo the moves, last first. Best effort, raise at the end if one failed."""
+    def _undo(journal_path: Path) -> None:
+        """
+        Undo the journaled moves, last first, skipping those not done or already undone.
+        Best effort, raise at the end if one failed.
+        """
         failed = False
-        for src, dst in reversed(moves):
+        for a_line in reversed(journal_path.read_text().splitlines()):
+            try:
+                src, dst = map(Path, json.loads(a_line))
+            except ValueError:
+                continue  # Cut by a kill, so not done
+            if not (dst.exists() or dst.is_symlink()):
+                continue
             try:
                 # A merged directory is removed once its last child moved
                 src.parent.mkdir(parents=True, exist_ok=True)
@@ -959,10 +978,11 @@ class Unpacker(object):
                     published = self._publish(staging, to_path)
                 except Exception as e:
                     if isinstance(e, PartialPublishException):
-                        # It holds what the extraction replaced, for a recovery
-                        logger.error("Kept %s, its publish was not undone", staging)
+                        # They hold what the extraction replaced, for a recovery
+                        logger.error("Kept %s(~replaced), publish not undone", staging)
                     else:
                         shutil.rmtree(staging, ignore_errors=True)
+                        shutil.rmtree(_backup_of(staging), ignore_errors=True)
                     compressed_path.unlink(missing_ok=True)
                     self._report_failure(to_path, archive_name, e)
                     raise
@@ -1146,27 +1166,33 @@ def _clean_up(info: Dict[str, Any], users_files_dir: Path) -> None:
     logger.warning(
         "Unpacking of %s by process %s was interrupted", info, info.get("pid")
     )
+    status: Dict[str, Any] = {"state": "error", "status_code": INTERRUPTED_STATUS_CODE}
+    outcome: Optional[str] = "nothing was kept: " + DETAIL_UNPACK_INTERRUPTED
     # Never trust the path blindly
     if staging.name.startswith(PROGRESS_PREFIX) and _inside(staging, users_files_dir):
-        shutil.rmtree(staging, ignore_errors=True)
+        backup = _backup_of(staging)
+        try:
+            if (backup / PUBLISHED).exists():
+                status, outcome = {"state": "done", "percent": 100}, None
+            elif (backup / JOURNAL).exists():
+                Unpacker._undo(backup / JOURNAL)  # Killed while publishing
+            shutil.rmtree(staging, ignore_errors=True)
+            shutil.rmtree(backup, ignore_errors=True)
+        except PartialPublishException:
+            logger.error("Kept %s(~replaced), publish not undone", staging)
+            outcome = "part of it may have been kept: " + DETAIL_UNPACK_PARTIAL
     else:
         logger.error("Not removing unexpected staging path %s", staging)
-    message = "Extraction of '%s' failed, nothing was kept: %s" % (
-        name,
-        DETAIL_UNPACK_INTERRUPTED,
-    )
-    when = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-    log = "%s UTC %s" % (when, message)
+    if outcome is not None:
+        message = "Extraction of '%s' failed, %s" % (name, outcome)
+        when = datetime.datetime.now(datetime.timezone.utc)
+        log = "%s UTC %s" % (when.strftime("%Y-%m-%d %H:%M:%S"), message)
+        status.update(message=message, log=log)
     upload_id = info.get("upload_id")
     if upload_id:
         try:
             UnpackStatus(str(upload_id), int(info.get("user_id", -1)), name).update(
-                {
-                    "state": "error",
-                    "status_code": INTERRUPTED_STATUS_CODE,
-                    "message": message,
-                    "log": log,
-                }
+                status
             )
         except Exception as e:
             logger.error(

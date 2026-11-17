@@ -215,3 +215,85 @@ def test_unreadable_and_old_temp_entries_dropped(dirs):
 
 def test_no_registry_dir(tmp_path):
     assert Unpack.sweep_stale(tmp_path / "none", tmp_path) == 0
+
+
+class Killed(BaseException):
+    """The process killed, so not caught as an Exception"""
+
+
+def _killed_publish_setup(dirs):
+    """A dead process registered staging, which merges into an existing name/"""
+    users, root, parent, registry = dirs
+    (parent / "name").mkdir()
+    (parent / "name" / "a.tsv").write_bytes(b"old\n")
+    (parent / "name" / "old.tsv").write_bytes(TSV)
+    staging = parent / (PROGRESS_PREFIX + "x")
+    (staging / "name" / "sub").mkdir(parents=True)
+    for a_file in ("a.tsv", "sub/n.tsv", "z.tsv"):
+        (staging / "name" / a_file).write_bytes(TSV)
+    _owner(registry, staging, parent, "die").wait(10)
+    return users, parent, registry, staging
+
+
+def test_killed_publish_undone(dirs, monkeypatch):
+    users, parent, registry, staging = _killed_publish_setup(dirs)
+    orig, calls = Unpacker._move, []
+
+    def killed(src: Path, dst: Path, journal) -> None:
+        calls.append(src)
+        if len(calls) == 4:  # The last move: a.tsv makes 2, sub/ and z.tsv 1 each
+            raise Killed()
+        orig(src, dst, journal)
+
+    monkeypatch.setattr(Unpacker, "_move", staticmethod(killed))
+    with pytest.raises(Killed):
+        Unpacker._publish(staging, parent)
+    monkeypatch.undo()
+    assert Unpack.sweep_stale(registry, users) == 1
+    # As before the publish, and nothing left of it
+    assert tree(parent) == ["name/", "name/a.tsv", "name/old.tsv"]
+    assert (parent / "name" / "a.tsv").read_bytes() == b"old\n"
+    status = UnpackStatus.read(UPLOAD_ID)
+    assert status is not None and "nothing was kept" in status["message"]
+
+
+def test_killed_after_publish_done(dirs, monkeypatch):
+    users, parent, registry, staging = _killed_publish_setup(dirs)
+
+    def killed(*args, **kwargs) -> None:
+        raise Killed()
+
+    monkeypatch.setattr(Unpack.shutil, "rmtree", killed)
+    with pytest.raises(Killed):
+        Unpacker._publish(staging, parent)
+    monkeypatch.undo()
+    assert Unpack.sweep_stale(registry, users) == 1
+    # Published: kept, and the leftovers removed
+    assert tree(parent) == [
+        "name/",
+        "name/a.tsv",
+        "name/old.tsv",
+        "name/sub/",
+        "name/sub/n.tsv",
+        "name/z.tsv",
+    ]
+    assert (parent / "name" / "a.tsv").read_bytes() == TSV
+    status = UnpackStatus.read(UPLOAD_ID)
+    assert status is not None and status["state"] == "done"
+
+
+def test_planted_journal_ignored(dirs, tmp_path):
+    users, root, parent, registry = dirs
+    staging = _staging(parent)
+    victim = root / "victim.tsv"
+    victim.write_bytes(TSV)
+    # From the archive: a journal inside the staging folder, not next to it
+    planted = staging / (staging.name + "~replaced")
+    planted.mkdir()
+    (planted / "moves.jsonl").write_text(
+        json.dumps([str(root / "moved.tsv"), str(victim)]) + "\n"
+    )
+    _owner(registry, staging, parent, "die").wait(10)
+    assert Unpack.sweep_stale(registry, users) == 1
+    assert victim.exists() and not (root / "moved.tsv").exists()
+    assert tree(parent) == []
