@@ -15,7 +15,12 @@ from tuspyserver.lock import acquire_upload_lock
 from tuspyserver.storage.local import LocalFileStorage
 
 from FS.Unpack import UnpackStatus, Unpacker, PROGRESS_PREFIX
-from FS.Uploads import claim_upload, get_tus_files_dir, release_claim
+from FS.Uploads import (
+    claim_upload,
+    get_tus_files_dir,
+    get_tus_info_dir,
+    release_claim,
+)
 from FS.UserFilesDir import UserFilesDirectory
 from helpers.AppConfig import Config
 from helpers.CustomException import BaseAppException, UnprocessableEntityException
@@ -325,7 +330,7 @@ class SplitLocalFileStorage(LocalFileStorage):
 
 hybrid_storage = SplitLocalFileStorage(
     files_dir=get_tus_files_dir(),
-    info_dir="/tmp/tus_info_scratch",
+    info_dir=get_tus_info_dir(),
 )
 
 

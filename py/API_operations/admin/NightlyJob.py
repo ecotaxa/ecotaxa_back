@@ -34,11 +34,16 @@ from DB.helpers import Result
 from DB.helpers import Session
 from DB.helpers.Direct import text
 from FS.TempDirForTasks import TempDirForTasks
-from FS.Uploads import get_tus_files_dir
+from FS.Uploads import get_tus_files_dir, get_tus_info_dir
 from FS.UserFilesDir import UserFilesDirectory
 from helpers.DynamicLogs import get_logger, LogsSwitcher
 
 logger = get_logger(__name__)
+
+# A TUS upload metadata file without its upload, untouched for this long (s), is removed
+INFO_ORPHAN_AGE = 24 * 3600
+# TUS upload metadata files, and their temporary version while written
+INFO_SUFFIXES = (".info", ".info.tmp")
 
 
 class NightlyJobService(JobServiceBase):
@@ -494,6 +499,8 @@ class NightlyJobService(JobServiceBase):
             tf = int(os.path.getctime(item))
             if tf < old:
                 self._delete_definitely(loggerfilename, item, tf, users_files_dir)
+        # then the metadata of TUS uploads which are gone
+        self._clean_tus_infos(loggerfilename, now)
         # bottom to top scandir
         for entry in glob(users_files_dir + os.path.sep + userdirpattern + "*"):
             item = Path(entry)
@@ -524,6 +531,37 @@ class NightlyJobService(JobServiceBase):
         logger.info("End removing directories older than %s day(s)", str(timelive))
         self.update_progress(end, "Users Files Maintenance terminated")
         return None
+
+    def _clean_tus_infos(self, loggerfilename: str, now: float) -> None:
+        """
+        Remove the TUS metadata files (<upload id>.info) whose upload is gone, once old enough.
+        While the upload is there, the client may still ask for it, e.g. retrying its last
+        request, and without the metadata the upload would be unknown, so sent again.
+        """
+        info_dir = get_tus_info_dir()
+        try:
+            entries = list(os.scandir(info_dir))
+        except OSError:
+            return  # No TUS upload in this container, yet
+        tus_dir = get_tus_files_dir()
+        for an_entry in entries:
+            name = an_entry.name
+            if name.startswith(".") or not name.endswith(INFO_SUFFIXES):
+                continue
+            try:
+                if not an_entry.is_file(follow_symlinks=False):
+                    continue
+                mtime = an_entry.stat(follow_symlinks=False).st_mtime
+            except OSError:
+                continue
+            upload_id = name.split(".", 1)[0]
+            if os.path.lexists(os.path.join(tus_dir, upload_id)):
+                continue
+            if now - mtime < INFO_ORPHAN_AGE:
+                continue
+            self._delete_definitely(
+                loggerfilename, Path(an_entry.path), int(mtime), info_dir
+            )
 
     @staticmethod
     def _can_delete_dir(startpath: str, ptime: int, excluded: str) -> bool:

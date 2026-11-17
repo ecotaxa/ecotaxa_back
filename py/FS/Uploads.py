@@ -12,6 +12,8 @@ from helpers.AppConfig import Config
 
 # Marker telling that the upload was already treated by the completion hook
 CLAIM_SUFFIX = ".claimed"
+# Where TUS upload metadata (<upload id>.info) and locks are, local to the server container
+TUS_INFO_DIR = "/tmp/tus_info_scratch"
 
 
 def get_tus_files_dir() -> str:
@@ -23,6 +25,13 @@ def get_tus_files_dir() -> str:
     tus_dir = Path(base_dir, "tus_uploads")
     tus_dir.mkdir(parents=True, exist_ok=True)
     return str(tus_dir)
+
+
+def get_tus_info_dir() -> str:
+    """
+    Get the directory where TUS upload metadata (<upload id>.info) is stored.
+    """
+    return TUS_INFO_DIR
 
 
 def claim_upload(upload_id: str) -> Optional[Path]:

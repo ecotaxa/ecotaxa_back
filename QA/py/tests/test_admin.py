@@ -3,9 +3,11 @@ import logging
 import os
 import shutil
 import time
+import uuid
 from pathlib import Path
 
 from API_operations.helpers.Service import Service
+from FS.Uploads import get_tus_info_dir
 from FS.UserFilesDir import get_tus_files_dir
 from helpers.AppConfig import Config
 from sqlalchemy import text
@@ -123,7 +125,40 @@ def create_fake_users_directories(monkeypatch):
     recent_tus_file.write_text("recent tus file")
     os.utime(recent_tus_file, (recent_time, recent_time))
 
+    # 7. TUS uploads metadata: removed when old and without upload
+    info_dir = Path(get_tus_info_dir())
+    info_dir.mkdir(parents=True, exist_ok=True)
+
+    def _info(uid: str, mtime: float, suffix: str = ".info") -> Path:
+        ret = info_dir / (uid + suffix)
+        ret.write_text("{}")
+        os.utime(ret, (mtime, mtime))
+        return ret
+
+    def _payload(uid: str, mtime: float) -> Path:
+        ret = tus_dir / uid
+        ret.write_text("tus payload")
+        os.utime(ret, (mtime, mtime))
+        return ret
+
+    old_orphan_info = _info(uuid.uuid4().hex, old_time)
+    old_orphan_info_tmp = _info(uuid.uuid4().hex, old_time, ".info.tmp")
+    recent_orphan_info = _info(uuid.uuid4().hex, recent_time)
+    uid = uuid.uuid4().hex
+    old_info_recent_payload = _info(uid, old_time)
+    recent_payload = _payload(uid, recent_time)
+    uid = uuid.uuid4().hex
+    old_info_old_payload = _info(uid, old_time)
+    old_payload = _payload(uid, old_time)
+
     return {
+        "old_orphan_info": old_orphan_info,
+        "old_orphan_info_tmp": old_orphan_info_tmp,
+        "recent_orphan_info": recent_orphan_info,
+        "old_info_recent_payload": old_info_recent_payload,
+        "recent_payload": recent_payload,
+        "old_info_old_payload": old_info_old_payload,
+        "old_payload": old_payload,
         "users_files_dir": users_files_dir,
         "user_dir": user_dir,
         "old_dir": old_dir,
@@ -188,6 +223,7 @@ def test_nightly_job(fastapi, caplog, tstlogs, mock_taxoserver, monkeypatch):
     assert (recent_dir / "recent_file.txt").exists()
     assert recent_trash_file.exists()
     assert recent_tus_file.exists()
+    _check_tus_infos(fake_dirs)
 
     maintenance_log_file = (
         users_files_dir
@@ -199,6 +235,7 @@ def test_nightly_job(fastapi, caplog, tstlogs, mock_taxoserver, monkeypatch):
     assert "old_trash_sub" in maintenance_log_content
     assert "old_trash_file.txt" in maintenance_log_content
     assert "old_tus_upload.tmp" in maintenance_log_content
+    assert fake_dirs["old_orphan_info"].name in maintenance_log_content
 
     # Second cleanup must do nothing
     log = do_nightly(fastapi)
@@ -215,3 +252,20 @@ def test_nightly_job(fastapi, caplog, tstlogs, mock_taxoserver, monkeypatch):
     assert recent_dir.exists()
     assert recent_trash_file.exists()
     assert recent_tus_file.exists()
+    _check_tus_infos(fake_dirs)
+
+    # Leave nothing from this test
+    for a_key in ("recent_orphan_info", "old_info_recent_payload", "recent_payload"):
+        fake_dirs[a_key].unlink(missing_ok=True)
+
+
+def _check_tus_infos(fake_dirs) -> None:
+    """TUS metadata kept while its upload is there, else removed once old"""
+    assert not fake_dirs["old_orphan_info"].exists()
+    assert not fake_dirs["old_orphan_info_tmp"].exists()
+    assert fake_dirs["recent_orphan_info"].exists()
+    assert fake_dirs["old_info_recent_payload"].exists()
+    assert fake_dirs["recent_payload"].exists()
+    # Upload removed by age, its metadata in the same run
+    assert not fake_dirs["old_payload"].exists()
+    assert not fake_dirs["old_info_old_payload"].exists()
