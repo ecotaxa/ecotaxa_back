@@ -1,10 +1,12 @@
 import datetime
+import json
 import logging
 import os
 import shutil
 import time
 import uuid
 from pathlib import Path
+from typing import Dict
 
 from API_operations.helpers.Service import Service
 from FS.Unpack import PROGRESS_PREFIX, registered
@@ -154,6 +156,25 @@ def create_fake_users_directories(monkeypatch):
         os.utime(ret, (mtime, mtime))
         return ret
 
+    # TUS uploads extracted: removed a day after, their claim and status stay
+    def _extracted(state: str, mtime: float, claimed: bool = True) -> Dict[str, Path]:
+        uid = uuid.uuid4().hex
+        ret = {"payload": _payload(uid, mtime)}
+        ret["status"] = tus_dir / (uid + ".unpack.json")
+        ret["status"].write_text(json.dumps({"state": state}))
+        if claimed:
+            ret["claim"] = tus_dir / (uid + ".claimed")
+            ret["claim"].write_text("pid 1")
+        for a_file in ret.values():
+            os.utime(a_file, (mtime, mtime))
+        return ret
+
+    two_days_ago = now - 2 * 86400
+    extracted_old = _extracted("done", two_days_ago)
+    extracted_recent = _extracted("done", recent_time)
+    unpacking_old = _extracted("unpacking", two_days_ago)
+    done_not_claimed_old = _extracted("done", two_days_ago, claimed=False)
+
     old_orphan_info = _info(uuid.uuid4().hex, old_time)
     old_orphan_info_tmp = _info(uuid.uuid4().hex, old_time, ".info.tmp")
     recent_orphan_info = _info(uuid.uuid4().hex, recent_time)
@@ -181,6 +202,10 @@ def create_fake_users_directories(monkeypatch):
     live_staging_old = _staging(user_dir / (PROGRESS_PREFIX + "live_old"), old_time)
 
     return {
+        "extracted_old": extracted_old,
+        "extracted_recent": extracted_recent,
+        "unpacking_old": unpacking_old,
+        "done_not_claimed_old": done_not_claimed_old,
         "old_hidden_trash_file": old_hidden_trash_file,
         "old_hidden_trash_dir": old_hidden_trash_dir,
         "recent_hidden_trash_file": recent_hidden_trash_file,
@@ -269,6 +294,7 @@ def test_nightly_job(fastapi, caplog, tstlogs, mock_taxoserver, monkeypatch):
     assert recent_tus_file.exists()
     _check_tus_infos(fake_dirs)
     _check_hidden_trash(fake_dirs)
+    _check_extracted_uploads(fake_dirs)
     # Archive extraction folders: the orphan one goes once old, the registered one stays
     assert not fake_dirs["orphan_staging_old"].exists()
     assert fake_dirs["orphan_staging_recent"].exists()
@@ -288,6 +314,7 @@ def test_nightly_job(fastapi, caplog, tstlogs, mock_taxoserver, monkeypatch):
     assert PROGRESS_PREFIX + "orphan_old" in maintenance_log_content
     assert ".old_hidden_file" in maintenance_log_content
     assert ".old_hidden_dir" in maintenance_log_content
+    assert fake_dirs["extracted_old"]["payload"].name in maintenance_log_content
 
     # Second cleanup must do nothing
     log = do_nightly(fastapi)
@@ -307,6 +334,7 @@ def test_nightly_job(fastapi, caplog, tstlogs, mock_taxoserver, monkeypatch):
     _check_tus_infos(fake_dirs)
 
     _check_hidden_trash(fake_dirs)
+    _check_extracted_uploads(fake_dirs)
     # Not registered anymore, all old: an orphan now
     assert not live_staging_old.exists()
     assert fake_dirs["orphan_staging_recent"].exists()
@@ -315,6 +343,9 @@ def test_nightly_job(fastapi, caplog, tstlogs, mock_taxoserver, monkeypatch):
     for a_key in ("recent_orphan_info", "old_info_recent_payload", "recent_payload"):
         fake_dirs[a_key].unlink(missing_ok=True)
     shutil.rmtree(fake_dirs["orphan_staging_recent"], ignore_errors=True)
+    for a_key in ("extracted_old", "extracted_recent", "unpacking_old", "done_not_claimed_old"):
+        for a_file in fake_dirs[a_key].values():
+            a_file.unlink(missing_ok=True)
 
 
 def _check_tus_infos(fake_dirs) -> None:
@@ -334,3 +365,14 @@ def _check_hidden_trash(fake_dirs) -> None:
     assert not fake_dirs["old_hidden_trash_file"].exists()
     assert not fake_dirs["old_hidden_trash_dir"].exists()
     assert fake_dirs["recent_hidden_trash_file"].exists()
+
+
+def _check_extracted_uploads(fake_dirs) -> None:
+    """An upload extracted a day ago goes, its claim and status stay. Others stay."""
+    extracted_old = fake_dirs["extracted_old"]
+    assert not extracted_old["payload"].exists()
+    assert extracted_old["claim"].exists()
+    assert extracted_old["status"].exists()
+    for a_key in ("extracted_recent", "unpacking_old", "done_not_claimed_old"):
+        for a_file in fake_dirs[a_key].values():
+            assert a_file.exists(), a_file

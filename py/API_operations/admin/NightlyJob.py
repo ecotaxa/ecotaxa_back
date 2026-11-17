@@ -34,15 +34,15 @@ from DB.helpers import Result
 from DB.helpers import Session
 from DB.helpers.Direct import text
 from FS.TempDirForTasks import TempDirForTasks
-from FS.Uploads import get_tus_files_dir, get_tus_info_dir
-from FS.Unpack import PROGRESS_PREFIX, active_stagings
+from FS.Uploads import CLAIM_SUFFIX, get_tus_files_dir, get_tus_info_dir
+from FS.Unpack import PROGRESS_PREFIX, UnpackStatus, active_stagings
 from FS.UserFilesDir import UserFilesDirectory, get_unpack_registry_dir
 from helpers.DynamicLogs import get_logger, LogsSwitcher
 
 logger = get_logger(__name__)
 
-# A TUS upload metadata file without its upload, untouched for this long (s), is removed
-INFO_ORPHAN_AGE = 24 * 3600
+# A TUS upload, or its metadata, untouched for this long (s) can't be retried by the client
+TUS_RETRY_AGE = 24 * 3600
 # TUS upload metadata files, and their temporary version while written
 INFO_SUFFIXES = (".info", ".info.tmp")
 # An archive extraction folder not registered, untouched for this long (s), is removed
@@ -498,10 +498,11 @@ class NightlyJobService(JobServiceBase):
             if tf < trashtime:
                 self._delete_definitely(loggerfilename, item, tf, users_files_dir)
         # remove old files in TUS uploads directory
+        extracted_old = int(now - TUS_RETRY_AGE)
         for entry in glob(get_tus_files_dir() + os.path.sep + "*"):
             item = Path(entry)
             tf = int(os.path.getctime(item))
-            if tf < old:
+            if tf < old or self._extracted_upload(item, extracted_old):
                 self._delete_definitely(loggerfilename, item, tf, users_files_dir)
         # then the metadata of TUS uploads which are gone
         self._clean_tus_infos(loggerfilename, now)
@@ -550,6 +551,28 @@ class NightlyJobService(JobServiceBase):
         return None
 
     @staticmethod
+    def _extracted_upload(item: Path, too_old: int) -> bool:
+        """
+        Whether item is a TUS upload extracted, successfully, before too_old. Its content is
+        in My Files, and the client can't retry it anymore.
+        """
+        upload_id = item.name
+        if "." in upload_id:
+            return False  # Claim, status... not an upload
+        try:
+            if not item.is_file():
+                return False
+            # Treated by the completion hook, not released for a retry
+            if not Path(get_tus_files_dir(), upload_id + CLAIM_SUFFIX).exists():
+                return False
+            status = UnpackStatus.read(upload_id)
+            if status is None or status.get("state") != "done":
+                return False
+            return int(os.path.getctime(UnpackStatus.path_for(upload_id))) < too_old
+        except (ValueError, OSError):
+            return False
+
+    @staticmethod
     def _holds_extraction(dirpath: Path, active: List[Path]) -> bool:
         """Whether dirpath is, or holds at any depth, an archive extraction in progress"""
         abs_path = dirpath.absolute()
@@ -583,7 +606,7 @@ class NightlyJobService(JobServiceBase):
             upload_id = name.split(".", 1)[0]
             if os.path.lexists(os.path.join(tus_dir, upload_id)):
                 continue
-            if now - mtime < INFO_ORPHAN_AGE:
+            if now - mtime < TUS_RETRY_AGE:
                 continue
             self._delete_definitely(
                 loggerfilename, Path(an_entry.path), int(mtime), info_dir
