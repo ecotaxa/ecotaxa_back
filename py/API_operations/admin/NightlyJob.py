@@ -35,7 +35,8 @@ from DB.helpers import Session
 from DB.helpers.Direct import text
 from FS.TempDirForTasks import TempDirForTasks
 from FS.Uploads import get_tus_files_dir, get_tus_info_dir
-from FS.UserFilesDir import UserFilesDirectory
+from FS.Unpack import PROGRESS_PREFIX, active_stagings
+from FS.UserFilesDir import UserFilesDirectory, get_unpack_registry_dir
 from helpers.DynamicLogs import get_logger, LogsSwitcher
 
 logger = get_logger(__name__)
@@ -44,6 +45,8 @@ logger = get_logger(__name__)
 INFO_ORPHAN_AGE = 24 * 3600
 # TUS upload metadata files, and their temporary version while written
 INFO_SUFFIXES = (".info", ".info.tmp")
+# An archive extraction folder not registered, untouched for this long (s), is removed
+STAGING_ORPHAN_AGE = 24 * 3600
 
 
 class NightlyJobService(JobServiceBase):
@@ -501,6 +504,12 @@ class NightlyJobService(JobServiceBase):
                 self._delete_definitely(loggerfilename, item, tf, users_files_dir)
         # then the metadata of TUS uploads which are gone
         self._clean_tus_infos(loggerfilename, now)
+        # the archive extractions in progress, to keep
+        active = [
+            a_staging.absolute()
+            for a_staging in active_stagings(get_unpack_registry_dir())
+        ]
+        orphan_old = int(now - STAGING_ORPHAN_AGE)
         # bottom to top scandir
         for entry in glob(users_files_dir + os.path.sep + userdirpattern + "*"):
             item = Path(entry)
@@ -512,10 +521,17 @@ class NightlyJobService(JobServiceBase):
                     if a_dir.startswith(self.trashdirpattern):
                         continue
                     dirpath = Path(root).joinpath(a_dir)
+                    if self._holds_extraction(dirpath, active):
+                        continue  # Not even if all is old, the extraction would be lost
+                    # An archive extraction folder not registered, i.e. left by a failed
+                    # cleanup, goes once untouched long enough for no extraction to be alive
+                    too_old = (
+                        orphan_old if a_dir.startswith(PROGRESS_PREFIX) else old
+                    )
                     ptime = int(os.path.getctime(dirpath))
-                    if ptime < old:
+                    if ptime < too_old:
                         candelete = self._can_delete_dir(
-                            str(dirpath), old, self.trashdirpattern
+                            str(dirpath), too_old, self.trashdirpattern
                         )
                         if candelete:
                             todel: Tuple[Path, int] = (dirpath, ptime)
@@ -531,6 +547,15 @@ class NightlyJobService(JobServiceBase):
         logger.info("End removing directories older than %s day(s)", str(timelive))
         self.update_progress(end, "Users Files Maintenance terminated")
         return None
+
+    @staticmethod
+    def _holds_extraction(dirpath: Path, active: List[Path]) -> bool:
+        """Whether dirpath is, or holds at any depth, an archive extraction in progress"""
+        abs_path = dirpath.absolute()
+        return any(
+            a_staging == abs_path or abs_path in a_staging.parents
+            for a_staging in active
+        )
 
     def _clean_tus_infos(self, loggerfilename: str, now: float) -> None:
         """

@@ -7,8 +7,9 @@ import uuid
 from pathlib import Path
 
 from API_operations.helpers.Service import Service
+from FS.Unpack import PROGRESS_PREFIX, registered
 from FS.Uploads import get_tus_info_dir
-from FS.UserFilesDir import get_tus_files_dir
+from FS.UserFilesDir import get_tus_files_dir, get_unpack_registry_dir
 from helpers.AppConfig import Config
 from sqlalchemy import text
 from starlette import status
@@ -151,7 +152,26 @@ def create_fake_users_directories(monkeypatch):
     old_info_old_payload = _info(uid, old_time)
     old_payload = _payload(uid, old_time)
 
+    # 8. Archive extraction folders: removed when not registered and untouched for a day
+    def _staging(where: Path, mtime: float) -> Path:
+        where.mkdir(parents=True, exist_ok=True)
+        (where / "f.txt").write_text("extracted")
+        _set_tree_mtime(where, mtime)
+        return where
+
+    orphan_staging_old = _staging(
+        user_dir / (PROGRESS_PREFIX + "orphan_old"), now - 2 * 86400
+    )
+    orphan_staging_recent = _staging(
+        recent_dir / (PROGRESS_PREFIX + "orphan_recent"), recent_time
+    )
+    os.utime(recent_dir, (recent_time, recent_time))
+    live_staging_old = _staging(user_dir / (PROGRESS_PREFIX + "live_old"), old_time)
+
     return {
+        "orphan_staging_old": orphan_staging_old,
+        "orphan_staging_recent": orphan_staging_recent,
+        "live_staging_old": live_staging_old,
         "old_orphan_info": old_orphan_info,
         "old_orphan_info_tmp": old_orphan_info_tmp,
         "recent_orphan_info": recent_orphan_info,
@@ -208,7 +228,16 @@ def test_nightly_job(fastapi, caplog, tstlogs, mock_taxoserver, monkeypatch):
     # Only Admin can
     caplog.set_level(logging.DEBUG)
 
-    log = do_nightly(fastapi)
+    live_staging_old = fake_dirs["live_staging_old"]
+    live_info = {
+        "staging": str(live_staging_old.absolute()),
+        "parent": str(live_staging_old.parent.absolute()),
+        "name": "live_old.zip",
+        "user_id": 1,
+        "upload_id": None,
+    }
+    with registered(get_unpack_registry_dir(), live_info):
+        log = do_nightly(fastapi)
     msgs = len([line for line in log if "About to clean 3 jobs" in line])
     assert msgs > 0
 
@@ -224,6 +253,10 @@ def test_nightly_job(fastapi, caplog, tstlogs, mock_taxoserver, monkeypatch):
     assert recent_trash_file.exists()
     assert recent_tus_file.exists()
     _check_tus_infos(fake_dirs)
+    # Archive extraction folders: the orphan one goes once old, the registered one stays
+    assert not fake_dirs["orphan_staging_old"].exists()
+    assert fake_dirs["orphan_staging_recent"].exists()
+    assert live_staging_old.exists()
 
     maintenance_log_file = (
         users_files_dir
@@ -236,6 +269,7 @@ def test_nightly_job(fastapi, caplog, tstlogs, mock_taxoserver, monkeypatch):
     assert "old_trash_file.txt" in maintenance_log_content
     assert "old_tus_upload.tmp" in maintenance_log_content
     assert fake_dirs["old_orphan_info"].name in maintenance_log_content
+    assert PROGRESS_PREFIX + "orphan_old" in maintenance_log_content
 
     # Second cleanup must do nothing
     log = do_nightly(fastapi)
@@ -254,9 +288,14 @@ def test_nightly_job(fastapi, caplog, tstlogs, mock_taxoserver, monkeypatch):
     assert recent_tus_file.exists()
     _check_tus_infos(fake_dirs)
 
+    # Not registered anymore, all old: an orphan now
+    assert not live_staging_old.exists()
+    assert fake_dirs["orphan_staging_recent"].exists()
+
     # Leave nothing from this test
     for a_key in ("recent_orphan_info", "old_info_recent_payload", "recent_payload"):
         fake_dirs[a_key].unlink(missing_ok=True)
+    shutil.rmtree(fake_dirs["orphan_staging_recent"], ignore_errors=True)
 
 
 def _check_tus_infos(fake_dirs) -> None:

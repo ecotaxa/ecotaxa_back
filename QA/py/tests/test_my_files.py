@@ -523,7 +523,7 @@ def test_file_operations_refuse_parent_of_extraction_in_progress(fastapi):
 
 
 def test_orphan_staging_does_not_block(fastapi):
-    """A '⌛' folder no extraction has registered (dead process, not swept yet) blocks nothing."""
+    """A '⌛' folder no extraction has registered (e.g. left by a failed cleanup) blocks nothing."""
     from FS.Unpack import PROGRESS_PREFIX
     from FS.UserFilesDir import UserFilesDirectory
 
