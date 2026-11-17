@@ -201,7 +201,23 @@ def create_fake_users_directories(monkeypatch):
     os.utime(recent_dir, (recent_time, recent_time))
     live_staging_old = _staging(user_dir / (PROGRESS_PREFIX + "live_old"), old_time)
 
+    # 9. Logs of this maintenance: removed after time to live
+    old_maintenance_log = users_files_dir / "2000-01-01-users_files_maintenance.log"
+    old_maintenance_log.write_text("old log")
+    os.utime(old_maintenance_log, (old_time, old_time))
+    yesterday = datetime.datetime.now() - datetime.timedelta(days=1)
+    recent_maintenance_log = users_files_dir / (
+        yesterday.strftime("%Y-%m-%d") + "-users_files_maintenance.log"
+    )
+    recent_existed = recent_maintenance_log.exists()
+    if not recent_existed:
+        recent_maintenance_log.write_text("recent log")
+        os.utime(recent_maintenance_log, (recent_time, recent_time))
+
     return {
+        "old_maintenance_log": old_maintenance_log,
+        "recent_maintenance_log": recent_maintenance_log,
+        "recent_existed": recent_existed,
         "extracted_old": extracted_old,
         "extracted_recent": extracted_recent,
         "unpacking_old": unpacking_old,
@@ -295,6 +311,17 @@ def test_nightly_job(fastapi, caplog, tstlogs, mock_taxoserver, monkeypatch):
     _check_tus_infos(fake_dirs)
     _check_hidden_trash(fake_dirs)
     _check_extracted_uploads(fake_dirs)
+    # Rotated logs
+    assert not fake_dirs["old_maintenance_log"].exists()
+    assert fake_dirs["recent_maintenance_log"].exists()
+    # One line per cleanup in the job log
+    _check_log_line(log, "trash entries older than", "2 of them hidden")
+    # At least: tus_uploads may hold extracted uploads of previous runs
+    line = _log_line(log, "TUS upload files older than")
+    assert int(line.split(", and ", 1)[1].split(" ", 1)[0]) >= 1, line
+    _check_log_line(log, "TUS upload metadata files without upload", "Removed ")
+    _check_log_line(log, "directories older than", "and 1 orphan archive")
+    assert _removed_count(log, "users files maintenance logs older than") >= 1
     # Archive extraction folders: the orphan one goes once old, the registered one stays
     assert not fake_dirs["orphan_staging_old"].exists()
     assert fake_dirs["orphan_staging_recent"].exists()
@@ -335,6 +362,12 @@ def test_nightly_job(fastapi, caplog, tstlogs, mock_taxoserver, monkeypatch):
 
     _check_hidden_trash(fake_dirs)
     _check_extracted_uploads(fake_dirs)
+    _check_log_line(log, "trash entries older than", "0 of them hidden")
+    _check_log_line(log, "TUS upload files older than", "and 0 extracted")
+    assert _removed_count(log, "TUS upload metadata files without upload") == 0
+    # Not registered anymore, so removed by this run
+    _check_log_line(log, "directories older than", "and 1 orphan archive")
+    assert _removed_count(log, "users files maintenance logs older than") == 0
     # Not registered anymore, all old: an orphan now
     assert not live_staging_old.exists()
     assert fake_dirs["orphan_staging_recent"].exists()
@@ -343,6 +376,8 @@ def test_nightly_job(fastapi, caplog, tstlogs, mock_taxoserver, monkeypatch):
     for a_key in ("recent_orphan_info", "old_info_recent_payload", "recent_payload"):
         fake_dirs[a_key].unlink(missing_ok=True)
     shutil.rmtree(fake_dirs["orphan_staging_recent"], ignore_errors=True)
+    if not fake_dirs["recent_existed"]:
+        fake_dirs["recent_maintenance_log"].unlink(missing_ok=True)
     for a_key in ("extracted_old", "extracted_recent", "unpacking_old", "done_not_claimed_old"):
         for a_file in fake_dirs[a_key].values():
             a_file.unlink(missing_ok=True)
@@ -376,3 +411,20 @@ def _check_extracted_uploads(fake_dirs) -> None:
     for a_key in ("extracted_recent", "unpacking_old", "done_not_claimed_old"):
         for a_file in fake_dirs[a_key].values():
             assert a_file.exists(), a_file
+
+
+def _log_line(log, what: str) -> str:
+    """The job log line for the cleanup of what"""
+    lines = [a_line for a_line in log if "Removed " in a_line and what in a_line]
+    assert len(lines) == 1, (what, lines)
+    return lines[0]
+
+
+def _check_log_line(log, what: str, expected: str) -> None:
+    line = _log_line(log, what)
+    assert expected in line, line
+
+
+def _removed_count(log, what: str) -> int:
+    line = _log_line(log, what)
+    return int(line.split("Removed ", 1)[1].split(" ", 1)[0])
