@@ -16,7 +16,7 @@ from typing import Optional, Any
 logger = logging.getLogger(__name__)
 
 # Default lock file name
-DEFAULT_LOCK_FILENAME = "/tmp/ecotaxa_leader.lock"
+DEFAULT_LOCK_FILENAME = "ecotaxa_leader.lock"
 
 # Lock name for logging
 LOCK_NAME = "ecotaxa_leader_election"

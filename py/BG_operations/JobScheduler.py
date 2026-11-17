@@ -130,13 +130,13 @@ class JobScheduler(Service):
     # Include only these job types
     INCLUDE: ClassVar[List[str]] = []
     # A single runner per web process in DEV mode.
-    # In PROD, the_runner forks and exits immediately.
+    # In PROD, the_runner forks and is monitored.
     the_runner: Optional[Union[ThreadJobRunner, ProcessJobRunner]] = (
         None  # Only written by JobTimer_s_
     )
-    the_timer: Optional[threading.Timer] = None
+    the_thread: Optional[Thread] = None
+    stop_event: Event = Event()
     # First creation by Main, replacements by JobTimer_s_
-    do_run: Event = Event()  # R/W by Main & JobTimer
 
     def __init__(self) -> None:
         super().__init__()
@@ -202,21 +202,19 @@ class JobScheduler(Service):
         return sce
 
     @classmethod
-    def launch_at_interval(cls, interval: int) -> None:
-        """
-        Launch a job if possible, then wait a bit before accessing next one.
-        Current thread: Main for first launch, JobTimer (_different ones_) for others
-        """
-        cls.do_run.set()
-        cls._create_and_launch_timer(interval)
+    def launch_at_interval(cls, interval: Union[int, float]) -> None:
+        """Launch periodic scheduler thread if not already running."""
+        if cls.the_thread is not None and cls.the_thread.is_alive():
+            return
 
-    @classmethod
-    def _create_and_launch_timer(cls, interval: int) -> None:
-        cls.the_timer = threading.Timer(
-            interval=interval, function=cls.launch, args=[interval]
+        cls.stop_event.clear()
+        cls.the_thread = Thread(
+            target=cls.launch,
+            args=(interval,),
+            name=f"{cls.__name__}Thread",
+            daemon=True,
         )
-        cls.the_timer.name = "JobTimer"
-        cls.the_timer.start()
+        cls.the_thread.start()
 
     @classmethod
     def _interpret_runner_result(
@@ -297,24 +295,23 @@ class JobScheduler(Service):
             logger.exception("Error interpreting result for job %d: %s", job_id, e)
 
     @classmethod
-    def launch(cls, interval: int) -> None:
-        # Current thread: JobTimer_s_
-        try:
-            with cls() as sce:
-                # noinspection PyProtectedMember
-                sce._run_one()
-        except Exception as e:
-            # TODO here we have cryptic startup message if DB issue
-            logger.exception("Job run() exception: %s", e)
-        if not cls.do_run.is_set():
-            if cls.the_runner is not None:
-                # Wait for child process indefinitely before taking another task
-                cls.the_runner.join()
-                cls._interpret_runner_result(cls.the_runner)
-                cls.the_runner = None
-            cls.the_timer = None
-        else:
-            cls._create_and_launch_timer(interval)
+    def launch(cls, interval: Union[int, float]) -> None:
+        """Continuous loop checking for pending jobs."""
+        while not cls.stop_event.wait(timeout=interval):
+            try:
+                with cls() as sce:
+                    # noinspection PyProtectedMember
+                    sce._run_one()
+            except Exception as e:
+                # TODO here we have cryptic startup message if DB issue
+                logger.exception("Job run() exception: %s", e)
+
+        # Exiting thread after being signaled to stop
+        if cls.the_runner is not None:
+            # Wait for child process indefinitely before taking another task
+            cls.the_runner.join()
+            cls._interpret_runner_result(cls.the_runner)
+            cls.the_runner = None
 
     @classmethod
     def shutdown(cls) -> None:
@@ -323,26 +320,31 @@ class JobScheduler(Service):
         Restore class-loading time state.
         Current thread: Main
         """
-        if cls.do_run.is_set():
-            # Signal the timer to stop & cancel itself
-            cls.do_run.clear()
-            # Cancel the timer if it's waiting
-            if cls.the_timer:
-                cls.the_timer.cancel()
-                cls.the_timer = None
+        cls.stop_event.set()
+        if cls.the_thread is not None:
+            if cls.the_thread.is_alive():
+                cls.the_thread.join(timeout=5)
+            cls.the_thread = None
 
-        # Also ensure the runner is joined if it was finished or we are shutting down
-        if cls.the_runner is not None:
+        if cls.the_runner is None:
+            return
+        if isinstance(cls.the_runner, ThreadJobRunner):
+            cls.the_runner.join(timeout=1)
+            if cls.the_runner.is_alive():
+                logger.error(
+                    "Job #%d thread did not finish within 1s during shutdown",
+                    cls.the_runner.db_job.id,
+                )
+            else:
+                cls._interpret_runner_result(cls.the_runner)
+                cls.the_runner = None
+        else:
             if not cls.the_runner.is_alive():
                 cls.the_runner.join(timeout=1)
                 cls._interpret_runner_result(cls.the_runner)
                 cls.the_runner = None
             else:
-                # If it's still alive, we might want to wait a bit or just leave it
-                # but for tests, we should probably try to join it
-                cls.the_runner.join(timeout=2)
-                if not cls.the_runner.is_alive():
-                    cls._interpret_runner_result(cls.the_runner)
-                    cls.the_runner = None
-                else:
-                    logger.warning("JobScheduler runner is still alive during shutdown")
+                logger.info(
+                    "Job #%d detached process left running during worker shutdown",
+                    cls.the_runner.db_job.id,
+                )
