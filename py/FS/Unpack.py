@@ -46,6 +46,7 @@ from helpers.httpexception import (
     DETAIL_FILE_TYPE_NOT_ACCEPTED,
     DETAIL_UNPACK_INTERRUPTED,
     DETAIL_UNPACK_NO_DISK_SPACE,
+    DETAIL_UNPACK_PARTIAL,
     DETAIL_UNPACK_TOO_DEEP,
     DETAIL_UNPACK_TOO_LARGE,
     DETAIL_UNPACK_TOO_MANY_ENTRIES,
@@ -111,6 +112,13 @@ class InsufficientStorageException(BaseAppException):
 
     def __init__(self, message: str):
         super().__init__(message, status_code=507)
+
+
+class PartialPublishException(BaseAppException):
+    """A failed publish could not be undone, part of the extraction may be in place"""
+
+    def __init__(self) -> None:
+        super().__init__(DETAIL_UNPACK_PARTIAL, status_code=500)
 
 
 class FileTypeRefusedException(UnprocessableEntityException):
@@ -706,21 +714,32 @@ class Unpacker(object):
     @classmethod
     def _publish(cls, staging: Path, parent: Path) -> List[str]:
         """
-        Move the content of the staging directory into parent, merged into what is already
-        there: new entries are added, same-name ones overwritten, others kept.
+        Move the content of the staging directory into parent, merged into what is
+        already there: new entries are added, same-name ones replaced, others kept.
+        All or nothing: replaced entries are kept aside until the end, and on failure
+        each move is undone.
         Return the published names.
         """
         published = list(staging.iterdir())
-        for an_entry in published:
-            cls._merge(an_entry, parent / an_entry.name)
-        staging.rmdir()
+        # Created after the listing, so not published
+        backup = cls._new_staging_dir(staging, Path("replaced"))
+        moves: List[Tuple[Path, Path]] = []
+        try:
+            for an_entry in published:
+                cls._merge(an_entry, parent / an_entry.name, backup, moves)
+        except Exception:
+            cls._undo(moves)
+            raise
+        shutil.rmtree(staging)  # With the replaced entries
         return sorted(an_entry.name for an_entry in published)
 
     @classmethod
-    def _merge(cls, src: Path, dst: Path) -> None:
+    def _merge(
+        cls, src: Path, dst: Path, backup: Path, moves: List[Tuple[Path, Path]]
+    ) -> None:
         """
         Put src at dst, merging into an existing directory: new entries are added,
-        same-name ones overwritten, others kept. One rename when dst is absent.
+        same-name ones replaced, others kept. One rename when dst is absent.
         """
         if (
             src.is_dir()
@@ -729,23 +748,43 @@ class Unpacker(object):
             and not dst.is_symlink()
         ):
             for a_child in list(src.iterdir()):
-                cls._merge(a_child, dst / a_child.name)
+                cls._merge(a_child, dst / a_child.name, backup, moves)
             src.rmdir()
         else:
-            cls._replace(src, dst)
+            cls._replace(src, dst, backup, moves)
 
-    @staticmethod
-    def _replace(src: Path, dst: Path) -> None:
+    @classmethod
+    def _replace(
+        cls, src: Path, dst: Path, backup: Path, moves: List[Tuple[Path, Path]]
+    ) -> None:
         """
-        Put src at dst, removing whatever was at dst first, e.g. a file where a directory
-        comes. One rename: merging only goes down existing directories, see _merge.
+        Put src at dst, moving whatever was at dst into backup first, e.g. a file where
+        a directory comes. Merging only goes down existing directories, see _merge.
         """
         if dst.is_symlink() or dst.exists():
-            if dst.is_dir() and not dst.is_symlink():
-                shutil.rmtree(dst)
-            else:
-                dst.unlink()
+            cls._move(dst, backup / str(len(moves)), moves)
+        cls._move(src, dst, moves)
+
+    @staticmethod
+    def _move(src: Path, dst: Path, moves: List[Tuple[Path, Path]]) -> None:
+        """A rename, recorded for undoing it"""
         src.rename(dst)
+        moves.append((src, dst))
+
+    @staticmethod
+    def _undo(moves: List[Tuple[Path, Path]]) -> None:
+        """Undo the moves, last first. Best effort, raise at the end if one failed."""
+        failed = False
+        for src, dst in reversed(moves):
+            try:
+                # A merged directory is removed once its last child moved
+                src.parent.mkdir(parents=True, exist_ok=True)
+                dst.rename(src)
+            except OSError as e:
+                logger.error("Could not undo the move of %s to %s: %s", src, dst, e)
+                failed = True
+        if failed:
+            raise PartialPublishException()
 
     def unpack_failure(self, name: str, e: Exception) -> Tuple[int, str]:
         """
@@ -761,6 +800,9 @@ class Unpacker(object):
             code, reason = 500, "unexpected server error"
         if isinstance(e, FileTypeRefusedException):
             return code, "Upload of '%s' refused: %s" % (name, reason)
+        if isinstance(e, PartialPublishException):
+            message = "Extraction of '%s' failed, part of it may have been kept: %s"
+            return code, message % (name, reason)
         return code, "Extraction of '%s' failed, nothing was kept: %s" % (name, reason)
 
     def _report_failure(self, parent: Path, archive_name: str, e: Exception) -> None:
@@ -916,7 +958,11 @@ class Unpacker(object):
                     self._dispatch_nested(staged_archive, staging, kind=kind)
                     published = self._publish(staging, to_path)
                 except Exception as e:
-                    shutil.rmtree(staging, ignore_errors=True)
+                    if isinstance(e, PartialPublishException):
+                        # It holds what the extraction replaced, for a recovery
+                        logger.error("Kept %s, its publish was not undone", staging)
+                    else:
+                        shutil.rmtree(staging, ignore_errors=True)
                     compressed_path.unlink(missing_ok=True)
                     self._report_failure(to_path, archive_name, e)
                     raise

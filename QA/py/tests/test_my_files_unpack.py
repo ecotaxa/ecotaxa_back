@@ -104,7 +104,7 @@ import tarfile
 
 import pytest
 
-from FS.Unpack import PROGRESS_PREFIX, Unpacker
+from FS.Unpack import PROGRESS_PREFIX, PartialPublishException, Unpacker
 from FS.UserFilesDir import UserFilesDirectory
 from helpers.CustomException import UnprocessableEntityException
 from helpers.httpexception import (
@@ -183,6 +183,63 @@ def test_failure_during_type_check(tmp_path, monkeypatch):
     with pytest.raises(OSError):
         unpacker.dispatch_unpack(archive, parent)
     _nothing_left(parent)
+
+
+def _failing_publish(monkeypatch, then=None):
+    """The publish fails when moving z.tsv, after then(src) if given"""
+    orig = Unpacker._move
+
+    def failing(src: Path, dst: Path, moves) -> None:
+        if src.name == "z.tsv":
+            if then is not None:
+                then(src)
+            raise OSError("Permission denied")
+        orig(src, dst, moves)
+
+    monkeypatch.setattr(Unpacker, "_move", staticmethod(failing))
+
+
+def _publish_setup(tmp_path: Path):
+    root, parent = _setup(tmp_path)
+    (parent / "name").mkdir()
+    (parent / "name" / "a.tsv").write_bytes(b"old\n")
+    (parent / "name" / "old.tsv").write_bytes(TSV)
+    archive = _upload(
+        parent,
+        "name.zip",
+        zip_bytes({"a.tsv": TSV, "sub/n.tsv": TSV, "z.tsv": TSV}),
+    )
+    return root, parent, archive
+
+
+def test_publish_failure_undone(tmp_path, monkeypatch):
+    root, parent, archive = _publish_setup(tmp_path)
+    user_dir = _recording(make_user_dir(root))
+    _failing_publish(monkeypatch)
+    with pytest.raises(OSError):
+        user_dir.unpacker.dispatch_unpack(archive, parent)
+    # As before: what was replaced is back, nothing from the archive
+    assert tree(parent) == ["name/", "name/a.tsv", "name/old.tsv"]
+    assert (parent / "name" / "a.tsv").read_bytes() == b"old\n"
+    assert "nothing was kept" in _failure_log(user_dir)
+
+
+def test_publish_undo_failure_keeps_staging(tmp_path, monkeypatch):
+    root, parent, archive = _publish_setup(tmp_path)
+    user_dir = _recording(make_user_dir(root))
+
+    def block_undo(src: Path) -> None:
+        # a.tsv was moved from there, it can't come back
+        (src.parent / "a.tsv").mkdir()
+        (src.parent / "a.tsv" / "x").write_bytes(b"x")
+
+    _failing_publish(monkeypatch, block_undo)
+    with pytest.raises(PartialPublishException):
+        user_dir.unpacker.dispatch_unpack(archive, parent)
+    # Kept, it holds what the extraction replaced
+    kept = [an_entry.name for an_entry in parent.iterdir()]
+    assert any(a_name.startswith(PROGRESS_PREFIX) for a_name in kept), kept
+    assert "part of it may have been kept" in _failure_log(user_dir)
 
 
 def _failure_log(user_dir) -> str:
