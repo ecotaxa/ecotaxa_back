@@ -35,6 +35,7 @@ class ImportDiagnostic(object):
         self.error_context: Optional[str] = None
         # existing objects for consistency checks
         self.existing_objects_and_image: Set[str] = set()
+        self.existing_ranks_per_obj: RanksPerObject[str] = RanksPerObject()
         self.topology = ProjectTopology()
         # the files which were found but skipped
         self.skipped_files: List[str] = []
@@ -106,7 +107,7 @@ class ImportHow(object):
         self.existing_objects: Dict[str, int] = {}
         # The generated/from TSV image ranks, compact per object.
         # e.g. 1455263 -> {1, 2} or 636800034 -> 1
-        self.image_ranks_per_obj: RanksPerObject = RanksPerObject()
+        self.image_ranks_per_obj: RanksPerObject[int] = RanksPerObject()
         # Updated during RealImport
         self.loaded_files = loaded_files
         # For UVP6 vignetting

@@ -7,7 +7,6 @@ import random
 import shutil
 import zipfile
 from pathlib import Path
-
 # noinspection PyPackageRequirements
 from typing import Callable, List, Dict, Tuple, Generator
 
@@ -194,7 +193,9 @@ class InBundle(object):
             return Project.fetch_existing_objects(session, prj_id)
 
     @staticmethod
-    def fetch_existing_ranks(session: Session, prj_id: ProjectIDT) -> RanksPerObject:
+    def fetch_existing_ranks(
+        session: Session, prj_id: ProjectIDT
+    ) -> RanksPerObject[int]:
         """
         Get existing image ranks from the project
         """

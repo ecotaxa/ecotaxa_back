@@ -6,9 +6,11 @@ import csv
 import datetime
 import sys
 from collections import OrderedDict
+from itertools import chain
 from pathlib import Path
 from typing import (
     Dict,
+    Iterable,
     Set,
     Any,
     Mapping,
@@ -50,6 +52,7 @@ from DB.Sample import Sample
 from DB.User import UserIDT
 from DB.helpers import Session
 from DB.helpers.Bean import Bean
+from DB.helpers.Caches import RanksPerObject
 from DB.helpers.ORM import detach_from_session
 from helpers.DynamicLogs import get_logger
 from .Image import ImageBO
@@ -931,18 +934,13 @@ class TSVFile(object):
         sub_path = where.vault.store_image(img_file_path, image_to_write.imgid)
         present_ranks = how.image_ranks_per_obj.ranks_of(image_to_write.objid)
         if image_to_write.get("imgrank") is None:
-            self.compute_rank(image_to_write, present_ranks)
+            image_to_write.imgrank = self.compute_next_rank(present_ranks)
         else:
             # The TSV format is float
             image_to_write.imgrank = int(image_to_write.imgrank)
             if image_to_write.imgrank in present_ranks:
-                tsv_rank = image_to_write.imgrank
-                self.compute_rank(image_to_write, present_ranks)
-                logger.info(
-                    "For %s, cannot use rank from TSV %d, using %d instead",
-                    img_file_path,
-                    tsv_rank,
-                    image_to_write.imgrank,
+                raise ValueError(
+                    f"Duplicate rank {image_to_write.imgrank} for object {image_to_write.objid}"
                 )
         how.image_ranks_per_obj.add(image_to_write.objid, image_to_write.imgrank)
 
@@ -953,13 +951,12 @@ class TSVFile(object):
             logger.error(err + ", not copied")
 
     @staticmethod
-    def compute_rank(image_to_write, present_ranks):
+    def compute_next_rank(present_ranks: Iterable[int]) -> int:
         # No (more) duplicates, so pick next number from existing ones
         ranks_to_use = [a_rank for a_rank in present_ranks if a_rank < 100]
         if len(ranks_to_use) == 0:
-            image_to_write.imgrank = 0
-        else:
-            image_to_write.imgrank = max(ranks_to_use) + 1
+            return 0
+        return max(ranks_to_use) + 1
 
     def do_validate(self, how: ImportHow, diag: ImportDiagnostic):
         with self.open():
@@ -1081,6 +1078,7 @@ class TSVFile(object):
         row_count_for_csv = 0
         seen_vals: Dict[str, LRUCache] = {}
         local_keys: Dict[str, int] = {}
+        local_obj_ranks: RanksPerObject[str] = RanksPerObject()
         logged_parents: Set[Tuple[Any, Any]] = set()
         lig: Dict
         for lig in self.rdr:
@@ -1123,24 +1121,58 @@ class TSVFile(object):
                         self.user_loc,
                     )
 
-            # Verify duplicate images
-            key_exist_obj = "%s*%s" % (object_id, img_file_name)
-            if key_exist_obj in local_keys:
-                previous_line = local_keys[key_exist_obj]
-                diag.error(
-                    "line %d: (Object '%s', Image '%s') is already in this TSV line %d."
-                    % (line_num, object_id, img_file_name, previous_line),
-                    self.user_loc,
+            if object_id != "":
+                obj_local_ranks = local_obj_ranks.ranks_of(object_id)
+                obj_existing_ranks = diag.existing_ranks_per_obj.ranks_of(object_id)
+
+                # Determine rank
+                raw_img_rank = lig.get("img_rank")
+                clean_img_rank = (
+                    clean_value_and_none(raw_img_rank, is_numeric=True)
+                    if raw_img_rank is not None
+                    else ""
                 )
-            elif not how.skip_object_duplicates:
-                # Ban the duplicates, except if we can skip them.
-                if key_exist_obj in diag.existing_objects_and_image:
+                rank: int | None
+                if clean_img_rank != "":
+                    vf = to_float(clean_img_rank)
+                    rank = int(vf) if vf is not None else None
+                else:
+                    rank = self.compute_next_rank(
+                        chain(obj_local_ranks, obj_existing_ranks)
+                    )
+
+                # Verify duplicate images and ranks
+                key_exist_obj = "%s*%s" % (object_id, img_file_name)
+                if key_exist_obj in local_keys:
+                    previous_line = local_keys[key_exist_obj]
                     diag.error(
-                        "line %d: (Object '%s', Image '%s') is already in EcoTaxa or being imported."
-                        % (line_num, object_id, img_file_name),
+                        "line %d: (Object '%s', Image '%s') is already in this TSV line %d."
+                        % (line_num, object_id, img_file_name, previous_line),
                         self.user_loc,
                     )
-            local_keys[key_exist_obj] = row_count_for_csv + 2
+                elif rank is not None and rank in obj_local_ranks:
+                    diag.error(
+                        "line %d: (Object '%s', Rank %d) is already in this TSV."
+                        % (line_num, object_id, rank),
+                        self.user_loc,
+                    )
+                elif not how.skip_object_duplicates:
+                    # Ban the duplicates, except if we can skip them.
+                    if key_exist_obj in diag.existing_objects_and_image:
+                        diag.error(
+                            "line %d: (Object '%s', Image '%s') is already in EcoTaxa or being imported."
+                            % (line_num, object_id, img_file_name),
+                            self.user_loc,
+                        )
+                    elif rank is not None and rank in obj_existing_ranks:
+                        diag.error(
+                            "line %d: (Object '%s', Rank %d) is already in EcoTaxa or being imported."
+                            % (line_num, object_id, rank),
+                            self.user_loc,
+                        )
+                local_keys[key_exist_obj] = line_num
+                if rank is not None:
+                    local_obj_ranks.add(object_id, rank)
 
             # Verify that we do not make the topology worse...
             if not how.can_update_only:
@@ -1183,6 +1215,7 @@ class TSVFile(object):
 
         # For other TSV analysis
         diag.existing_objects_and_image.update(local_keys.keys())
+        diag.existing_ranks_per_obj.merge(local_obj_ranks)
 
         return row_count_for_csv
 

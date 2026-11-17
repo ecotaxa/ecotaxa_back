@@ -197,9 +197,10 @@ class FileImport(ImportServiceBase):
             with CodeTimer(
                 "collect_existing: Existing images for %d: " % self.prj_id, logger
             ):
-                import_diag.existing_objects_and_image = Image.fetch_existing_images(
-                    self.session, self.prj_id
-                )
+                (
+                    import_diag.existing_objects_and_image,
+                    import_diag.existing_ranks_per_obj,
+                ) = Image.fetch_existing_images(self.session, self.prj_id)
         import_diag.topology.read_from_db(self.session, prj_id=self.prj_id)
         # Do the bulk job of validation
         nb_rows = source_bundle.validate_import(
@@ -409,7 +410,7 @@ class FileImport(ImportServiceBase):
         if self.req.skip_existing_objects:
             # If we must skip existing objects then do an inventory of what's in already
             with CodeTimer("run: Existing images for %d: " % self.prj_id, logger):
-                import_how.objects_and_images_to_skip = Image.fetch_existing_images(
+                import_how.objects_and_images_to_skip, _ = Image.fetch_existing_images(
                     self.session, self.prj_id
                 )
         import_how.do_thumbnail_above(self.config.get_thumbnails_limit())

@@ -121,13 +121,13 @@ class Project(Model):
     @classmethod
     def fetch_existing_ranks(
         cls, session: Session, prj_id: ProjectIDT
-    ) -> RanksPerObject:
+    ) -> RanksPerObject[int]:
         """
         Image ranks per object, compact form @see RanksPerObject.
         """
         from .Relations import ObjectHeader, Sample, Image, Acquisition
 
-        ret = RanksPerObject()
+        ret: RanksPerObject[int] = RanksPerObject()
         stmt = (
             select(Image.objid, Image.imgrank)
             .join(ObjectHeader)
