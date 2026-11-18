@@ -253,12 +253,12 @@ class DarwinCoreExport(JobServiceBase):
                 + DETAIL_ONE_OR_MORE_PRIVATE
                 + ": "
                 + ", ".join(
-                [
-                    prj.title + "(" + str(prj.projid) + ")"
-                    for prj in self.collection.projects
-                    if (prj.access == AccessLevelEnum.PRIVATE.value)
-                ]
-            )
+                    [
+                        prj.title + "(" + str(prj.projid) + ")"
+                        for prj in self.collection.projects
+                        if (prj.access == AccessLevelEnum.PRIVATE.value)
+                    ]
+                )
             )
             raise HTTPException(status_code=422, detail=detail)
         logger.info("---------- create job -----------")
@@ -640,7 +640,7 @@ class DarwinCoreExport(JobServiceBase):
                 # TODO: ZooProcess (from projects)
             ],
             keywordThesaurus="GBIF Dataset Type Vocabulary: "
-                             "http://rs.gbif.org/vocabulary/gbif/dataset_type.xml",
+            "http://rs.gbif.org/vocabulary/gbif/dataset_type.xml",
         )
 
         now = now_time().replace(microsecond=0)
@@ -904,7 +904,9 @@ class DarwinCoreExport(JobServiceBase):
                 % (self._sample_ref_for_message(sample), str(e))
             )
         else:
-            ins = self.instrument_from_sample_fields(net_type, net_mesh, net_surf, event_id)
+            ins = self.instrument_from_sample_fields(
+                net_type, net_mesh, net_surf, event_id
+            )
             if ins is None:
                 self.unknown_nets.setdefault(net_type, []).append(
                     self._sample_ref_for_message(sample)
@@ -925,8 +927,9 @@ class DarwinCoreExport(JobServiceBase):
     }
 
     @staticmethod
-    def instrument_from_sample_fields(net_type: Any, net_mesh: Any, net_surf: Any,
-                                      event_id: str) -> SamplingInstrumentName | None:
+    def instrument_from_sample_fields(
+        net_type: Any, net_mesh: Any, net_surf: Any, event_id: str
+    ) -> SamplingInstrumentName | None:
         if net_type == "bongo":
             # TODO: There could be more specific, a dozen of bongos are there:
             #  http://vocab.nerc.ac.uk/collection/L22/current/
@@ -1486,6 +1489,7 @@ class DarwinCoreExport(JobServiceBase):
             ProjectBO.update_taxo_stats(self.session, projid=a_project_id)
             # Ensure that the geography is OK propagated upwards from objects, for all projects inside the collection
             Sample.propagate_geo(self.session, prj_id=a_project_id)
+            self.session.commit()
         a_stat: ProjectTaxoStats
         for a_stat in ProjectBO.read_taxo_stats(self.session, project_ids, []):
             self.validated_count += a_stat.nb_validated

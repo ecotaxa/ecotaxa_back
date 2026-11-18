@@ -298,6 +298,7 @@ class ProjectsService(Service):
             self.session, current_user_id, Action.ADMINISTRATE, prj_id
         )
         Sample.propagate_geo(self.session, prj_id)
+        self.session.commit()
 
     def recompute_sunpos(self, current_user_id: int, prj_id: ProjectIDT) -> int:
         """

@@ -526,6 +526,7 @@ class EnumeratedObjectSet(MappedTable):
         qry = qry.join(Acquisition)
         qry = qry.join(ObjectHeader)
         qry = qry.filter(ObjectHeader.objid == any_(self.object_ids))
+        qry = qry.order_by(Project.projid)
         qry = qry.yield_per(SQL.DB_CHUNK_SIZE * 40)  # 1 column
         with CodeTimer("Prjs for %d objs: " % len(self.object_ids), logger):
             return [an_id for an_id, in qry]
