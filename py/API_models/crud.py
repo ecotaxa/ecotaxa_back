@@ -729,6 +729,14 @@ class SampleModel(_SampleModelFromDB):
     )
 
 
+class SampleDetailModel(SampleModel):
+    objcount: float = Field(
+        title="Object count",
+        description="The number of objects in this sample.",
+        examples=[15.0],
+    )
+
+
 class SamplesSearchReq(BaseModel):
     """
     Body form of GET /samples/search, for long project lists which could exceed URL length limits.

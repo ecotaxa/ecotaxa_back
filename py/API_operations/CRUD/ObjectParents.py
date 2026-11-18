@@ -57,6 +57,7 @@ class SamplesService(Service):
             )
         mappings = ProjectMapping().load_from_project(project)
         ret.map_free_columns(mappings.sample_mappings)
+        setattr(ret, "objcount", ret.read_objcount())
         return ret
 
     def update_set(
