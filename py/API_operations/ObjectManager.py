@@ -392,8 +392,8 @@ class ObjectManager(Service):
             self.CHUNK_SIZE, remover.add_files
         )
 
-        # Update stats on impacted project(s)
-        for prj_id in prj_ids:
+        # Update stats on impacted project(s) in deterministic order to prevent deadlocks
+        for prj_id in sorted(prj_ids):
             ProjectBO.update_taxo_stats(self.session, prj_id)
             # Stats depend on taxo stats
             ProjectBO.update_stats(self.session, prj_id)

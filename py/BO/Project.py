@@ -676,6 +676,10 @@ class ProjectBO(object):
     @staticmethod
     def update_taxo_stats(session: Session, projid: int):
         sql = text(f"""
+        SELECT 1 FROM projects WHERE projid = :prjid FOR NO KEY UPDATE;
+         """)  # Prevent simultaneous updates from e.g. jobs without blocking child FK checks
+        session.execute(sql, {"prjid": projid})
+        sql = text(f"""
         DELETE FROM projects_taxo_stat pts
          WHERE pts.projid = :prjid;
          """)
@@ -1189,11 +1193,19 @@ class ProjectBO(object):
         Instead, apply deltas because in this context we know them.
         TODO: All SQL to SQLAlchemy form
         """
-        needed_ids = list(collated_changes.keys())
+        needed_ids = sorted(collated_changes.keys())
+        # Lock project first (same order as update_taxo_stats) to prevent deadlocks
+        # and serialize with full stats recomputations
+        prj_sql = """SELECT 1
+                       FROM projects
+                      WHERE projid = :prjid
+                     FOR NO KEY UPDATE"""
+        session.execute(text(prj_sql), {"prjid": prj_id})
         # Lock taxo lines to prevent re-entering, during validation it's often a handful of them.
         pts_sql = """SELECT id
                        FROM taxonomy
                       WHERE id = ANY(:ids)
+                      ORDER BY id
                      FOR NO KEY UPDATE
         """
         session.execute(text(pts_sql), {"ids": needed_ids})
@@ -1202,6 +1214,7 @@ class ProjectBO(object):
                        FROM projects_taxo_stat
                       WHERE projid = :prj
                         AND id = ANY(:ids)
+                      ORDER BY id
                      FOR NO KEY UPDATE"""
         res = session.execute(text(pts_sql), {"prj": prj_id, "ids": needed_ids})
         ids_in_db = {classif_id: nbr for (classif_id, nbr) in res}

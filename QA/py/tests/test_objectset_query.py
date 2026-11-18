@@ -6,7 +6,7 @@ import logging
 
 from starlette import status
 
-from API_models.filters import ObjectSetQueryFilters
+from API_models.filters import ProjectFilters
 from tests.credentials import CREATOR_AUTH
 from tests.test_import import do_test_import, do_import_a_bit_more_skipping
 
@@ -271,12 +271,12 @@ def test_fields_not_a_filter():
         {"taxo": "1", "fields": "obj.orig_id,fre.area"},
         [["taxo", "1"], ["fields", "obj.orig_id,fre.area"]],
     ):
-        flt = ObjectSetQueryFilters.model_validate(body)
+        flt = ProjectFilters.model_validate(body)
         assert flt.fields == "obj.orig_id,fre.area"
         assert "fields" not in flt.base()
         assert flt.base()["taxo"] == "1"
         assert flt.min_base() == {"taxo": "1"}
-    assert ObjectSetQueryFilters.model_validate({}).fields is None
+    assert ProjectFilters.model_validate({}).fields is None
 
 
 def test_fields_in_list_body(fastapi):
@@ -297,3 +297,28 @@ def test_fields_in_list_body(fastapi):
     )
     assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     assert "'fields'" in rsp.json()["detail"]
+
+
+def test_query_body_schema_is_project_filters():
+    # Generated clients name the body argument after its schema: ProjectFilters gives
+    # get_object_set(project_id, project_filters, ...). A subclass would rename it and break callers.
+    from main import app
+
+    op = app.openapi()["paths"]["/object_set/{project_id}/query"]["post"]
+    schema = op["requestBody"]["content"]["application/json"]["schema"]
+    assert schema == {"$ref": "#/components/schemas/ProjectFilters"}
+
+
+def test_fields_in_body_ignored_elsewhere(fastapi):
+    # 'fields' is part of ProjectFilters, but only the query uses it
+    from tests.test_classification import OBJECT_SET_SUMMARY_URL
+
+    prj_id = do_test_import(fastapi, "Fields ignored by summary test project")
+    url = OBJECT_SET_SUMMARY_URL.format(project_id=prj_id)
+    ref = fastapi.post(url, headers=CREATOR_AUTH, json={"statusfilter": "P"})
+    assert ref.status_code == status.HTTP_200_OK
+    rsp = fastapi.post(
+        url, headers=CREATOR_AUTH, json={"statusfilter": "P", "fields": "obj.orig_id"}
+    )
+    assert rsp.status_code == status.HTTP_200_OK
+    assert rsp.json() == ref.json()

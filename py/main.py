@@ -78,7 +78,6 @@ from API_models.filters import (
     Optional,
     ProjectFilters,
     ProjectFiltersDict,
-    ObjectSetQueryFilters,
 )
 from API_models.helpers.Introspect import plain_columns
 from API_models.imports import ImportReq, SimpleImportRsp, SimpleImportReq, ImportRsp
@@ -2601,7 +2600,7 @@ def get_object_set(
     project_id: int = Path(
         ..., description="Internal, numeric id of the project.", examples=[1]
     ),
-    filters: ObjectSetQueryFilters = Body(...),
+    filters: ProjectFilters = Body(...),
     fields: Optional[str] = Query(
         title="Fields",
         description="""
