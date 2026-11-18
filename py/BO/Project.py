@@ -676,6 +676,10 @@ class ProjectBO(object):
     @staticmethod
     def update_taxo_stats(session: Session, projid: int):
         sql = text(f"""
+        SELECT 1 FROM projects WHERE projid = :prjid FOR UPDATE;
+         """)  # Prevent simultaneous updates from e.g. jobs
+        session.execute(sql, {"prjid": projid})
+        sql = text(f"""
         DELETE FROM projects_taxo_stat pts
          WHERE pts.projid = :prjid;
          """)
