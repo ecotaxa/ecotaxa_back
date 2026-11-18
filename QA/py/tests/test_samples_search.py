@@ -7,8 +7,12 @@ import json
 
 from starlette import status
 
+from API_operations.CRUD.ObjectParents import SamplesService
+from API_operations.CRUD.Projects import ProjectsService
 from API_operations.CRUD.Users import UserService
+from BO.DataLicense import AccessLevelEnum
 from BO.Preferences import Preferences
+from DB.ProjectPrivilege import ProjectPrivilege
 from DB.User import User
 from tests.credentials import (
     ADMIN_USER_ID,
@@ -17,6 +21,7 @@ from tests.credentials import (
     ORDINARY_USER_USER_ID,
 )
 from tests.test_import import create_project, do_test_import
+from tests.test_project_bo_set import _counting_queries
 
 SAMPLES_SEARCH_URL = "/samples/search?project_ids={project_ids}&id_pattern="
 SAMPLES_SEARCH_POST_URL = "/samples/search"
@@ -118,3 +123,73 @@ def test_samples_search_post_keeps_recent_projects(fastapi):
     assert rsp.json() == []
     # A search is not an access to each project: recent projects unchanged
     assert _recent_projects(ORDINARY_USER_USER_ID) == before
+
+
+# Rights over many projects are checked in one go, with the same answers as one by one
+PRIVATE = AccessLevelEnum.PRIVATE.value
+PUBLIC = AccessLevelEnum.PUBLIC.value
+OPEN = AccessLevelEnum.OPEN.value
+
+
+def _search(fastapi, prj_ids, auth):
+    ids = ",".join(str(p) for p in prj_ids)
+    return fastapi.get(SAMPLES_SEARCH_URL.format(project_ids=ids), headers=auth)
+
+
+def _grant(prj_id, user_id, privilege):
+    with ProjectsService() as sce:
+        priv = ProjectPrivilege()
+        priv.projid = prj_id
+        priv.member = user_id
+        priv.privilege = privilege
+        sce.session.add(priv)
+        sce.session.commit()
+
+
+def test_samples_search_rights_on_many_projects(fastapi):
+    public = create_project(ADMIN_USER_ID, "Samples rights public", access=PUBLIC)
+    an_open = create_project(ADMIN_USER_ID, "Samples rights open", access=OPEN)
+    private = create_project(ADMIN_USER_ID, "Samples rights private", access=PRIVATE)
+    viewed = create_project(ADMIN_USER_ID, "Samples rights viewed", access=PRIVATE)
+    _grant(viewed, ORDINARY_USER_USER_ID, "View")
+    unknown = 999999
+    ok, refused, not_found = (
+        status.HTTP_200_OK,
+        status.HTTP_403_FORBIDDEN,
+        status.HTTP_404_NOT_FOUND,
+    )
+    # Logged user: public, open, and private with a privilege are readable
+    assert _search(fastapi, [public, an_open, viewed], USER_AUTH).status_code == ok
+    # One private project in the list, wherever it is, refuses all
+    assert _search(fastapi, [public, private], USER_AUTH).status_code == refused
+    assert _search(fastapi, [private, public], USER_AUTH).status_code == refused
+    # Unknown project
+    assert _search(fastapi, [public, unknown], USER_AUTH).status_code == not_found
+    # First failure in list order wins, as when checking one by one
+    assert _search(fastapi, [unknown, private], USER_AUTH).status_code == not_found
+    assert _search(fastapi, [private, unknown], USER_AUTH).status_code == refused
+    # Admin reads anything existing
+    assert _search(fastapi, [private, public], ADMIN_AUTH).status_code == ok
+    assert _search(fastapi, [private, unknown], ADMIN_AUTH).status_code == not_found
+    # Anonymous: only open projects, unknown ones are refused
+    assert _search(fastapi, [an_open], {}).status_code == ok
+    assert _search(fastapi, [an_open, public], {}).status_code == refused
+    assert _search(fastapi, [an_open, unknown], {}).status_code == refused
+    # Duplicates and empty list
+    assert _search(fastapi, [public, public], USER_AUTH).json() == []
+    assert _search(fastapi, [], USER_AUTH).json() == []
+
+
+def test_samples_search_rights_in_constant_queries(fastapi):
+    prj_ids = [
+        create_project(ADMIN_USER_ID, "Samples rights queries %d" % i) for i in range(6)
+    ]
+    counts = []
+    for some_ids in (prj_ids[:2], prj_ids):
+        with SamplesService() as sce:
+            with _counting_queries(sce.session) as statements:
+                sce.search(ORDINARY_USER_USER_ID, some_ids, "")
+            # The background job scheduler polls on the same engine, at any time
+            mine = [a_stmt for a_stmt in statements if "FROM job" not in a_stmt]
+            counts.append(len(mine))
+    assert counts[0] == counts[1], counts
