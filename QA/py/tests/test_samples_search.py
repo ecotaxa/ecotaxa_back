@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 # Searches and stats over several projects check rights on each project,
 # but are not an access to them: they must not change the user's recent projects.
+# /samples/search is also a POST with the same parameters in a JSON body (long project lists),
+# but they must never be in both the query string and the body.
 import json
 
 from starlette import status
@@ -14,9 +16,10 @@ from tests.credentials import (
     USER_AUTH,
     ORDINARY_USER_USER_ID,
 )
-from tests.test_import import create_project
+from tests.test_import import create_project, do_test_import
 
 SAMPLES_SEARCH_URL = "/samples/search?project_ids={project_ids}&id_pattern="
+SAMPLES_SEARCH_POST_URL = "/samples/search"
 USER_STATS_URL = "/project_set/user_stats?ids={project_ids}"
 
 
@@ -50,3 +53,68 @@ def test_user_stats_keeps_recent_projects(fastapi):
     rsp = fastapi.get(url, headers=ADMIN_AUTH)
     assert rsp.status_code == status.HTTP_200_OK
     assert _recent_projects(ADMIN_USER_ID) == before
+
+
+def test_samples_search_post(fastapi):
+    # Long project lists can be sent in the body, same result as GET
+    prj_ids = [do_test_import(fastapi, "Samples search POST %d" % i) for i in range(2)]
+    ids_str = ",".join(str(p) for p in prj_ids)
+    rsp = fastapi.get(SAMPLES_SEARCH_URL.format(project_ids=ids_str), headers=ADMIN_AUTH)
+    assert rsp.status_code == status.HTTP_200_OK
+    in_get = rsp.json()
+    assert len(in_get) > 0
+    assert {a_sam["projid"] for a_sam in in_get} == set(prj_ids)
+    rsp = fastapi.post(
+        SAMPLES_SEARCH_POST_URL,
+        headers=ADMIN_AUTH,
+        json={"project_ids": ids_str, "id_pattern": "*"},
+    )
+    assert rsp.status_code == status.HTTP_200_OK
+    assert rsp.json() == in_get
+    # id_pattern defaults to 'any'
+    rsp = fastapi.post(
+        SAMPLES_SEARCH_POST_URL, headers=ADMIN_AUTH, json={"project_ids": ids_str}
+    )
+    assert rsp.status_code == status.HTTP_200_OK
+    assert rsp.json() == in_get
+    # A pattern matching nothing
+    rsp = fastapi.post(
+        SAMPLES_SEARCH_POST_URL,
+        headers=ADMIN_AUTH,
+        json={"project_ids": ids_str, "id_pattern": "no_such_sample_xyz"},
+    )
+    assert rsp.status_code == status.HTTP_200_OK
+    assert rsp.json() == []
+
+
+def test_samples_search_post_refuses_both_places(fastapi):
+    prj_id = create_project(ADMIN_USER_ID, "Samples search POST both places")
+    for a_param, a_val in (("project_ids", prj_id), ("id_pattern", "*")):
+        rsp = fastapi.post(
+            SAMPLES_SEARCH_POST_URL + "?%s=%s" % (a_param, a_val),
+            headers=ADMIN_AUTH,
+            json={"project_ids": str(prj_id)},
+        )
+        assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+        assert (
+            "'%s' given both in query string and body" % a_param
+            in rsp.json()["detail"]
+        )
+
+
+def test_samples_search_post_keeps_recent_projects(fastapi):
+    # Public projects the user has no right on, readable by any logged user
+    prj_ids = [
+        create_project(ADMIN_USER_ID, "Samples search POST recent %d" % i)
+        for i in range(2)
+    ]
+    before = _recent_projects(ORDINARY_USER_USER_ID)
+    rsp = fastapi.post(
+        SAMPLES_SEARCH_POST_URL,
+        headers=USER_AUTH,
+        json={"project_ids": ",".join(str(p) for p in prj_ids)},
+    )
+    assert rsp.status_code == status.HTTP_200_OK
+    assert rsp.json() == []
+    # A search is not an access to each project: recent projects unchanged
+    assert _recent_projects(ORDINARY_USER_USER_ID) == before

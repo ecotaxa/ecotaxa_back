@@ -729,6 +729,25 @@ class SampleModel(_SampleModelFromDB):
     )
 
 
+class SamplesSearchReq(BaseModel):
+    """
+    Body form of GET /samples/search, for long project lists which could exceed URL length limits.
+    The parameters must not also be sent in the query string.
+    """
+
+    project_ids: str = Field(
+        title="Project Ids",
+        description="String containing the list of one or more project id separated by non-num char.",
+        examples=["1,55"],
+    )
+    id_pattern: str = Field(
+        default="",
+        title="Pattern Id",
+        description="Sample id textual pattern. Use * or '' for 'any matches'. Match is case-insensitive.",
+        examples=["*"],
+    )
+
+
 class _DBSampleTaxoStatsDescription(DescriptiveModel):
     sample_id: SampleIDT = Field(title="Sample id", description="The sample id.")
     used_taxa = Field(
