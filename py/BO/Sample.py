@@ -107,11 +107,12 @@ class DescribedSampleSet(object):
         """
         Return filtered samples from description.
         TODO: No free columns value so far.
+        Project ids go as a single array parameter: an IN list costs one bind parameter
+        per project (DB driver limit of 65535), and no join with projects is needed.
         """
         qry = select(Sample)
-        qry = qry.join(Sample, Project.all_samples)
-        qry = qry.filter(Project.projid.in_(self.prj_ids))
-        qry = qry.filter(Sample.orig_id.ilike(self.pattern))
+        qry = qry.where(Sample.projid == any_(self.prj_ids))
+        qry = qry.where(Sample.orig_id.ilike(self.pattern))
         return self._session.scalars(qry).fetchall()
 
 
