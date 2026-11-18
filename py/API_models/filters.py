@@ -290,8 +290,8 @@ class ObjectSetQueryFilters(ProjectFilters):
     fields: Optional[str] = Field(
         default=None,
         title="Fields",
-        description="Same as the 'fields' query parameter, which it overrides. "
-        "Use it when the field list makes the URL too long.",
+        description="Same as the 'fields' query parameter, use it when the field list makes the URL too long. "
+        "Sending 'fields' in both the query string and the body is refused with a 422 error.",
         examples=["obj.longitude,fre.feret"],
     )
 

@@ -238,14 +238,14 @@ def test_fields_in_body(fastapi):
     assert rsp.status_code == status.HTTP_200_OK
     assert rsp.json()["object_ids"] == in_qry
     assert rsp.json()["details"] == details_qry
-    # Body wins over query param
+    # Both in query param and body: refused, no silent winner
     rsp = fastapi.post(
         url + "?order_field=obj.objid&fields=obj.objid",
         headers=CREATOR_AUTH,
         json={"fields": some_fields},
     )
-    assert rsp.status_code == status.HTTP_200_OK
-    assert rsp.json()["details"] == details_qry
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert "'fields' given both in query string and body" in rsp.json()["detail"]
     # Body fields alongside real filters, which still apply
     for a_status in ("V", "P"):
         flt_qry, _ = _prj_query(
@@ -291,3 +291,9 @@ def test_fields_in_list_body(fastapi):
     assert rsp.status_code == status.HTTP_200_OK
     assert rsp.json()["object_ids"] == ref
     assert rsp.json()["details"] == ref_details
+    # Both places, list form of body: refused as well
+    rsp = fastapi.post(
+        url + "&fields=obj.objid", headers=CREATOR_AUTH, json=[["fields", "obj.orig_id"]]
+    )
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert "'fields'" in rsp.json()["detail"]
