@@ -4,7 +4,13 @@ import logging
 import pytest
 from starlette import status
 
-from tests.credentials import ADMIN_AUTH, CREATOR_AUTH, ORDINARY_USER3_USER_ID
+from tests.credentials import (
+    ADMIN_AUTH,
+    CREATOR_AUTH,
+    ORDINARY_USER2_USER_ID,
+    ORDINARY_USER3_USER_ID,
+    REAL_USER_ID,
+)
 from tests.test_export import OBJECT_SET_GENERAL_EXPORT_URL
 from tests.test_fastapi import PROJECT_QUERY_URL, USER_ME_URL
 from tests.jobs import get_job_and_wait_until_ok
@@ -359,3 +365,86 @@ def test_collection_remove_project_keeps_other_collections(fastapi):
     for coll_id in coll_ids:
         rsp = fastapi.delete(COLLECTION_DELETE_URL.format(collection_id=coll_id), headers=who)
         assert rsp.status_code == status.HTTP_200_OK
+
+
+def _gui_patch(fastapi, coll_id, **changes):
+    """PATCH like the GUI collection settings: the whole collection as read, with some fields changed."""
+    url = COLLECTION_QUERY_URL.format(collection_id=coll_id)
+    the_coll = fastapi.get(url, headers=ADMIN_AUTH).json()
+    the_coll.update(changes)
+    return fastapi.patch(
+        COLLECTION_UPDATE_URL.format(collection_id=coll_id),
+        headers=ADMIN_AUTH,
+        json=the_coll,
+    )
+
+
+def test_collection_patch_like_gui(fastapi):
+    """The GUI sends back the whole collection with persons changed: never a 500."""
+    prj_id = do_test_import(fastapi, "Coll patch gui prj", instrument="Other scanner")
+    coll_ids = []
+    for title in ("Coll patch gui A", "Coll patch gui B"):
+        rsp = fastapi.post(
+            COLLECTION_CREATE_URL,
+            headers=ADMIN_AUTH,
+            json={"title": title, "project_ids": [prj_id]},
+        )
+        assert rsp.status_code == status.HTTP_200_OK
+        coll_ids.append(rsp.json())
+    coll_id = coll_ids[0]
+    persons = dict(
+        contact_user=ORDINARY_USER3_USER_ID,
+        provider_user=ORDINARY_USER3_USER_ID,
+        creator_users=[REAL_USER_ID],
+        associate_users=[ORDINARY_USER2_USER_ID],
+        creator_organisations=["Coll patch org 1"],
+        associate_organisations=["Coll patch org 2"],
+        display_order={
+            "creators": ["%d_u" % REAL_USER_ID],
+            "associates": ["%d_u" % ORDINARY_USER2_USER_ID],
+        },
+    )
+    variants = {
+        "persons set": persons,
+        "unchanged": {},
+        "persons changed": dict(
+            persons,
+            creator_users=[ORDINARY_USER2_USER_ID],
+            associate_users=[REAL_USER_ID],
+        ),
+        "same org creator and associate": dict(
+            persons,
+            creator_organisations=["Coll patch org 1"],
+            associate_organisations=["Coll patch org 1"],
+        ),
+        "same org twice": dict(
+            persons, creator_organisations=["Coll patch org 1", "Coll patch org 1"]
+        ),
+        "same user twice": dict(
+            persons, creator_users=[REAL_USER_ID, REAL_USER_ID]
+        ),
+    }
+    for name, changes in variants.items():
+        rsp = _gui_patch(fastapi, coll_id, **changes)
+        assert rsp.status_code == status.HTTP_200_OK, (name, rsp.text)
+    # Persons listed twice are stored once
+    coll = fastapi.get(
+        COLLECTION_QUERY_URL.format(collection_id=coll_id), headers=ADMIN_AUTH
+    ).json()
+    assert [u["id"] for u in coll["creator_users"]] == [REAL_USER_ID]
+    # What the DB would refuse gets a clear message, not a 500
+    refused = {
+        "Coll patch gui B": dict(persons, title="Coll patch gui B"),
+        "at most 64 characters (it has 80)": dict(persons, short_title="x" * 80),
+    }
+    for message, changes in refused.items():
+        rsp = _gui_patch(fastapi, coll_id, **changes)
+        assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+        assert message in rsp.json()["detail"]
+    rsp = _gui_patch(fastapi, coll_ids[1], short_title="coll-b")
+    assert rsp.status_code == status.HTTP_200_OK
+    rsp = _gui_patch(fastapi, coll_id, **dict(persons, short_title="coll-b"))
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert rsp.json()["detail"] == (
+        "The short title 'coll-b' is already used by another collection"
+    )
