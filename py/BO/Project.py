@@ -510,8 +510,10 @@ class ProjectBO(object):
         title = title.strip()
         assert instrument is not None, "Project update: A valid Instrument is needed."
         # Field reflexes
-        if cnn_network_id != self._project.cnn_network_id:
-            # Delete CNN features, which depend on the CNN network
+        if cnn_network_id != self._project.cnn_network_id or (
+            cnn_image_position or 1
+        ) != (self._project.cnn_image_position or 1):
+            # Delete CNN features, which depend on the CNN network and image position
             DeepFeatures.delete_all(session, proj_id)
         # Fields update
         self._project.instrument_id = instrument
@@ -590,6 +592,13 @@ class ProjectBO(object):
                     # Delete CNN features, which depend on the CNN network
                     DeepFeatures.delete_all(session, projid)
                 self._project.cnn_network_id = projectreq.cnn_network_id
+            elif modelfield == "cnn_image_position":
+                if (projectreq.cnn_image_position or 1) != (
+                    self._project.cnn_image_position or 1
+                ):
+                    # Delete CNN features, which depend on the image position
+                    DeepFeatures.delete_all(session, projid)
+                self._project.cnn_image_position = projectreq.cnn_image_position
             elif modelfield == "access":
                 self._project.access = projectreq.access
             elif modelfield == "formulae":
