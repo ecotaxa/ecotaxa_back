@@ -213,7 +213,7 @@ api_logger = get_api_logger()
 
 app = FastAPI(
     title="EcoTaxa",
-    version="0.0.56",
+    version="0.0.57",
     # openapi URL as seen from navigator, this is included when /docs is required
     # which serves swagger-ui JS app. Stay in /api sub-path.
     openapi_url="/api/openapi.json",
@@ -2664,6 +2664,16 @@ Allows to return only a slice of the result, by returning a _maximum_ of window_
 If no **unique order** is specified, the result can vary for same call and conditions.""",
         examples=["100"],
     ),
+    img_order: int = Query(
+        default=1,
+        ge=1,
+        title="Image position",
+        description="""
+Selects which image to return for each object, by order of increasing `imgrank`.
+`1` (the default) returns the first/visible image, `2` the second one, and so on.
+When `img.` fields are requested, objects with fewer than `img_order` images are omitted from the result.""",
+        examples=["1"],
+    ),
     current_user: Optional[int] = Depends(get_optional_current_user),
 ) -> MyORJSONResponse:
     """
@@ -2690,6 +2700,7 @@ If no **unique order** is specified, the result can vary for same call and condi
                 order_field,
                 window_start,
                 window_size,
+                img_order,
             )
     rsp.total_ids = total
     rsp.object_ids = [with_p[0] for with_p in obj_with_parents]
@@ -2698,13 +2709,14 @@ If no **unique order** is specified, the result can vary for same call and condi
     rsp.project_ids = [with_p[3] for with_p in obj_with_parents]
     rsp.details = details
     api_logger.info(
-        "ObjectSetQuery(prj=%s, flt=%s, ord=%s, ret=%s, winf=%s, wint=%s, seen_ms=%.2f)",
+        "ObjectSetQuery(prj=%s, flt=%s, ord=%s, ret=%s, winf=%s, wint=%s, imgrank=%s, seen_ms=%.2f)",
         project_id,
         filters.min_base(),
         repr(order_field),
         return_fields,
         window_start,
         window_size,
+        img_order,
         (time.time() - before) * 1000,
     )
     # Serialize

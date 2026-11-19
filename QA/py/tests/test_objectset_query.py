@@ -7,6 +7,8 @@ import logging
 from starlette import status
 
 from API_models.filters import ProjectFilters
+from API_operations.helpers.Service import Service
+from DB.Image import Image
 from tests.credentials import CREATOR_AUTH
 from tests.test_import import do_test_import, do_import_a_bit_more_skipping
 
@@ -15,7 +17,15 @@ OBJECT_SET_QUERY_URL = "/object_set/{project_id}/query"  # ?order_field={order}&
 
 # TODO: Dup/extend of the same in test_classification.py
 def _prj_query(
-    fastapi, auth, prj_id, order=None, start=None, size=None, fields=None, **kwargs
+    fastapi,
+    auth,
+    prj_id,
+    order=None,
+    start=None,
+    size=None,
+    fields=None,
+    img_order=None,
+    **kwargs,
 ):
     """Query using the filters in kwargs"""
     params = []
@@ -27,6 +37,8 @@ def _prj_query(
         params.append("window_start=%s" % start)
     if size:
         params.append("window_size=%s" % size)
+    if img_order is not None:
+        params.append("img_order=%s" % img_order)
     if params:
         params.insert(0, "?")
     url = OBJECT_SET_QUERY_URL.format(project_id=prj_id) + "&".join(params)
@@ -322,3 +334,131 @@ def test_fields_in_body_ignored_elsewhere(fastapi):
     )
     assert rsp.status_code == status.HTTP_200_OK
     assert rsp.json() == ref.json()
+
+
+def test_img_order(fastapi):
+    prj_id = do_test_import(fastapi, "Img order test project")
+
+    all_objs, init_details = _prj_query(
+        fastapi,
+        CREATOR_AUTH,
+        prj_id,
+        order="obj.objid",
+        fields="obj.objid,img.imgid,img.imgrank",
+    )
+    assert len(all_objs) >= 2
+    assert init_details == _prj_query(
+        fastapi,
+        CREATOR_AUTH,
+        prj_id,
+        order="obj.objid",
+        fields="obj.objid,img.imgid,img.imgrank",
+        img_order=1,
+    )[1]
+
+    obj0, obj1 = all_objs[0], all_objs[1]
+    with Service() as sce:
+        img0 = (
+            sce.session.query(Image)
+            .filter(Image.objid == obj0)
+            .order_by(Image.imgrank)
+            .first()
+        )
+        img1 = (
+            sce.session.query(Image)
+            .filter(Image.objid == obj1)
+            .order_by(Image.imgrank)
+            .first()
+        )
+        assert img0 is not None and img1 is not None
+        # Add extra images with non-contiguous imgrank values
+        obj0_img2 = Image(
+            objid=obj0,
+            imgrank=img0.imgrank + 2,
+            width=img0.width,
+            height=img0.height,
+            orig_file_name="obj0_rank2.jpg",
+            thumb_width=img0.thumb_width,
+            thumb_height=img0.thumb_height,
+        )
+        obj0_img3 = Image(
+            objid=obj0,
+            imgrank=img0.imgrank + 5,
+            width=img0.width,
+            height=img0.height,
+            orig_file_name="obj0_rank5.jpg",
+            thumb_width=img0.thumb_width,
+            thumb_height=img0.thumb_height,
+        )
+        obj1_img2 = Image(
+            objid=obj1,
+            imgrank=img1.imgrank + 3,
+            width=img1.width,
+            height=img1.height,
+            orig_file_name="obj1_rank3.jpg",
+            thumb_width=img1.thumb_width,
+            thumb_height=img1.thumb_height,
+        )
+        sce.session.add_all([obj0_img2, obj0_img3, obj1_img2])
+        sce.session.commit()
+        obj0_img2_id, obj0_img2_rank = obj0_img2.imgid, obj0_img2.imgrank
+        obj0_img3_id, obj0_img3_rank = obj0_img3.imgid, obj0_img3.imgrank
+        obj1_img2_id, obj1_img2_rank = obj1_img2.imgid, obj1_img2.imgrank
+
+    # img_order=2 returns only objects with >= 2 images, picking 2nd by increasing imgrank
+    objs_2, details_2 = _prj_query(
+        fastapi,
+        CREATOR_AUTH,
+        prj_id,
+        order="obj.objid",
+        fields="obj.objid,img.imgid,img.imgrank,img.orig_file_name",
+        img_order=2,
+    )
+    assert objs_2 == [obj0, obj1]
+    assert details_2 == [
+        [obj0, obj0_img2_id, obj0_img2_rank, "obj0_rank2.jpg"],
+        [obj1, obj1_img2_id, obj1_img2_rank, "obj1_rank3.jpg"],
+    ]
+
+    # img_order=3 returns only obj0 with its 3rd image
+    objs_3, details_3 = _prj_query(
+        fastapi,
+        CREATOR_AUTH,
+        prj_id,
+        order="obj.objid",
+        fields="obj.objid,img.imgid,img.imgrank,img.orig_file_name",
+        img_order=3,
+    )
+    assert objs_3 == [obj0]
+    assert details_3 == [[obj0, obj0_img3_id, obj0_img3_rank, "obj0_rank5.jpg"]]
+
+    # img_order beyond any object's image count returns empty result when img.* requested
+    objs_4, details_4 = _prj_query(
+        fastapi,
+        CREATOR_AUTH,
+        prj_id,
+        order="obj.objid",
+        fields="obj.objid,img.imgid",
+        img_order=4,
+    )
+    assert objs_4 == []
+    assert details_4 == []
+
+    # Without img.* fields, img_order does not filter out objects
+    objs_no_img, _ = _prj_query(
+        fastapi,
+        CREATOR_AUTH,
+        prj_id,
+        order="obj.objid",
+        fields="obj.objid",
+        img_order=2,
+    )
+    assert objs_no_img == all_objs
+
+    # img_order < 1 is rejected by validation
+    url = OBJECT_SET_QUERY_URL.format(project_id=prj_id)
+    for bad_order in (0, -1):
+        rsp = fastapi.post(
+            f"{url}?img_order={bad_order}", headers=CREATOR_AUTH, json={}
+        )
+        assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
