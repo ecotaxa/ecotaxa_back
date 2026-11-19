@@ -46,6 +46,7 @@ def test_update_prj(fastapi):
         "classifsettings": None,
         "initclassiflist": None,
         "cnn_network_id": None,
+        "cnn_image_position": None,
         "comments": None,
         "contact": {
             "email": "administrator@email.test",
@@ -195,6 +196,7 @@ def test_update_prj(fastapi):
     upd_json["comments"] = "New comment"
     upd_json["contact"] = contact_usr
     upd_json["access"] = AccessLevelEnum.PRIVATE.value
+    upd_json["cnn_image_position"] = 2
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=upd_json)
     assert rsp.status_code == status.HTTP_200_OK
 
@@ -204,6 +206,14 @@ def test_update_prj(fastapi):
     assert rsp.json() != ref_json
     assert rsp.json()["comments"] == "New comment"
     assert rsp.json()["access"] == AccessLevelEnum.PRIVATE.value
+    assert rsp.json()["cnn_image_position"] == 2
+
+    # Invalid cnn_image_position (< 1)
+    invalid_pos_upd = deepcopy(read_json)
+    invalid_pos_upd["cnn_image_position"] = 0
+    url = PROJECT_UPDATE_URL.format(project_id=prj_id)
+    rsp = fastapi.put(url, headers=ADMIN_AUTH, json=invalid_pos_upd)
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
     # For ecotaxa/ecotaxa_dev#602
     # Set no contact at all

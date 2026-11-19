@@ -71,3 +71,23 @@ def test_patch_project_contact_and_managers(fastapi):
     prj_json = rsp.json()
     assert prj_json["contact"]["id"] == ADMIN_USER_ID
     assert prj_json["managers"][0]["id"] == ADMIN_USER_ID
+
+
+def test_patch_project_cnn_image_position(fastapi):
+    prj_id = create_project(ADMIN_USER_ID, "Patch Test Project CNN Image Pos")
+    url = PATCH_URL.format(project_id=prj_id)
+    get_url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
+
+    # Set valid cnn_image_position >= 1
+    rsp = fastapi.patch(url, headers=ADMIN_AUTH, json={"cnn_image_position": 3})
+    assert rsp.status_code == status.HTTP_200_OK, rsp.text
+    assert fastapi.get(get_url, headers=ADMIN_AUTH).json()["cnn_image_position"] == 3
+
+    # Reject invalid cnn_image_position < 1
+    rsp = fastapi.patch(url, headers=ADMIN_AUTH, json={"cnn_image_position": 0})
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT, rsp.text
+
+    # Reset to None
+    rsp = fastapi.patch(url, headers=ADMIN_AUTH, json={"cnn_image_position": None})
+    assert rsp.status_code == status.HTTP_200_OK, rsp.text
+    assert fastapi.get(get_url, headers=ADMIN_AUTH).json()["cnn_image_position"] is None

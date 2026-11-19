@@ -189,6 +189,7 @@ class FieldsList(object):
         return [
             "status",
             "cnn_network_id",
+            "cnn_image_position",
             "formulae",
             "rf_models_used",
             "classifsettings",
@@ -249,6 +250,7 @@ class FieldsList(object):
                 "comments",
                 "rf_models_used",
                 "cnn_network_id",
+                "cnn_image_position",
                 "formulae",
                 "highest_right",
             ]
@@ -500,6 +502,7 @@ class ProjectBO(object):
         viewers: List[Any],
         access: Optional[str],
         formulae: Optional[str],
+        cnn_image_position: Optional[int] = None,
     ):
         assert contact is not None, "A valid Contact is needed."
         proj_id = self._project.projid
@@ -518,6 +521,7 @@ class ProjectBO(object):
         self._project.classiffieldlist = classiffieldlist
         self._project.popoverfieldlist = popoverfieldlist
         self._project.cnn_network_id = cnn_network_id
+        self._project.cnn_image_position = cnn_image_position
         self._project.comments = comments
         self._project.access = access if access is not None else AccessLevelEnum.OPEN
         self._project.formulae = json.loads(formulae) if formulae is not None else None
