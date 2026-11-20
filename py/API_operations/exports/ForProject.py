@@ -596,11 +596,29 @@ class ProjectExport(JobServiceBase):
             # The zip will contain a single TSV with the same base name as the zip
             prev_value = self.out_file_name.replace(".zip", "")
 
-        file_from_name = (
-            (lambda value: self.normalize_for_filename(str(value)))
-            if req.split_by == "taxon"
-            else lambda value: str(value)
-        )
+        # Names of split TSVs/directories in the zip. Split values are case-sensitive in DB
+        # (e.g. samples 'aaaa' and 'AAAA') but most file systems are not, so make each name unique
+        # ignoring case. The same value always maps to the same name, so TSV name, image directory
+        # and image paths written into the TSV stay consistent, i.e. reimportable.
+        chosen_names: Dict[str, str] = {}
+        taken_lower: Set[str] = set()
+
+        def file_from_name(value: Any) -> str:
+            key = str(value)
+            ret = chosen_names.get(key)
+            if ret is not None:
+                return ret
+            if req.split_by == "taxon":
+                base = self.normalize_for_filename(key)
+            else:
+                base = self.safe_path_part(key)
+            ret, num = base, 1
+            while ret.lower() in taken_lower:
+                num += 1
+                ret = "%s_%d" % (base, num)
+            taken_lower.add(ret.lower())
+            chosen_names[key] = ret
+            return ret
 
         csv_path: Path = (
             self.out_path / csv_filename
@@ -845,6 +863,15 @@ class ProjectExport(JobServiceBase):
             Path(originalfilename).suffix.lower(),
         )
         return orig_file_name
+
+    @staticmethod
+    def safe_path_part(name: str) -> str:
+        """Make name usable as a file or directory name on all OSes, keeping it as is when possible."""
+        # noinspection RegExpRedundantEscape
+        ret = re.sub(R'[\\/:*?"<>|\x00-\x1f]', "_", name)
+        # Windows silently drops trailing dots and spaces
+        ret = ret.rstrip(" .")
+        return ret if ret else "_"
 
     @staticmethod
     def normalize_for_filename(name) -> str:

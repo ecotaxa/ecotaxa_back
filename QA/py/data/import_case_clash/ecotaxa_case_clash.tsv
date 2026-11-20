@@ -1,0 +1,6 @@
+img_file_name	img_rank	object_id	object_lat	object_lon	object_date	object_time	object_depth_min	object_depth_max	sample_id	acq_id	process_id
+[t]	[f]	[t]	[f]	[f]	[t]	[t]	[f]	[f]	[t]	[t]	[t]
+roi.0729931500.png	0	low_1	43.1	7.2	20160719	020139	10	20	aaaa	acq_low	proc
+roi.0729937400.png	0	low_2	43.1	7.2	20160719	020140	10	20	aaaa	acq_low	proc
+roi.0729931500.png	0	up_1	43.2	7.3	20160720	020139	10	20	AAAA	acq_up	proc
+roi.0729937400.png	0	up_2	43.2	7.3	20160720	020140	10	20	AAAA	acq_up	proc

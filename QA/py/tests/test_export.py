@@ -1,6 +1,7 @@
 import datetime
 import json
 import logging
+import zipfile
 from typing import Dict, Any
 from unittest import mock
 
@@ -12,6 +13,7 @@ from deepdiff.helper import TREE_VIEW
 from starlette import status
 
 from tests.api_wrappers import api_wait_for_stable_job, JOB_QUERY_URL
+from tests.consts import CASE_CLASH_DIR, FTP_DIR
 from tests.credentials import (
     ADMIN_AUTH,
     ADMIN_USER_ID,
@@ -291,6 +293,66 @@ def test_export_roundtrip(fastapi, tstlogs):
     )
     assert len(changes) == 1
     assert changes[0].path() == "root['ttl']"  # Just title changed
+
+
+def test_export_case_clash_roundtrip(fastapi, tstlogs):
+    """Samples 'aaaa' and 'AAAA' must produce distinct names in backup zip, even on
+    case-insensitive file systems, and the zip must reimport identically. Issue ecotaxa/ecotaxa#16
+    """
+    prj_id = create_project(ADMIN_USER_ID, "Case clash export source project")
+    do_import(fastapi, prj_id, source_path=CASE_CLASH_DIR, auth=ADMIN_AUTH)
+
+    job_id, file_in_ftp = export_project_to_ftp(fastapi, prj_id, just_annots=False)
+    zip_name = "task_%d_%s" % (job_id, file_in_ftp)
+
+    with zipfile.ZipFile(FTP_DIR / zip_name) as zf:
+        names = zf.namelist()
+    # Nothing gets overwritten when extracted on a case-insensitive file system
+    assert len({n.lower() for n in names}) == len(names)
+    tsvs = sorted(n for n in names if n.endswith(".tsv"))
+    assert tsvs in (
+        ["AAAA/ecotaxa_AAAA.tsv", "aaaa_2/ecotaxa_aaaa_2.tsv"],
+        ["AAAA_2/ecotaxa_AAAA_2.tsv", "aaaa/ecotaxa_aaaa.tsv"],
+    )
+    for a_tsv in tsvs:
+        a_dir = a_tsv.split("/")[0]
+        imgs = [n for n in names if n.startswith(a_dir + "/") and n.endswith(".png")]
+        assert len(imgs) == 2, (a_tsv, names)
+
+    # Reimport gives the same project
+    clone_prj_id = create_project(ADMIN_USER_ID, "Case clash export clone project")
+    do_import(
+        fastapi,
+        clone_prj_id,
+        source_path=DATA_DIR / "ftp" / zip_name,
+        auth=ADMIN_AUTH,
+    )
+    # Import order follows zip paths, not DB order, so compare samples sorted by their id
+    jsons = []
+    for a_prj_id, dump in (
+        (prj_id, "case_clash_source.json"),
+        (clone_prj_id, "case_clash_clone.json"),
+    ):
+        prj_json = json_dump_project(a_prj_id, dump, tstlogs)
+        force_leaves(prj_json, {"id": 0, "fil": "xx.png"})
+        prj_json["samples"].sort(key=lambda sam: sam["sid"])
+        jsons.append(prj_json)
+    assert [sam["sid"] for sam in jsons[1]["samples"]] == ["AAAA", "aaaa"]
+    diffs = DeepDiff(jsons[0], jsons[1], view=TREE_VIEW)
+    assert list(diffs.keys()) == ["values_changed"], diffs
+    changes = diffs["values_changed"]
+    assert len(changes) == 1
+    assert changes[0].path() == "root['ttl']"  # Just title changed
+
+
+def test_safe_path_part():
+    from API_operations.exports.ForProject import ProjectExport
+
+    assert ProjectExport.safe_path_part("m106_mn01 (n1).sml") == "m106_mn01 (n1).sml"
+    assert ProjectExport.safe_path_part("a/b") == "a_b"
+    assert ProjectExport.safe_path_part('a\\:*?"<>|b') == "a________b"
+    assert ProjectExport.safe_path_part("st. 1. ") == "st. 1"
+    assert ProjectExport.safe_path_part("..") == "_"
 
 
 def force_leaves(prj_json: Dict, forced: Dict[str, Any]):
