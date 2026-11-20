@@ -239,7 +239,9 @@ class MergeService(Service):
         """
         Real merge operation.
         """
-        if src_prj.cnn_network_id != dest_prj.cnn_network_id:
+        if src_prj.cnn_network_id != dest_prj.cnn_network_id or (
+            src_prj.cnn_image_position or 1
+        ) != (dest_prj.cnn_image_position or 1):
             nb_deleted = DeepFeatures.delete_all(self.session, self.src_prj_id)
             logger.info(
                 "Deleted %d CNN features from source project %d",

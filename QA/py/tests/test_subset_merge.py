@@ -1628,8 +1628,29 @@ def test_subset_consistency(fastapi, tstlogs):
     [
         ({"cnn_network_id": "zooscan2026"}, {"cnn_network_id": "uvp62026"}, True),
         ({"cnn_network_id": "zooscan2026"}, {"cnn_network_id": "zooscan2026"}, False),
+        (
+            {"cnn_network_id": "zooscan2026", "cnn_image_position": 2},
+            {"cnn_network_id": "zooscan2026", "cnn_image_position": 1},
+            True,
+        ),
+        (
+            {"cnn_network_id": "zooscan2026", "cnn_image_position": None},
+            {"cnn_network_id": "zooscan2026", "cnn_image_position": 1},
+            False,
+        ),
+        (
+            {"cnn_network_id": "zooscan2026", "cnn_image_position": 2},
+            {"cnn_network_id": "zooscan2026", "cnn_image_position": 2},
+            False,
+        ),
     ],
-    ids=["different_network", "same_extractor"],
+    ids=[
+        "different_network",
+        "same_extractor",
+        "different_image_position",
+        "equivalent_default_image_position",
+        "same_explicit_image_position",
+    ],
 )
 def test_merge_cnn_features(fastapi, dest_patch, src_patch, expect_deleted):
     from DB.CNNFeatureVector import N_DEEP_FEATURES, ObjectCNNFeatureVector
