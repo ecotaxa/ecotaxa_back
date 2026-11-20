@@ -5,7 +5,7 @@
 # Testing & QA additions
 pandas
 tox==4.16.0
-pytest==8.2.2
+pytest==9.0.3
 pytest-mock==3.14.1
 pytest-asyncio==0.15.1
 coverage==7.6.0
