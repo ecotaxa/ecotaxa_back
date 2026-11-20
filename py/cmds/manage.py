@@ -188,6 +188,7 @@ def run_nightly(
     # 1. Instantiate and run the maintenance job
     typer.echo(f"Starting NightlyMaintenance job for admin user #{admin_user_id}...")
     with NightlyJobService() as sce:
+        sce.config.validate()
         job_id = sce.run(admin_user_id)
         # Mark as running immediately so that concurrent background schedulers do not pick it up
         with JobBO.get_for_update(sce.session, job_id) as job_bo:
