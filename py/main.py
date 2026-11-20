@@ -2694,7 +2694,7 @@ When `img.` fields are requested, objects with fewer than `img_order` images are
     with ObjectManager() as sce:
         with RightsThrower():
             rsp = ObjectSetQueryRsp()
-            obj_with_parents, details, total = sce.query(
+            res = sce.query_columns(
                 current_user,
                 project_id,
                 filters.base(),
@@ -2704,14 +2704,14 @@ When `img.` fields are requested, objects with fewer than `img_order` images are
                 window_size,
                 img_order,
             )
-    rsp.total_ids = total
-    rsp.object_ids = [with_p[0] for with_p in obj_with_parents]
-    rsp.acquisition_ids = [with_p[1] for with_p in obj_with_parents]
-    rsp.sample_ids = [with_p[2] for with_p in obj_with_parents]
-    rsp.project_ids = [with_p[3] for with_p in obj_with_parents]
-    rsp.details = details
+    rsp.total_ids = res.total
+    rsp.object_ids = res.object_ids
+    rsp.acquisition_ids = res.acquisition_ids
+    rsp.sample_ids = res.sample_ids
+    rsp.project_ids = [project_id] * len(res.object_ids)
+    rsp.details = res.details
     api_logger.info(
-        "ObjectSetQuery(prj=%s, flt=%s, ord=%s, ret=%s, winf=%s, wint=%s, imgrank=%s, seen_ms=%.2f)",
+        "ObjectSetQuery(prj=%s, flt=%s, ord=%s, ret=%s, winf=%s, wint=%s, imgrank=%s, rows=%d, total=%d, sql_ms=%.2f, count_ms=%.2f, seen_ms=%.2f)",
         project_id,
         filters.min_base(),
         repr(order_field),
@@ -2719,6 +2719,10 @@ When `img.` fields are requested, objects with fewer than `img_order` images are
         window_start,
         window_size,
         img_order,
+        len(res.object_ids),
+        res.total,
+        res.sql_ms,
+        res.count_ms,
         (time.time() - before) * 1000,
     )
     # Serialize

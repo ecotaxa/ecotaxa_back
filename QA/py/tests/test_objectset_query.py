@@ -462,3 +462,73 @@ def test_img_order(fastapi):
             f"{url}?img_order={bad_order}", headers=CREATOR_AUTH, json={}
         )
         assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+
+def _raw_query(fastapi, prj_id, params: str, **filters) -> dict:
+    url = OBJECT_SET_QUERY_URL.format(project_id=prj_id) + params
+    rsp = fastapi.post(url, headers=CREATOR_AUTH, json=filters)
+    assert rsp.status_code == status.HTTP_200_OK, rsp.text
+    return rsp.json()
+
+
+def test_total_ids_and_parents(fastapi):
+    """total_ids is the size of the whole filtered set whatever the window, and parents
+    are the ones of each object, either derived from the rows or counted apart."""
+    prj_id = do_test_import(fastapi, "Total ids test project")
+    do_import_a_bit_more_skipping(fastapi, "Total ids test project")
+
+    full = _raw_query(fastapi, prj_id, "?order_field=obj.objid")
+    nb = len(full["object_ids"])
+    assert nb == 11
+    assert full["total_ids"] == nb
+    assert full["project_ids"] == [prj_id] * nb
+    # Parents are the ones known by the parents service
+    rsp = fastapi.post("/object_set/parents", headers=CREATOR_AUTH, json=full["object_ids"])
+    assert rsp.status_code == status.HTTP_200_OK
+    parents = rsp.json()
+    assert full["acquisition_ids"] == parents["acquisition_ids"]
+    assert full["sample_ids"] == parents["sample_ids"]
+    assert len(set(full["sample_ids"])) > 1  # the test covers several samples
+
+    def check(params: str, nb_rows: int, total: int = nb, **filters):
+        rsp = _raw_query(fastapi, prj_id, params, **filters)
+        assert len(rsp["object_ids"]) == nb_rows, params
+        assert rsp["total_ids"] == total, params
+        # Same parents as in the full query, for the returned objects
+        for objid, acq_id, sam_id, prj in zip(
+            rsp["object_ids"], rsp["acquisition_ids"], rsp["sample_ids"], rsp["project_ids"]
+        ):
+            idx = full["object_ids"].index(objid)
+            assert (acq_id, sam_id, prj) == (
+                full["acquisition_ids"][idx],
+                full["sample_ids"][idx],
+                prj_id,
+            ), params
+        return rsp
+
+    order = "&order_field=obj.objid"
+    check("?window_size=4" + order, 4)  # A page, the set continues
+    check("?window_start=8&window_size=4" + order, 3)  # Last, partial, page
+    check("?window_start=4&window_size=7" + order, 7)  # Page ending exactly at the end
+    check("?window_start=11&window_size=4" + order, 0)  # Just after the end
+    check("?window_start=20&window_size=4" + order, 0)  # Far after the end
+    check("?window_start=4" + order, 7)  # Offset only
+    check("?window_size=50", nb)  # Window larger than the set, no order
+    check("?window_size=0" + order, 0)  # Empty window
+    # With a filter, the total is the one of the filtered set
+    a_sample = full["sample_ids"][0]
+    nb_in_sample = full["sample_ids"].count(a_sample)
+    check("?window_size=50" + order, nb_in_sample, nb_in_sample, samples=str(a_sample))
+    check("?window_size=1" + order, 1, nb_in_sample, samples=str(a_sample))
+    # Image fields, with the image virtual columns
+    rsp = check("?window_size=50&fields=img.file_name,obj.objid" + order, nb)
+    for (file_name, objid), an_objid in zip(rsp["details"], rsp["object_ids"]):
+        assert objid == an_objid
+        assert file_name.endswith(".jpg") or file_name.endswith(".png")
+    # An image rank which most objects don't have: rows are dropped but the total
+    # stays the one of the filtered set, as before.
+    rsp = _raw_query(
+        fastapi, prj_id, "?window_size=50&img_order=9&fields=img.imgid" + order
+    )
+    assert rsp["object_ids"] == []
+    assert rsp["total_ids"] == nb
