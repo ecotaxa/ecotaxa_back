@@ -97,6 +97,9 @@ ObjectSetClassifChangesT = OrderedDictT[ChangeTupleT, ObjectIDListT]
 
 logger = get_logger(__name__)
 
+# Table aliases of the hierarchy above objects, in queries
+HIERARCHY_ALIASES = {"prjs", "prj", "sam", "acq", "prc"}
+
 # If one of these statuses are required, then the classif_id must be valid
 MEANS_CLASSIF_ID_EXIST = ("P", "V", "D", "PV", "PVD", "NVM", "VM")
 # MEANS_TRAINING_ID_EXIST = ("P",)
@@ -262,6 +265,10 @@ class BaseDescribedObjectSet(object):
                 params.update(a_where.params)
 
         if order_clause.has_window():
+            # The bounds of objects in the set, if they don't need the hierarchy tables
+            objects_only_where = None
+            if "prjs." not in bound_expr:
+                objects_only_where = f"obh.objid {bound_expr}"
             self.optimize_for_limit(
                 filter_clauses,
                 select_clause,
@@ -270,6 +277,7 @@ class BaseDescribedObjectSet(object):
                 order_clause,
                 order_clause_refs,
                 obf_in_first,
+                objects_only_where,
             )
 
         return selected_tables, where_clause, params
@@ -283,6 +291,7 @@ class BaseDescribedObjectSet(object):
         order_clause: OrderClause,
         order_clause_refs: Set[str],
         obf_in_first: bool,
+        objects_only_where: Optional[str] = None,
     ):
         """
          If the query has a window function OFFSET + LIMIT, arrange that costly
@@ -322,6 +331,18 @@ class BaseDescribedObjectSet(object):
           LEFT JOIN taxonomy txo ON txo.id = obh.classif_id
           JOIN LATERAL (select * from images img2 where obh.objid = img2.objid order by imgrank limit 1) img ON true
           ORDER BY hier.n06 DESC, hier.objfid
+
+         When the order is only on obj_head, there is no filter, and nothing selected comes from the
+         hierarchy (samples, acquisitions...), objects_only_where (the conditions making an object
+         part of the set, i.e. its id range in the project) is enough to find the window. The subquery
+         then reads obj_head alone, in the order of an index if one fits, instead of joining all
+         acquisitions of the set before sorting, e.g.:
+          FROM (SELECT obh.objid, obh.acquisid, obh.classif_id
+                FROM obj_head obh
+                WHERE obh.objid <@ obj_in_prj(:projid)
+               ORDER BY obh.objid ASC OFFSET 0 LIMIT 100
+             ) hier
+          LEFT JOIN taxonomy txo ON txo.id = hier.classif_id
         """
         used_tables = set(selected_tables.table_aliases)
         if "cnn" in used_tables:
@@ -355,8 +376,29 @@ class BaseDescribedObjectSet(object):
             # No interest in inlining
             return
 
+        subselect_where = ""
+        if (
+            objects_only_where is not None
+            and not obf_in_first
+            and obj_tables == ["obh"]
+            and order_clause_refs
+            and order_clause_refs.issubset({"obh"})
+            # A filter on obj_head is better evaluated inside the covering index on
+            # (acquisid, objid) than while walking obj_head in sort order: when it matches few
+            # objects, the walk reads the whole table.
+            and not filter_clauses
+            and not select_clause.table_refs().intersection(HIERARCHY_ALIASES)
+        ):
+            # Drive by obj_head alone, the hierarchy joins are not needed
+            for table_ref in refs_to_move:
+                FromClause.transfer(selected_tables, FromClause(), table_ref)
+            subselect_from = FromClause(f"{ObjectHeader.__tablename__} obh")
+            subselect_where = "\n     WHERE " + objects_only_where
+            refs_to_move = ["obh"]
+
         for table_ref in refs_to_move:
-            FromClause.transfer(selected_tables, subselect_from, table_ref)
+            if not subselect_where:
+                FromClause.transfer(selected_tables, subselect_from, table_ref)
             from_to_expr = SelectClause.copy_for_ref(
                 select_clause, subselect_select, table_ref
             )
@@ -416,6 +458,7 @@ class BaseDescribedObjectSet(object):
             + subselect_select.get_sql()
             + "\n     FROM "
             + subselect_from.get_sql("     ")
+            + subselect_where
             + order_sql
             + ") hier"
         )

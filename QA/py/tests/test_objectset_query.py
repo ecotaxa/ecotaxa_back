@@ -532,3 +532,27 @@ def test_total_ids_and_parents(fastapi):
     )
     assert rsp["object_ids"] == []
     assert rsp["total_ids"] == nb
+
+
+def test_windows_follow_the_order(fastapi):
+    """Pages of a sorted query, with or without filter, are slices of the full sorted result,
+    whatever way the window is computed in the DB."""
+    prj_id = do_test_import(fastapi, "Windows order test project")
+    do_import_a_bit_more_skipping(fastapi, "Windows order test project")
+    fields = "&fields=obj.objid,txo.display_name,img.file_name"
+    for order in ("obj.objid", "-obj.objid", "obj.orig_id", "-obj.depth_min"):
+        for filters in ({}, {"statusfilter": "P"}):
+            full = _raw_query(fastapi, prj_id, "?order_field=" + order + fields, **filters)
+            nb = len(full["object_ids"])
+            assert nb > 3
+            for start, size in ((0, 3), (3, 3), (nb - 2, 3)):
+                page = _raw_query(
+                    fastapi,
+                    prj_id,
+                    f"?order_field={order}&window_start={start}&window_size={size}" + fields,
+                    **filters,
+                )
+                ctx = (order, filters, start, size)
+                for key in ("object_ids", "acquisition_ids", "sample_ids", "details"):
+                    assert page[key] == full[key][start : start + size], ctx
+                assert page["total_ids"] == nb, ctx
