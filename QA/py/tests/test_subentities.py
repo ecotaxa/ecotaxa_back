@@ -93,6 +93,13 @@ def test_subentities(database, fastapi, tstlogs):
             "used_taxa": [-1],
         }
     ]
+    stat = stats[0]
+    assert sample["objcount"] == float(
+        stat["nb_dubious"]
+        + stat["nb_predicted"]
+        + stat["nb_unclassified"]
+        + stat["nb_validated"]
+    )
 
     acquis_id = first_obj[1]
     # Wrong ID
