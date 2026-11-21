@@ -188,6 +188,7 @@ class ProjectsService(Service):
             classiffieldlist=project.classiffieldlist,
             popoverfieldlist=project.popoverfieldlist,
             cnn_network_id=project.cnn_network_id,
+            cnn_image_position=project.cnn_image_position,
             comments=project.comments,
             contact=project.contact,
             managers=project.managers,

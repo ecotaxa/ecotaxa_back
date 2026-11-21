@@ -80,6 +80,8 @@ class Project(Model):
     fileloaded: Mapped[str | None] = mapped_column(VARCHAR)
     rf_models_used: Mapped[str | None] = mapped_column(VARCHAR)
     cnn_network_id: Mapped[str | None] = mapped_column(VARCHAR(50))
+    # Use image as this position (following imgrank)
+    cnn_image_position: Mapped[int | None] = mapped_column(INTEGER)
     # project specific formulae used to calculate concentration and biovolume ( used in project summary export, and collection DarwinCore export)
     formulae: Mapped[str | None] = mapped_column(JSONB)
     # Temporary: legacy string formulae, kept as a backup after the jsonb migration.

@@ -50,19 +50,19 @@ Add the new script to the local git repo.
 
 Next step is to generate SQL for DB creation giant SQL in QA directory:
 
-`PATH=../venv38/bin PYTHONPATH=.. APP_CONFIG=../config.ini alembic upgrade --sql head
+`PATH=../venv314/bin PYTHONPATH=.. APP_CONFIG=../config.ini alembic upgrade --sql head
 `
 
-Copy/paste the last section (signalled by "-- Running upgrade...") at the end of `upgrade_prod.sql`.
+Copy/paste the last section (signaled by "-- Running upgrade...") at the end of `upgrade_prod.sql`.
 
 Alternatively you can generate only the _last_ script, providing the down_revision (previous version, supposed to be in DB), e.g.:
 
-`PATH=../venv38/bin PYTHONPATH=.. APP_CONFIG=../config.ini alembic upgrade --sql 0a3132f436fb:head
+`PATH=../venv314/bin PYTHONPATH=.. APP_CONFIG=../config.ini alembic upgrade --sql 0a3132f436fb:head
 `
 
 Finally upgrade your local DB:
 
-`PATH=../venv38/bin PYTHONPATH=.. APP_CONFIG=../config.ini alembic upgrade head
+`PATH=../venv314/bin PYTHONPATH=.. APP_CONFIG=../config.ini alembic upgrade head
 `
 
 * As an operator, to upgrade a production DB, from docker shell:

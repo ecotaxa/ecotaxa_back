@@ -244,7 +244,13 @@ class _Project2Model(DescriptiveModel):
     )
     rf_models_used: str = Field(title="Rf models used", description="", examples=[""])
     cnn_network_id: str = Field(
-        title="Cnn network id", description="", examples=["SCN_zooscan_group1"]
+        title="CNN model id", description="", examples=["SCN_zooscan_group1"]
+    )
+    cnn_image_position: int = Field(
+        ge=1,
+        title="CNN image position",
+        description="Use image at this position (following imgrank) for predictions.",
+        examples=[1],
     )
     access: AccessLevelEnum = Field(
         title="Access level",
@@ -554,9 +560,16 @@ class ProjectReq(BaseModel):
     )
     cnn_network_id: Optional[str] = Field(
         default=None,
-        title="Cnn network id",
+        title="CNN model id",
         description="",
         examples=["SCN_zooscan_group1"],
+    )
+    cnn_image_position: Optional[int] = Field(
+        default=None,
+        ge=1,
+        title="CNN image position",
+        description="Use image at this position (following imgrank) for predictions",
+        examples=[1],
     )
     formulae: Optional[str] = Field(
         title="Formulae",

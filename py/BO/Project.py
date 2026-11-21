@@ -189,6 +189,7 @@ class FieldsList(object):
         return [
             "status",
             "cnn_network_id",
+            "cnn_image_position",
             "formulae",
             "rf_models_used",
             "classifsettings",
@@ -249,6 +250,7 @@ class FieldsList(object):
                 "comments",
                 "rf_models_used",
                 "cnn_network_id",
+                "cnn_image_position",
                 "formulae",
                 "highest_right",
             ]
@@ -500,6 +502,7 @@ class ProjectBO(object):
         viewers: List[Any],
         access: Optional[str],
         formulae: Optional[str],
+        cnn_image_position: Optional[int] = None,
     ):
         assert contact is not None, "A valid Contact is needed."
         proj_id = self._project.projid
@@ -507,8 +510,10 @@ class ProjectBO(object):
         title = title.strip()
         assert instrument is not None, "Project update: A valid Instrument is needed."
         # Field reflexes
-        if cnn_network_id != self._project.cnn_network_id:
-            # Delete CNN features, which depend on the CNN network
+        if cnn_network_id != self._project.cnn_network_id or (
+            cnn_image_position or 1
+        ) != (self._project.cnn_image_position or 1):
+            # Delete CNN features, which depend on the CNN network and image position
             DeepFeatures.delete_all(session, proj_id)
         # Fields update
         self._project.instrument_id = instrument
@@ -518,6 +523,7 @@ class ProjectBO(object):
         self._project.classiffieldlist = classiffieldlist
         self._project.popoverfieldlist = popoverfieldlist
         self._project.cnn_network_id = cnn_network_id
+        self._project.cnn_image_position = cnn_image_position
         self._project.comments = comments
         self._project.access = access if access is not None else AccessLevelEnum.OPEN
         self._project.formulae = json.loads(formulae) if formulae is not None else None
@@ -586,6 +592,13 @@ class ProjectBO(object):
                     # Delete CNN features, which depend on the CNN network
                     DeepFeatures.delete_all(session, projid)
                 self._project.cnn_network_id = projectreq.cnn_network_id
+            elif modelfield == "cnn_image_position":
+                if (projectreq.cnn_image_position or 1) != (
+                    self._project.cnn_image_position or 1
+                ):
+                    # Delete CNN features, which depend on the image position
+                    DeepFeatures.delete_all(session, projid)
+                self._project.cnn_image_position = projectreq.cnn_image_position
             elif modelfield == "access":
                 self._project.access = projectreq.access
             elif modelfield == "formulae":

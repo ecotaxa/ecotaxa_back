@@ -46,6 +46,7 @@ def test_update_prj(fastapi):
         "classifsettings": None,
         "initclassiflist": None,
         "cnn_network_id": None,
+        "cnn_image_position": None,
         "comments": None,
         "contact": {
             "email": "administrator@email.test",
@@ -195,6 +196,7 @@ def test_update_prj(fastapi):
     upd_json["comments"] = "New comment"
     upd_json["contact"] = contact_usr
     upd_json["access"] = AccessLevelEnum.PRIVATE.value
+    upd_json["cnn_image_position"] = 2
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=upd_json)
     assert rsp.status_code == status.HTTP_200_OK
 
@@ -204,6 +206,14 @@ def test_update_prj(fastapi):
     assert rsp.json() != ref_json
     assert rsp.json()["comments"] == "New comment"
     assert rsp.json()["access"] == AccessLevelEnum.PRIVATE.value
+    assert rsp.json()["cnn_image_position"] == 2
+
+    # Invalid cnn_image_position (< 1)
+    invalid_pos_upd = deepcopy(read_json)
+    invalid_pos_upd["cnn_image_position"] = 0
+    url = PROJECT_UPDATE_URL.format(project_id=prj_id)
+    rsp = fastapi.put(url, headers=ADMIN_AUTH, json=invalid_pos_upd)
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
     # For ecotaxa/ecotaxa_dev#602
     # Set no contact at all
@@ -307,3 +317,49 @@ def test_update_prj_bodc_vars(fastapi):
     rsp = fastapi.get(qry_url, headers=ADMIN_AUTH)
     read_json = rsp.json()
     assert json.loads(read_json[FORMULAE_KEY]) == vars
+
+
+def test_update_prj_cnn_image_position_clears_features(fastapi):
+    from tests.test_objectset_query import _prj_query
+    from tests.test_patch_project import _count_features, _insert_features
+
+    prj_id, _ = do_import_uvp6(fastapi, "Update Test CNN Image Pos Features")
+    obj_ids = _prj_query(fastapi, ADMIN_AUTH, prj_id)
+    assert len(obj_ids) > 0
+
+    qry_url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
+    upd_url = PROJECT_UPDATE_URL.format(project_id=prj_id)
+    upd_json = fastapi.get(qry_url, headers=ADMIN_AUTH).json()
+
+    _insert_features(obj_ids)
+    assert _count_features(obj_ids) == len(obj_ids)
+
+    # None -> 1 is not a real change: features must remain
+    upd_json["cnn_image_position"] = 1
+    rsp = fastapi.put(upd_url, headers=ADMIN_AUTH, json=upd_json)
+    assert rsp.status_code == status.HTTP_200_OK, rsp.text
+    assert _count_features(obj_ids) == len(obj_ids)
+
+    # 1 -> None is not a real change: features must remain
+    upd_json["cnn_image_position"] = None
+    rsp = fastapi.put(upd_url, headers=ADMIN_AUTH, json=upd_json)
+    assert rsp.status_code == status.HTTP_200_OK, rsp.text
+    assert _count_features(obj_ids) == len(obj_ids)
+
+    # None -> 2 is a real change: features must be erased
+    upd_json["cnn_image_position"] = 2
+    rsp = fastapi.put(upd_url, headers=ADMIN_AUTH, json=upd_json)
+    assert rsp.status_code == status.HTTP_200_OK, rsp.text
+    assert _count_features(obj_ids) == 0
+
+    # Re-insert and update 2 -> 2 (no change): features must remain
+    _insert_features(obj_ids)
+    rsp = fastapi.put(upd_url, headers=ADMIN_AUTH, json=upd_json)
+    assert rsp.status_code == status.HTTP_200_OK, rsp.text
+    assert _count_features(obj_ids) == len(obj_ids)
+
+    # 2 -> None is a real change: features must be erased
+    upd_json["cnn_image_position"] = None
+    rsp = fastapi.put(upd_url, headers=ADMIN_AUTH, json=upd_json)
+    assert rsp.status_code == status.HTTP_200_OK, rsp.text
+    assert _count_features(obj_ids) == 0

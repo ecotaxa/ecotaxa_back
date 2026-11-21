@@ -2,7 +2,7 @@
   "openapi":"3.0.2",
   "info":{
     "title":"EcoTaxa",
-    "version":"0.0.56"
+    "version":"0.0.58"
   },
   "servers":[
     {
@@ -4410,6 +4410,20 @@
               "nullable":true
             },
             "description":"\nAllows to return only a slice of the result, by returning a _maximum_ of window_size lines.\nIf no **unique order** is specified, the result can vary for same call and conditions."
+          },
+          {
+            "name":"img_order",
+            "in":"query",
+            "required":false,
+            "schema":{
+              "type":"integer",
+              "minimum":1,
+              "title":"Image position",
+              "description":"\nSelects which image to return for each object, by order of increasing `imgrank`.\n`1` (the default) returns the first/visible image, `2` the second one, and so on.\nWhen `img.` fields are requested, objects with fewer than `img_order` images are omitted from the result.",
+              "default":1,
+              "example":"1"
+            },
+            "description":"\nSelects which image to return for each object, by order of increasing `imgrank`.\n`1` (the default) returns the first/visible image, `2` the second one, and so on.\nWhen `img.` fields are requested, objects with fewer than `img_order` images are omitted from the result."
           }
         ],
         "requestBody":{
@@ -11262,10 +11276,18 @@
             "nullable":true
           },
           "cnn_network_id":{
-            "title":"Cnn network id",
+            "title":"CNN model id",
             "description":"",
             "example":"SCN_zooscan_group1",
             "type":"string",
+            "nullable":true
+          },
+          "cnn_image_position":{
+            "title":"CNN image position",
+            "description":"Use image at this position (following imgrank) for predictions.",
+            "example":1,
+            "type":"integer",
+            "minimum":1.0,
             "nullable":true
           },
           "formulae":{
@@ -11454,10 +11476,18 @@
             "nullable":true
           },
           "cnn_network_id":{
-            "title":"Cnn network id",
+            "title":"CNN model id",
             "description":"",
             "example":"SCN_zooscan_group1",
             "type":"string",
+            "nullable":true
+          },
+          "cnn_image_position":{
+            "title":"CNN image position",
+            "description":"Use image at this position (following imgrank) for predictions",
+            "example":1,
+            "type":"integer",
+            "minimum":1.0,
             "nullable":true
           },
           "formulae":{
