@@ -48,6 +48,8 @@ ANNOTATION_FIELDS: Final = {
         "field": "classif_qual",
         "type": "t",
     },
+    # Computed at export time, never stored, thus ignored at import.
+    # See NON_STORED_FIELDS below.
     "object_annotation_hierarchy": {
         "table": "",
         "field": "object_annotation_hierarchy",
@@ -132,6 +134,12 @@ PREDEFINED_FIELDS: Final = {
         "field": "instrument",
         "type": "t",
     },
+}
+
+# Fields with no target table are generated on export (e.g. object_annotation_hierarchy).
+# They must be accepted when validating a TSV, but never dispatched to an ORM class.
+NON_STORED_FIELDS: Final = {
+    field for field, mapping in PREDEFINED_FIELDS.items() if not mapping["table"]
 }
 
 # C'est un set de table 😁
