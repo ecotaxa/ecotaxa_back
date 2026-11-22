@@ -131,9 +131,7 @@ class JobScheduler(Service):
     INCLUDE: ClassVar[List[str]] = []
     # A single runner per web process in DEV mode.
     # In PROD, the_runner forks and is monitored.
-    the_runner: Optional[Union[ThreadJobRunner, ProcessJobRunner]] = (
-        None  # Only written by JobTimer_s_
-    )
+    the_runner: Optional[Union[ThreadJobRunner, ProcessJobRunner]] = None
     the_thread: Optional[Thread] = None
     stop_event: Event = Event()
     # First creation by Main, replacements by JobTimer_s_
@@ -145,7 +143,6 @@ class JobScheduler(Service):
         """
         Pick first pending job and run it, except if already running.
         This is an instance method, so there is DB session to work with, released straight away.
-        Current thread: JobTimer
         """
         cls = JobScheduler
         if cls.the_runner is not None:

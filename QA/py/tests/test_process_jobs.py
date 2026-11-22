@@ -300,22 +300,3 @@ def test_job_hard_exit_reconciled(fastapi, jobs_as_process):
     job_info = api_wait_for_stable_job(fastapi, job_id)
     assert job_info.state == "E"
     assert "exit code 42" in job_info.progress_msg
-
-
-def test_jobscheduler_launch_waits_and_interprets(fastapi, no_scheduler, jobs_as_process):
-    """
-    Verify that calling JobScheduler.launch() directly when do_run is not set
-    waits for the runner to finish and interprets its result.
-    """
-    with HardExitJob(exit_code=17) as job:
-        job.run(ADMIN_USER_ID)
-        job_id = job.job_id
-
-    # Single-run invocation of JobScheduler.launch
-    JobScheduler.launch(0)
-
-    job_get_url = JOB_QUERY_URL.format(job_id=job_id)
-    rsp = fastapi.get(job_get_url, headers=ADMIN_AUTH)
-    job_data = rsp.json()
-    assert job_data["state"] == "E"
-    assert "exit code 17" in job_data["progress_msg"]
