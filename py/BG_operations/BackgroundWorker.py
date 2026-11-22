@@ -43,6 +43,12 @@ class BackgroundWorker:
 
     def run_loop(self, interval: Union[int, float]) -> None:
         """Continuous loop checking for background work."""
+        try:
+            with JobsManager() as sce:
+                sce.fail_running_jobs()
+        except Exception as e:
+            logger.exception("Job fail_running_jobs() exception: %s", e)
+
         while not self.stop_event.wait(timeout=interval):
             try:
                 with JobsManager() as sce:
@@ -52,7 +58,7 @@ class BackgroundWorker:
                 logger.exception("Job run() exception: %s", e)
 
         # Exiting thread after being signaled to stop
-        JobsManager.wait_runner()
+        JobsManager.wait_runners()
 
     def shutdown(self) -> None:
         """

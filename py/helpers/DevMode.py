@@ -4,6 +4,7 @@
 #
 # Helpers for detecting development and debug execution modes.
 #
+import os
 import sys
 
 
@@ -20,3 +21,7 @@ def is_debug_mode() -> bool:
 def is_local_https_url(url: str) -> bool:
     """Return True when the URL points to a local HTTPS endpoint (e.g. self-signed dev)."""
     return url.startswith("https://localhost")
+
+
+def is_pytest():
+    return "PYTEST_CURRENT_TEST" in os.environ
