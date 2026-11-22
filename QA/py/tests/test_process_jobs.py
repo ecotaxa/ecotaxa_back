@@ -5,8 +5,8 @@ import time
 import pytest
 
 from API_operations.helpers.JobService import JobServiceBase, ArgsDict
-from BG_operations import JobScheduler as JobSchedulerMod
-from BG_operations.JobScheduler import ProcessJobRunner, JobScheduler
+from BG_operations import JobsManager as JobsManagerMod
+from BG_operations.JobsManager import ProcessJobRunner
 from helpers.DynamicLogs import LogsSwitcher, get_logger
 from tests.api_wrappers import (
     api_wait_for_stable_job,
@@ -22,12 +22,12 @@ from tests.credentials import ADMIN_USER_ID, ADMIN_AUTH
 @pytest.fixture
 def jobs_as_process():
     """
-    Switch JobScheduler to ProcessJobRunner for the duration of the test.
+    Switch JobsManager to ProcessJobRunner for the duration of the test.
     """
-    old_runner = JobSchedulerMod.JobRunner
-    JobSchedulerMod.JobRunner = ProcessJobRunner
+    old_runner = JobsManagerMod.JobRunner
+    JobsManagerMod.JobRunner = ProcessJobRunner
     yield
-    JobSchedulerMod.JobRunner = old_runner
+    JobsManagerMod.JobRunner = old_runner
 
 
 # Define a job that reports its PID in the result
@@ -107,7 +107,7 @@ def test_job_process_behavior(fastapi, jobs_as_process):
 
     # Check if we are in a state where processes are expected
     assert (
-        JobSchedulerMod.JobRunner == ProcessJobRunner
+        JobsManagerMod.JobRunner == ProcessJobRunner
     ), "JobRunner should be ProcessJobRunner when not debugging"
 
     # Retrieve the PID reported by the job from its results
@@ -224,13 +224,15 @@ def test_job_kill(fastapi, jobs_as_process):
 @pytest.fixture
 def no_scheduler():
     """
-    Disable the JobScheduler during the test.
+    Disable the BackgroundWorker during the test.
     """
-    JobScheduler.shutdown()
-    yield
+    from BG_operations import BackgroundWorker as BackgroundWorkerMod
     import main
 
-    JobScheduler.launch_at_interval(main.JOB_INTERVAL)
+    assert main.background_worker is not None
+    main.background_worker.shutdown()
+    yield
+    main.background_worker.launch_at_interval(BackgroundWorkerMod.JOB_INTERVAL)
 
 
 def test_job_delete_pending(fastapi, no_scheduler, jobs_as_process):
@@ -291,7 +293,7 @@ class HardExitJob(JobServiceBase):
 def test_job_hard_exit_reconciled(fastapi, jobs_as_process):
     """
     Verify that when a process exits abruptly (e.g. crash/os._exit),
-    JobScheduler interprets the exitcode and reconciles the DB job state to Error.
+    JobsManager interprets the exitcode and reconciles the DB job state to Error.
     """
     with HardExitJob(exit_code=42) as job:
         job.run(ADMIN_USER_ID)

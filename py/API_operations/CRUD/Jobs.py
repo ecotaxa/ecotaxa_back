@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 from typing import Tuple, List, Any, Dict, Optional
 
-from BG_operations.JobScheduler import JobScheduler
+from BG_operations.JobsManager import JobsManager
 from BO.Job import JobBO
 from BO.Rights import RightsBO, NOT_FOUND, NOT_AUTHORIZED
 from DB.Job import JobIDT, DBJobStateEnum, Job
@@ -100,7 +100,7 @@ class JobCRUDService(Service):
             job_bo.type,
             job_id,
         )
-        with JobScheduler.instantiate(sce_class, job_bo) as sce:
+        with JobsManager.instantiate(sce_class, job_bo) as sce:
             out_file_name = sce.PRODUCED_FILE_NAME
             assert out_file_name is not None
         # ...and the file in its temp directory

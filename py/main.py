@@ -162,7 +162,7 @@ from API_operations.exports.ForProject import (
 )
 from API_operations.imports.Import import FileImport
 from API_operations.imports.SimpleImport import SimpleImport
-from BG_operations.JobScheduler import JobScheduler
+from BG_operations.BackgroundWorker import BackgroundWorker
 from BG_operations.ResourceCleaner import ResourceCleaner
 from BO.Classification import HistoricalClassification, ClassifIDT
 from BO.Collection import (
@@ -4641,8 +4641,8 @@ app.add_exception_handler(
 dump_openapi(app, __file__)
 
 # Can be overwritten for testing. Looks for what to do at this interval.
-JOB_INTERVAL = 2
 CLEANUP_INTERVAL = 10
+background_worker: Optional[BackgroundWorker] = None
 
 
 def register_exception(app: FastAPI):
@@ -4690,9 +4690,9 @@ async def lifespan(app: FastAPI):
     # (connection pool expiration & memory cleanup).
     ResourceCleaner.launch_at_interval(CLEANUP_INTERVAL)
 
+    global background_worker
     # Don't run predictions, they are left to a specialized runner
-    JobScheduler.FILTER = [PredictForProject.JOB_TYPE]
-    JobScheduler.launch_at_interval(JOB_INTERVAL)
+    background_worker = BackgroundWorker()
 
     try:
         yield
@@ -4700,8 +4700,8 @@ async def lifespan(app: FastAPI):
         logger.error("Error during server operation: %s", str(e), exc_info=True)
         raise
     finally:
-        JobScheduler.shutdown()
-        logger.info("JobScheduler shutdown complete")
+        background_worker.shutdown()
+        logger.info("BackgroundWorker shutdown complete")
         ResourceCleaner.shutdown()
         logger.info("MaintenanceScheduler shutdown complete")
 

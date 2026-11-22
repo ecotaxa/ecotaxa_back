@@ -14,7 +14,6 @@ os.environ["CORS_ALLOWED_ORIGIN_REGEX"] = (
 )
 
 import pytest
-from BG_operations.JobScheduler import JobScheduler
 from fastapi.testclient import TestClient
 
 # from starlette.testclient import TestClient
@@ -30,6 +29,7 @@ from tests.prj_utils import sce_check_consistency
 def fastapi(config, database, tstlogs, request) -> Generator[TestClient, Any, None]:
     # Overwrite a method in URLSafeTimedSerializer
     from helpers import fastApiUtils
+    from BG_operations import BackgroundWorker as BackgroundWorkerMod
     import main
 
     serializer = fastApiUtils.build_serializer()
@@ -38,9 +38,9 @@ def fastapi(config, database, tstlogs, request) -> Generator[TestClient, Any, No
     serializer.loads = lambda s, max_age: {"user_id": s}
 
     client = TestClient(main.app)
-    main.JOB_INTERVAL = 0.01
+    BackgroundWorkerMod.JOB_INTERVAL = 0.01
 
-    with client:  # Trigger the fastapi 'startup' event -> launches the JobScheduler
+    with client:  # Trigger the fastapi 'startup' event -> launches the JobsManager
         yield client
     # Teardown, once per module
     consistency_exception = None
@@ -51,7 +51,8 @@ def fastapi(config, database, tstlogs, request) -> Generator[TestClient, Any, No
     except AssertionError as e:
         consistency_exception = e
     serializer.loads = sav_loads
-    JobScheduler.shutdown()
+    if main.background_worker is not None:
+        main.background_worker.shutdown()
     if consistency_exception is not None:
         clear_all_jobs()  # Don't leak failed/unfinished jobs to next tests
         raise consistency_exception

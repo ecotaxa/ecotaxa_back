@@ -7,8 +7,8 @@ import os
 import signal
 import sys
 import threading
-from threading import Event, Thread
-from typing import Any, Optional, List, ClassVar, Type, Union
+from threading import Thread
+from typing import Any, Optional, List, Type, Union, ClassVar
 
 from API_operations.helpers.JobService import JobServiceBase
 from API_operations.helpers.Service import Service
@@ -46,7 +46,7 @@ class BaseJobRunner:
         Common run logic for both Thread and Process runners.
         """
         try:
-            sce = JobScheduler.instantiate(self.sce_class, self.db_job)
+            sce = JobsManager.instantiate(self.sce_class, self.db_job)
             with LogsSwitcher(sce):
                 logger.info("Running job %d in %s", self.db_job.id, msg)
         except Exception as te:
@@ -120,7 +120,7 @@ if sys.gettrace() is not None:
     JobRunner = ThreadJobRunner
 
 
-class JobScheduler(Service):
+class JobsManager(Service):
     """
     In charge of launching/monitoring sub processes i.e. keep sync b/w processes and their images in jobs DB table.
     """
@@ -132,19 +132,16 @@ class JobScheduler(Service):
     # A single runner per web process in DEV mode.
     # In PROD, the_runner forks and is monitored.
     the_runner: Optional[Union[ThreadJobRunner, ProcessJobRunner]] = None
-    the_thread: Optional[Thread] = None
-    stop_event: Event = Event()
-    # First creation by Main, replacements by JobTimer_s_
 
     def __init__(self) -> None:
         super().__init__()
 
-    def _run_one(self) -> None:
+    def run_one(self) -> None:
         """
         Pick first pending job and run it, except if already running.
         This is an instance method, so there is DB session to work with, released straight away.
         """
-        cls = JobScheduler
+        cls = JobsManager
         if cls.the_runner is not None:
             # A single runner at a time (short-lived for PROD, long for DEV)
             if cls.the_runner.is_alive():
@@ -197,21 +194,6 @@ class JobScheduler(Service):
         # TODO: Direct member assignment is bad
         sce.job_id = a_job.id
         return sce
-
-    @classmethod
-    def launch_at_interval(cls, interval: Union[int, float]) -> None:
-        """Launch periodic scheduler thread if not already running."""
-        if cls.the_thread is not None and cls.the_thread.is_alive():
-            return
-
-        cls.stop_event.clear()
-        cls.the_thread = Thread(
-            target=cls.launch,
-            args=(interval,),
-            name=f"{cls.__name__}Thread",
-            daemon=True,
-        )
-        cls.the_thread.start()
 
     @classmethod
     def _interpret_runner_result(
@@ -292,18 +274,8 @@ class JobScheduler(Service):
             logger.exception("Error interpreting result for job %d: %s", job_id, e)
 
     @classmethod
-    def launch(cls, interval: Union[int, float]) -> None:
-        """Continuous loop checking for pending jobs."""
-        while not cls.stop_event.wait(timeout=interval):
-            try:
-                with cls() as sce:
-                    # noinspection PyProtectedMember
-                    sce._run_one()
-            except Exception as e:
-                # TODO here we have cryptic startup message if DB issue
-                logger.exception("Job run() exception: %s", e)
-
-        # Exiting thread after being signaled to stop
+    def wait_runner(cls) -> None:
+        """Wait for any active runner to finish when stopping the scheduler loop."""
         if cls.the_runner is not None:
             # Wait for child process indefinitely before taking another task
             cls.the_runner.join()
@@ -313,16 +285,8 @@ class JobScheduler(Service):
     @classmethod
     def shutdown(cls) -> None:
         """
-        Clean close of multi-threading resources: Runner, Timer, and Event
-        Restore class-loading time state.
-        Current thread: Main
+        Clean close of any remaining runner during worker shutdown.
         """
-        cls.stop_event.set()
-        if cls.the_thread is not None:
-            if cls.the_thread.is_alive():
-                cls.the_thread.join(timeout=5)
-            cls.the_thread = None
-
         if cls.the_runner is None:
             return
         if isinstance(cls.the_runner, ThreadJobRunner):
