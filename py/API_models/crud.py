@@ -244,7 +244,13 @@ class _Project2Model(DescriptiveModel):
     )
     rf_models_used: str = Field(title="Rf models used", description="", examples=[""])
     cnn_network_id: str = Field(
-        title="Cnn network id", description="", examples=["SCN_zooscan_group1"]
+        title="CNN model id", description="", examples=["SCN_zooscan_group1"]
+    )
+    cnn_image_position: int = Field(
+        ge=1,
+        title="CNN image position",
+        description="Use image at this position (following imgrank) for predictions.",
+        examples=[1],
     )
     access: AccessLevelEnum = Field(
         title="Access level",
@@ -554,9 +560,16 @@ class ProjectReq(BaseModel):
     )
     cnn_network_id: Optional[str] = Field(
         default=None,
-        title="Cnn network id",
+        title="CNN model id",
         description="",
         examples=["SCN_zooscan_group1"],
+    )
+    cnn_image_position: Optional[int] = Field(
+        default=None,
+        ge=1,
+        title="CNN image position",
+        description="Use image at this position (following imgrank) for predictions",
+        examples=[1],
     )
     formulae: Optional[str] = Field(
         title="Formulae",
@@ -726,6 +739,25 @@ class SampleModel(_SampleModelFromDB):
         description="Free columns from sample mapping in project.",
         default={},
         examples=[{"flash_delay": "t01"}],
+    )
+
+
+class SamplesSearchReq(BaseModel):
+    """
+    Body form of GET /samples/search, for long project lists which could exceed URL length limits.
+    The parameters must not also be sent in the query string.
+    """
+
+    project_ids: str = Field(
+        title="Project Ids",
+        description="String containing the list of one or more project id separated by non-num char.",
+        examples=["1,55"],
+    )
+    id_pattern: str = Field(
+        default="",
+        title="Pattern Id",
+        description="Sample id textual pattern. Use * or '' for 'any matches'. Match is case-insensitive.",
+        examples=["*"],
     )
 
 

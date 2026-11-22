@@ -83,25 +83,12 @@ class SamplesService(Service):
         project_ids: ProjectIDListT,
         orig_id_pattern: str,
     ) -> List[Sample]:
-        # Security check
+        # Security check, in a constant number of queries: a search can be over many projects
+        # (e.g. global map). It is not an access to each project: recent projects are unchanged.
         if current_user_id is None:
-            [
-                RightsBO.anonymous_wants(self.ro_session, Action.READ, project_id)
-                for project_id in project_ids
-            ]
+            RightsBO.anonymous_wants_read_all(self.ro_session, project_ids)
         else:
-            # A search, possibly over many projects (e.g. global map), is not an access
-            # to each project: don't add them to recent projects (one commit each).
-            [
-                RightsBO.user_wants(
-                    self.session,
-                    current_user_id,
-                    Action.READ,
-                    project_id,
-                    update_preference=False,
-                )
-                for project_id in project_ids
-            ]
+            RightsBO.user_wants_read_all(self.session, current_user_id, project_ids)
         sample_set = DescribedSampleSet(self.ro_session, project_ids, orig_id_pattern)
         # mappings = ProjectMapping().load_from_project(project)
         # ret.map_free_columns(mappings.sample_mappings)

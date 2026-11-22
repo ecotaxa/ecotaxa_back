@@ -1621,3 +1621,97 @@ def test_subset_consistency(fastapi, tstlogs):
     job = api_wait_for_stable_job(fastapi, rsp.job_id)
     check_job_ok(job)
     check_project(tstlogs, subset_prj_id)
+
+
+@pytest.mark.parametrize(
+    "dest_patch, src_patch, expect_deleted",
+    [
+        ({"cnn_network_id": "zooscan2026"}, {"cnn_network_id": "uvp62026"}, True),
+        ({"cnn_network_id": "zooscan2026"}, {"cnn_network_id": "zooscan2026"}, False),
+        (
+            {"cnn_network_id": "zooscan2026", "cnn_image_position": 2},
+            {"cnn_network_id": "zooscan2026", "cnn_image_position": 1},
+            True,
+        ),
+        (
+            {"cnn_network_id": "zooscan2026", "cnn_image_position": None},
+            {"cnn_network_id": "zooscan2026", "cnn_image_position": 1},
+            False,
+        ),
+        (
+            {"cnn_network_id": "zooscan2026", "cnn_image_position": 2},
+            {"cnn_network_id": "zooscan2026", "cnn_image_position": 2},
+            False,
+        ),
+    ],
+    ids=[
+        "different_network",
+        "same_extractor",
+        "different_image_position",
+        "equivalent_default_image_position",
+        "same_explicit_image_position",
+    ],
+)
+def test_merge_cnn_features(fastapi, dest_patch, src_patch, expect_deleted):
+    from DB.CNNFeatureVector import N_DEEP_FEATURES, ObjectCNNFeatureVector
+    from tests.test_objectset_query import _prj_query
+    from tests.test_patch_project import PATCH_URL
+
+    def _insert_features(obj_ids):
+        with ProjectsService() as sce:
+            bulks = [
+                {"objcnnid": oid, "features": [0.1] * N_DEEP_FEATURES}
+                for oid in obj_ids
+            ]
+            sce.session.execute(ObjectCNNFeatureVector.__table__.insert(), bulks)
+            sce.session.commit()
+
+    def _count_features(obj_ids) -> int:
+        with ProjectsService() as sce:
+            return (
+                sce.session.query(ObjectCNNFeatureVector)
+                .filter(ObjectCNNFeatureVector.objcnnid.in_(obj_ids))
+                .count()
+            )
+
+    def _setup_prj(title, patch_body):
+        prj_id, _ = do_import_uvp6(fastapi, title)
+        rsp = fastapi.patch(
+            PATCH_URL.format(project_id=prj_id),
+            headers=ADMIN_AUTH,
+            json=patch_body,
+        )
+        assert rsp.status_code == status.HTTP_200_OK, rsp.text
+        obj_ids = _prj_query(fastapi, ADMIN_AUTH, prj_id)
+        assert len(obj_ids) > 0
+        _insert_features(obj_ids)
+        assert _count_features(obj_ids) == len(obj_ids)
+        return prj_id, obj_ids
+
+    dest_prj_id, dest_obj_ids = _setup_prj("Merge Dest CNN", dest_patch)
+    src_prj_id, src_obj_ids = _setup_prj("Merge Src CNN", src_patch)
+
+    # Dry run must never delete features
+    url = PROJECT_MERGE_URL.format(
+        project_id=dest_prj_id, source_project_id=src_prj_id, dry_run=True
+    )
+    response = fastapi.post(url, headers=ADMIN_AUTH)
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()["errors"] == []
+    assert _count_features(src_obj_ids) == len(src_obj_ids)
+
+    # Real merge
+    url = PROJECT_MERGE_URL.format(
+        project_id=dest_prj_id, source_project_id=src_prj_id, dry_run=False
+    )
+    response = fastapi.post(url, headers=ADMIN_AUTH)
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()["errors"] == []
+
+    all_obj_ids = _prj_query(fastapi, ADMIN_AUTH, dest_prj_id)
+    assert len(all_obj_ids) == len(dest_obj_ids) + len(src_obj_ids)
+    assert set(dest_obj_ids).issubset(set(all_obj_ids))
+    merged_obj_ids = list(set(all_obj_ids) - set(dest_obj_ids))
+    assert _count_features(dest_obj_ids) == len(dest_obj_ids)
+    expected_merged_count = 0 if expect_deleted else len(src_obj_ids)
+    assert _count_features(merged_obj_ids) == expected_merged_count

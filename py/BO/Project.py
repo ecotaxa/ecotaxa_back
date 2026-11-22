@@ -189,6 +189,7 @@ class FieldsList(object):
         return [
             "status",
             "cnn_network_id",
+            "cnn_image_position",
             "formulae",
             "rf_models_used",
             "classifsettings",
@@ -249,6 +250,7 @@ class FieldsList(object):
                 "comments",
                 "rf_models_used",
                 "cnn_network_id",
+                "cnn_image_position",
                 "formulae",
                 "highest_right",
             ]
@@ -500,6 +502,7 @@ class ProjectBO(object):
         viewers: List[Any],
         access: Optional[str],
         formulae: Optional[str],
+        cnn_image_position: Optional[int] = None,
     ):
         assert contact is not None, "A valid Contact is needed."
         proj_id = self._project.projid
@@ -507,8 +510,10 @@ class ProjectBO(object):
         title = title.strip()
         assert instrument is not None, "Project update: A valid Instrument is needed."
         # Field reflexes
-        if cnn_network_id != self._project.cnn_network_id:
-            # Delete CNN features, which depend on the CNN network
+        if cnn_network_id != self._project.cnn_network_id or (
+            cnn_image_position or 1
+        ) != (self._project.cnn_image_position or 1):
+            # Delete CNN features, which depend on the CNN network and image position
             DeepFeatures.delete_all(session, proj_id)
         # Fields update
         self._project.instrument_id = instrument
@@ -518,6 +523,7 @@ class ProjectBO(object):
         self._project.classiffieldlist = classiffieldlist
         self._project.popoverfieldlist = popoverfieldlist
         self._project.cnn_network_id = cnn_network_id
+        self._project.cnn_image_position = cnn_image_position
         self._project.comments = comments
         self._project.access = access if access is not None else AccessLevelEnum.OPEN
         self._project.formulae = json.loads(formulae) if formulae is not None else None
@@ -586,6 +592,13 @@ class ProjectBO(object):
                     # Delete CNN features, which depend on the CNN network
                     DeepFeatures.delete_all(session, projid)
                 self._project.cnn_network_id = projectreq.cnn_network_id
+            elif modelfield == "cnn_image_position":
+                if (projectreq.cnn_image_position or 1) != (
+                    self._project.cnn_image_position or 1
+                ):
+                    # Delete CNN features, which depend on the image position
+                    DeepFeatures.delete_all(session, projid)
+                self._project.cnn_image_position = projectreq.cnn_image_position
             elif modelfield == "access":
                 self._project.access = projectreq.access
             elif modelfield == "formulae":
@@ -675,6 +688,10 @@ class ProjectBO(object):
 
     @staticmethod
     def update_taxo_stats(session: Session, projid: int):
+        sql = text(f"""
+        SELECT 1 FROM projects WHERE projid = :prjid FOR NO KEY UPDATE;
+         """)  # Prevent simultaneous updates from e.g. jobs without blocking child FK checks
+        session.execute(sql, {"prjid": projid})
         sql = text(f"""
         DELETE FROM projects_taxo_stat pts
          WHERE pts.projid = :prjid;
@@ -1189,11 +1206,19 @@ class ProjectBO(object):
         Instead, apply deltas because in this context we know them.
         TODO: All SQL to SQLAlchemy form
         """
-        needed_ids = list(collated_changes.keys())
+        needed_ids = sorted(collated_changes.keys())
+        # Lock project first (same order as update_taxo_stats) to prevent deadlocks
+        # and serialize with full stats recomputations
+        prj_sql = """SELECT 1
+                       FROM projects
+                      WHERE projid = :prjid
+                     FOR NO KEY UPDATE"""
+        session.execute(text(prj_sql), {"prjid": prj_id})
         # Lock taxo lines to prevent re-entering, during validation it's often a handful of them.
         pts_sql = """SELECT id
                        FROM taxonomy
                       WHERE id = ANY(:ids)
+                      ORDER BY id
                      FOR NO KEY UPDATE
         """
         session.execute(text(pts_sql), {"ids": needed_ids})
@@ -1202,6 +1227,7 @@ class ProjectBO(object):
                        FROM projects_taxo_stat
                       WHERE projid = :prj
                         AND id = ANY(:ids)
+                      ORDER BY id
                      FOR NO KEY UPDATE"""
         res = session.execute(text(pts_sql), {"prj": prj_id, "ids": needed_ids})
         ids_in_db = {classif_id: nbr for (classif_id, nbr) in res}

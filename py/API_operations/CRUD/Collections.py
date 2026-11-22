@@ -5,6 +5,7 @@
 from typing import List, Union, Optional, Dict, Any
 
 from fastapi import HTTPException
+from sqlalchemy.exc import IntegrityError, DataError
 from sqlalchemy.orm import Query
 from starlette.status import HTTP_422_UNPROCESSABLE_CONTENT
 
@@ -63,7 +64,16 @@ class CollectionsService(Service):
         if present_collection is None:
             raise HTTPException(status_code=404, detail="Collection not found")
         self._exclusive_creator_associate(req)
-        res = present_collection.update(session=self.session, collection_update=req)
+        self._check_titles(collection_id, req)
+        try:
+            res = present_collection.update(session=self.session, collection_update=req)
+        except (IntegrityError, DataError) as e:
+            self.session.rollback()
+            raise HTTPException(
+                status_code=422,
+                detail="Collection not updated, the database refused the change: "
+                + str(getattr(getattr(e.orig, "diag", None), "message_primary", None) or e.orig),
+            )
         if isinstance(res, str):
             raise HTTPException(
                 status_code=422, detail=res + "\n Collection not updated"
@@ -206,6 +216,36 @@ class CollectionsService(Service):
             excluded=excluded,
         )
         return aggregated
+
+    SHORT_TITLE_MAX_LEN = 64
+
+    def _check_titles(self, collection_id: CollectionIDT, req: Dict[str, Any]) -> None:
+        """
+        Refuse with a clear message a title or short title the DB would refuse:
+        too long, or already used by another collection.
+        """
+        short_title = req.get("short_title")
+        if short_title and len(short_title) > self.SHORT_TITLE_MAX_LEN:
+            raise HTTPException(
+                status_code=422,
+                detail="The short title must be at most %d characters (it has %d)"
+                % (self.SHORT_TITLE_MAX_LEN, len(short_title)),
+            )
+        for col, label in (("title", "title"), ("short_title", "short title")):
+            value = req.get(col)
+            if not value:
+                continue
+            other = (
+                self.ro_session.query(Collection.id)
+                .filter(getattr(Collection, col) == value, Collection.id != collection_id)
+                .first()
+            )
+            if other is not None:
+                raise HTTPException(
+                    status_code=422,
+                    detail="The %s '%s' is already used by another collection"
+                    % (label, value),
+                )
 
     @staticmethod
     def _exclusive_creator_associate(req):

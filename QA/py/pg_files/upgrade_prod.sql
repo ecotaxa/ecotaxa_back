@@ -4034,6 +4034,16 @@ UPDATE alembic_version SET version_num='5d2e8c41a7b3' WHERE alembic_version.vers
 
 COMMIT;
 
+BEGIN;
+
+-- Running upgrade 5d2e8c41a7b3 -> 324867bfe911
+
+ALTER TABLE projects ADD COLUMN cnn_image_position INTEGER;
+
+UPDATE alembic_version SET version_num='324867bfe911' WHERE alembic_version.version_num = '5d2e8c41a7b3';
+
+COMMIT;
+
 ------- Leave on tail
 
 ALTER TABLE alembic_version REPLICA IDENTITY FULL;

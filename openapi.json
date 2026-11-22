@@ -2,7 +2,7 @@
   "openapi":"3.0.2",
   "info":{
     "title":"EcoTaxa",
-    "version":"0.0.55"
+    "version":"0.0.58"
   },
   "servers":[
     {
@@ -3679,7 +3679,7 @@
           "samples"
         ],
         "summary":"Samples Search",
-        "description":"**Search for samples.**",
+        "description":"**Search for samples.**\n\nFor long project lists, which could exceed URL length limits, use POST on the same path\nwith the same parameters in a JSON body.",
         "operationId":"samples_search",
         "security":[
           {
@@ -3723,6 +3723,55 @@
                     "$ref":"#/components/schemas/SampleModel"
                   },
                   "title":"Response Samples Search"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post":{
+        "tags":[
+          "samples"
+        ],
+        "summary":"Samples Search Post",
+        "description":"**Search for samples**, parameters in the JSON body.\n\nSame as GET /samples/search, for long project lists which could exceed URL length limits.\n\n`project_ids` and `id_pattern` must be in the body only: also sending one of them in the query string\nis refused with a 422 error.",
+        "operationId":"samples_search_post",
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ],
+        "requestBody":{
+          "required":true,
+          "content":{
+            "application/json":{
+              "schema":{
+                "$ref":"#/components/schemas/SamplesSearchReq"
+              }
+            }
+          }
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "type":"array",
+                  "items":{
+                    "$ref":"#/components/schemas/SampleModel"
+                  },
+                  "title":"Response Samples Search Post"
                 }
               }
             }
@@ -4316,12 +4365,12 @@
             "required":false,
             "schema":{
               "title":"Fields",
-              "description":"\n\nSpecify the needed object (and ancillary entities) fields.\n\nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.\n\nMore help :\n\nYou can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.\n\n**Note that the following fields must be prefixed with the header \"obj.\"** (for example → obj.orig_id):\n\nacquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id,\nclassif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,\nlatitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.\n\n**Note that the following fields must be prefixed with the header \"img.\"** (for example → img.file_name):\n\nfile_name, height, imgid, imgrank, file_name, objid, orig_file_name, thumb_file_name, thumb_height, thumb_width, width.\n\n**Note that the following fields must be prefixed with the header \"txo.\"** (for example → txo.display_name):\n\ncreation_datetime, creator_email, display_name, id, id_instance,aphia_id, lastupdate_datetime,\nname, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostatus, taxotype.\n\n**All other fields must be prefixed by the header \"fre.\"** (for example → fre.circ.).\n                   ",
+              "description":"\n\nSpecify the needed object (and ancillary entities) fields.\n\nMay instead be sent as `fields` in the JSON body, useful for long lists which could exceed URL length limits.\nSending it in both the query string and the body is refused with a 422 error.\n\nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.\n\nMore help :\n\nYou can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.\n\n**Note that the following fields must be prefixed with the header \"obj.\"** (for example → obj.orig_id):\n\nacquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id,\nclassif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,\nlatitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.\n\n**Note that the following fields must be prefixed with the header \"img.\"** (for example → img.file_name):\n\nfile_name, height, imgid, imgrank, file_name, objid, orig_file_name, thumb_file_name, thumb_height, thumb_width, width.\n\n**Note that the following fields must be prefixed with the header \"txo.\"** (for example → txo.display_name):\n\ncreation_datetime, creator_email, display_name, id, id_instance,aphia_id, lastupdate_datetime,\nname, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostatus, taxotype.\n\n**All other fields must be prefixed by the header \"fre.\"** (for example → fre.circ.).\n                   ",
               "example":"obj.longitude,fre.feret",
               "type":"string",
               "nullable":true
             },
-            "description":"\n\nSpecify the needed object (and ancillary entities) fields.\n\nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.\n\nMore help :\n\nYou can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.\n\n**Note that the following fields must be prefixed with the header \"obj.\"** (for example → obj.orig_id):\n\nacquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id,\nclassif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,\nlatitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.\n\n**Note that the following fields must be prefixed with the header \"img.\"** (for example → img.file_name):\n\nfile_name, height, imgid, imgrank, file_name, objid, orig_file_name, thumb_file_name, thumb_height, thumb_width, width.\n\n**Note that the following fields must be prefixed with the header \"txo.\"** (for example → txo.display_name):\n\ncreation_datetime, creator_email, display_name, id, id_instance,aphia_id, lastupdate_datetime,\nname, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostatus, taxotype.\n\n**All other fields must be prefixed by the header \"fre.\"** (for example → fre.circ.).\n                   "
+            "description":"\n\nSpecify the needed object (and ancillary entities) fields.\n\nMay instead be sent as `fields` in the JSON body, useful for long lists which could exceed URL length limits.\nSending it in both the query string and the body is refused with a 422 error.\n\nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.\n\nMore help :\n\nYou can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.\n\n**Note that the following fields must be prefixed with the header \"obj.\"** (for example → obj.orig_id):\n\nacquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id,\nclassif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,\nlatitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.\n\n**Note that the following fields must be prefixed with the header \"img.\"** (for example → img.file_name):\n\nfile_name, height, imgid, imgrank, file_name, objid, orig_file_name, thumb_file_name, thumb_height, thumb_width, width.\n\n**Note that the following fields must be prefixed with the header \"txo.\"** (for example → txo.display_name):\n\ncreation_datetime, creator_email, display_name, id, id_instance,aphia_id, lastupdate_datetime,\nname, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostatus, taxotype.\n\n**All other fields must be prefixed by the header \"fre.\"** (for example → fre.circ.).\n                   "
           },
           {
             "name":"order_field",
@@ -4361,6 +4410,20 @@
               "nullable":true
             },
             "description":"\nAllows to return only a slice of the result, by returning a _maximum_ of window_size lines.\nIf no **unique order** is specified, the result can vary for same call and conditions."
+          },
+          {
+            "name":"img_order",
+            "in":"query",
+            "required":false,
+            "schema":{
+              "type":"integer",
+              "minimum":1,
+              "title":"Image position",
+              "description":"\nSelects which image to return for each object, by order of increasing `imgrank`.\n`1` (the default) returns the first/visible image, `2` the second one, and so on.\nWhen `img.` fields are requested, objects with fewer than `img_order` images are omitted from the result.",
+              "default":1,
+              "example":"1"
+            },
+            "description":"\nSelects which image to return for each object, by order of increasing `imgrank`.\n`1` (the default) returns the first/visible image, `2` the second one, and so on.\nWhen `img.` fields are requested, objects with fewer than `img_order` images are omitted from the result."
           }
         ],
         "requestBody":{
@@ -10967,6 +11030,13 @@
             "example":"34,67",
             "type":"string",
             "nullable":true
+          },
+          "fields":{
+            "title":"Fields",
+            "description":"Only used by POST /object_set/{project_id}/query: same as its 'fields' query parameter, use it when the field list makes the URL too long. Sending 'fields' in both the query string and the body is refused with a 422 error. Ignored by the other endpoints.",
+            "example":"obj.longitude,fre.feret",
+            "type":"string",
+            "nullable":true
           }
         },
         "type":"object",
@@ -11206,10 +11276,18 @@
             "nullable":true
           },
           "cnn_network_id":{
-            "title":"Cnn network id",
+            "title":"CNN model id",
             "description":"",
             "example":"SCN_zooscan_group1",
             "type":"string",
+            "nullable":true
+          },
+          "cnn_image_position":{
+            "title":"CNN image position",
+            "description":"Use image at this position (following imgrank) for predictions.",
+            "example":1,
+            "type":"integer",
+            "minimum":1.0,
             "nullable":true
           },
           "formulae":{
@@ -11398,10 +11476,18 @@
             "nullable":true
           },
           "cnn_network_id":{
-            "title":"Cnn network id",
+            "title":"CNN model id",
             "description":"",
             "example":"SCN_zooscan_group1",
             "type":"string",
+            "nullable":true
+          },
+          "cnn_image_position":{
+            "title":"CNN image position",
+            "description":"Use image at this position (following imgrank) for predictions",
+            "example":1,
+            "type":"integer",
+            "minimum":1.0,
             "nullable":true
           },
           "formulae":{
@@ -11751,6 +11837,29 @@
         },
         "type":"object",
         "title":"SampleTaxoStatsModel"
+      },
+      "SamplesSearchReq":{
+        "properties":{
+          "project_ids":{
+            "type":"string",
+            "title":"Project Ids",
+            "description":"String containing the list of one or more project id separated by non-num char.",
+            "example":"1,55"
+          },
+          "id_pattern":{
+            "type":"string",
+            "title":"Pattern Id",
+            "description":"Sample id textual pattern. Use * or '' for 'any matches'. Match is case-insensitive.",
+            "default":"",
+            "example":"*"
+          }
+        },
+        "type":"object",
+        "required":[
+          "project_ids"
+        ],
+        "title":"SamplesSearchReq",
+        "description":"Body form of GET /samples/search, for long project lists which could exceed URL length limits.\nThe parameters must not also be sent in the query string."
       },
       "SciExportTypeEnum":{
         "type":"string",

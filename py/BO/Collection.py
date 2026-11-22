@@ -301,10 +301,12 @@ class CollectionBO(object):
             )
             # Add all
             for a_role, a_user_list in by_role["user"].items():
+                added_users = set()
                 for a_user in a_user_list:
                     user_id = CollectionBO.get_user_id(session, a_user)
-                    if user_id is None:
-                        continue  # mypy
+                    if user_id is None or user_id in added_users:
+                        continue  # mypy, or listed twice
+                    added_users.add(user_id)
                     collurole = CollectionUserRole()
                     collurole.collection_id = coll_id
                     collurole.user_id = user_id
@@ -329,10 +331,12 @@ class CollectionBO(object):
             # Add all
             inst_code_provider = 0
             for a_role, an_org_list in by_role["org"].items():
+                added_orgs = set()
                 for an_org in an_org_list:
                     org_id = CollectionBO.get_organisation_id(session, an_org)
-                    if org_id is None:
-                        continue
+                    if org_id is None or org_id in added_orgs:
+                        continue  # unknown, or listed twice
+                    added_orgs.add(org_id)
                     collorole = CollectionOrgaRole()
                     collorole.collection_id = coll_id
                     collorole.organization_id = org_id

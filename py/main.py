@@ -53,6 +53,7 @@ from API_models.crud import (
     CreateCollectionReq,
     CollectionReq,
     SampleModel,
+    SamplesSearchReq,
     JobModel,
     BulkUpdateReq,
     CreateProjectReq,
@@ -73,7 +74,11 @@ from API_models.exports import (
     BackupExportReq,
 )
 from API_models.filesystem import DirectoryModel, UnpackStatusModel
-from API_models.filters import Optional, ProjectFilters, ProjectFiltersDict
+from API_models.filters import (
+    Optional,
+    ProjectFilters,
+    ProjectFiltersDict,
+)
 from API_models.helpers.Introspect import plain_columns
 from API_models.imports import ImportReq, SimpleImportRsp, SimpleImportReq, ImportRsp
 from API_models.login import LoginReq, TokenRsp, RefreshReq
@@ -209,7 +214,7 @@ api_logger = get_api_logger()
 
 app = FastAPI(
     title="EcoTaxa",
-    version="0.0.55",
+    version="0.0.58",
     # openapi URL as seen from navigator, this is included when /docs is required
     # which serves swagger-ui JS app. Stay in /api sub-path.
     openapi_url="/api/openapi.json",
@@ -2252,7 +2257,42 @@ def samples_search(
 ) -> List[SampleModel]:
     """
     **Search for samples.**
+
+    For long project lists, which could exceed URL length limits, use POST on the same path
+    with the same parameters in a JSON body.
     """
+    return _samples_search(current_user, project_ids, id_pattern)
+
+
+@app_router.post(
+    "/samples/search",
+    operation_id="samples_search_post",
+    tags=["samples"],
+    response_model=List[SampleModel],
+)
+def samples_search_post(
+    request: Request,
+    req: SamplesSearchReq = Body(...),
+    current_user: Optional[int] = Depends(get_optional_current_user),
+) -> List[SampleModel]:
+    """
+    **Search for samples**, parameters in the JSON body.
+
+    Same as GET /samples/search, for long project lists which could exceed URL length limits.
+
+    `project_ids` and `id_pattern` must be in the body only: also sending one of them in the query string
+    is refused with a 422 error.
+    """
+    for a_param in ("project_ids", "id_pattern"):
+        _refuse_in_both(
+            "samples search", a_param, a_param in request.query_params, True
+        )
+    return _samples_search(current_user, req.project_ids, req.id_pattern)
+
+
+def _samples_search(
+    current_user: Optional[int], project_ids: str, id_pattern: str
+) -> List[SampleModel]:
     with SamplesService() as sce:
         proj_ids = _split_num_list(project_ids)
         with RightsThrower():
@@ -2568,6 +2608,9 @@ def get_object_set(
 
 Specify the needed object (and ancillary entities) fields.
 
+May instead be sent as `fields` in the JSON body, useful for long lists which could exceed URL length limits.
+Sending it in both the query string and the body is refused with a 422 error.
+
 It follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.
 
 The column obj.imgcount contains the total count of images for the object.
@@ -2622,11 +2665,26 @@ Allows to return only a slice of the result, by returning a _maximum_ of window_
 If no **unique order** is specified, the result can vary for same call and conditions.""",
         examples=["100"],
     ),
+    img_order: int = Query(
+        default=1,
+        ge=1,
+        title="Image position",
+        description="""
+Selects which image to return for each object, by order of increasing `imgrank`.
+`1` (the default) returns the first/visible image, `2` the second one, and so on.
+When `img.` fields are requested, objects with fewer than `img_order` images are omitted from the result.""",
+        examples=["1"],
+    ),
     current_user: Optional[int] = Depends(get_optional_current_user),
 ) -> MyORJSONResponse:
     """
     Returns **filtered object Ids** for the given project.
     """
+    _refuse_in_both(
+        "object_set query", "fields", fields is not None, filters.fields is not None
+    )
+    if filters.fields is not None:
+        fields = filters.fields
     return_fields = None
     if fields is not None:
         return_fields = fields.split(",")
@@ -2643,6 +2701,7 @@ If no **unique order** is specified, the result can vary for same call and condi
                 order_field,
                 window_start,
                 window_size,
+                img_order,
             )
     rsp.total_ids = total
     rsp.object_ids = [with_p[0] for with_p in obj_with_parents]
@@ -2651,13 +2710,14 @@ If no **unique order** is specified, the result can vary for same call and condi
     rsp.project_ids = [with_p[3] for with_p in obj_with_parents]
     rsp.details = details
     api_logger.info(
-        "ObjectSetQuery(prj=%s, flt=%s, ord=%s, ret=%s, winf=%s, wint=%s, seen_ms=%.2f)",
+        "ObjectSetQuery(prj=%s, flt=%s, ord=%s, ret=%s, winf=%s, wint=%s, imgrank=%s, seen_ms=%.2f)",
         project_id,
         filters.min_base(),
         repr(order_field),
         return_fields,
         window_start,
         window_size,
+        img_order,
         (time.time() - before) * 1000,
     )
     # Serialize
@@ -4667,3 +4727,17 @@ def _split_num_list(ids: str) -> List[int]:
         sep = ","
     num_ids = [int(x) for x in ids.split(sep) if x.isdigit()]
     return num_ids
+
+
+def _refuse_in_both(endpoint: str, param: str, in_query: bool, in_body: bool) -> None:
+    """
+    Some parameters may be sent either in the query string or in the JSON body, the latter for
+    long values which could exceed URL length limits. They must NOT be sent in both places:
+    there would be no obvious winner, and a client doing so most likely has a bug.
+    So refuse the request with a 422 (validation) error, naming the parameter.
+    """
+    if in_query and in_body:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"{endpoint}: '{param}' given both in query string and body, send it in only one place",
+        )

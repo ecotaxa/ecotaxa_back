@@ -276,8 +276,22 @@ class ProjectFilters(ProjectFiltersModel):
             return dict(v)
         return v
 
+    # Not a filter, only used by POST /object_set/{project_id}/query. It is in ProjectFilters itself,
+    # not in a subclass, to keep that endpoint's body schema named ProjectFilters: generated clients
+    # name the body argument after the schema (project_filters), changing it breaks their callers.
+    fields: Optional[str] = Field(
+        default=None,
+        title="Fields",
+        description="Only used by POST /object_set/{project_id}/query: same as its 'fields' query parameter, "
+        "use it when the field list makes the URL too long. Sending 'fields' in both the query string "
+        "and the body is refused with a 422 error. Ignored by the other endpoints.",
+        examples=["obj.longitude,fre.feret"],
+    )
+
     def base(self) -> ProjectFiltersDict:
-        return cast(ProjectFiltersDict, self.model_dump())
+        ret = cast(ProjectFiltersDict, self.model_dump())
+        ret.pop("fields", None)  # type: ignore[typeddict-item]
+        return ret
 
     def min_base(self) -> Dict:
         # Only dump (few) valuated filters

@@ -460,6 +460,7 @@ class TSVFile(object):
     def filter_unused_fields(self, how: ImportHow, field_set: set) -> set:
         """
         Sanitize field list by removing the ones which are not known in mapping, nor used programmatically.
+        Fields generated at export time have no target DB column, so they are removed as well.
         :param how: import directives.
         :param field_set:
         :return:
@@ -468,9 +469,12 @@ class TSVFile(object):
             [
                 field
                 for field in field_set
-                if how.custom_mapping.search_field(field) is not None
-                or field in GlobalMapping.PREDEFINED_FIELDS
-                or field in GlobalMapping.DOUBLED_FIELDS
+                if field not in GlobalMapping.NON_STORED_FIELDS
+                and (
+                    how.custom_mapping.search_field(field) is not None
+                    or field in GlobalMapping.PREDEFINED_FIELDS
+                    or field in GlobalMapping.DOUBLED_FIELDS
+                )
             ]
         )
         # Remove classification fields if updating but not classification

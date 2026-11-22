@@ -3,13 +3,13 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 from enum import IntEnum
-from typing import Optional, Tuple, List, Dict
+from typing import Optional, Tuple, List, Dict, Set
 
 from BO.DataLicense import AccessLevelEnum
 from DB.Project import Project
 from DB.ProjectPrivilege import ProjectPrivilege
 from DB.User import User, Role, UserStatus
-from DB.helpers.ORM import Session
+from DB.helpers.ORM import Session, any_, select
 from .Preferences import Preferences
 from .ProjectPrivilege import ProjectPrivilegeBO
 
@@ -98,20 +98,63 @@ class RightsBO(object):
                     or ProjectPrivilegeBO.MANAGE in rights_on_proj
                 ), NOT_AUTHORIZED
             elif action == Action.READ:
-                # TODO: Bah, not nice either
-                assert (
-                    project.access
-                    in [AccessLevelEnum.OPEN.value, AccessLevelEnum.PUBLIC.value]
-                    or ProjectPrivilegeBO.VIEW in rights_on_proj
-                    or ProjectPrivilegeBO.ANNOTATE in rights_on_proj
-                    or ProjectPrivilegeBO.MANAGE in rights_on_proj
-                ), NOT_AUTHORIZED
+                assert RightsBO._can_read(project.access, rights_on_proj), NOT_AUTHORIZED
             else:
                 raise Exception("Not implemented")
         # Keep the last accessed projects
         if update_preference == True and Preferences(user).add_recent_project(prj_id):
             session.commit()
         return user, project
+
+    @staticmethod
+    def _can_read(access: Optional[str], rights_on_proj: Set[str]) -> bool:
+        """
+        The READ rule for a non-admin user: a public or open project, or any privilege on it.
+        """
+        return access in (
+            AccessLevelEnum.OPEN.value,
+            AccessLevelEnum.PUBLIC.value,
+        ) or bool(
+            rights_on_proj
+            & {
+                ProjectPrivilegeBO.VIEW,
+                ProjectPrivilegeBO.ANNOTATE,
+                ProjectPrivilegeBO.MANAGE,
+            }
+        )
+
+    @staticmethod
+    def _projects_access(session: Session, prj_ids: List[int]) -> Dict[int, str]:
+        """
+        Access level of the given projects, in a single query. Missing projects are absent.
+        """
+        qry = select(Project.projid, Project.access).where(
+            Project.projid == any_(prj_ids)
+        )
+        return {projid: access for projid, access in session.execute(qry)}
+
+    @staticmethod
+    def user_wants_read_all(session: Session, user_id: int, prj_ids: List[int]) -> None:
+        """
+        Same as user_wants(READ) on each project, in the same order so with the same error,
+        but in a constant number of queries, for searches over many projects.
+        A search is not an access to each project: recent projects are not updated.
+        """
+        if len(prj_ids) == 0:
+            return
+        user: User = RightsBO.get_user_throw(session, user_id)
+        accesses = RightsBO._projects_access(session, prj_ids)
+        is_admin = user.has_role(Role.APP_ADMINISTRATOR)
+        rights: Dict[int, Set[str]] = {}
+        if not is_admin:
+            for a_priv in user.privs_on_projects:
+                rights.setdefault(a_priv.projid, set()).add(a_priv.privilege)
+        for prj_id in prj_ids:
+            assert prj_id in accesses, NOT_FOUND
+            if not is_admin:
+                assert RightsBO._can_read(
+                    accesses[prj_id], rights.get(prj_id, set())
+                ), NOT_AUTHORIZED
 
     @staticmethod
     def user_wants_export(
@@ -260,6 +303,17 @@ class RightsBO(object):
         else:
             assert False, NOT_AUTHORIZED
         return project
+
+    @staticmethod
+    def anonymous_wants_read_all(session: Session, prj_ids: List[int]) -> None:
+        """
+        Same as anonymous_wants(READ) on each project, in a single query.
+        """
+        if len(prj_ids) == 0:
+            return
+        accesses = RightsBO._projects_access(session, prj_ids)
+        for prj_id in prj_ids:
+            assert accesses.get(prj_id) == AccessLevelEnum.OPEN.value, NOT_AUTHORIZED
 
     @staticmethod
     def user_has_role(session: Session, user_id: int, role: str) -> User:

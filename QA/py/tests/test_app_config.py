@@ -1,8 +1,9 @@
 import os
+import shutil
 from enum import StrEnum
 
 import pytest
-from helpers.AppConfig import Config, ConfigKey
+from helpers.AppConfig import Config, ConfigKey, validate_directory
 
 
 # Helper to create a dummy config file
@@ -35,12 +36,16 @@ def temp_dirs(tmp_path):
     export = tmp_path / "export"
     export.mkdir()
 
+    models = tmp_path / "models"
+    models.mkdir()
+
     yield {
         "VAULT_DIR": str(vault),
         "JOBS_DIR": str(jobs),
         "USERSFILESAREA": str(users),
         "SERVERLOADAREA": str(common),
         "FTPEXPORTAREA": str(export),
+        "MODELSAREA": str(models),
     }
 
     # Cleanup
@@ -65,6 +70,7 @@ def base_config(temp_dirs):
         "SECRET_KEY": "secret",
         "VAULT_DIR": temp_dirs["VAULT_DIR"],
         "JOBS_DIR": temp_dirs["JOBS_DIR"],
+        "MODELSAREA": temp_dirs["MODELSAREA"],
         "USERSFILESAREA": temp_dirs["USERSFILESAREA"],
         "THUMBSIZELIMIT": "400",
         "APPMANAGER_NAME": "name",
@@ -243,6 +249,7 @@ def test_config_validate_with_folders_permissions(
     [
         ("SERVERLOADAREA", "SERVERLOADAREA", os.W_OK, "is not writable"),
         ("FTPEXPORTAREA", "FTPEXPORTAREA", os.R_OK, "is not readable"),
+        ("MODELSAREA", "MODELSAREA", os.R_OK, "is not readable"),
     ],
 )
 def test_config_validate_fails_when_folder_permissions_invalid(
@@ -522,3 +529,49 @@ def test_config_validate_unpack_sync_wait_negative(
     cfg = Config()
     with pytest.raises(AssertionError, match="UNPACK_SYNC_WAIT must be >= 0"):
         cfg.validate()
+
+
+def test_validate_directory_success_and_disk_usage(tmp_path):
+    free_from_str = validate_directory(str(tmp_path))
+    free_from_path = validate_directory(tmp_path)
+    expected_free = shutil.disk_usage(tmp_path).free
+    assert isinstance(free_from_str, int)
+    assert free_from_str >= 0
+    assert abs(free_from_str - expected_free) < 1024 * 1024 * 100
+    assert abs(free_from_path - expected_free) < 1024 * 1024 * 100
+
+
+def test_validate_directory_nonexistent_and_file(tmp_path):
+    missing = tmp_path / "does_not_exist"
+    with pytest.raises(AssertionError, match="does not exist"):
+        validate_directory(missing)
+
+    file_path = tmp_path / "a_file.txt"
+    file_path.write_text("hello")
+    with pytest.raises(AssertionError, match="does not exist"):
+        validate_directory(file_path)
+
+
+def test_validate_directory_permissions_flags(tmp_path, mocker):
+    target = tmp_path / "dir"
+    target.mkdir()
+
+    def no_read(path, mode):
+        if mode == os.R_OK:
+            return False
+        return True
+
+    mocker.patch("os.access", side_effect=no_read)
+    with pytest.raises(AssertionError, match="is not readable"):
+        validate_directory(target, check_read=True, check_write=True)
+    assert validate_directory(target, check_read=False, check_write=True) >= 0
+
+    def no_write(path, mode):
+        if mode == os.W_OK:
+            return False
+        return True
+
+    mocker.patch("os.access", side_effect=no_write)
+    with pytest.raises(AssertionError, match="is not writable"):
+        validate_directory(target, check_read=True, check_write=True)
+    assert validate_directory(target, check_read=True, check_write=False) >= 0

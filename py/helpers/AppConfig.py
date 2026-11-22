@@ -9,6 +9,7 @@
 import configparser
 import os
 import re
+import shutil
 import socket
 from enum import StrEnum
 from pathlib import Path
@@ -18,10 +19,29 @@ from typing import (
     overload,
     Literal,
     List,
+    Union,
 )
 
 # Env. variable
 ENV_KEY = "APP_CONFIG"
+
+
+def validate_directory(
+    dir_path: Union[str, Path],
+    check_read: bool = True,
+    check_write: bool = True,
+) -> int:
+    """
+    Validate that a directory exists and has the requested permissions.
+    Returns the free space left on the device in bytes.
+    """
+    path = Path(dir_path)
+    assert path.is_dir(), f"Directory '{dir_path}' does not exist."
+    if check_read:
+        assert os.access(path, os.R_OK), f"Directory '{dir_path}' is not readable."
+    if check_write:
+        assert os.access(path, os.W_OK), f"Directory '{dir_path}' is not writable."
+    return shutil.disk_usage(path).free
 
 
 class ConfigKey(StrEnum):
@@ -412,27 +432,17 @@ class Config(object):
         """
         Read all configuration values to ensure they are present and valid.
         """
-        vault_dir = self.vault_dir()
-        jobs_dir = self.jobs_dir()
-        common_folder = self.common_folder()
-        export_folder = self.export_folder()
-        users_files_dir = self.get_users_files_dir()
-
-        for d in [
-            vault_dir,
-            jobs_dir,
-            common_folder,
-            export_folder,
-            users_files_dir,
-        ]:
-            if d is None:
-                continue
-            path = Path(d)
-            assert path.is_dir(), f"Directory '{d}' does not exist."
-            if d != common_folder:
-                assert os.access(path, os.R_OK), f"Directory '{d}' is not readable."
-            if d != export_folder:
-                assert os.access(path, os.W_OK), f"Directory '{d}' is not writable."
+        dirs_to_check: List[Tuple[Optional[str], bool, bool]] = [
+            (self.vault_dir(), True, True),
+            (self.jobs_dir(), True, True),
+            (self.common_folder(), False, True),
+            (self.export_folder(), True, False),
+            (self.models_dir(), True, False),
+            (self.get_users_files_dir(), True, True),
+        ]
+        for d, check_read, check_write in dirs_to_check:
+            if d is not None:
+                validate_directory(d, check_read=check_read, check_write=check_write)
 
         db_address = self.get_db_address(read_only=False)
         ro_db_address = self.get_db_address(read_only=True)
