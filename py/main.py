@@ -187,6 +187,7 @@ from DB.User import GuestIDT, OrganizationIDT, User, UserIDT
 from FS.Unpack import UnpackStatus
 from FS.UserFilesDir import sweep_stale_unpacks
 from helpers.AppConfig import Config
+from helpers.DevMode import is_dev_mode
 from helpers.DynamicLogs import get_logger, get_api_logger, MONITOR_LOG_PATH
 from helpers.fastApiUtils import (
     internal_server_error_handler,
@@ -4642,7 +4643,6 @@ dump_openapi(app, __file__)
 
 # Can be overwritten for testing. Looks for what to do at this interval.
 CLEANUP_INTERVAL = 10
-background_worker: Optional[BackgroundWorker] = None
 
 
 def register_exception(app: FastAPI):
@@ -4690,9 +4690,10 @@ async def lifespan(app: FastAPI):
     # (connection pool expiration & memory cleanup).
     ResourceCleaner.launch_at_interval(CLEANUP_INTERVAL)
 
-    global background_worker
-    # Don't run predictions, they are left to a specialized runner
-    background_worker = BackgroundWorker()
+    if is_dev_mode():
+        background_worker = BackgroundWorker()
+    else:
+        pass  # Rely on worker in an external process
 
     try:
         yield
@@ -4700,8 +4701,9 @@ async def lifespan(app: FastAPI):
         logger.error("Error during server operation: %s", str(e), exc_info=True)
         raise
     finally:
-        background_worker.shutdown()
-        logger.info("BackgroundWorker shutdown complete")
+        if is_dev_mode():
+            background_worker.shutdown()
+            logger.info("BackgroundWorker shutdown complete")
         ResourceCleaner.shutdown()
         logger.info("MaintenanceScheduler shutdown complete")
 

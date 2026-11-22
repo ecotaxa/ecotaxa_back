@@ -221,20 +221,6 @@ def test_job_kill(fastapi, jobs_as_process):
     api_check_job_ok(fastapi, job2_id)
 
 
-@pytest.fixture
-def no_scheduler():
-    """
-    Disable the BackgroundWorker during the test.
-    """
-    from BG_operations import BackgroundWorker as BackgroundWorkerMod
-    import main
-
-    assert main.background_worker is not None
-    main.background_worker.shutdown()
-    yield
-    main.background_worker.launch_at_interval(BackgroundWorkerMod.JOB_INTERVAL)
-
-
 def test_job_delete_pending(fastapi, no_scheduler, jobs_as_process):
     """
     Verify that a pending job can be deleted and it goes to Error state with Killed message.

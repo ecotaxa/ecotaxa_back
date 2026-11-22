@@ -21,6 +21,7 @@ class BackgroundWorker:
     """
 
     def __init__(self) -> None:
+        # Don't run predictions, they are left to a specialized runner
         JobsManager.FILTER = [PredictForProject.JOB_TYPE]
         self.the_thread: Optional[Thread] = None
         self.stop_event: Event = Event()
@@ -35,7 +36,7 @@ class BackgroundWorker:
         self.the_thread = Thread(
             target=self.run_loop,
             args=(interval,),
-            name=f"{self.__class__.__name__}Thread",
+            name=f"BgWkThread",
             daemon=True,
         )
         self.the_thread.start()

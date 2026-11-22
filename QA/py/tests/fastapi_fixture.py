@@ -21,6 +21,8 @@ from fastapi.testclient import TestClient
 from tests.jobs import clear_all_jobs
 from tests.prj_utils import sce_check_consistency
 
+background_worker = None
+
 
 # noinspection PyProtectedMember
 # Note: We need this fixture in 99% of the tests, so it could be "session" scoped,
@@ -41,6 +43,8 @@ def fastapi(config, database, tstlogs, request) -> Generator[TestClient, Any, No
     BackgroundWorkerMod.JOB_INTERVAL = 0.01
 
     with client:  # Trigger the fastapi 'startup' event -> launches the JobsManager
+        global background_worker
+        background_worker = BackgroundWorkerMod.BackgroundWorker()
         yield client
     # Teardown, once per module
     consistency_exception = None
@@ -51,8 +55,19 @@ def fastapi(config, database, tstlogs, request) -> Generator[TestClient, Any, No
     except AssertionError as e:
         consistency_exception = e
     serializer.loads = sav_loads
-    if main.background_worker is not None:
-        main.background_worker.shutdown()
+    background_worker.shutdown()
     if consistency_exception is not None:
         clear_all_jobs()  # Don't leak failed/unfinished jobs to next tests
         raise consistency_exception
+
+
+@pytest.fixture
+def no_scheduler():
+    """
+    Disable the BackgroundWorker during the test.
+    """
+    from BG_operations import BackgroundWorker as BackgroundWorkerMod
+
+    background_worker.shutdown()
+    yield
+    background_worker.launch_at_interval(BackgroundWorkerMod.JOB_INTERVAL)

@@ -34,6 +34,7 @@ from starlette.responses import Response, JSONResponse
 from starlette.status import HTTP_403_FORBIDDEN, HTTP_204_NO_CONTENT
 
 from helpers.AppConfig import Config
+from helpers.DevMode import is_dev_mode
 from .starlette import status, PlainTextResponse
 
 
@@ -145,9 +146,7 @@ def adapt_openapi_31_to_30(d: dict):  # pragma: no cover
 
 # In a development environment, dump the API definition at each run
 def dump_openapi(app: FastAPI, main_path: str):  # pragma: no cover
-    import sys
-
-    if "uvicorn" not in sys.argv:
+    if not is_dev_mode():
         return  # It's not dev
     import json
     from pathlib import Path

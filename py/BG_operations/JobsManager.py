@@ -5,7 +5,6 @@
 import multiprocessing as mp
 import os
 import signal
-import sys
 import threading
 from threading import Thread
 from typing import Any, Optional, List, Type, Union, ClassVar
@@ -16,6 +15,7 @@ from BO.Job import JobBO
 from DB.Job import Job, DBJobStateEnum, JobIDT
 from DB.helpers.ORM import clone_of
 from helpers import DynamicLogs
+from helpers.DevMode import is_debug_mode
 from helpers.DynamicLogs import (
     get_logger,
     LogsSwitcher,
@@ -116,7 +116,7 @@ class ProcessJobRunner(spawn_ctx.Process, BaseJobRunner):  # type: ignore[name-d
 JobRunnerType = Union[Type[ThreadJobRunner], Type[ProcessJobRunner]]
 JobRunner: JobRunnerType = ProcessJobRunner
 # Force thread in debug
-if sys.gettrace() is not None:
+if is_debug_mode():
     JobRunner = ThreadJobRunner
 
 
@@ -143,7 +143,7 @@ class JobsManager(Service):
         """
         cls = JobsManager
         if cls.the_runner is not None:
-            # A single runner at a time (short-lived for PROD, long for DEV)
+            # A single runner at a time
             if cls.the_runner.is_alive():
                 return
             cls.the_runner.join()
