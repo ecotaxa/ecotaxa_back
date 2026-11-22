@@ -38,9 +38,7 @@ def _recent_projects(user_id):
 
 def test_samples_search_keeps_recent_projects(fastapi):
     # Public projects the user has no right on, readable by any logged user
-    prj_ids = [
-        create_project(ADMIN_USER_ID, "Samples search %d" % i) for i in range(2)
-    ]
+    prj_ids = [create_project(ADMIN_USER_ID, "Samples search %d" % i) for i in range(2)]
     before = _recent_projects(ORDINARY_USER_USER_ID)
     url = SAMPLES_SEARCH_URL.format(project_ids=",".join(str(p) for p in prj_ids))
     rsp = fastapi.get(url, headers=USER_AUTH)
@@ -64,7 +62,9 @@ def test_samples_search_post(fastapi):
     # Long project lists can be sent in the body, same result as GET
     prj_ids = [do_test_import(fastapi, "Samples search POST %d" % i) for i in range(2)]
     ids_str = ",".join(str(p) for p in prj_ids)
-    rsp = fastapi.get(SAMPLES_SEARCH_URL.format(project_ids=ids_str), headers=ADMIN_AUTH)
+    rsp = fastapi.get(
+        SAMPLES_SEARCH_URL.format(project_ids=ids_str), headers=ADMIN_AUTH
+    )
     assert rsp.status_code == status.HTTP_200_OK
     in_get = rsp.json()
     assert len(in_get) > 0
@@ -102,8 +102,7 @@ def test_samples_search_post_refuses_both_places(fastapi):
         )
         assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert (
-            "'%s' given both in query string and body" % a_param
-            in rsp.json()["detail"]
+            "'%s' given both in query string and body" % a_param in rsp.json()["detail"]
         )
 
 
@@ -180,7 +179,7 @@ def test_samples_search_rights_on_many_projects(fastapi):
     assert _search(fastapi, [], USER_AUTH).json() == []
 
 
-def test_samples_search_rights_in_constant_queries(fastapi):
+def test_samples_search_rights_in_constant_queries(database):
     prj_ids = [
         create_project(ADMIN_USER_ID, "Samples rights queries %d" % i) for i in range(6)
     ]
