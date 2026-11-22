@@ -4,7 +4,7 @@
 #
 # FS entries description
 #
-from typing import List
+from typing import List, Optional
 
 from helpers.pydantic import BaseModel, Field
 
@@ -48,4 +48,71 @@ class DirectoryModel(BaseModel):
         title="Entries",
         description="Entries, i.e. subdirectories or contained files."
         "All entries are readable, i.e. can be used as input or navigated into.",
+    )
+
+
+class UnpackStatusModel(BaseModel):
+    """
+    Status of the unpacking of an archive uploaded with TUS, to poll until state is 'done'.
+    A failure is not a status, but the HTTP error of the poll.
+    """
+
+    state: str = Field(
+        title="State",
+        description="'unpacking', then 'done'.",
+        examples=["unpacking"],
+    )
+    name: str = Field(
+        title="Name", description="Uploaded file name.", examples=["b_da_19.zip"]
+    )
+    percent: int = Field(
+        default=0,
+        title="Percent",
+        description="Progress, 0 to 100, entries done out of entries total. It moves while "
+        "entries are extracted, and may go down when a nested archive adds its own entries to "
+        "the total. It stays below 100 until the result is published.",
+        examples=[42],
+    )
+    entries_done: Optional[int] = Field(
+        default=None,
+        title="Entries done",
+        description="Entries extracted so far, in the uploaded archive and the nested archives "
+        "opened so far.",
+        examples=[420],
+    )
+    entries_total: Optional[int] = Field(
+        default=None,
+        title="Entries total",
+        description="Entries of the archives opened so far, nested archives included. Grows "
+        "when a nested archive is opened.",
+        examples=[1000],
+    )
+    files_done: Optional[int] = Field(
+        default=None,
+        title="Files done",
+        description="Files unpacked so far, nested archives included.",
+        examples=[12000],
+    )
+    bytes_done: Optional[int] = Field(
+        default=None,
+        title="Bytes done",
+        description="Bytes unpacked so far, nested archives included.",
+        examples=[123456789],
+    )
+    bytes_declared: Optional[int] = Field(
+        default=None,
+        title="Bytes declared",
+        description="Uncompressed size declared by the uploaded archive, nested archives not included.",
+        examples=[223456789],
+    )
+    result_paths: Optional[List[str]] = Field(
+        default=None,
+        title="Result paths",
+        description="When done, where the result is in My Files.",
+        examples=[["my_folder/b_da_19"]],
+    )
+    updated: str = Field(
+        title="Updated",
+        description="Last update, UTC ISO format.",
+        examples=["2026-11-12T14:00:00.123456+00:00"],
     )

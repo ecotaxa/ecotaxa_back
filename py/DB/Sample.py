@@ -102,7 +102,6 @@ class Sample(Model):
          WHERE usam.sampleid = sll.sampleid
            AND projid = :projid """)
         session.execute(sql, {"projid": prj_id})
-        session.commit()
 
     @classmethod
     def get_sample_summary(cls, session: Session, sample_id: int) -> List:

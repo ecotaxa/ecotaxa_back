@@ -40,7 +40,7 @@ from DB.Object import (
 )
 from DB.Project import ProjectIDT, Project
 from DB.User import UserIDT
-from DB.helpers import Result
+from DB.helpers import Result, SQL
 from DB.helpers.Direct import text
 from DB.helpers.Hints import RECURS_HINT
 from DB.helpers.Postgres import db_server_now
@@ -73,12 +73,14 @@ class ObjectManager(Service):
         order_field: Optional[str] = None,
         window_start: Optional[int] = None,
         window_size: Optional[int] = None,
+        img_order: int = 1,
     ) -> Tuple[ObjectIDWithParentsListT, List[List[Any]], int]:
         """
         Query the given project with given filters, return all IDs.
         If provided order_field, the result is sorted by this field.
         Ambiguity is solved in a stable (over calls) way.
         window_start and window_size allow to select a window of data in the result.
+        img_order selects the nth image (by increasing imgrank) returned for each object.
         """
         # Security check
         if current_user_id is None:
@@ -134,7 +136,7 @@ class ObjectManager(Service):
 
         order_clause.set_window(window_start, window_size)
         from_clause, where_clause, params = object_set.get_sql(
-            select_clause, order_clause
+            select_clause, order_clause, img_order=img_order
         )
 
         sql = select_clause.get_sql() + "\n FROM "
@@ -144,7 +146,13 @@ class ObjectManager(Service):
         sql += "\n" + order_clause.get_sql()
 
         with CodeTimer("Query: SQL: %s PARAMS: %s: " % (sql, params), logger, 1):
-            res: Result = self.ro_session.execute(text(sql), params)
+            res: Result = self.ro_session.execute(
+                text(sql).execution_options(
+                    stream_results=True,
+                    max_row_buffer=SQL.DB_CHUNK_SIZE * 10,  # 4 columns + extras
+                ),
+                params,
+            )
         ids = []
         details = []
         total = 0
@@ -276,7 +284,12 @@ class ObjectManager(Service):
        AND obh.objid <@ obj_in_prj(sam.projid) """ % ObjectHeader.__tablename__
         params = {"ids": object_ids}
 
-        res: Result = self.ro_session.execute(text(sql), params)
+        res: Result = self.ro_session.execute(
+            text(sql).execution_options(
+                stream_results=True, max_row_buffer=SQL.DB_CHUNK_SIZE * 10  # 4 columns
+            ),
+            params,
+        )
         ids = [
             (objid, acquisid, sampleid, projid)
             for objid, acquisid, sampleid, projid in res
@@ -381,8 +394,8 @@ class ObjectManager(Service):
             self.CHUNK_SIZE, remover.add_files
         )
 
-        # Update stats on impacted project(s)
-        for prj_id in prj_ids:
+        # Update stats on impacted project(s) in deterministic order to prevent deadlocks
+        for prj_id in sorted(prj_ids):
             ProjectBO.update_taxo_stats(self.session, prj_id)
             # Stats depend on taxo stats
             ProjectBO.update_stats(self.session, prj_id)

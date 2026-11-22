@@ -514,7 +514,7 @@ class TaxonBOSet(object):
         with CodeTimer("TaxonBOSet query for %d IDs: " % len(taxon_ids), logger):
             res: Result = session.execute(qry)
         self.taxa: List[TaxonBO] = []
-        for a_rec in res.fetchall():
+        for a_rec in res:
             lst_rec = list(a_rec)
             (
                 nbobj1,

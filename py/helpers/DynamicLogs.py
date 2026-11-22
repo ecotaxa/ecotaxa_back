@@ -4,7 +4,6 @@
 #
 import abc
 import logging
-import os
 import sys
 import time
 from abc import ABC
@@ -12,13 +11,10 @@ from logging import Logger, Handler, LogRecord
 from threading import get_ident
 from typing import Dict
 
-# Format without %(asctime)s if NO_TIME_LOG environment variable is set
-_NO_TIME_LOG = os.getenv("NO_TIME_LOG", "").strip().lower() in (
-    "1",
-    "true",
-    "yes",
-    "on",
-)
+from helpers.AppConfig import Config
+
+# Format without %(asctime)s if NO_TIME_LOG is set
+_NO_TIME_LOG = Config().get_no_time_log()
 ASCTIME_FORMAT = "" if _NO_TIME_LOG else "%(asctime)s|"
 # General format for Web workers
 LOGGING_FORMAT = (
@@ -48,11 +44,18 @@ class LogFormatter(logging.Formatter):
             return name
         return ".".join([p[0] for p in parts[:-1]] + [parts[-1]])
 
+    @staticmethod
+    def _abbreviate_thread_name(name: str | None) -> str | None:
+        if name == "AnyIO worker thread":  # Hardcoded in _asyncio.py
+            return "AnyIOWkThd"
+        return name
+
     def format(self, record: LogRecord) -> str:
         """
         Shorten logger name a bit Java-style
         """
         record.name = self._abbreviate_logger_name(record.name)
+        record.threadName = self._abbreviate_thread_name(record.threadName)
         return super().format(record)
 
 

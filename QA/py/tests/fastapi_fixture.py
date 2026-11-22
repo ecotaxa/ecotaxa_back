@@ -6,6 +6,12 @@ from typing import Any, Generator
 # We need this before first import of main.py for location middleware
 FAKE_SERVER = "https://my.real.site:443/"
 os.environ["SERVERURL"] = FAKE_SERVER
+# Same for CORS middleware, see test_cors.py
+CORS_ORIGIN = "https://ecotaxoguide.example.org"
+os.environ["CORS_ALLOWED_ORIGINS"] = CORS_ORIGIN
+os.environ["CORS_ALLOWED_ORIGIN_REGEX"] = (
+    r"^http://((pkscope|planktoscope)[a-z0-9-]*\.local|home\.pkscope|192\.168\.4\.1)(:\d+)?$"
+)
 
 import pytest
 from BG_operations.JobScheduler import JobScheduler

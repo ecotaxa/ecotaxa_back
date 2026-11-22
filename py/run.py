@@ -2,17 +2,14 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-import os
 import sys
 from logging import INFO
 from typing import Any
 
-THE_APP = "main:app"
-APP_PORT = "8000"
+from helpers.AppConfig import Config
 
-# Overload port if provided from env.
-if "APP_PORT" in os.environ:
-    APP_PORT = os.environ["APP_PORT"]
+THE_APP = "main:app"
+APP_PORT = str(Config().get_app_port())
 
 
 def run_uvicorn() -> None:
@@ -34,7 +31,7 @@ def run_uvicorn() -> None:
     uvicorn.run(
         THE_APP,
         log_level=INFO,
-        port=int(APP_PORT),
+        port=Config().get_app_port(),
         reload=True,
         access_log=False,  # No reporting of HTTP requests and status
     )

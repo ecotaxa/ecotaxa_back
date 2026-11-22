@@ -3,7 +3,7 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 
-from typing import List, Union, Tuple, Optional, Dict
+from typing import List, Union, Tuple, Optional
 
 from fastapi import HTTPException
 
@@ -16,10 +16,9 @@ from BO.Project import (
     ProjectBOSet,
     ProjectTaxoStats,
     ProjectUserStats,
-    ProjectColumns,
 )
 from BO.ProjectSet import ProjectSetColumnStats, LimitedInCategoriesProjectSet
-from BO.Rights import RightsBO, Action, NOT_FOUND
+from BO.Rights import RightsBO, Action
 from BO.User import UserIDT
 from DB.Project import Project, ANNOTATE_STATUS, ProjectIDT, ProjectIDListT
 from DB.Sample import Sample
@@ -189,6 +188,7 @@ class ProjectsService(Service):
             classiffieldlist=project.classiffieldlist,
             popoverfieldlist=project.popoverfieldlist,
             cnn_network_id=project.cnn_network_id,
+            cnn_image_position=project.cnn_image_position,
             comments=project.comments,
             contact=project.contact,
             managers=project.managers,
@@ -299,6 +299,7 @@ class ProjectsService(Service):
             self.session, current_user_id, Action.ADMINISTRATE, prj_id
         )
         Sample.propagate_geo(self.session, prj_id)
+        self.session.commit()
 
     def recompute_sunpos(self, current_user_id: int, prj_id: ProjectIDT) -> int:
         """
@@ -319,7 +320,18 @@ class ProjectsService(Service):
         """
         Read classification statistics for these projects.
         """
-        # No security barrier because there is no private information inside
+        # Security barrier. Stats are not an access to each project: keep recent projects.
+        for prj_id in prj_ids:
+            if current_user_id is None:
+                RightsBO.anonymous_wants(self.ro_session, Action.READ, prj_id)
+            else:
+                RightsBO.user_wants(
+                    self.ro_session,
+                    current_user_id,
+                    Action.READ,
+                    prj_id,
+                    update_preference=False,
+                )
         return ProjectBO.read_taxo_stats(self.session, prj_ids, taxa_ids)
 
     def read_user_stats(
@@ -353,7 +365,15 @@ class ProjectsService(Service):
         """
         Read data statistics for these projects, optionally using a limit and filtering categories.
         """
-        # No security barrier because there is no private information inside
+        # Security barrier. Stats are not an access to each project: keep recent projects.
+        for prj_id in prj_ids:
+            RightsBO.user_wants(
+                self.ro_session,
+                current_user_id,
+                Action.READ,
+                prj_id,
+                update_preference=False,
+            )
         learning_set = LimitedInCategoriesProjectSet(
             self.session, prj_ids, column_names, random_limit, categories
         )
@@ -368,72 +388,15 @@ class ProjectsService(Service):
         """
         Read classification statistics for these projects.
         """
-        # add security barrier ?
+        # Security barrier
+        if current_user_id is None:
+            RightsBO.anonymous_wants(self.ro_session, Action.READ, projid)
+        else:
+            RightsBO.user_wants(
+                self.ro_session,
+                current_user_id,
+                Action.READ,
+                projid,
+                update_preference=False,
+            )
         return ProjectBO.in_collections(self.ro_session, projid)
-
-    def read_projects_columns(
-        self,
-        current_user_id: Optional[UserIDT],
-        project_ids: List[int],
-        fields: Optional[str] = FieldListType.default,
-    ) -> Optional[List[ProjectColumns]]:
-        """
-        Read values for specific columns for these projects.
-        """
-        projects = ProjectBOSet(self.ro_session, project_ids, public=False)
-        ret = []
-        columns: List = []
-        if fields is not None and (
-            fields[0 : len(FieldListType.default)] == FieldListType.default.value
-            and len(fields) > 1
-        ):
-            project_columns: Dict = {
-                FieldListType.default: [
-                    Project.projid,
-                    Project.title,
-                    Project.instrument,
-                    Project.comments,
-                    Project.initclassiflist,
-                    Project.classiffieldlist,
-                    Project.cnn_network_id,
-                    Project.status,
-                    Project.access,
-                    Project.formulae,
-                ]
-            }
-
-            project_columns[FieldListType.all] = project_columns[
-                FieldListType.default
-            ] + [
-                Project.mappingobj,
-                Project.mappingsample,
-                Project.mappingprocess,
-                Project.mappingacq,
-            ]
-            lfields = fields.split(",")
-            typelist = lfields.pop(0)
-            columns = project_columns[typelist]
-            columnplus = []
-            if typelist != FieldListType.all and len(lfields):
-                lfields = lfields[0].split(",")
-                for col in project_columns[FieldListType.all]:
-                    if col.key in lfields:
-                        columnplus.append(col)
-                columns.extend(columnplus)
-
-        for project in projects.as_list():
-            values = []
-            for column in columns:
-                if hasattr(project, column.key):
-                    values.append(getattr(project, column.key))
-                elif column == "userstats":
-                    annotators = ProjectBO.read_user_stats(self.session, project_ids)
-                    creators = []
-                    for annotator in annotators[1].annotators:
-                        creators.append(annotator.id)
-                    values.append(creators)
-                else:
-                    values.append(NOT_FOUND)
-            cols = [col.key for col in columns]
-            ret.append(ProjectColumns(project.projid, cols, values))
-        return ret

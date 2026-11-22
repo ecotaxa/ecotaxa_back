@@ -26,19 +26,11 @@ class CentralTaxonomyService(Service):
     Communication with EcoTaxoServer, for various purposes.
     """
 
-    # Configuration keys
-    TAXOSERVER_URL_KEY = "TAXOSERVER_URL"
-    TAXOSERVER_MY_ID = "TAXOSERVER_INSTANCE_ID"
-    TAXOSERVER_MY_SECRET_KEY = "TAXOSERVER_SHARED_SECRET"
-
     def __init__(self) -> None:
         super().__init__()
-        url = self.config.get_cnf(self.TAXOSERVER_URL_KEY)
-        assert url is not None
-        my_id = self.config.get_cnf(self.TAXOSERVER_MY_ID)
-        assert my_id is not None
-        my_key = self.config.get_cnf(self.TAXOSERVER_MY_SECRET_KEY)
-        assert my_key is not None
+        url = self.config.get_taxoserver_url()
+        my_id = self.config.get_taxoserver_instance_id()
+        my_key = self.config.get_taxoserver_shared_secret()
         self.client = EcoTaxoServerClient(url, my_id, my_key)
 
     def get_taxon_by_id(self, taxon_id: int) -> str:

@@ -12,6 +12,7 @@ from helpers.httpexception import (
     DETAIL_PASSWORD_STRENGTH_ERROR,
     DETAIL_INVALID_EMAIL,
     DETAIL_EMAIL_OWNED_BY_OTHER,
+    DETAIL_INVALID_PARAMETER,
 )
 
 from tests.credentials import (
@@ -826,6 +827,57 @@ def test_create_with_bogus_token_is_refused(monkeypatch, fastapi):
     url = USER_CREATE_URL + "?" + urlencode(params, doseq=True)
     rsp = fastapi.post(url, json=body)
     assert rsp.status_code == 403
+
+
+def test_create_with_token_of_another_email_is_refused(monkeypatch, fastapi):
+    get_last_token = set_config_on(monkeypatch, "off")
+    # a registration token received for one's own address
+    own_email = "own_address@mailtestprovider1.net"
+    params = {"no_bot": ["193.4.123.4", "sdfgdqsg"]}
+    urlparams = USER_CREATE_URL + "?" + urlencode(params, doseq=True)
+    ref_json = {"email": own_email, "id": None, "name": "", "organisation": ""}
+    rsp = fastapi.post(urlparams, json=ref_json)
+    assert rsp.status_code == 200
+    token = get_last_token()
+    assert token
+
+    # used to create an account for another address: refused, nothing created
+    password = "Zzzz?a123"
+    user_confirm_email(
+        fastapi,
+        "other_address@mailtestprovider1.net",
+        ref_json={
+            "email": "other_address@mailtestprovider1.net",
+            "id": None,
+            "name": "Token for another email",
+            "organisation": "Test Org",
+            "password": password,
+        },
+        url=USER_CREATE_URL,
+        password=password,
+        token=token,
+        expected_rsp_code=422,
+        expected_rsp_detail={"detail": [DETAIL_INVALID_PARAMETER]},
+    )
+    assert search_user_id_by_name(fastapi, "Token for another email") is None
+
+    # the same token still works for its own address, whatever the case
+    user_confirm_email(
+        fastapi,
+        own_email.upper(),
+        ref_json={
+            "email": own_email.upper(),
+            "id": None,
+            "name": "Token for own email",
+            "organisation": "Test Org",
+            "password": password,
+        },
+        url=USER_CREATE_URL,
+        password=password,
+        token=token,
+        expected_rsp_code=200,
+    )
+    assert search_user_id_by_name(fastapi, "Token for own email") is not None
 
 
 def test_set_config_on_spies_token(monkeypatch, fastapi):

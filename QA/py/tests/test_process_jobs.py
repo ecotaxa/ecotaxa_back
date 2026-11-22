@@ -265,3 +265,57 @@ def test_job_delete_pending(fastapi, no_scheduler, jobs_as_process):
     assert any(
         "Process killed by" in line for line in log_lines
     ), f"Log file should contain kill message, got: {log_lines}"
+
+
+class HardExitJob(JobServiceBase):
+    JOB_TYPE = "HardExit"
+    logger = get_logger(__name__)
+
+    def __init__(self, exit_code: int = 42):
+        super().__init__()
+        self.exit_code = exit_code
+
+    def init_args(self, args: ArgsDict) -> ArgsDict:
+        super().init_args(args)
+        args["exit_code"] = self.exit_code
+        return args
+
+    def run(self, current_user_id: int) -> None:
+        self.create_job(self.JOB_TYPE, current_user_id)
+
+    def do_background(self) -> None:
+        # Exit directly without setting job result or calling update_progress
+        os._exit(self.exit_code)
+
+
+def test_job_hard_exit_reconciled(fastapi, jobs_as_process):
+    """
+    Verify that when a process exits abruptly (e.g. crash/os._exit),
+    JobScheduler interprets the exitcode and reconciles the DB job state to Error.
+    """
+    with HardExitJob(exit_code=42) as job:
+        job.run(ADMIN_USER_ID)
+        job_id = job.job_id
+
+    job_info = api_wait_for_stable_job(fastapi, job_id)
+    assert job_info.state == "E"
+    assert "exit code 42" in job_info.progress_msg
+
+
+def test_jobscheduler_launch_waits_and_interprets(fastapi, no_scheduler, jobs_as_process):
+    """
+    Verify that calling JobScheduler.launch() directly when do_run is not set
+    waits for the runner to finish and interprets its result.
+    """
+    with HardExitJob(exit_code=17) as job:
+        job.run(ADMIN_USER_ID)
+        job_id = job.job_id
+
+    # Single-run invocation of JobScheduler.launch
+    JobScheduler.launch(0)
+
+    job_get_url = JOB_QUERY_URL.format(job_id=job_id)
+    rsp = fastapi.get(job_get_url, headers=ADMIN_AUTH)
+    job_data = rsp.json()
+    assert job_data["state"] == "E"
+    assert "exit code 17" in job_data["progress_msg"]

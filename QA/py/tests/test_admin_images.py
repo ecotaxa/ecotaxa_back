@@ -150,3 +150,24 @@ def test_admin_images_cleanup(fastapi):
         assert Path(vault.image_path(dup_info.orig_img_file)).exists()
         for dup_file in dup_info.dup_files:
             assert not Path(vault.image_path(dup_file)).exists()
+
+
+def test_vault_image_endpoint(fastapi):
+    prj_id, _ = do_import_uvp6(fastapi, "Test Project Vault Image")
+    with Service() as sce:
+        first_img = (
+            sce.session.query(Image)
+            .join(ObjectHeader, ObjectHeader.objid == Image.objid)
+            .join(Acquisition, Acquisition.acquisid == ObjectHeader.acquisid)
+            .join(Sample, Sample.sampleid == Acquisition.acq_sample_id)
+            .filter(Sample.projid == prj_id)
+            .first()
+        )
+        assert first_img is not None
+        img_rel_path = first_img.img_to_file()
+        dir_id, img_in_dir = img_rel_path.split("/", 1)
+
+    rsp = fastapi.get(f"/vault/{dir_id}/{img_in_dir}")
+    assert rsp.status_code == status.HTTP_200_OK
+    assert rsp.headers["content-type"] in ["image/jpeg", "image/png"]
+    assert len(rsp.content) > 0

@@ -6,6 +6,9 @@ import logging
 
 from starlette import status
 
+from API_models.filters import ProjectFilters
+from API_operations.helpers.Service import Service
+from DB.Image import Image
 from tests.credentials import CREATOR_AUTH
 from tests.test_import import do_test_import, do_import_a_bit_more_skipping
 
@@ -14,7 +17,15 @@ OBJECT_SET_QUERY_URL = "/object_set/{project_id}/query"  # ?order_field={order}&
 
 # TODO: Dup/extend of the same in test_classification.py
 def _prj_query(
-    fastapi, auth, prj_id, order=None, start=None, size=None, fields=None, **kwargs
+    fastapi,
+    auth,
+    prj_id,
+    order=None,
+    start=None,
+    size=None,
+    fields=None,
+    img_order=None,
+    **kwargs,
 ):
     """Query using the filters in kwargs"""
     params = []
@@ -26,6 +37,8 @@ def _prj_query(
         params.append("window_start=%s" % start)
     if size:
         params.append("window_size=%s" % size)
+    if img_order is not None:
+        params.append("img_order=%s" % img_order)
     if params:
         params.insert(0, "?")
     url = OBJECT_SET_QUERY_URL.format(project_id=prj_id) + "&".join(params)
@@ -217,3 +230,235 @@ def test_free_columns(fastapi):
         freetxt="ot01",
         freetxtval="False",
     )
+
+
+def test_fields_in_body(fastapi):
+    prj_id = do_test_import(fastapi, "Queries fields in body test project")
+    url = OBJECT_SET_QUERY_URL.format(project_id=prj_id)
+    some_fields = "obj.orig_id,img.file_name"
+    in_qry, details_qry = _prj_query(
+        fastapi, CREATOR_AUTH, prj_id, order="obj.objid", fields=some_fields
+    )
+    assert len(details_qry) > 0
+    assert all(len(a_det) == 2 for a_det in details_qry)
+    # Same fields in body, no query param
+    rsp = fastapi.post(
+        url + "?order_field=obj.objid",
+        headers=CREATOR_AUTH,
+        json={"fields": some_fields},
+    )
+    assert rsp.status_code == status.HTTP_200_OK
+    assert rsp.json()["object_ids"] == in_qry
+    assert rsp.json()["details"] == details_qry
+    # Both in query param and body: refused, no silent winner
+    rsp = fastapi.post(
+        url + "?order_field=obj.objid&fields=obj.objid",
+        headers=CREATOR_AUTH,
+        json={"fields": some_fields},
+    )
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert "'fields' given both in query string and body" in rsp.json()["detail"]
+    # Body fields alongside real filters, which still apply
+    for a_status in ("V", "P"):
+        flt_qry, _ = _prj_query(
+            fastapi,
+            CREATOR_AUTH,
+            prj_id,
+            order="obj.objid",
+            fields="obj.objid",
+            statusfilter=a_status,
+        )
+        rsp = fastapi.post(
+            url + "?order_field=obj.objid",
+            headers=CREATOR_AUTH,
+            json={"fields": "obj.objid", "statusfilter": a_status},
+        )
+        assert rsp.status_code == status.HTTP_200_OK
+        assert rsp.json()["object_ids"] == flt_qry
+
+
+def test_fields_not_a_filter():
+    # Dict and list (sent by frontend) forms
+    for body in (
+        {"taxo": "1", "fields": "obj.orig_id,fre.area"},
+        [["taxo", "1"], ["fields", "obj.orig_id,fre.area"]],
+    ):
+        flt = ProjectFilters.model_validate(body)
+        assert flt.fields == "obj.orig_id,fre.area"
+        assert "fields" not in flt.base()
+        assert flt.base()["taxo"] == "1"
+        assert flt.min_base() == {"taxo": "1"}
+    assert ProjectFilters.model_validate({}).fields is None
+
+
+def test_fields_in_list_body(fastapi):
+    prj_id = do_test_import(fastapi, "Queries fields in list body test project")
+    url = OBJECT_SET_QUERY_URL.format(project_id=prj_id) + "?order_field=obj.objid"
+    ref, ref_details = _prj_query(
+        fastapi, CREATOR_AUTH, prj_id, order="obj.objid", fields="obj.orig_id"
+    )
+    rsp = fastapi.post(
+        url, headers=CREATOR_AUTH, json=[["fields", "obj.orig_id"]]
+    )
+    assert rsp.status_code == status.HTTP_200_OK
+    assert rsp.json()["object_ids"] == ref
+    assert rsp.json()["details"] == ref_details
+    # Both places, list form of body: refused as well
+    rsp = fastapi.post(
+        url + "&fields=obj.objid", headers=CREATOR_AUTH, json=[["fields", "obj.orig_id"]]
+    )
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert "'fields'" in rsp.json()["detail"]
+
+
+def test_query_body_schema_is_project_filters():
+    # Generated clients name the body argument after its schema: ProjectFilters gives
+    # get_object_set(project_id, project_filters, ...). A subclass would rename it and break callers.
+    from main import app
+
+    op = app.openapi()["paths"]["/object_set/{project_id}/query"]["post"]
+    schema = op["requestBody"]["content"]["application/json"]["schema"]
+    assert schema == {"$ref": "#/components/schemas/ProjectFilters"}
+
+
+def test_fields_in_body_ignored_elsewhere(fastapi):
+    # 'fields' is part of ProjectFilters, but only the query uses it
+    from tests.test_classification import OBJECT_SET_SUMMARY_URL
+
+    prj_id = do_test_import(fastapi, "Fields ignored by summary test project")
+    url = OBJECT_SET_SUMMARY_URL.format(project_id=prj_id)
+    ref = fastapi.post(url, headers=CREATOR_AUTH, json={"statusfilter": "P"})
+    assert ref.status_code == status.HTTP_200_OK
+    rsp = fastapi.post(
+        url, headers=CREATOR_AUTH, json={"statusfilter": "P", "fields": "obj.orig_id"}
+    )
+    assert rsp.status_code == status.HTTP_200_OK
+    assert rsp.json() == ref.json()
+
+
+def test_img_order(fastapi):
+    prj_id = do_test_import(fastapi, "Img order test project")
+
+    all_objs, init_details = _prj_query(
+        fastapi,
+        CREATOR_AUTH,
+        prj_id,
+        order="obj.objid",
+        fields="obj.objid,img.imgid,img.imgrank",
+    )
+    assert len(all_objs) >= 2
+    assert init_details == _prj_query(
+        fastapi,
+        CREATOR_AUTH,
+        prj_id,
+        order="obj.objid",
+        fields="obj.objid,img.imgid,img.imgrank",
+        img_order=1,
+    )[1]
+
+    obj0, obj1 = all_objs[0], all_objs[1]
+    with Service() as sce:
+        img0 = (
+            sce.session.query(Image)
+            .filter(Image.objid == obj0)
+            .order_by(Image.imgrank)
+            .first()
+        )
+        img1 = (
+            sce.session.query(Image)
+            .filter(Image.objid == obj1)
+            .order_by(Image.imgrank)
+            .first()
+        )
+        assert img0 is not None and img1 is not None
+        # Add extra images with non-contiguous imgrank values
+        obj0_img2 = Image(
+            objid=obj0,
+            imgrank=img0.imgrank + 2,
+            width=img0.width,
+            height=img0.height,
+            orig_file_name="obj0_rank2.jpg",
+            thumb_width=img0.thumb_width,
+            thumb_height=img0.thumb_height,
+        )
+        obj0_img3 = Image(
+            objid=obj0,
+            imgrank=img0.imgrank + 5,
+            width=img0.width,
+            height=img0.height,
+            orig_file_name="obj0_rank5.jpg",
+            thumb_width=img0.thumb_width,
+            thumb_height=img0.thumb_height,
+        )
+        obj1_img2 = Image(
+            objid=obj1,
+            imgrank=img1.imgrank + 3,
+            width=img1.width,
+            height=img1.height,
+            orig_file_name="obj1_rank3.jpg",
+            thumb_width=img1.thumb_width,
+            thumb_height=img1.thumb_height,
+        )
+        sce.session.add_all([obj0_img2, obj0_img3, obj1_img2])
+        sce.session.commit()
+        obj0_img2_id, obj0_img2_rank = obj0_img2.imgid, obj0_img2.imgrank
+        obj0_img3_id, obj0_img3_rank = obj0_img3.imgid, obj0_img3.imgrank
+        obj1_img2_id, obj1_img2_rank = obj1_img2.imgid, obj1_img2.imgrank
+
+    # img_order=2 returns only objects with >= 2 images, picking 2nd by increasing imgrank
+    objs_2, details_2 = _prj_query(
+        fastapi,
+        CREATOR_AUTH,
+        prj_id,
+        order="obj.objid",
+        fields="obj.objid,img.imgid,img.imgrank,img.orig_file_name",
+        img_order=2,
+    )
+    assert objs_2 == [obj0, obj1]
+    assert details_2 == [
+        [obj0, obj0_img2_id, obj0_img2_rank, "obj0_rank2.jpg"],
+        [obj1, obj1_img2_id, obj1_img2_rank, "obj1_rank3.jpg"],
+    ]
+
+    # img_order=3 returns only obj0 with its 3rd image
+    objs_3, details_3 = _prj_query(
+        fastapi,
+        CREATOR_AUTH,
+        prj_id,
+        order="obj.objid",
+        fields="obj.objid,img.imgid,img.imgrank,img.orig_file_name",
+        img_order=3,
+    )
+    assert objs_3 == [obj0]
+    assert details_3 == [[obj0, obj0_img3_id, obj0_img3_rank, "obj0_rank5.jpg"]]
+
+    # img_order beyond any object's image count returns empty result when img.* requested
+    objs_4, details_4 = _prj_query(
+        fastapi,
+        CREATOR_AUTH,
+        prj_id,
+        order="obj.objid",
+        fields="obj.objid,img.imgid",
+        img_order=4,
+    )
+    assert objs_4 == []
+    assert details_4 == []
+
+    # Without img.* fields, img_order does not filter out objects
+    objs_no_img, _ = _prj_query(
+        fastapi,
+        CREATOR_AUTH,
+        prj_id,
+        order="obj.objid",
+        fields="obj.objid",
+        img_order=2,
+    )
+    assert objs_no_img == all_objs
+
+    # img_order < 1 is rejected by validation
+    url = OBJECT_SET_QUERY_URL.format(project_id=prj_id)
+    for bad_order in (0, -1):
+        rsp = fastapi.post(
+            f"{url}?img_order={bad_order}", headers=CREATOR_AUTH, json={}
+        )
+        assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT

@@ -18,12 +18,14 @@ sys.path.extend([join("", "..", "..", "py")])
 
 HERE = Path(dirname(realpath(__file__)))
 
+from DB.helpers import SQL
 from DB.helpers.DBWriter import DBWriter
 from BO.TSVFile import TSVFile
 from FS.Vault import Vault
 from API_operations.exports.ForProject import ProjectExport
 from API_operations.admin.NightlyJob import NightlyJobService
 from API_operations.Subset import SubsetServiceOnProject
+from helpers.AppConfig import Config
 
 
 class EcoTaxaConfig(object):
@@ -41,6 +43,8 @@ def config() -> Generator[EcoTaxaConfig, Any, None]:
     ProjectExport.ROWS_REPORT_EVERY = 5
     ProjectExport.IMAGES_REPORT_EVERY = 7
     NightlyJobService.REPORT_EVERY = 2
+    # Small DB fetch chunks, to exercise server-side cursor chunking.
+    SQL.DB_CHUNK_SIZE = 5
     # Avoid testing time explosion.
     # Comment for a better coverage of Process jobs. But some tests will fail
     # due to the fresh process.
@@ -50,6 +54,8 @@ def config() -> Generator[EcoTaxaConfig, Any, None]:
     shutil.rmtree(vault.path.joinpath("0000").as_posix(), ignore_errors=True)
     # env variable to conf
     os.environ["APP_CONFIG"] = (HERE / "config.ini").as_posix()
+    Config.reset()
     yield conf
     # Teardown
     conf.cleanup()
+    Config.reset()

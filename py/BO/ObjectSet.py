@@ -72,7 +72,7 @@ from DB.Project import ProjectIDListT, Project
 from DB.Sample import Sample
 from DB.Taxonomy import Taxonomy, TaxoStatus
 from DB.User import User, UserIDT
-from DB.helpers import Result
+from DB.helpers import Result, SQL
 from DB.helpers.Core import select
 from DB.helpers.Direct import func
 from DB.helpers.ORM import Delete, Update, any_, and_, or_, case
@@ -129,13 +129,17 @@ class BaseDescribedObjectSet(object):
         select_clause: SelectClause,
         order_clause: Optional[OrderClause] = None,
         all_images: bool = False,
+        img_order: int = 1,
     ) -> Tuple[FromClause, WhereClause, SQLParamDict]:
         """
         Construct SQL parts for getting per-object information.
         :param order_clause: The required order by clause, possibly containing a resultset window.
         :param select_clause: Used for hinting the builder that some specific table will be needed in join.
                 Major tables obj_head, samples, and acquisitions are always joined.
-        :param all_images: If not set (default), only return the lowest rank, i.e. visible, image
+        :param all_images: If not set (default), only return the lowest rank, i.e. visible, image.
+                If set, all images are returned and img_order is ignored.
+        :param img_order: When all_images is not set, the 1-based rank of the image to return,
+                ordered by increasing imgrank. Defaults to 1, i.e. the visible image.
         :return:
         """
         if order_clause is None:
@@ -238,7 +242,14 @@ class BaseDescribedObjectSet(object):
             if all_images:
                 selected_tables += f"{Image.__tablename__} img ON img.objid = obh.objid"
             else:
-                selected_tables += f"(select * from {Image.__tablename__} img2 where img2.objid = obh.objid order by imgrank limit 1) img ON true"
+                # imgrank values are not guaranteed to be contiguous, so img_order is
+                # a 1-based position in the list of images ordered by increasing imgrank.
+                rank_offset = max(int(img_order) - 1, 0)
+                selected_tables += (
+                    f"(select * from {Image.__tablename__} img2 "
+                    f"where img2.objid = obh.objid order by imgrank "
+                    f"limit 1 offset {rank_offset}) img ON true"
+                )
                 selected_tables.set_lateral(f"(select * from {Image.__tablename__}")
         if "usr" in referenced_table_aliases:
             selected_tables += f"{User.__tablename__} usr ON usr.id = obh.classif_who"
@@ -526,6 +537,8 @@ class EnumeratedObjectSet(MappedTable):
         qry = qry.join(Acquisition)
         qry = qry.join(ObjectHeader)
         qry = qry.filter(ObjectHeader.objid == any_(self.object_ids))
+        qry = qry.order_by(Project.projid)
+        qry = qry.yield_per(SQL.DB_CHUNK_SIZE * 40)  # 1 column
         with CodeTimer("Prjs for %d objs: " % len(self.object_ids), logger):
             return [an_id for an_id, in qry]
 
@@ -610,6 +623,7 @@ class EnumeratedObjectSet(MappedTable):
         )
         qry = qry.filter(ObjectHeader.objid == any_(self.object_ids))
         qry = qry.filter(ObjectHeader.classif_qual.in_(MANUAL_STATES_TEXT))
+        qry = qry.yield_per(SQL.DB_CHUNK_SIZE * 20)  # 2 columns
         # A bit dirty but fast
         prev_nb_objs = len(self.object_ids)
         new_objects_ids = []
@@ -790,6 +804,7 @@ class EnumeratedObjectSet(MappedTable):
             ObjectHeader.objid == subq_alias.c.objid,
             isouter=(from_user_id is None),
         )
+        qry = qry.execution_options(yield_per=SQL.DB_CHUNK_SIZE * 5)  # 8 columns
         if from_user_id is not None:
             # If taking history from a user, don't apply to the objects he/she classified
             # in last already.
@@ -802,7 +817,7 @@ class EnumeratedObjectSet(MappedTable):
         logger.info("_get_last_classif_history qry:%s", str(qry))
         res = self.session.execute(qry).mappings()
         with CodeTimer("HISTORY for %d objs: " % len(self.object_ids), logger):
-            ret = [HistoricalLastClassif(**rec) for rec in res.fetchall()]
+            ret = [HistoricalLastClassif(**rec) for rec in res]
         logger.info("_get_last_classif_history qry: %d rows", len(ret))
         return ret
 
@@ -1145,6 +1160,7 @@ class EnumeratedObjectSet(MappedTable):
             ObjectHeader.classif_score,
         ).with_for_update(key_share=True)
         qry = qry.where(ObjectHeader.objid == any_(self.object_ids))
+        qry = qry.execution_options(yield_per=SQL.DB_CHUNK_SIZE * 5)  # 6 columns
         logger.info("Fetch with lock: %s", qry)
         res: Result = self.session.execute(qry)
         prev = {rec["objid"]: rec for rec in res.mappings()}

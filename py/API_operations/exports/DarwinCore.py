@@ -9,10 +9,18 @@
 #      ../../DwCA/gbif-data-validator/validator-ws/run-prod coll_6512_export.zip
 # EMODnet QC source code:
 #      https://github.com/EMODnet/EMODnetBiocheck
-import BO.ProjectVarsDefault as DefaultVars
 import datetime
 import json
 import re
+from collections import OrderedDict
+from functools import lru_cache
+from typing import Dict, List, Optional, Tuple, cast, Set, Any, Iterable
+from urllib.parse import quote_plus
+
+from fastapi import HTTPException
+from sqlalchemy import bindparam
+
+import BO.ProjectVarsDefault as DefaultVars
 from API_models.exports import ExportRsp, SciExportTypeEnum
 from BO.Classification import ClassifIDT, ClassifIDListT, ClassifIDSetT
 from BO.Collection import (
@@ -48,9 +56,7 @@ from DB.User import Organization, User, UserIDT
 from DB.helpers import Session
 from DB.helpers.Direct import text
 from DB.helpers.Postgres import timestamp_to_str
-from collections import OrderedDict
 from data.Countries import countries_by_name
-from fastapi import HTTPException
 from formats.DarwinCore.Archive import DwC_Archive, DwcArchive
 from formats.DarwinCore.DatasetMeta import DatasetMetadata
 from formats.DarwinCore.MoF import (
@@ -80,16 +86,11 @@ from formats.DarwinCore.models import (
     EMLIdentifier,
     EMLAssociatedPerson,
 )
-from functools import lru_cache
 from helpers.CustomException import ValidationException
 from helpers.DateTime import now_time
 from helpers.DynamicLogs import get_logger, LogsSwitcher
 from helpers.httpexception import DETAIL_ONE_OR_MORE_PRIVATE, DETAIL_EXPORT_PREVENTED
 from providers.NERC import NERCFetcher
-from sqlalchemy import bindparam
-from typing import Dict, List, Optional, Tuple, cast, Set, Any, Iterable
-from urllib.parse import quote_plus
-
 from ..helpers.JobService import JobServiceBase, ArgsDict
 
 logger = get_logger(__name__)
@@ -252,12 +253,12 @@ class DarwinCoreExport(JobServiceBase):
                 + DETAIL_ONE_OR_MORE_PRIVATE
                 + ": "
                 + ", ".join(
-                [
-                    prj.title + "(" + str(prj.projid) + ")"
-                    for prj in self.collection.projects
-                    if (prj.access == AccessLevelEnum.PRIVATE.value)
-                ]
-            )
+                    [
+                        prj.title + "(" + str(prj.projid) + ")"
+                        for prj in self.collection.projects
+                        if (prj.access == AccessLevelEnum.PRIVATE.value)
+                    ]
+                )
             )
             raise HTTPException(status_code=422, detail=detail)
         logger.info("---------- create job -----------")
@@ -639,7 +640,7 @@ class DarwinCoreExport(JobServiceBase):
                 # TODO: ZooProcess (from projects)
             ],
             keywordThesaurus="GBIF Dataset Type Vocabulary: "
-                             "http://rs.gbif.org/vocabulary/gbif/dataset_type.xml",
+            "http://rs.gbif.org/vocabulary/gbif/dataset_type.xml",
         )
 
         now = now_time().replace(microsecond=0)
@@ -806,6 +807,7 @@ class DarwinCoreExport(JobServiceBase):
                     val[1].taxo_id for val in added_occurences.values()
                 }
                 nb_added = len(added_occurences)
+                by_ml_added_occurences: WoRMSAggregT = {}
                 if self.include_predicted:
                     by_ml_added_occurences = self.add_occurrences_for_sample(
                         sample=a_sample, arch=arch, event_id=event_id, predicted=True
@@ -829,11 +831,19 @@ class DarwinCoreExport(JobServiceBase):
                     )
                 # Taxa-level eMoFs
                 added_emofs = self.add_occurrence_eMoFs_for_sample(
-                    sample=a_sample, arch=arch, event_id=event_id, predicted=False
+                    sample=a_sample,
+                    arch=arch,
+                    event_id=event_id,
+                    predicted=False,
+                    occurrences=added_occurences,
                 )
                 if self.include_predicted:
                     _ = self.add_occurrence_eMoFs_for_sample(
-                        sample=a_sample, arch=arch, event_id=event_id, predicted=True
+                        sample=a_sample,
+                        arch=arch,
+                        event_id=event_id,
+                        predicted=True,
+                        occurrences=by_ml_added_occurences,
                     )
                 # Ensure EMOFs (in recast space) are also covered in occurrences (so far in raw space)
                 self.cover_EMOF_in_occurrences(
@@ -894,7 +904,9 @@ class DarwinCoreExport(JobServiceBase):
                 % (self._sample_ref_for_message(sample), str(e))
             )
         else:
-            ins = self.instrument_from_sample_fields(net_type, net_mesh, net_surf, event_id)
+            ins = self.instrument_from_sample_fields(
+                net_type, net_mesh, net_surf, event_id
+            )
             if ins is None:
                 self.unknown_nets.setdefault(net_type, []).append(
                     self._sample_ref_for_message(sample)
@@ -915,8 +927,9 @@ class DarwinCoreExport(JobServiceBase):
     }
 
     @staticmethod
-    def instrument_from_sample_fields(net_type: Any, net_mesh: Any, net_surf: Any,
-                                      event_id: str) -> SamplingInstrumentName | None:
+    def instrument_from_sample_fields(
+        net_type: Any, net_mesh: Any, net_surf: Any, event_id: str
+    ) -> SamplingInstrumentName | None:
         if net_type == "bongo":
             # TODO: There could be more specific, a dozen of bongos are there:
             #  http://vocab.nerc.ac.uk/collection/L22/current/
@@ -965,7 +978,7 @@ class DarwinCoreExport(JobServiceBase):
         sample_count = res.one()[0]
         return sample_count
 
-    @lru_cache(maxsize=None)
+    @lru_cache(maxsize=50)
     def _get_instrument_url_and_label(
         self, project: Project
     ) -> Optional[Tuple[str, str]]:
@@ -1287,11 +1300,19 @@ class DarwinCoreExport(JobServiceBase):
         return ret, not_found
 
     def add_occurrence_eMoFs_for_sample(
-        self, sample: Sample, arch: DwC_Archive, event_id: str, predicted: bool
+        self,
+        sample: Sample,
+        arch: DwC_Archive,
+        event_id: str,
+        predicted: bool,
+        occurrences: WoRMSAggregT,
     ) -> WoRMSAggregT:
         """
         Add DwC occurrence eMoFs, for given sample, into the archive. A single line per WoRMS taxon.
         Note: We're in recast-ed taxo "space".
+        :param occurrences: The occurrences already produced for this sample & predicted flag.
+            eMoFs for a WoRMS taxon present there reuse its occurrenceID, as the EcoTaxa IDs
+            used for building the occurrenceID can differ b/w occurrence & eMoF recasts.
         If 'predicted' is set, do the computations on predicted (but not validated) objects.
         Otherwise, use human-validated objects.
         """
@@ -1321,6 +1342,10 @@ class DarwinCoreExport(JobServiceBase):
         # Loop over WoRMS taxa
         for a_lsid, for_lsid in by_abundance_desc.items():
             occurrence_id, aggreg_for_lsid, worms = for_lsid
+            same_taxon_occ = occurrences.get(a_lsid)
+            if same_taxon_occ is not None and same_taxon_occ[0] != occurrence_id:
+                occurrence_id = same_taxon_occ[0]
+                by_abundance_desc[a_lsid] = (occurrence_id, aggreg_for_lsid, worms)
             self.add_eMoFs_for_occurrence(
                 arch=arch,
                 event_id=event_id,
@@ -1464,6 +1489,7 @@ class DarwinCoreExport(JobServiceBase):
             ProjectBO.update_taxo_stats(self.session, projid=a_project_id)
             # Ensure that the geography is OK propagated upwards from objects, for all projects inside the collection
             Sample.propagate_geo(self.session, prj_id=a_project_id)
+            self.session.commit()
         a_stat: ProjectTaxoStats
         for a_stat in ProjectBO.read_taxo_stats(self.session, project_ids, []):
             self.validated_count += a_stat.nb_validated

@@ -65,6 +65,8 @@ class Organization(Model):
     )
     name: Mapped[str] = mapped_column(String(512), unique=True)
     directories: Mapped[str | None] = mapped_column(String(2000))
+    # lowercase email of who created it with the API, NULL for older ones
+    creator_email: Mapped[str | None] = mapped_column(String(255))
 
     def __str__(self):
         return "{0} ({1})".format(self.name, self.directories)

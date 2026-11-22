@@ -1,9 +1,9 @@
 import pytest
 from starlette import status
 
-from tests.credentials import ADMIN_AUTH, USER_AUTH
+from tests.credentials import ADMIN_AUTH, USER_AUTH, ADMIN_USER_ID
 from tests.test_fastapi import PROJECT_QUERY_URL
-from tests.test_import import do_test_import
+from tests.test_import import do_test_import, create_project
 from tests.test_update_prj import PROJECT_UPDATE_URL
 
 COLLECTIONS_AGGREGATED_URL = (
@@ -79,6 +79,39 @@ def test_collections_aggregated_multiple_projects(fastapi):
     # cnn_network_id is common across projects
     assert data.get("cnn_network_id") == "zooscan2026"
     assert data.get("excluded", {}).get("cnn_network_id", []) == []
+
+
+def test_collections_aggregated_access(fastapi):
+    # Access levels: PRIVATE "0" < PUBLIC "1" < OPEN "2"
+    prj_private = create_project(ADMIN_USER_ID, "Agg access private", access="0")
+    prj_public = create_project(ADMIN_USER_ID, "Agg access public", access="1")
+    prj_open = create_project(ADMIN_USER_ID, "Agg access open", access="2")
+
+    # Mixed: the collection gets the most restricted access, the more open projects are excluded
+    url = COLLECTIONS_AGGREGATED_URL.format(
+        project_ids=f"{prj_open},{prj_private},{prj_public}"
+    )
+    rsp = fastapi.get(url, headers=ADMIN_AUTH)
+    assert rsp.status_code == status.HTTP_200_OK
+    data = rsp.json()
+    assert data["access"] == "0"
+    assert sorted(data["excluded"]["access"]) == sorted([prj_public, prj_open])
+
+    # Without the private one
+    url = COLLECTIONS_AGGREGATED_URL.format(project_ids=f"{prj_open},{prj_public}")
+    rsp = fastapi.get(url, headers=ADMIN_AUTH)
+    assert rsp.status_code == status.HTTP_200_OK
+    data = rsp.json()
+    assert data["access"] == "1"
+    assert data["excluded"]["access"] == [prj_open]
+
+    # Single level, nothing excluded
+    url = COLLECTIONS_AGGREGATED_URL.format(project_ids=str(prj_open))
+    rsp = fastapi.get(url, headers=ADMIN_AUTH)
+    assert rsp.status_code == status.HTTP_200_OK
+    data = rsp.json()
+    assert data["access"] == "2"
+    assert data["excluded"]["access"] == []
 
 
 def test_collections_aggregated_permissions(fastapi):

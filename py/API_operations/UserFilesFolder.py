@@ -9,7 +9,7 @@ from os import path as ospath
 from pathlib import Path
 from typing import Optional, Union
 
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 from fastapi import UploadFile
 
 from API_models.filesystem import DirectoryEntryModel, DirectoryModel
@@ -17,10 +17,15 @@ from BO.Rights import RightsBO, NOT_AUTHORIZED
 from BO.User import UserIDT
 from DB.User import User
 from FS.CommonDir import CommonFolder
+from FS.Unpack import PROGRESS_PREFIX
 from FS.UserFilesDir import UserFilesDirectory
 from helpers.CustomException import UnprocessableEntityException, BaseAppException
 from helpers.DynamicLogs import get_logger
-from helpers.httpexception import DETAIL_NOTHING_DONE, DETAIL_UNKNOWN_ERROR
+from helpers.httpexception import (
+    DETAIL_NOTHING_DONE,
+    DETAIL_UNKNOWN_ERROR,
+    DETAIL_EXTRACTION_IN_PROGRESS,
+)
 from .helpers.Service import Service
 
 logger = get_logger(__name__)
@@ -47,6 +52,16 @@ class UserFilesFolderService(Service):
         )
 
     @staticmethod
+    def _not_in_progress_throw(path: str) -> str:
+        """Refuse a change in an archive extraction in progress, its content is not final"""
+        if any(a_part.startswith(PROGRESS_PREFIX) for a_part in path.split(ospath.sep)):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=DETAIL_EXTRACTION_IN_PROGRESS,
+            )
+        return path
+
+    @staticmethod
     def _sanitize_filename_throw(filename: str) -> str:
         assert ".." not in filename, "Forbidden"
         return ospath.basename(filename.rstrip(ospath.sep))
@@ -65,11 +80,15 @@ class UserFilesFolderService(Service):
         assert file.filename is not None, "No filename in store def"
         file_name = self._sanitize_filename_throw(file.filename)
         if path is not None:
-            path = self._can_use_dir_throw(path)
+            path = self._not_in_progress_throw(self._can_use_dir_throw(path))
         logger.info("Adding '%s' ('%s') for '%s'", path, file_name, current_user.name)
 
         folder = UserFilesDirectory(current_user_id)
-        ret = await folder.add_file(file_name, path, file)
+        try:
+            ret = await folder.add_file(file_name, path, file)
+        except BaseAppException as e:
+            code, message = folder.unpacker.unpack_failure(file_name, e)
+            raise HTTPException(status_code=code, detail=message)
         return ret
 
     def list(self, sub_path: str, current_user_id: UserIDT) -> DirectoryModel:
@@ -81,6 +100,12 @@ class UserFilesFolderService(Service):
             sub_path = "/"
         _: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
         sub_path = self._can_use_dir_throw(sub_path)
+        # The content of an archive extraction in progress is not final, don't show it
+        if any(a_part.startswith(PROGRESS_PREFIX) for a_part in sub_path.split(ospath.sep)):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail={"message": DETAIL_EXTRACTION_IN_PROGRESS, "state": "unpacking"},
+            )
         folder = UserFilesDirectory(current_user_id)
         return self.list_and_format(folder, sub_path)
 
@@ -98,10 +123,12 @@ class UserFilesFolderService(Service):
         except Exception as e:
             raise HTTPException(status_code=500, detail=DETAIL_UNKNOWN_ERROR)
 
-        # Format data to return
+        # Format data to return. An archive extraction in progress is not shown, its
+        # result appears once complete.
         entries = [
             DirectoryEntryModel(name=a_name, type=a_type, size=a_size, mtime=a_mtime)
             for (a_name, a_type, a_size, a_mtime) in listing
+            if not a_name.startswith(PROGRESS_PREFIX)
         ]
         return DirectoryModel(path=sub_path, entries=entries)
 
@@ -111,7 +138,9 @@ class UserFilesFolderService(Service):
         """
         _: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
         # Leading / implies root directory
-        dest_path = self._can_use_dir_throw(source_path, exclude_path=["/"])
+        dest_path = self._not_in_progress_throw(
+            self._can_use_dir_throw(source_path, exclude_path=["/"])
+        )
         if not Path(dest_path).exists():
             folder = UserFilesDirectory(current_user_id)
             try:
@@ -129,7 +158,9 @@ class UserFilesFolderService(Service):
         """
         # Leading / implies root directory
         _: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
-        source_path = self._can_use_dir_throw(source_path, exclude_path=["/"])
+        source_path = self._not_in_progress_throw(
+            self._can_use_dir_throw(source_path, exclude_path=["/"])
+        )
         folder = UserFilesDirectory(current_user_id)
         try:
             folder.remove(source_path)
@@ -144,8 +175,8 @@ class UserFilesFolderService(Service):
         """
         # Leading / implies root directory
         _: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
-        source_path = self._can_use_dir_throw(source_path)
-        dest_path = self._can_use_dir_throw(dest_path)
+        source_path = self._not_in_progress_throw(self._can_use_dir_throw(source_path))
+        dest_path = self._not_in_progress_throw(self._can_use_dir_throw(dest_path))
         folder = UserFilesDirectory(current_user_id)
         try:
             dest_path = folder.move(source_path, dest_path)

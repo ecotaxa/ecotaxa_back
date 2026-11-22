@@ -19,11 +19,10 @@ from BO.Classification import ClassifIDListT, ClassifIDT
 from BO.Object import ObjectBO
 from BO.ObjectSet import DescribedObjectSet
 from BO.Rights import RightsBO, Action
-
 from DB.Object import ObjectIDListT
 from DB.Project import ProjectIDListT, Project
 from DB.User import UserIDT
-from DB.helpers import Session, Result
+from DB.helpers import Session, Result, SQL
 from DB.helpers.Direct import text
 from DB.helpers.ORM import any_
 from DB.helpers.SQL import SelectClause
@@ -174,7 +173,11 @@ class FeatureConsistentProjectSet(object):
         sql = self.amend_sql(sql)
         # Format output
         logger.debug("read_all SQL: %s", sql)
-        res: Result = self.session.execute(text(sql))
+        res: Result = self.session.execute(
+            text(sql).execution_options(
+                stream_results=True, max_row_buffer=SQL.DB_CHUNK_SIZE
+            )
+        )
         return res
 
     def np_read_all(

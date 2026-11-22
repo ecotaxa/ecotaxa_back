@@ -2,7 +2,7 @@
   "openapi":"3.0.2",
   "info":{
     "title":"EcoTaxa",
-    "version":"0.0.52"
+    "version":"0.0.58"
   },
   "servers":[
     {
@@ -1125,7 +1125,7 @@
           "organizations"
         ],
         "summary":"Create Organization",
-        "description":"**Create a new organization**, return **NULL upon success.**\n\n🔒 Depending on logged user, different authorizations apply:\n- An administrator or user administrator or logged project manager can create an organization.\n- An ordinary logged user cannot create another organization this way.\n- An unlogged user creating an account can, with the token received by email.",
+        "description":"**Create a new organization**, return **NULL upon success.**\n\n🔒 Depending on logged user, different authorizations apply:\n- An administrator or user administrator can create organizations.\n- Any other logged user can create one, e.g. when updating one's profile.\n- An unlogged user creating an account can create one, with the token received by email.\n\nFor these last two, an organization they created before and that no person nor collection uses yet\nis replaced by the new one.",
         "operationId":"create_organization",
         "security":[
           {
@@ -2845,75 +2845,6 @@
         }
       }
     },
-    "/project_set/projects":{
-      "get":{
-        "tags":[
-          "projects"
-        ],
-        "summary":"Project Set Get Projects",
-        "description":"**Returns projects statistics**, i.e. used taxa and classification states.",
-        "operationId":"project_set_get_projects",
-        "security":[
-          {
-            "BearerOrCookieAuth":[]
-          }
-        ],
-        "parameters":[
-          {
-            "name":"ids",
-            "in":"query",
-            "required":true,
-            "schema":{
-              "type":"string",
-              "title":"Ids",
-              "description":"String containing the list of one or more project id separated by non-num char. \n \n **If several ids are provided**, one stat record will be returned per project.",
-              "example":"1"
-            },
-            "description":"String containing the list of one or more project id separated by non-num char. \n \n **If several ids are provided**, one stat record will be returned per project."
-          },
-          {
-            "name":"fields",
-            "in":"query",
-            "required":false,
-            "schema":{
-              "title":"Fields",
-              "description":"Return the default fields (typically used in conjunction with an additional field list). To return selected fields.",
-              "default":"*default",
-              "example":"*default,fieldlist",
-              "type":"string",
-              "nullable":true
-            },
-            "description":"Return the default fields (typically used in conjunction with an additional field list). To return selected fields."
-          }
-        ],
-        "responses":{
-          "200":{
-            "description":"Successful Response",
-            "content":{
-              "application/json":{
-                "schema":{
-                  "type":"array",
-                  "items":{
-                    "$ref":"#/components/schemas/ProjectColumnsModel"
-                  },
-                  "title":"Response Project Set Get Projects"
-                }
-              }
-            }
-          },
-          "422":{
-            "description":"Validation Error",
-            "content":{
-              "application/json":{
-                "schema":{
-                  "$ref":"#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/project_set/taxo_stats":{
       "get":{
         "tags":[
@@ -3748,7 +3679,7 @@
           "samples"
         ],
         "summary":"Samples Search",
-        "description":"**Search for samples.**",
+        "description":"**Search for samples.**\n\nFor long project lists, which could exceed URL length limits, use POST on the same path\nwith the same parameters in a JSON body.",
         "operationId":"samples_search",
         "security":[
           {
@@ -3792,6 +3723,55 @@
                     "$ref":"#/components/schemas/SampleModel"
                   },
                   "title":"Response Samples Search"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post":{
+        "tags":[
+          "samples"
+        ],
+        "summary":"Samples Search Post",
+        "description":"**Search for samples**, parameters in the JSON body.\n\nSame as GET /samples/search, for long project lists which could exceed URL length limits.\n\n`project_ids` and `id_pattern` must be in the body only: also sending one of them in the query string\nis refused with a 422 error.",
+        "operationId":"samples_search_post",
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ],
+        "requestBody":{
+          "required":true,
+          "content":{
+            "application/json":{
+              "schema":{
+                "$ref":"#/components/schemas/SamplesSearchReq"
+              }
+            }
+          }
+        },
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "type":"array",
+                  "items":{
+                    "$ref":"#/components/schemas/SampleModel"
+                  },
+                  "title":"Response Samples Search Post"
                 }
               }
             }
@@ -4385,12 +4365,12 @@
             "required":false,
             "schema":{
               "title":"Fields",
-              "description":"\n\nSpecify the needed object (and ancillary entities) fields.\n\nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.\n\nMore help :\n\nYou can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.\n\n**Note that the following fields must be prefixed with the header \"obj.\"** (for example → obj.orig_id):\n\nacquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id,\nclassif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,\nlatitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.\n\n**Note that the following fields must be prefixed with the header \"img.\"** (for example → img.file_name):\n\nfile_name, height, imgid, imgrank, file_name, objid, orig_file_name, thumb_file_name, thumb_height, thumb_width, width.\n\n**Note that the following fields must be prefixed with the header \"txo.\"** (for example → txo.display_name):\n\ncreation_datetime, creator_email, display_name, id, id_instance,aphia_id, lastupdate_datetime,\nname, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostatus, taxotype.\n\n**All other fields must be prefixed by the header \"fre.\"** (for example → fre.circ.).\n                   ",
+              "description":"\n\nSpecify the needed object (and ancillary entities) fields.\n\nMay instead be sent as `fields` in the JSON body, useful for long lists which could exceed URL length limits.\nSending it in both the query string and the body is refused with a 422 error.\n\nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.\n\nMore help :\n\nYou can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.\n\n**Note that the following fields must be prefixed with the header \"obj.\"** (for example → obj.orig_id):\n\nacquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id,\nclassif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,\nlatitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.\n\n**Note that the following fields must be prefixed with the header \"img.\"** (for example → img.file_name):\n\nfile_name, height, imgid, imgrank, file_name, objid, orig_file_name, thumb_file_name, thumb_height, thumb_width, width.\n\n**Note that the following fields must be prefixed with the header \"txo.\"** (for example → txo.display_name):\n\ncreation_datetime, creator_email, display_name, id, id_instance,aphia_id, lastupdate_datetime,\nname, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostatus, taxotype.\n\n**All other fields must be prefixed by the header \"fre.\"** (for example → fre.circ.).\n                   ",
               "example":"obj.longitude,fre.feret",
               "type":"string",
               "nullable":true
             },
-            "description":"\n\nSpecify the needed object (and ancillary entities) fields.\n\nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.\n\nMore help :\n\nYou can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.\n\n**Note that the following fields must be prefixed with the header \"obj.\"** (for example → obj.orig_id):\n\nacquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id,\nclassif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,\nlatitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.\n\n**Note that the following fields must be prefixed with the header \"img.\"** (for example → img.file_name):\n\nfile_name, height, imgid, imgrank, file_name, objid, orig_file_name, thumb_file_name, thumb_height, thumb_width, width.\n\n**Note that the following fields must be prefixed with the header \"txo.\"** (for example → txo.display_name):\n\ncreation_datetime, creator_email, display_name, id, id_instance,aphia_id, lastupdate_datetime,\nname, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostatus, taxotype.\n\n**All other fields must be prefixed by the header \"fre.\"** (for example → fre.circ.).\n                   "
+            "description":"\n\nSpecify the needed object (and ancillary entities) fields.\n\nMay instead be sent as `fields` in the JSON body, useful for long lists which could exceed URL length limits.\nSending it in both the query string and the body is refused with a 422 error.\n\nIt follows the naming convention 'prefix.field' : Prefix is either 'obj' for main object, 'fre' for free fields, 'img' for the visible image.\n\nThe column obj.imgcount contains the total count of images for the object.\n\nUse a comma to separate fields.\n\nMore help :\n\nYou can get the field labels by parsing the classiffieldlist returned by a call to https://ecotaxa.obs-vlfr.fr/api/docs#/projects/project_query_projects__project_id__get.\n\n**Note that the following fields must be prefixed with the header \"obj.\"** (for example → obj.orig_id):\n\nacquisid classif_auto_id, classif_auto_score, classif_auto_when, classif_crossvalidation_id,\nclassif_id, classif_qual, classif_who, classif_when, complement_info, depth_max, depth_min,\nlatitude, longitude, objdate, object_link, objid, objtime, orig_id, random_value, similarity, sunpos.\n\n**Note that the following fields must be prefixed with the header \"img.\"** (for example → img.file_name):\n\nfile_name, height, imgid, imgrank, file_name, objid, orig_file_name, thumb_file_name, thumb_height, thumb_width, width.\n\n**Note that the following fields must be prefixed with the header \"txo.\"** (for example → txo.display_name):\n\ncreation_datetime, creator_email, display_name, id, id_instance,aphia_id, lastupdate_datetime,\nname, nbrobj, nbrobjcum, parent_id, rename_to, source_desc, source_url, taxostatus, taxotype.\n\n**All other fields must be prefixed by the header \"fre.\"** (for example → fre.circ.).\n                   "
           },
           {
             "name":"order_field",
@@ -4430,6 +4410,20 @@
               "nullable":true
             },
             "description":"\nAllows to return only a slice of the result, by returning a _maximum_ of window_size lines.\nIf no **unique order** is specified, the result can vary for same call and conditions."
+          },
+          {
+            "name":"img_order",
+            "in":"query",
+            "required":false,
+            "schema":{
+              "type":"integer",
+              "minimum":1,
+              "title":"Image position",
+              "description":"\nSelects which image to return for each object, by order of increasing `imgrank`.\n`1` (the default) returns the first/visible image, `2` the second one, and so on.\nWhen `img.` fields are requested, objects with fewer than `img_order` images are omitted from the result.",
+              "default":1,
+              "example":"1"
+            },
+            "description":"\nSelects which image to return for each object, by order of increasing `imgrank`.\n`1` (the default) returns the first/visible image, `2` the second one, and so on.\nWhen `img.` fields are requested, objects with fewer than `img_order` images are omitted from the result."
           }
         ],
         "requestBody":{
@@ -6959,16 +6953,6 @@
               "example":47445
             },
             "description":"Internal, the unique numeric id of this job."
-          },
-          {
-            "name":"Range",
-            "in":"header",
-            "required":false,
-            "schema":{
-              "title":"Range",
-              "type":"string",
-              "nullable":true
-            }
           }
         ],
         "responses":{
@@ -7094,6 +7078,57 @@
         }
       }
     },
+    "/user_files/unpack_status/{upload_id}":{
+      "get":{
+        "tags":[
+          "MyFiles"
+        ],
+        "summary":"Get Unpack Status",
+        "description":"**Status of the unpacking of an archive uploaded with TUS.** Poll it until state is 'done',\nor an error is returned. While unpacking, the Retry-After header suggests when to ask again.\n\nIf the upload failed, answers its HTTP error, with why nothing was kept as detail:\n422 for a refused upload (corrupt or empty archive, limit reached, file type not accepted),\n507 when the server has not enough disk space, 500 for other server errors.",
+        "operationId":"get_unpack_status",
+        "security":[
+          {
+            "BearerOrCookieAuth":[]
+          }
+        ],
+        "parameters":[
+          {
+            "name":"upload_id",
+            "in":"path",
+            "required":true,
+            "schema":{
+              "type":"string",
+              "description":"The TUS upload id, i.e. the last part of the Location returned when the upload was created.",
+              "title":"Upload Id",
+              "example":"fd8d989adda14069ba8495a71af1d6b8"
+            },
+            "description":"The TUS upload id, i.e. the last part of the Location returned when the upload was created."
+          }
+        ],
+        "responses":{
+          "200":{
+            "description":"Successful Response",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/UnpackStatusModel"
+                }
+              }
+            }
+          },
+          "422":{
+            "description":"Validation Error",
+            "content":{
+              "application/json":{
+                "schema":{
+                  "$ref":"#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/user_files/{sub_path}":{
       "get":{
         "tags":[
@@ -7148,7 +7183,7 @@
           "MyFiles"
         ],
         "summary":"Put User File",
-        "description":"**Upload a file for the current user files directory.**\n\nThe returned text will contain a server-side path which is usable for some file-related operations.\n\n*e.g. import.*",
+        "description":"**Upload a file for the current user files directory.**\n\nThe returned text will contain a server-side path which is usable for some file-related operations.\n\nNote: Any archive (zip, tar, tar.gz) will be automatically and recursively extracted.\n⚠️ For very big files, this can lead to timeouts and failed extraction ⚠️\nUsing chunks in upload (via TUS protocol, /users_files/upload/*) is a better option in this case,\nas decompression will continue in background if too long.\n\n*e.g. import.*",
         "operationId":"post_user_file",
         "requestBody":{
           "content":{
@@ -8649,7 +8684,7 @@
             "type":"string",
             "title":"Password regexp",
             "description":"8 to 64 chars, at least one uppercase, one lowercase, one number and one special char in '#?!@%^&*-+' ",
-            "default":"^(?:(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#?%^&+*-])).{8,64}$"
+            "default":"^(?:(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#?%^&+*\\-])).{8,64}$"
           },
           "email_verification":{
             "type":"boolean",
@@ -8712,7 +8747,19 @@
             "type":"array",
             "title":"Accepted mime types",
             "description":"File import and My Files, list of accepted mime types",
-            "default":[]
+            "default":[
+              "application/zip",
+              "application/gzip",
+              "application/x-tar",
+              "text/plain",
+              "text/csv",
+              "text/tab-separated-values",
+              "image/jpeg",
+              "image/png",
+              "image/x-png",
+              "image/gif",
+              "image/tiff"
+            ]
           },
           "archive_extensions":{
             "items":{
@@ -8721,7 +8768,16 @@
             "type":"array",
             "title":"Accepted archive extensions",
             "description":"File import and My Files, list of accepted archive extensions",
-            "default":[]
+            "default":[
+              "zip",
+              "tar",
+              "gzip",
+              "tar.gz",
+              "tgz",
+              "tar.bz2",
+              "tar.xz",
+              "gz"
+            ]
           },
           "all_in_one":{
             "type":"boolean",
@@ -10782,33 +10838,6 @@
         ],
         "title":"ProcessModel"
       },
-      "ProjectColumnsModel":{
-        "properties":{
-          "projid":{
-            "type":"integer",
-            "title":"Project ID",
-            "description":"Project ID from the call."
-          },
-          "columns":{
-            "items":{
-              "type":"string"
-            },
-            "type":"array",
-            "title":"Columns",
-            "description":"Column names from the call."
-          },
-          "values":{
-            "items":{
-              "type":"string"
-            },
-            "type":"array",
-            "title":"All rows",
-            "description":"All rows regardless of emptiness."
-          }
-        },
-        "type":"object",
-        "title":"ProjectColumnsModel"
-      },
       "ProjectFilters":{
         "properties":{
           "taxo":{
@@ -10999,6 +11028,13 @@
             "title":"Filter last annotator",
             "description":"Coma-separated list of annotators, i.e. persons who validated the classification in last.",
             "example":"34,67",
+            "type":"string",
+            "nullable":true
+          },
+          "fields":{
+            "title":"Fields",
+            "description":"Only used by POST /object_set/{project_id}/query: same as its 'fields' query parameter, use it when the field list makes the URL too long. Sending 'fields' in both the query string and the body is refused with a 422 error. Ignored by the other endpoints.",
+            "example":"obj.longitude,fre.feret",
             "type":"string",
             "nullable":true
           }
@@ -11240,10 +11276,18 @@
             "nullable":true
           },
           "cnn_network_id":{
-            "title":"Cnn network id",
+            "title":"CNN model id",
             "description":"",
             "example":"SCN_zooscan_group1",
             "type":"string",
+            "nullable":true
+          },
+          "cnn_image_position":{
+            "title":"CNN image position",
+            "description":"Use image at this position (following imgrank) for predictions.",
+            "example":1,
+            "type":"integer",
+            "minimum":1.0,
             "nullable":true
           },
           "formulae":{
@@ -11432,10 +11476,18 @@
             "nullable":true
           },
           "cnn_network_id":{
-            "title":"Cnn network id",
+            "title":"CNN model id",
             "description":"",
             "example":"SCN_zooscan_group1",
             "type":"string",
+            "nullable":true
+          },
+          "cnn_image_position":{
+            "title":"CNN image position",
+            "description":"Use image at this position (following imgrank) for predictions",
+            "example":1,
+            "type":"integer",
+            "minimum":1.0,
             "nullable":true
           },
           "formulae":{
@@ -11785,6 +11837,29 @@
         },
         "type":"object",
         "title":"SampleTaxoStatsModel"
+      },
+      "SamplesSearchReq":{
+        "properties":{
+          "project_ids":{
+            "type":"string",
+            "title":"Project Ids",
+            "description":"String containing the list of one or more project id separated by non-num char.",
+            "example":"1,55"
+          },
+          "id_pattern":{
+            "type":"string",
+            "title":"Pattern Id",
+            "description":"Sample id textual pattern. Use * or '' for 'any matches'. Match is case-insensitive.",
+            "default":"",
+            "example":"*"
+          }
+        },
+        "type":"object",
+        "required":[
+          "project_ids"
+        ],
+        "title":"SamplesSearchReq",
+        "description":"Body form of GET /samples/search, for long project lists which could exceed URL length limits.\nThe parameters must not also be sent in the query string."
       },
       "SciExportTypeEnum":{
         "type":"string",
@@ -12674,6 +12749,90 @@
           "refresh_expires_in"
         ],
         "title":"Token response Model"
+      },
+      "UnpackStatusModel":{
+        "properties":{
+          "state":{
+            "type":"string",
+            "title":"State",
+            "description":"'unpacking', then 'done'.",
+            "example":"unpacking"
+          },
+          "name":{
+            "type":"string",
+            "title":"Name",
+            "description":"Uploaded file name.",
+            "example":"b_da_19.zip"
+          },
+          "percent":{
+            "type":"integer",
+            "title":"Percent",
+            "description":"Progress, 0 to 100, entries done out of entries total. It moves while entries are extracted, and may go down when a nested archive adds its own entries to the total. It stays below 100 until the result is published.",
+            "default":0,
+            "example":42
+          },
+          "entries_done":{
+            "title":"Entries done",
+            "description":"Entries extracted so far, in the uploaded archive and the nested archives opened so far.",
+            "example":420,
+            "type":"integer",
+            "nullable":true
+          },
+          "entries_total":{
+            "title":"Entries total",
+            "description":"Entries of the archives opened so far, nested archives included. Grows when a nested archive is opened.",
+            "example":1000,
+            "type":"integer",
+            "nullable":true
+          },
+          "files_done":{
+            "title":"Files done",
+            "description":"Files unpacked so far, nested archives included.",
+            "example":12000,
+            "type":"integer",
+            "nullable":true
+          },
+          "bytes_done":{
+            "title":"Bytes done",
+            "description":"Bytes unpacked so far, nested archives included.",
+            "example":123456789,
+            "type":"integer",
+            "nullable":true
+          },
+          "bytes_declared":{
+            "title":"Bytes declared",
+            "description":"Uncompressed size declared by the uploaded archive, nested archives not included.",
+            "example":223456789,
+            "type":"integer",
+            "nullable":true
+          },
+          "result_paths":{
+            "title":"Result paths",
+            "description":"When done, where the result is in My Files.",
+            "example":[
+              "my_folder/b_da_19"
+            ],
+            "items":{
+              "type":"string"
+            },
+            "type":"array",
+            "nullable":true
+          },
+          "updated":{
+            "type":"string",
+            "title":"Updated",
+            "description":"Last update, UTC ISO format.",
+            "example":"2026-11-12T14:00:00.123456+00:00"
+          }
+        },
+        "type":"object",
+        "required":[
+          "state",
+          "name",
+          "updated"
+        ],
+        "title":"UnpackStatusModel",
+        "description":"Status of the unpacking of an archive uploaded with TUS, to poll until state is 'done'.\nA failure is not a status, but the HTTP error of the poll."
       },
       "UserActivateReq":{
         "properties":{

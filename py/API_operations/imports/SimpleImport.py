@@ -45,6 +45,7 @@ class SimpleImport(ImportServiceBase):
     def run(self, current_user_id: int) -> SimpleImportRsp:
         # Security check
         RightsBO.user_wants(self.session, current_user_id, Action.ANNOTATE, self.prj_id)
+        self._no_extraction_inside_throw(current_user_id)
         # Validate values in all cases, dry run or not.
         ret = self._validate()
         if len(ret.errors) > 0:

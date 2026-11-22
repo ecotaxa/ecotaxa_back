@@ -1,8 +1,10 @@
 import datetime
 import json
 import logging
+from io import BytesIO
 from typing import Dict, Any
 from unittest import mock
+from zipfile import ZipFile
 
 import pytest
 from deepdiff import DeepDiff
@@ -19,7 +21,11 @@ from tests.credentials import (
     ORDINARY_USER_USER_ID,
     USER_AUTH,
 )
-from tests.export_shared import download_and_unzip_and_check, download_and_check
+from tests.export_shared import (
+    download_and_unzip_and_check,
+    download_and_check,
+    JOB_DOWNLOAD_URL,
+)
 from tests.jobs import (
     api_check_job_ok,
     get_job_and_wait_until_ok,
@@ -288,6 +294,61 @@ def test_export_roundtrip(fastapi, tstlogs):
     )
     changes = diff_projects(
         prj_id, "exp_source.json", clone_prj_id, "exp_clone.json", tstlogs
+    )
+    assert len(changes) == 1
+    assert changes[0].path() == "root['ttl']"  # Just title changed
+
+
+def test_export_plain_tsv_roundtrip(fastapi, tstlogs):
+    """Roundtrip plain general TSV export -> import into another project -> compare"""
+
+    # Admin imports the project
+    prj_id, _ = do_import_uvp6(fastapi, "Plain TSV roundtrip export source project")
+
+    # Admin exports it as a plain TSV (general export, not backup)
+    req_and_filters = {
+        "filters": {},
+        "request": {
+            "project_id": str(prj_id),
+            "with_images": "all",
+            "with_types_row": True,
+            "out_to_ftp": True,
+        },
+    }
+    rsp = fastapi.post(
+        OBJECT_SET_GENERAL_EXPORT_URL,
+        headers=ADMIN_AUTH,
+        json=req_and_filters,
+    )
+    assert rsp.status_code == status.HTTP_200_OK
+    job_id = get_job_and_wait_until_ok(fastapi, rsp)
+    url = JOB_QUERY_URL.format(job_id=job_id)
+    job_dict = fastapi.get(url, headers=ADMIN_AUTH).json()
+    file_in_ftp = job_dict["result"]["out_file"]
+
+    dl_rsp = fastapi.get(JOB_DOWNLOAD_URL.format(job_id=job_id), headers=ADMIN_AUTH)
+    assert dl_rsp.status_code == status.HTTP_200_OK
+    with ZipFile(BytesIO(dl_rsp.content)) as zf:
+        tsv_names = [n for n in zf.namelist() if n.endswith(".tsv")]
+        assert len(tsv_names) == 1
+        header = [
+            h.strip('"')
+            for h in zf.read(tsv_names[0]).decode("utf-8-sig").splitlines()[0].split("\t")
+        ]
+        assert "object_annotation_hierarchy" in header
+
+    # Create a clone project and re-import the plain TSV export
+    clone_prj_id = create_project(
+        ADMIN_USER_ID, "Plain TSV roundtrip export clone project"
+    )
+    do_import(
+        fastapi,
+        clone_prj_id,
+        source_path=DATA_DIR / "ftp" / ("task_%d_%s" % (job_id, file_in_ftp)),
+        auth=ADMIN_AUTH,
+    )
+    changes = diff_projects(
+        prj_id, "plain_tsv_source.json", clone_prj_id, "plain_tsv_clone.json", tstlogs
     )
     assert len(changes) == 1
     assert changes[0].path() == "root['ttl']"  # Just title changed

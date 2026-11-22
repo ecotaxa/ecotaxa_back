@@ -10,8 +10,6 @@
 from typing import Dict
 
 import numpy as np  # type: ignore
-
-# from numpy import ndarray
 from sqlalchemy import func
 
 from DB.Acquisition import Acquisition
@@ -24,12 +22,8 @@ from DB.Image import Image
 from DB.Object import ObjectHeader, ObjectIDT
 from DB.Project import ProjectIDT
 from DB.Sample import Sample
-from DB.helpers import Session
-
-# from DB.helpers.DBWriter import DBWriter
+from DB.helpers import Session, SQL
 from DB.helpers.ORM import and_
-
-# from DB.helpers.Postgres import BIGINT
 from helpers.DynamicLogs import get_logger
 
 # from sqlalchemy.dialects.postgresql import ARRAY
@@ -103,6 +97,7 @@ class DeepFeatures(object):
         qry = qry.filter(ObjectCNNFeatureVector.objcnnid == None)  # SQLAlchemy
         if not fast:
             qry = qry.order_by(ObjectHeader.objid, Image.imgrank)
+            qry = qry.yield_per(SQL.DB_CHUNK_SIZE * 10)  # 3 columns
         if fast:
             # We don't need the whole list to check that some are missing
             qry = qry.limit(10)

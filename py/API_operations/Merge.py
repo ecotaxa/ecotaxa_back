@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from API_models.merge import MergeRsp
 from BO.Bundle import InBundle
 from BO.Mappings import ProjectMapping, RemapOp, MAPPED_TABLES, MappedTableTypeT
+from BO.Prediction import DeepFeatures
 from BO.Project import ProjectBO
 from BO.ProjectPrivilege import ProjectPrivilegeBO
 from BO.Rights import RightsBO, Action
@@ -16,6 +17,7 @@ from DB.Acquisition import Acquisition, AcquisitionIDT
 from DB.Object import ObjectHeader, ObjectFields
 from DB.Project import Project
 from DB.Sample import Sample, SampleIDT, SAM_PRJ_OFFSET
+from DB.helpers import SQL
 from DB.helpers.ORM import orm_equals, any_, all_, func, update, delete, not_, or_
 from DB.helpers.Postgres import values_cte, text
 from helpers.DynamicLogs import get_logger
@@ -73,7 +75,7 @@ class MergeService(Service):
         logger.info("Remaps: %s", self.remap_operations)
         # Go for real if not dry run AND len(errs) == 0
         logger.info("Starting Merge of '%s'", prj.title)
-        self._do_merge(prj)
+        self._do_merge(prj, src_prj)
         self.session.commit()
 
         # Recompute stats and so on
@@ -212,7 +214,7 @@ class MergeService(Service):
             .join(Sample)
             .filter(Sample.projid == prj_id)
             .filter(not_(ObjectHeader.objid.op("<@")(func.obj_in_prj(prj_id))))
-            .all()
+            .yield_per(SQL.DB_CHUNK_SIZE * 40)  # 1 column
         )
         new_obj_id = ObjectHeader.get_next_pk(session, prj_id)
         obj_updates = []
@@ -233,10 +235,20 @@ class MergeService(Service):
         session.expire_all()
         session.commit()
 
-    def _do_merge(self, dest_prj: Project) -> None:
+    def _do_merge(self, dest_prj: Project, src_prj: Project) -> None:
         """
         Real merge operation.
         """
+        if src_prj.cnn_network_id != dest_prj.cnn_network_id or (
+            src_prj.cnn_image_position or 1
+        ) != (dest_prj.cnn_image_position or 1):
+            nb_deleted = DeepFeatures.delete_all(self.session, self.src_prj_id)
+            logger.info(
+                "Deleted %d CNN features from source project %d",
+                nb_deleted,
+                self.src_prj_id,
+            )
+
         # Loop over involved tables and remap free columns
         for a_mapped_tbl in MAPPED_TABLES:
             remaps = self.remap_operations.get(a_mapped_tbl)

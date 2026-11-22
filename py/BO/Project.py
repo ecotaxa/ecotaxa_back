@@ -65,7 +65,7 @@ from DB.ProjectVariables import KNOWN_PROJECT_VARS
 from DB.Sample import Sample
 from DB.User import Role, User, UserStatus, Organization
 from DB.User import UserIDT, UserIDListT
-from DB.helpers import Session, Result
+from DB.helpers import Session, Result, SQL
 from DB.helpers.Bean import Bean
 from DB.helpers.Core import select
 from DB.helpers.Direct import text
@@ -146,17 +146,6 @@ class ProjectUserStats:
     activities: UserActivityListT
 
 
-@dataclass()
-class ProjectColumns:
-    """
-    Column value for specific columns.
-    """
-
-    projid: ProjectIDT
-    columns: List[str]
-    values: List[str]
-
-
 class FieldsList(object):
     @staticmethod
     def required() -> List[str]:
@@ -200,6 +189,7 @@ class FieldsList(object):
         return [
             "status",
             "cnn_network_id",
+            "cnn_image_position",
             "formulae",
             "rf_models_used",
             "classifsettings",
@@ -260,6 +250,7 @@ class FieldsList(object):
                 "comments",
                 "rf_models_used",
                 "cnn_network_id",
+                "cnn_image_position",
                 "formulae",
                 "highest_right",
             ]
@@ -511,6 +502,7 @@ class ProjectBO(object):
         viewers: List[Any],
         access: Optional[str],
         formulae: Optional[str],
+        cnn_image_position: Optional[int] = None,
     ):
         assert contact is not None, "A valid Contact is needed."
         proj_id = self._project.projid
@@ -518,8 +510,10 @@ class ProjectBO(object):
         title = title.strip()
         assert instrument is not None, "Project update: A valid Instrument is needed."
         # Field reflexes
-        if cnn_network_id != self._project.cnn_network_id:
-            # Delete CNN features, which depend on the CNN network
+        if cnn_network_id != self._project.cnn_network_id or (
+            cnn_image_position or 1
+        ) != (self._project.cnn_image_position or 1):
+            # Delete CNN features, which depend on the CNN network and image position
             DeepFeatures.delete_all(session, proj_id)
         # Fields update
         self._project.instrument_id = instrument
@@ -529,6 +523,7 @@ class ProjectBO(object):
         self._project.classiffieldlist = classiffieldlist
         self._project.popoverfieldlist = popoverfieldlist
         self._project.cnn_network_id = cnn_network_id
+        self._project.cnn_image_position = cnn_image_position
         self._project.comments = comments
         self._project.access = access if access is not None else AccessLevelEnum.OPEN
         self._project.formulae = json.loads(formulae) if formulae is not None else None
@@ -597,6 +592,15 @@ class ProjectBO(object):
                     # Delete CNN features, which depend on the CNN network
                     DeepFeatures.delete_all(session, projid)
                 self._project.cnn_network_id = projectreq.cnn_network_id
+            elif modelfield == "cnn_image_position":
+                if (projectreq.cnn_image_position or 1) != (
+                    self._project.cnn_image_position or 1
+                ):
+                    # Delete CNN features, which depend on the image position
+                    DeepFeatures.delete_all(session, projid)
+                self._project.cnn_image_position = projectreq.cnn_image_position
+            elif modelfield == "access":
+                self._project.access = projectreq.access
             elif modelfield == "formulae":
                 formulae = projectreq.formulae
                 self._project.formulae = (
@@ -684,6 +688,10 @@ class ProjectBO(object):
 
     @staticmethod
     def update_taxo_stats(session: Session, projid: int):
+        sql = text(f"""
+        SELECT 1 FROM projects WHERE projid = :prjid FOR NO KEY UPDATE;
+         """)  # Prevent simultaneous updates from e.g. jobs without blocking child FK checks
+        session.execute(sql, {"prjid": projid})
         sql = text(f"""
         DELETE FROM projects_taxo_stat pts
          WHERE pts.projid = :prjid;
@@ -958,9 +966,15 @@ class ProjectBO(object):
             sql_params["window_size"] = window_size
 
         with CodeTimer("Projects.projects_for_user query (ids):", logger):
-            res: Result = session.execute(text(sql), sql_params)
+            res: Result = session.execute(
+                text(sql).execution_options(
+                    stream_results=True,
+                    max_row_buffer=SQL.DB_CHUNK_SIZE * 40,  # 1 column
+                ),
+                sql_params,
+            )
             # single-element tuple :( DBAPI
-            ret = [an_id for an_id, in res.fetchall()]
+            ret = [an_id for an_id, in res]
         return ret
 
     @staticmethod
@@ -1180,6 +1194,7 @@ class ProjectBO(object):
             Sample,
             and_(Sample.sampleid == Acquisition.acq_sample_id, Sample.projid == prj_id),
         )
+        qry = qry.yield_per(SQL.DB_CHUNK_SIZE * 40)  # 1 column
         return [an_id for an_id, in qry]
 
     @classmethod
@@ -1191,11 +1206,19 @@ class ProjectBO(object):
         Instead, apply deltas because in this context we know them.
         TODO: All SQL to SQLAlchemy form
         """
-        needed_ids = list(collated_changes.keys())
+        needed_ids = sorted(collated_changes.keys())
+        # Lock project first (same order as update_taxo_stats) to prevent deadlocks
+        # and serialize with full stats recomputations
+        prj_sql = """SELECT 1
+                       FROM projects
+                      WHERE projid = :prjid
+                     FOR NO KEY UPDATE"""
+        session.execute(text(prj_sql), {"prjid": prj_id})
         # Lock taxo lines to prevent re-entering, during validation it's often a handful of them.
         pts_sql = """SELECT id
                        FROM taxonomy
                       WHERE id = ANY(:ids)
+                      ORDER BY id
                      FOR NO KEY UPDATE
         """
         session.execute(text(pts_sql), {"ids": needed_ids})
@@ -1204,9 +1227,10 @@ class ProjectBO(object):
                        FROM projects_taxo_stat
                       WHERE projid = :prj
                         AND id = ANY(:ids)
+                      ORDER BY id
                      FOR NO KEY UPDATE"""
         res = session.execute(text(pts_sql), {"prj": prj_id, "ids": needed_ids})
-        ids_in_db = {classif_id: nbr for (classif_id, nbr) in res.fetchall()}
+        ids_in_db = {classif_id: nbr for (classif_id, nbr) in res}
         ids_not_in_db = set(needed_ids).difference(ids_in_db.keys())
         if len(ids_not_in_db) > 0:
             # Insert rows for missing IDs
@@ -1274,6 +1298,7 @@ class ProjectBO(object):
             Sample,
             and_(Sample.sampleid == Acquisition.acq_sample_id, Sample.projid == prj_id),
         )
+        # qry = qry.yield_per(SQL.DB_CHUNK_SIZE) # Cannot use cursor and commit every chunk
         ret = 0
         cache: Dict[typing.Tuple[Any], str] = {}
         for a_line in qry:
@@ -1454,7 +1479,8 @@ class CollectionProjectBOSet(ProjectBOSet):
         return list of projects id validating the restricted_access.
         """
         noaccesses: ProjectIDListT = []
-        restricted_access = max(
+        # "0" PRIVATE < "1" PUBLIC < "2" OPEN, so the most restricted is the min
+        restricted_access = min(
             [cast(AccessLevelEnum, project.access) for project in self.projects]
         )
         for project in self.projects:

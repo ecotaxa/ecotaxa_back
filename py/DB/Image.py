@@ -3,16 +3,16 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 from enum import Enum
-from typing import Any
+from typing import Any, Set, Tuple
 
 from sqlalchemy.orm import mapped_column
 
-from DB.helpers import Session
+from DB.helpers import Session, SQL
+from DB.helpers.Caches import RanksPerObject
 from DB.helpers.DDL import Index, ForeignKey, Sequence
 from DB.helpers.Direct import text
 from DB.helpers.Postgres import CHAR, BIGINT, VARCHAR, BYTEA, SMALLINT
 from .helpers import Result
-from .helpers.Hints import RECURS_HINT
 from .helpers.ORM import Model, Mapped
 from .helpers.VirtualColumn import VirtualColumnSet, VirtualColumn
 
@@ -36,22 +36,35 @@ class Image(Model):
     thumb_height: Mapped[int | None] = mapped_column(SMALLINT)
 
     @staticmethod
-    def fetch_existing_images(session: Session, prj_id):
+    def fetch_existing_images(
+        session: Session, prj_id: int
+    ) -> Tuple[Set[str], RanksPerObject[str]]:
         """
-        Get all object/image pairs from the project
+        Get all object/image pairs and existing image ranks per object from the project.
         """
         # Must be reloaded from DB, as phase 1 added all objects for duplicates checking
         sql = text(
-            f"SELECT {RECURS_HINT} concat(obh.orig_id,'*',img.orig_file_name) "
+            f"SELECT obh.orig_id, img.orig_file_name, img.imgrank "
             "  FROM samples sam "
             "  JOIN acquisitions acq ON acq.acq_sample_id = sam.sampleid AND acq.acquisid <@ acq_in_prj(:prj) "
             "  JOIN obj_head obh ON obh.acquisid = acq.acquisid AND obh.objid <@ obj_in_prj(:prj) "
             "  JOIN images img ON img.objid = obh.objid "
             " WHERE sam.projid = :prj"
         )
-        res: Result = session.execute(sql, {"prj": prj_id})
-        ret = {img_id for img_id, in res}
-        return ret
+        res: Result = session.execute(
+            sql.execution_options(
+                stream_results=True, max_row_buffer=SQL.DB_CHUNK_SIZE * 15  # 3 columns
+            ),
+            {"prj": prj_id},
+        )
+        existing_images: Set[str] = set()
+        ranks_per_obj: RanksPerObject[str] = RanksPerObject()
+        imgs_add = existing_images.add
+        ranks_add = ranks_per_obj.add
+        for orig_id, orig_file_name, imgrank in res:
+            imgs_add(f"{orig_id}*{orig_file_name}")
+            ranks_add(orig_id, imgrank)
+        return existing_images, ranks_per_obj
 
     def img_to_file(self):
         """Return the path in vault to the image"""
