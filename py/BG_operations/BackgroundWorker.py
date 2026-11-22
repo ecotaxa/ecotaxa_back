@@ -54,7 +54,6 @@ class BackgroundWorker:
                 with JobsManager() as sce:
                     sce.run_one()
             except Exception as e:
-                # TODO here we have cryptic startup message if DB issue
                 logger.exception("Job run() exception: %s", e)
 
         # Exiting thread after being signaled to stop

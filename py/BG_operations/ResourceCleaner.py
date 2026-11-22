@@ -6,14 +6,13 @@ from threading import Event, Thread
 from typing import Optional, Union
 
 from API_operations.helpers.Service import Service
-from DB.Job import Job
 from helpers.DynamicLogs import get_logger
 from helpers.fastApiUtils import regular_mem_cleanup
 
 logger = get_logger(__name__)
 
 
-class ResourceCleaner(Service):
+class ResourceCleaner:
     """
     In charge of running periodic connection pool and memory cleanups.
     """
@@ -21,11 +20,15 @@ class ResourceCleaner(Service):
     the_thread: Optional[Thread] = None
     stop_event: Event = Event()
 
-    def do_cleanup(self) -> None:
+    @classmethod
+    def do_cleanup(cls) -> None:
         """
-        Run maintenance tasks: ro_session query for connection pool eviction and memory cleanup.
+        Run maintenance tasks: connection pool eviction and memory cleanup.
         """
-        self.ro_session.query(Job).filter(Job.id == 0).first()
+        if Service.the_connection is not None:
+            Service.the_connection.cleanup_pool()
+        if Service.the_readonly_connection is not None:
+            Service.the_readonly_connection.cleanup_pool()
         regular_mem_cleanup()
 
     @classmethod
@@ -49,8 +52,7 @@ class ResourceCleaner(Service):
         # stop_event.wait(timeout) returns True when stop_event.set() is called
         while not cls.stop_event.wait(timeout=interval):
             try:
-                with cls() as sce:
-                    sce.do_cleanup()
+                cls.do_cleanup()
             except Exception as e:
                 logger.exception("%s run() exception: %s", cls.__name__, e)
 

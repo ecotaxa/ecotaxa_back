@@ -11,11 +11,13 @@ from threading import Thread
 from typing import Any, Optional, List, Type, Union, ClassVar
 
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from API_operations.helpers.JobService import JobServiceBase
 from API_operations.helpers.Service import Service
 from BO.Job import JobBO
 from DB.Job import Job, DBJobStateEnum, JobIDT
+from DB.helpers.Connection import DatabaseConnectionException
 from DB.helpers.ORM import clone_of
 from helpers import DateTime
 from helpers.DevMode import is_debug_mode, is_pytest
@@ -49,32 +51,45 @@ class BaseJobRunner:
     def common_run(self, msg: str) -> None:
         """
         Common run logic for both Thread and Process runners.
+        We're inside the job thread/process.
         """
         try:
             sce = JobsManager.instantiate(self.sce_class, self.db_job)
-            with LogsSwitcher(sce):
-                logger.info("Running job %d in %s", self.db_job.id, msg)
+            sce.session.get(Job, self.db_job.id).state = DBJobStateEnum.Running
+            sce.session.commit()
+        except DatabaseConnectionException as sue:
+            logger.error(f"No resource for job {self.db_job.id}: {sue}")
+            return
         except Exception as te:
             logger.error(f"Error instantiating job {self.db_job.id}: {te}")
             self.tech_error(self.db_job.id, te)
             return
         with sce:
+            with LogsSwitcher(sce):
+                logger.info("Running job %d in %s", self.db_job.id, msg)
             sce.run_in_background()
 
     @staticmethod
-    def tech_error(job_id: JobIDT, te: Any) -> None:
+    def _record_tech_error(session: Session, job_id: JobIDT, te: Any) -> None:
+        the_job = session.get(Job, job_id)
+        if the_job is not None:
+            the_job.state = DBJobStateEnum.Error
+            the_job.progress_msg = str(te)
+            session.commit()
+
+    @staticmethod
+    def tech_error(job_id: JobIDT, te: Any, session: Optional[Session] = None) -> None:
         """
         Technical problem, which cannot be managed by the service as it was not possible
         to create it. Report here.
         """
-        with (
-            Service() as base_service
-        ):  # Use a fresh session, in case the problem comes from the service session
-            the_job = base_service.session.get(Job, job_id)
-            if the_job is not None:
-                the_job.state = DBJobStateEnum.Error
-                the_job.progress_msg = str(te)
-                base_service.session.commit()
+        if session is not None:
+            BaseJobRunner._record_tech_error(session, job_id, te)
+        else:
+            with (
+                Service() as base_service
+            ):  # Use a fresh session, in case the problem comes from the service session
+                BaseJobRunner._record_tech_error(base_service.session, job_id, te)
 
 
 class ThreadJobRunner(Thread, BaseJobRunner):
@@ -144,7 +159,7 @@ class JobsManager(Service):
         super().__init__()
 
     @classmethod
-    def _reap_finished_runners(cls) -> None:
+    def _reap_finished_runners(cls, session: Session) -> None:
         """Join and interpret any runners that have already finished."""
         still_running: List[Union[ThreadJobRunner, ProcessJobRunner]] = []
         for runner in cls.the_runners:
@@ -152,7 +167,7 @@ class JobsManager(Service):
                 still_running.append(runner)
             else:
                 runner.join()
-                cls._interpret_runner_result(runner)
+                cls._interpret_runner_result(runner, session=session)
         cls.the_runners = still_running
 
     def fail_running_jobs(self) -> None:
@@ -186,13 +201,14 @@ class JobsManager(Service):
         This is an instance method, so there is DB session to work with, released straight away.
         """
         cls = JobsManager
-        cls._reap_finished_runners()
+        cls._reap_finished_runners(self.session)
 
         available_slots = MAX_PARALLEL_JOBS - len(cls.the_runners)
         if available_slots <= 0:
             return
 
         # Pick pending jobs which are not already managed by another runner
+        active_ids = [r.db_job.id for r in cls.the_runners]
         stmt = select(Job).where(Job.id > 0, Job.state == DBJobStateEnum.Pending)
         if self.INCLUDE:
             stmt = stmt.where(Job.type.in_(tuple(self.INCLUDE)))
@@ -203,15 +219,15 @@ class JobsManager(Service):
             .limit(available_slots)
             .with_for_update(skip_locked=True)
         )
+        if active_ids:
+            stmt = stmt.where(Job.id.notin_(active_ids))
         jobs_to_run: List[Job] = list(self.session.scalars(stmt).all())
         if not jobs_to_run:
             return
 
         for to_run in jobs_to_run:
             logger.info("Found job to run: %s", str(to_run))
-            # Align DB job state
-            to_run.state = DBJobStateEnum.Running
-        self.session.commit()
+        self.session.commit()  # Release locks for jobs to come
 
         for to_run in jobs_to_run:
             # Detach the job DB line from session, as JobRunner is in another process/thread
@@ -224,7 +240,7 @@ class JobsManager(Service):
                 runner.start()
             except Exception as e:
                 logger.error("Error starting job %d: %s", to_run.id, e)
-                BaseJobRunner.tech_error(to_run.id, e)
+                BaseJobRunner.tech_error(to_run.id, e, session=self.session)
             else:
                 cls.the_runners.append(runner)
 
@@ -250,7 +266,9 @@ class JobsManager(Service):
 
     @classmethod
     def _interpret_runner_result(
-        cls, runner: Union[ThreadJobRunner, ProcessJobRunner]
+        cls,
+        runner: Union[ThreadJobRunner, ProcessJobRunner],
+        session: Session,
     ) -> None:
         """
         Interpret the result of waiting for a subprocess or thread runner,
@@ -285,72 +303,75 @@ class JobsManager(Service):
                 )
 
         try:
-            with Service() as base_service:
-                the_job = base_service.session.get(Job, job_id)
-                if the_job is None:
-                    return  # Someone stole our job
-                match the_job.state:
-                    case DBJobStateEnum.Running:
-                        msg = exit_msg or "Process ended unexpectedly"
-                        the_job.state = DBJobStateEnum.Error
-                        the_job.progress_msg = msg
-                        base_service.session.commit()
-                        logger.error(
-                            "Job #%d ended unexpectedly while in Running state. Updated state to Error: %s",
-                            job_id,
-                            msg,
-                        )
-                    case DBJobStateEnum.Finished | DBJobStateEnum.Error:
-                        pass
-                    case other_state:
-                        logger.warning(
-                            "Job #%d in unexpected DB state: %s",
-                            job_id,
-                            other_state,
-                        )
+            the_job = session.get(Job, job_id)
+            if the_job is None:
+                return  # Someone stole our job
+            match the_job.state:
+                case DBJobStateEnum.Pending:  # It did not manage to go to Running state
+                    pass
+                case DBJobStateEnum.Running:
+                    msg = exit_msg or "Process ended unexpectedly"
+                    the_job.state = DBJobStateEnum.Error
+                    the_job.progress_msg = msg
+                    session.commit()
+                    logger.error(
+                        "Job #%d ended unexpectedly while in Running state. Updated state to Error: %s",
+                        job_id,
+                        msg,
+                    )
+                case DBJobStateEnum.Finished | DBJobStateEnum.Error:
+                    pass
+                case other_state:
+                    logger.warning(
+                        "Job #%d in unexpected DB state: %s",
+                        job_id,
+                        other_state,
+                    )
         except Exception as e:
             logger.exception("Error interpreting result for job %d: %s", job_id, e)
 
     @classmethod
     def wait_runners(cls) -> None:
         """Wait for all active runners to finish when stopping the scheduler loop."""
-        while cls.the_runners:
-            cls._reap_finished_runners()
-            if not cls.the_runners:
-                break
-            process_runners = [
-                r for r in cls.the_runners if isinstance(r, ProcessJobRunner)
-            ]
-            if len(process_runners) == len(cls.the_runners):
-                mp_wait([r.sentinel for r in process_runners])
-            else:
-                cls.the_runners[0].join(timeout=0.1)
+        with Service() as sce:
+            while cls.the_runners:
+                cls._reap_finished_runners(sce.session)
+                if not cls.the_runners:
+                    break
+                process_runners = [
+                    r for r in cls.the_runners if isinstance(r, ProcessJobRunner)
+                ]
+                if len(process_runners) == len(cls.the_runners):
+                    mp_wait([r.sentinel for r in process_runners])
+                else:
+                    cls.the_runners[0].join(timeout=0.1)
 
     @classmethod
     def shutdown(cls) -> None:
         """
         Clean close of any remaining runners during worker shutdown.
         """
-        remaining: List[Union[ThreadJobRunner, ProcessJobRunner]] = []
-        for runner in cls.the_runners:
-            if isinstance(runner, ThreadJobRunner):
-                runner.join(timeout=1)
-                if runner.is_alive():
-                    logger.error(
-                        "Job #%d thread did not finish within 1s during shutdown",
-                        runner.db_job.id,
-                    )
-                    remaining.append(runner)
-                else:
-                    cls._interpret_runner_result(runner)
-            else:
-                if not runner.is_alive():
+        with Service() as sce:
+            remaining: List[Union[ThreadJobRunner, ProcessJobRunner]] = []
+            for runner in cls.the_runners:
+                if isinstance(runner, ThreadJobRunner):
                     runner.join(timeout=1)
-                    cls._interpret_runner_result(runner)
+                    if runner.is_alive():
+                        logger.error(
+                            "Job #%d thread did not finish within 1s during shutdown",
+                            runner.db_job.id,
+                        )
+                        remaining.append(runner)
+                    else:
+                        cls._interpret_runner_result(runner, sce.session)
                 else:
-                    logger.info(
-                        "Job #%d detached process left running during worker shutdown",
-                        runner.db_job.id,
-                    )
-                    remaining.append(runner)
+                    if not runner.is_alive():
+                        runner.join(timeout=1)
+                        cls._interpret_runner_result(runner, sce.session)
+                    else:
+                        logger.info(
+                            "Job #%d detached process left running during worker shutdown",
+                            runner.db_job.id,
+                        )
+                        remaining.append(runner)
         cls.the_runners = remaining

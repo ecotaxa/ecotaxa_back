@@ -5,22 +5,14 @@ from unittest.mock import patch
 from BG_operations.ResourceCleaner import ResourceCleaner
 
 
-def _mock_cleaner_service():
-    p1 = patch.object(ResourceCleaner, "__init__", lambda self: None)
-    p2 = patch.object(ResourceCleaner, "__enter__", lambda self: self)
-    p3 = patch.object(ResourceCleaner, "__exit__", lambda self, *args: None)
-    return p1, p2, p3
-
-
 def test_resource_cleaner_lifecycle():
     call_count = 0
 
-    def mock_cleanup(self):
+    def mock_cleanup():
         nonlocal call_count
         call_count += 1
 
-    p1, p2, p3 = _mock_cleaner_service()
-    with p1, p2, p3, patch.object(ResourceCleaner, "do_cleanup", new=mock_cleanup):
+    with patch.object(ResourceCleaner, "do_cleanup", new=mock_cleanup):
         ResourceCleaner.launch_at_interval(0.05)
         try:
             assert ResourceCleaner.stop_event.is_set() is False
@@ -39,8 +31,7 @@ def test_resource_cleaner_lifecycle():
 
 
 def test_resource_cleaner_no_duplicate_threads():
-    p1, p2, p3 = _mock_cleaner_service()
-    with p1, p2, p3, patch.object(ResourceCleaner, "do_cleanup", return_value=None):
+    with patch.object(ResourceCleaner, "do_cleanup", return_value=None):
         ResourceCleaner.launch_at_interval(0.1)
         try:
             first_thread = ResourceCleaner.the_thread
@@ -59,14 +50,13 @@ def test_resource_cleaner_no_duplicate_threads():
 def test_resource_cleaner_exception_resilience():
     call_count = 0
 
-    def flaky_cleanup(self):
+    def flaky_cleanup():
         nonlocal call_count
         call_count += 1
         if call_count == 1:
             raise RuntimeError("Transient cleanup failure")
 
-    p1, p2, p3 = _mock_cleaner_service()
-    with p1, p2, p3, patch.object(ResourceCleaner, "do_cleanup", new=flaky_cleanup):
+    with patch.object(ResourceCleaner, "do_cleanup", new=flaky_cleanup):
         ResourceCleaner.launch_at_interval(0.05)
         try:
             time.sleep(0.18)

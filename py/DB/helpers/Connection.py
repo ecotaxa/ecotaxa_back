@@ -12,6 +12,7 @@ from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import QueuePool
 from sqlalchemy.util.queue import Queue
 
+from helpers.CustomException import ServiceUnavailableException
 from helpers.DynamicLogs import get_logger
 
 logger = get_logger(__name__)
@@ -45,11 +46,15 @@ class TimeEvictedQueue(Queue):
 
     def put(self, item, block=True, timeout=None):
         super().put(item, block, timeout)
+        self.evict()
+
+    def evict(self) -> int:
         now = time.time()
         if now - self.last_cleanup < self.CLEAN_INTERVAL:
-            return
+            return 0
         self.last_cleanup = now
         with self.mutex:
+            ret = 0
             for a_conn in self.queue:  # type: sqlalchemy.pool.base._ConnectionRecord
                 if (
                     a_conn.dbapi_connection
@@ -58,6 +63,8 @@ class TimeEvictedQueue(Queue):
                     # Note: invalidation is logged at INFO by the pool logger,
                     # which is set to WARNING below.
                     a_conn.invalidate()
+                    ret += 1
+            return ret
 
 
 class TimeEvictedQueuePool(QueuePool):
@@ -76,6 +83,10 @@ class TimeEvictedQueuePool(QueuePool):
     # def _do_get(self):
     #     logger.info("Stats: %s", self.status())
     #     return QueuePool._do_get(self)
+
+
+class DatabaseConnectionException(ServiceUnavailableException):
+    """Raised when a database connection cannot be obtained from the pool"""
 
 
 class Connection(object):
@@ -144,7 +155,20 @@ class Connection(object):
         Get a fresh or recycled session from the connection.
         """
         ret = self.session_factory()
+        # SQLAlchemy 2.0 is lazy, only feeds a real PG session when used.
+        # But it delays problems if we run out of resources.
+        try:
+            ret.connection()
+        except Exception as exc:
+            try:
+                ret.close()
+            except Exception:
+                pass
+            raise DatabaseConnectionException("Failed to get a DB connection") from exc
         return ret
+
+    def cleanup_pool(self) -> int:
+        return self.engine.pool._pool.evict()  # type: ignore
 
     def exec_outside_transaction(self, statement: str) -> None:
         """

@@ -187,6 +187,7 @@ from DB.User import GuestIDT, OrganizationIDT, User, UserIDT
 from FS.Unpack import UnpackStatus
 from FS.UserFilesDir import sweep_stale_unpacks
 from helpers.AppConfig import Config
+from helpers.CustomException import ServiceUnavailableException
 from helpers.DevMode import is_dev_mode
 from helpers.DynamicLogs import get_logger, get_api_logger, MONITOR_LOG_PATH
 from helpers.fastApiUtils import (
@@ -4660,6 +4661,21 @@ def register_exception(app: FastAPI):
         content = {"status_code": 10422, "message": exc_str, "data": None}
         return JSONResponse(
             content=content, status_code=status.HTTP_422_UNPROCESSABLE_CONTENT
+        )
+
+    @app.exception_handler(ServiceUnavailableException)
+    async def service_unavailable_exception_handler(
+        request: Request, exc: ServiceUnavailableException
+    ):
+        logger.error(
+            "503 %s %s | Service unavailable: %s",
+            request.method,
+            request.url.path,
+            exc.message,
+        )
+        return JSONResponse(
+            content={"detail": exc.message},
+            status_code=exc.status_code,
         )
 
 

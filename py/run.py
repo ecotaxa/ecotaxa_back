@@ -2,10 +2,10 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
-import sys
+import argparse
 from logging import INFO
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional, Sequence
 
 from helpers.AppConfig import Config
 
@@ -42,7 +42,7 @@ def run_uvicorn() -> None:
     )
 
 
-def run_gunicorn() -> None:
+def run_gunicorn(with_bg_worker: bool = False) -> None:
     from gunicorn.app.base import BaseApplication
     from uvicorn.workers import UvicornWorker
 
@@ -56,6 +56,7 @@ def run_gunicorn() -> None:
     # Unlike simple uvicorn above, the processes are forked from Master (present one)
     # so all logging configuration is inherited.
     from main import app
+    from BG_operations.BackgroundWorker import BackgroundWorker
 
     class EcotaxaApplication(BaseApplication):
         """Our Gunicorn application."""
@@ -106,12 +107,37 @@ def run_gunicorn() -> None:
         def load(self) -> Any:
             return self.application
 
-    EcotaxaApplication().run()
+    background_worker: Optional[BackgroundWorker] = None
+    if with_bg_worker:
+        background_worker = BackgroundWorker()
+
+    try:
+        EcotaxaApplication().run()
+    finally:
+        if background_worker is not None:
+            background_worker.shutdown()
+
+
+def main(argv: Optional[Sequence[str]] = None) -> None:
+    parser = argparse.ArgumentParser(description="Run EcoTaxa backend server.")
+    subparsers = parser.add_subparsers(dest="server")
+
+    subparsers.add_parser("uvicorn", help="Run development server with uvicorn.")
+    gunicorn_parser = subparsers.add_parser(
+        "gunicorn", help="Run production server with gunicorn."
+    )
+    gunicorn_parser.add_argument(
+        "--with-bg-worker",
+        action="store_true",
+        help="Start an in-process BackgroundWorker alongside Gunicorn.",
+    )
+
+    args = parser.parse_args(argv)
+    if args.server == "uvicorn":
+        run_uvicorn()
+    elif args.server == "gunicorn":
+        run_gunicorn(with_bg_worker=args.with_bg_worker)
 
 
 if __name__ == "__main__":
-    the_arg = sys.argv[1] if len(sys.argv) == 2 else ""
-    if the_arg == "uvicorn":
-        run_uvicorn()
-    elif the_arg == "gunicorn":
-        run_gunicorn()
+    main()
