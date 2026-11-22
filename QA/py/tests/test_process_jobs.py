@@ -383,9 +383,27 @@ def test_wait_runners_reaps_finished_before_head_finishes(
     """
     import threading
 
-    with ParallelSleepJob(duration=1.5) as slow_job:
+    with ParallelSleepJob(duration=2.5) as slow_job:
         slow_job.run(ADMIN_USER_ID)
         slow_id = slow_job.job_id
+
+    with JobsManagerMod.JobsManager() as mgr:
+        mgr.run_one()
+
+    # Wait for the slow job process to actually start and reach Running ('R')
+    # before launching the fast-crashing job, so it isn't still in Pending ('P')
+    # on slower CI runners when the fast job finishes.
+    start_deadline = time.monotonic() + 5.0
+    slow_state = None
+    while time.monotonic() < start_deadline:
+        rsp_slow = fastapi.get(
+            JOB_QUERY_URL.format(job_id=slow_id), headers=ADMIN_AUTH
+        )
+        slow_state = rsp_slow.json()["state"]
+        if slow_state == "R":
+            break
+        time.sleep(0.05)
+    assert slow_state == "R", f"Slow job did not enter Running state, got {slow_state}"
 
     with HardExitJob(exit_code=42) as fast_crash_job:
         fast_crash_job.run(ADMIN_USER_ID)
@@ -402,8 +420,8 @@ def test_wait_runners_reaps_finished_before_head_finishes(
     wait_thread.start()
 
     try:
-        # Fast crashing job should be reaped and reconciled to Error well before the 1.5s slow job finishes
-        deadline = time.monotonic() + 1.0
+        # Fast crashing job should be reaped and reconciled to Error well before the 2.5s slow job finishes
+        deadline = time.monotonic() + 2.0
         fast_state = None
         while time.monotonic() < deadline:
             rsp = fastapi.get(JOB_QUERY_URL.format(job_id=fast_id), headers=ADMIN_AUTH)
@@ -419,7 +437,7 @@ def test_wait_runners_reaps_finished_before_head_finishes(
         )
         assert rsp_slow.json()["state"] == "R"
     finally:
-        wait_thread.join(timeout=5)
+        wait_thread.join(timeout=10)
 
     assert not wait_thread.is_alive()
     assert len(JobsManagerMod.JobsManager.the_runners) == 0
