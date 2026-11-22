@@ -229,7 +229,7 @@ app = FastAPI(
 init_openid()
 
 app.include_router(openid_router)
-app.include_router(openid_router, prefix="/api")
+app.include_router(openid_router, prefix="/api", include_in_schema=False)
 
 app.add_middleware(
     SessionMiddleware,
@@ -4602,7 +4602,7 @@ def get_image(
 #     return Response(sce.run(), media_type="text/plain")
 
 app.include_router(app_router)
-app.include_router(app_router, prefix="/api")
+app.include_router(app_router, prefix="/api", include_in_schema=False)
 
 
 # Instrument a bit
@@ -4684,7 +4684,7 @@ async def lifespan(app: FastAPI):
     # The router for big files needs a valid USERSFILESAREA config
     big_files_router = create_big_files_router()
     app.include_router(big_files_router)
-    app.include_router(big_files_router, prefix="/api")
+    app.include_router(big_files_router, prefix="/api", include_in_schema=False)
 
     # ResourceCleaner runs on all processes for periodic idle maintenance
     # (connection pool expiration & memory cleanup).

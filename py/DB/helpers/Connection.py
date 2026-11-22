@@ -4,7 +4,7 @@
 #
 import logging
 import time
-from typing import ClassVar
+from typing import ClassVar, Optional
 
 import sqlalchemy
 from sqlalchemy import MetaData
@@ -136,8 +136,7 @@ class Connection(object):
             # Default cache_size is up to 500*1.5, but we have big text in queries, e.g. all obj_field columns
         )
         self.session_factory = sessionmaker(bind=engine)
-        self._meta: MetaData = sqlalchemy.MetaData()
-        self._meta.reflect(bind=engine)
+        self._meta: Optional[MetaData] = None
         self.engine = engine
 
     def get_session(self) -> Session:
@@ -158,6 +157,10 @@ class Connection(object):
 
     def get_metadata(self) -> MetaData:
         """
-        Get the metadata (for admin operations).
+        Get the metadata (for admin operations). Reflected on first use only, as
+        reflecting the whole schema is slow and not needed for regular serving.
         """
+        if self._meta is None:
+            self._meta = sqlalchemy.MetaData()
+            self._meta.reflect(bind=self.engine)
         return self._meta

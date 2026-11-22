@@ -4,6 +4,7 @@
 #
 import sys
 from logging import INFO
+from pathlib import Path
 from typing import Any
 
 from helpers.AppConfig import Config
@@ -15,6 +16,9 @@ APP_PORT = str(Config().get_app_port())
 def run_uvicorn() -> None:
     import uvicorn
     from uvicorn.config import LOGGING_CONFIG
+
+    # Only the application tree needs to be watched for changes.
+    app_dir = str(Path(__file__).resolve().parent)
 
     config = LOGGING_CONFIG
     # No need to log the requester, all comes from legacy app
@@ -33,23 +37,20 @@ def run_uvicorn() -> None:
         log_level=INFO,
         port=Config().get_app_port(),
         reload=True,
+        reload_dirs=[app_dir],
         access_log=False,  # No reporting of HTTP requests and status
     )
 
 
-# custom_worker.py
-from uvicorn.workers import UvicornWorker
-
-
-class StandaloneUvicornWorker(UvicornWorker):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.cfg.set("logconfig_dict", {})
-        self.CONFIG_KWARGS["log_config"] = None
-
-
 def run_gunicorn() -> None:
     from gunicorn.app.base import BaseApplication
+    from uvicorn.workers import UvicornWorker
+
+    class StandaloneUvicornWorker(UvicornWorker):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.cfg.set("logconfig_dict", {})
+            self.CONFIG_KWARGS["log_config"] = None
 
     # The import below makes the module variable for logging being computed.
     # Unlike simple uvicorn above, the processes are forked from Master (present one)
@@ -64,8 +65,7 @@ def run_gunicorn() -> None:
 
         def __init__(self) -> None:
             self.options = {
-                # Refers to site-packages/uvicorn/workers.py
-                "worker_class": "run.StandaloneUvicornWorker",
+                "worker_class": StandaloneUvicornWorker,
                 "bind": "%s:%s" % ("0.0.0.0", APP_PORT),
                 # Use WEB_CONCURRENCY env. var
                 # 'workers': 16,
