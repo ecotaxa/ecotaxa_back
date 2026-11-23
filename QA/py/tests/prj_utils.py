@@ -18,5 +18,7 @@ def sce_check_consistency(from_):
     with sce:
         old_logger = logger.info
         logger.info = lambda *args: print(from_, args[0] % args[1:])
-        assert sce.check_consistency(0, 0, True)
-        logger.info = old_logger
+        try:
+            assert sce.check_consistency(0, 0, True)
+        finally:
+            logger.info = old_logger

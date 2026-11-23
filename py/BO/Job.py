@@ -129,6 +129,14 @@ class JobBO(object):
 
     def archive(self) -> None:
         """Put the job in archival space, negative ids"""
+        if self._job.state in (DBJobStateEnum.Pending, DBJobStateEnum.Asking):
+            current_state = (
+                self._job.state.value
+                if isinstance(self._job.state, DBJobStateEnum)
+                else self._job.state
+            )
+            self._job.state = DBJobStateEnum.Finished
+            self._job.progress_msg = f"Cleaned {current_state} by user"
         self._job.id = -self._job.id
 
     def __enter__(self):

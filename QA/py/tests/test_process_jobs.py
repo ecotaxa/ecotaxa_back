@@ -224,9 +224,9 @@ def test_job_kill(fastapi, jobs_as_process):
 
 def test_job_delete_pending(fastapi, no_scheduler, jobs_as_process):
     """
-    Verify that a pending job can be deleted and it goes to Error state with Killed message.
+    Verify that a pending job can be deleted and is archived (negated ID).
     """
-    # 1. Launch a job but kill it faster than the Scheduler picks it
+    # 1. Launch a job without a scheduler so it stays Pending
     current_pid = os.getpid()
     with PidReportingJob(main_pid=current_pid) as job:
         job.run(ADMIN_USER_ID)
@@ -242,18 +242,17 @@ def test_job_delete_pending(fastapi, no_scheduler, jobs_as_process):
     rsp = fastapi.delete(job_delete_url, headers=ADMIN_AUTH)
     assert rsp.status_code == 200
 
-    # 4. Verify it's in Error state with Killed message
+    # 4. Verify it's archived (gone from positive ID, present under -job_id)
     rsp = fastapi.get(job_get_url, headers=ADMIN_AUTH)
-    job_info = rsp.json()
-    assert job_info["state"] == "E"
-    assert job_info["progress_msg"] == "Killed"
+    assert rsp.status_code == 404
 
-    # 5. Verify the log file contains the "Process killed by" line
-    log_lines = api_get_log_file(fastapi, job_id)
-    print(f"Log lines after kill: {log_lines}")
-    assert any(
-        "Process killed by" in line for line in log_lines
-    ), f"Log file should contain kill message, got: {log_lines}"
+    archived_get_url = JOB_QUERY_URL.format(job_id=-job_id)
+    rsp = fastapi.get(archived_get_url, headers=ADMIN_AUTH)
+    assert rsp.status_code == 200
+    job_info = rsp.json()
+    assert job_info["id"] == -job_id
+    assert job_info["state"] == "F"
+    assert job_info["progress_msg"] == "Cleaned P by user"
 
 
 class HardExitJob(JobServiceBase):
@@ -336,7 +335,9 @@ def test_parallel_jobs_execution(fastapi, jobs_as_process):
         results.append(job_info.result)
 
     elapsed = time.monotonic() - t0
-    assert elapsed < 3.5, f"4 x 1s jobs took {elapsed:.2f}s, expected parallel execution"
+    assert (
+        elapsed < 3.5
+    ), f"4 x 1s jobs took {elapsed:.2f}s, expected parallel execution"
     pids = {r["pid"] for r in results}
     assert len(pids) == 4, f"Expected 4 distinct job PIDs, got {pids}"
     # All 4 jobs should have overlapped in time
@@ -397,9 +398,7 @@ def test_wait_runners_reaps_finished_before_head_finishes(
     start_deadline = time.monotonic() + 5.0
     slow_state = None
     while time.monotonic() < start_deadline:
-        rsp_slow = fastapi.get(
-            JOB_QUERY_URL.format(job_id=slow_id), headers=ADMIN_AUTH
-        )
+        rsp_slow = fastapi.get(JOB_QUERY_URL.format(job_id=slow_id), headers=ADMIN_AUTH)
         slow_state = rsp_slow.json()["state"]
         if slow_state == "R":
             break
@@ -433,9 +432,7 @@ def test_wait_runners_reaps_finished_before_head_finishes(
 
         assert fast_state == "E", "Fast crashing runner was blocked behind slow runner"
         # Slow job should still be running at this point
-        rsp_slow = fastapi.get(
-            JOB_QUERY_URL.format(job_id=slow_id), headers=ADMIN_AUTH
-        )
+        rsp_slow = fastapi.get(JOB_QUERY_URL.format(job_id=slow_id), headers=ADMIN_AUTH)
         assert rsp_slow.json()["state"] == "R"
     finally:
         wait_thread.join(timeout=10)
@@ -548,7 +545,13 @@ def test_fail_running_jobs(fastapi, no_scheduler):
             pending_id = j_pending.id
             finished_id = j_finished.id
             filtered_id = j_filtered.id
-            created_ids = [running_id, archived_id, pending_id, finished_id, filtered_id]
+            created_ids = [
+                running_id,
+                archived_id,
+                pending_id,
+                finished_id,
+                filtered_id,
+            ]
             svc.session.commit()
 
         with JobsManagerMod.JobsManager() as mgr:

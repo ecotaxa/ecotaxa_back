@@ -557,9 +557,7 @@ class NightlyJobService(JobServiceBase):
                         continue  # Not even if all is old, the extraction would be lost
                     # An archive extraction folder not registered, i.e. left by a failed
                     # cleanup, goes once untouched long enough for no extraction to be alive
-                    too_old = (
-                        orphan_old if a_dir.startswith(PROGRESS_PREFIX) else old
-                    )
+                    too_old = orphan_old if a_dir.startswith(PROGRESS_PREFIX) else old
                     ptime = int(os.path.getctime(dirpath))
                     if ptime < too_old:
                         candelete = self._can_delete_dir(
