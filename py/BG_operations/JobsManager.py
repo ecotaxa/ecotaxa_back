@@ -5,8 +5,10 @@
 import multiprocessing as mp
 import os
 import signal
+import sys
 import threading
 from multiprocessing.connection import wait as mp_wait
+from os import EX_TEMPFAIL
 from threading import Thread
 from typing import Any, Optional, List, Type, Union, ClassVar
 
@@ -48,26 +50,29 @@ class BaseJobRunner:
         self.db_job = a_db_job
         self.sce_class = sce_class
 
-    def common_run(self, msg: str) -> None:
+    def common_run(self, msg: str) -> int:
         """
         Common run logic for both Thread and Process runners.
         We're inside the job thread/process.
         """
         try:
             sce = JobsManager.instantiate(self.sce_class, self.db_job)
-            sce.session.get(Job, self.db_job.id).state = DBJobStateEnum.Running
-            sce.session.commit()
         except DatabaseConnectionException as sue:
             logger.error(f"No resource for job {self.db_job.id}: {sue}")
-            return
+            return EX_TEMPFAIL
         except Exception as te:
             logger.error(f"Error instantiating job {self.db_job.id}: {te}")
             self.tech_error(self.db_job.id, te)
-            return
+            return 1
         with sce:
+            db_job = sce.session.get(Job, self.db_job.id)
+            assert db_job is not None and db_job.state == DBJobStateEnum.Pending
+            db_job.state = DBJobStateEnum.Running
+            sce.session.commit()
             with LogsSwitcher(sce):
                 logger.info("Running job %d in %s", self.db_job.id, msg)
             sce.run_in_background()
+            return 0
 
     @staticmethod
     def _record_tech_error(session: Session, job_id: JobIDT, te: Any) -> None:
@@ -87,9 +92,9 @@ class BaseJobRunner:
             BaseJobRunner._record_tech_error(session, job_id, te)
         else:
             with (
-                Service() as base_service
+                Service() as sce
             ):  # Use a fresh session, in case the problem comes from the service session
-                BaseJobRunner._record_tech_error(base_service.session, job_id, te)
+                BaseJobRunner._record_tech_error(sce.session, job_id, te)
 
 
 class ThreadJobRunner(Thread, BaseJobRunner):
@@ -133,7 +138,9 @@ class ProcessJobRunner(spawn_ctx.Process, BaseJobRunner):  # type: ignore[name-d
         # DynamicLogs.rewire_loggers_after_fork()
 
         # Launch the job
-        self.common_run(f"PID {os.getpid()}")
+        launch_status = self.common_run(f"PID {os.getpid()}")
+        if launch_status > 0:
+            sys.exit(launch_status)
 
 
 JobRunnerType = Union[Type[ThreadJobRunner], Type[ProcessJobRunner]]
@@ -197,52 +204,45 @@ class JobsManager(Service):
 
     def run_one(self) -> None:
         """
-        Pick pending jobs and run them in parallel, up to MAX_PARALLEL_JOBS.
+        Pick a single pending job and run it in parallel with active runners, up to MAX_PARALLEL_JOBS.
         This is an instance method, so there is DB session to work with, released straight away.
         """
         cls = JobsManager
         cls._reap_finished_runners(self.session)
 
-        available_slots = MAX_PARALLEL_JOBS - len(cls.the_runners)
-        if available_slots <= 0:
+        if len(cls.the_runners) >= MAX_PARALLEL_JOBS:
             return
 
-        # Pick pending jobs which are not already managed by another runner
+        # Pick a pending job which is not already managed by another runner
         active_ids = [r.db_job.id for r in cls.the_runners]
         stmt = select(Job).where(Job.id > 0, Job.state == DBJobStateEnum.Pending)
         if self.INCLUDE:
             stmt = stmt.where(Job.type.in_(tuple(self.INCLUDE)))
         for a_type in self.FILTER:
             stmt = stmt.where(Job.type != a_type)
-        stmt = (
-            stmt.order_by(Job.id)
-            .limit(available_slots)
-            .with_for_update(skip_locked=True)
-        )
         if active_ids:
             stmt = stmt.where(Job.id.notin_(active_ids))
-        jobs_to_run: List[Job] = list(self.session.scalars(stmt).all())
-        if not jobs_to_run:
+        stmt = stmt.order_by(Job.id).limit(1).with_for_update(skip_locked=True)
+        to_run: Optional[Job] = self.session.scalars(stmt).first()
+        if to_run is None:
             return
 
-        for to_run in jobs_to_run:
-            logger.info("Found job to run: %s", str(to_run))
+        logger.info("Found job to run: %s", str(to_run))
         self.session.commit()  # Release locks for jobs to come
 
-        for to_run in jobs_to_run:
-            # Detach the job DB line from session, as JobRunner is in another process/thread
-            # and SQLAlchemy objects are linked to sessions, and sessions cannot be shared b/w processes.
-            job_clone = clone_of(to_run)
-            job_clone.id = to_run.id
-            try:
-                # Run the service background
-                runner = JobRunner(JobBO(job_clone))
-                runner.start()
-            except Exception as e:
-                logger.error("Error starting job %d: %s", to_run.id, e)
-                BaseJobRunner.tech_error(to_run.id, e, session=self.session)
-            else:
-                cls.the_runners.append(runner)
+        # Detach the job DB line from session, as JobRunner is in another process/thread
+        # and SQLAlchemy objects are linked to sessions, and sessions cannot be shared b/w processes.
+        job_clone = clone_of(to_run)
+        job_clone.id = to_run.id
+        try:
+            # Run the service background
+            runner = JobRunner(JobBO(job_clone))
+            runner.start()
+        except Exception as e:
+            logger.error("Error starting job %d: %s", to_run.id, e)
+            BaseJobRunner.tech_error(to_run.id, e, session=self.session)
+        else:
+            cls.the_runners.append(runner)
 
     @staticmethod
     def instantiate(sce_class: Type["JobServiceBase"], a_job: JobBO):
@@ -294,7 +294,8 @@ class JobsManager(Service):
                 logger.error("Job #%d: %s", job_id, exit_msg)
             case int(code) if code > 0:
                 exit_msg = f"Process failed with exit code {code}"
-                logger.error("Job #%d: %s", job_id, exit_msg)
+                if code != EX_TEMPFAIL:
+                    logger.error("Job #%d: %s", job_id, exit_msg)
             case _:
                 logger.warning(
                     "Job #%d runner completed with unexpected exit code: %s",
@@ -308,7 +309,12 @@ class JobsManager(Service):
                 return  # Someone stole our job
             match the_job.state:
                 case DBJobStateEnum.Pending:  # It did not manage to go to Running state
-                    pass
+                    msg = exit_msg or "Process ended unexpectedly"
+                    logger.warning(
+                        "Job #%d could not reach Running state: %s",
+                        job_id,
+                        msg,
+                    )
                 case DBJobStateEnum.Running:
                     msg = exit_msg or "Process ended unexpectedly"
                     the_job.state = DBJobStateEnum.Error

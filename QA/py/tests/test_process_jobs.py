@@ -356,8 +356,9 @@ def test_parallel_jobs_limit_respected(fastapi, no_scheduler, jobs_as_process):
             job_ids.append(job.job_id)
 
     with patch.object(JobsManagerMod, "MAX_PARALLEL_JOBS", 2):
-        with JobsManagerMod.JobsManager() as mgr:
-            mgr.run_one()
+        for _ in range(3):
+            with JobsManagerMod.JobsManager() as mgr:
+                mgr.run_one()
         assert len(JobsManagerMod.JobsManager.the_runners) == 2
 
         deadline = time.monotonic() + 15
@@ -445,6 +446,37 @@ def test_wait_runners_reaps_finished_before_head_finishes(
     assert slow_info.state == "F"
 
 
+def test_run_one_launches_single_job(fastapi, no_scheduler, jobs_as_process):
+    """
+    Verify that JobsManager.run_one() launches only a single job per call,
+    even when multiple pending jobs exist and more parallel slots are available.
+    """
+    job_ids = []
+    for _ in range(3):
+        with ParallelSleepJob(duration=0.5) as job:
+            job.run(ADMIN_USER_ID)
+            job_ids.append(job.job_id)
+
+    with JobsManagerMod.JobsManager() as mgr:
+        mgr.run_one()
+    assert len(JobsManagerMod.JobsManager.the_runners) == 1
+
+    with JobsManagerMod.JobsManager() as mgr:
+        mgr.run_one()
+    assert len(JobsManagerMod.JobsManager.the_runners) == 2
+
+    with JobsManagerMod.JobsManager() as mgr:
+        mgr.run_one()
+    assert len(JobsManagerMod.JobsManager.the_runners) == 3
+
+    JobsManagerMod.JobsManager.wait_runners()
+    assert len(JobsManagerMod.JobsManager.the_runners) == 0
+
+    for job_id in job_ids:
+        job_info = api_wait_for_stable_job(fastapi, job_id, max_wait=5)
+        assert job_info.state == "F"
+
+
 def test_wait_runners_with_thread_runners(fastapi, no_scheduler):
     """
     Verify that wait_runners() handles ThreadJobRunner instances cleanly.
@@ -458,8 +490,9 @@ def test_wait_runners_with_thread_runners(fastapi, no_scheduler):
                 job.run(ADMIN_USER_ID)
                 job_ids.append(job.job_id)
 
-        with JobsManagerMod.JobsManager() as mgr:
-            mgr.run_one()
+        for _ in range(2):
+            with JobsManagerMod.JobsManager() as mgr:
+                mgr.run_one()
 
         assert len(JobsManagerMod.JobsManager.the_runners) == 2
         JobsManagerMod.JobsManager.wait_runners()

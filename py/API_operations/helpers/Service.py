@@ -8,7 +8,11 @@ from typing import Optional, ContextManager
 from sqlalchemy import event
 from sqlalchemy.orm import Session
 
-from DB.helpers.Connection import Connection, check_sqlalchemy_version
+from DB.helpers.Connection import (
+    Connection,
+    check_sqlalchemy_version,
+    DatabaseConnectionException,
+)
 from helpers.AppConfig import Config
 
 
@@ -91,15 +95,15 @@ class Service(BaseService, ContextManager):
         else:
             ro_conn = Service.the_readonly_connection
         # Finally feed the subclass
-        self.session: Session = conn.get_session()
-        if ro_conn != conn:
+        try:
+            self.session: Session = conn.get_session()
             self.ro_session: Session = ro_conn.get_session()
             # When r/w session commits, ensure the ro is clean.
-            if not hasattr(self.session, "ro"):
-                setattr(self.session, "ro", self.ro_session)
-                event.listen(self.session, "before_commit", self.abort_ro)
-        else:
-            self.ro_session = self.session
+            setattr(self.session, "ro", self.ro_session)
+            event.listen(self.session, "before_commit", self.abort_ro)
+        except DatabaseConnectionException:
+            self.close_db_sessions()  # both or none
+            raise
         self._in_with: int = 0  # For debugging session leaks
 
     @staticmethod
@@ -157,36 +161,39 @@ class Service(BaseService, ContextManager):
         )
 
     def close_db_sessions(self):
-        # Release DB session
-        if hasattr(self, "session") and self.session is not None:
-            # noinspection PyBroadException
-            try:
-                self.session.close()
-            except Exception:
-                # In this context we want no stack trace.
-                pass
-            # noinspection PyBroadException
-            if self.ro_session != self.session:
-                # noinspection PyBroadException
-                try:
-                    delattr(self.session, "ro")
-                    self.ro_session.close()
-                except Exception:
-                    # In this context we want no stack trace.
-                    pass
-            self.session = None
-            self.ro_session = None
+        # Release DB sessions
+        if getattr(self, "session", None) is None:
+            return
+        # noinspection PyBroadException
+        try:
+            self.session.close()
+        except Exception:
+            # In this context we want no stack trace.
+            pass
+        if hasattr(self.session, "ro"):
+            delattr(self.session, "ro")
+        self.session = None
+        if getattr(self, "ro_session", None) is None:
+            return
+        # noinspection PyBroadException
+        try:
+            self.ro_session.close()
+        except Exception:
+            # In this context we want no stack trace.
+            pass
+        self.ro_session = None
 
     def __del__(self):
         # DB session should have been released during __exit__
-        if hasattr(self, "session") and self.session is not None:
-            try:
-                self.close_db_sessions()
-            except:
-                pass
-            assert (
-                False
-            ), "%s: Please use Service-derived classes in a with() context" % str(self)
+        if getattr(self, "session", None) is None:
+            return
+        try:
+            self.close_db_sessions()
+        except:
+            pass
+        assert (
+            False
+        ), "%s: Please use Service-derived classes in a with() context" % str(self)
 
     def __enter__(self):
         self._in_with += 1

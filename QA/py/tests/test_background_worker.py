@@ -258,7 +258,7 @@ def test_jobs_manager_run_one_passes_session_to_tech_error():
     mgr = JobsManager.__new__(JobsManager)
     mgr.session = MagicMock()
     pending_job = SimpleNamespace(id=99, type="TestJob", params={})
-    mgr.session.scalars.return_value.all.return_value = [pending_job]
+    mgr.session.scalars.return_value.first.return_value = pending_job
 
     start_err = RuntimeError("cannot spawn")
     with (
