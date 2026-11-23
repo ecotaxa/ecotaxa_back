@@ -147,13 +147,46 @@ def test_patch_project_cnn_image_position_clears_features(fastapi):
     assert rsp.status_code == status.HTTP_200_OK, rsp.text
     assert _count_features(obj_ids) == len(obj_ids)
 
-    # 2 -> 3 is a real change: features must be erased
-    rsp = fastapi.patch(url, headers=ADMIN_AUTH, json={"cnn_image_position": 3})
-    assert rsp.status_code == status.HTTP_200_OK, rsp.text
-    assert _count_features(obj_ids) == 0
-
-    # Re-insert and patch 3 -> None (real change back to default 1): features must be erased
-    _insert_features(obj_ids)
+    # 2 -> None (real change back to default 1): features must be erased
     rsp = fastapi.patch(url, headers=ADMIN_AUTH, json={"cnn_image_position": None})
     assert rsp.status_code == status.HTTP_200_OK, rsp.text
     assert _count_features(obj_ids) == 0
+
+
+def test_patch_project_cnn_image_position_validation(fastapi):
+    prj_id, _ = do_import_uvp6(fastapi, "Patch Test CNN Image Pos Validation")
+    obj_ids = _prj_query(fastapi, ADMIN_AUTH, prj_id)
+    assert len(obj_ids) == 15
+    url = PATCH_URL.format(project_id=prj_id)
+    get_url = PROJECT_QUERY_URL.format(project_id=prj_id, manage=True)
+
+    _insert_features(obj_ids)
+    assert _count_features(obj_ids) == len(obj_ids)
+
+    # All 15 objects in UVP6_example have 2 images, so position 3 must fail
+    rsp = fastapi.patch(url, headers=ADMIN_AUTH, json={"cnn_image_position": 3})
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT, rsp.text
+    assert "15" in rsp.json()["detail"]
+    # Neither project field nor existing features should be modified on failure
+    assert fastapi.get(get_url, headers=ADMIN_AUTH).json()["cnn_image_position"] is None
+    assert _count_features(obj_ids) == len(obj_ids)
+
+    # Delete one image from one object so it only has 1 image; now position 2 must fail for 1 object
+    from DB.Image import Image
+
+    with SamplesService() as sce:
+        img_to_del = (
+            sce.session.query(Image)
+            .filter(Image.objid == obj_ids[0])
+            .order_by(Image.imgrank.desc())
+            .first()
+        )
+        assert img_to_del is not None
+        sce.session.delete(img_to_del)
+        sce.session.commit()
+
+    rsp = fastapi.patch(url, headers=ADMIN_AUTH, json={"cnn_image_position": 2})
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT, rsp.text
+    assert "1 object(s)" in rsp.json()["detail"]
+    assert fastapi.get(get_url, headers=ADMIN_AUTH).json()["cnn_image_position"] is None
+    assert _count_features(obj_ids) == len(obj_ids)

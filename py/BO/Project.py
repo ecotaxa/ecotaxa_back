@@ -43,6 +43,7 @@ from BO.User import (
 )
 from DB.Acquisition import Acquisition
 from DB.Collection import CollectionProject, Collection
+from DB.Image import Image
 from DB.Object import (
     VALIDATED_CLASSIF_QUAL,
     PREDICTED_CLASSIF_QUAL,
@@ -509,6 +510,11 @@ class ProjectBO(object):
         # strip title
         title = title.strip()
         assert instrument is not None, "Project update: A valid Instrument is needed."
+        if (
+            cnn_image_position is not None
+            and cnn_image_position != self._project.cnn_image_position
+        ):
+            self.validate_cnn_image_position(session, cnn_image_position)
         # Field reflexes
         if cnn_network_id != self._project.cnn_network_id or (
             cnn_image_position or 1
@@ -593,6 +599,13 @@ class ProjectBO(object):
                     DeepFeatures.delete_all(session, projid)
                 self._project.cnn_network_id = projectreq.cnn_network_id
             elif modelfield == "cnn_image_position":
+                if (
+                    projectreq.cnn_image_position is not None
+                    and projectreq.cnn_image_position != self._project.cnn_image_position
+                ):
+                    self.validate_cnn_image_position(
+                        session, projectreq.cnn_image_position
+                    )
                 if (projectreq.cnn_image_position or 1) != (
                     self._project.cnn_image_position or 1
                 ):
@@ -652,6 +665,35 @@ class ProjectBO(object):
                                 )
                         session.add(projectpriv)
         session.commit()
+
+    def validate_cnn_image_position(
+        self, session: Session, cnn_image_position: int
+    ) -> None:
+        """
+        Ensure every object in the project has at least `cnn_image_position` images.
+        """
+        proj_id = self._project.projid
+        non_compliant_subq = (
+            select(ObjectHeader.objid)
+            .join(Acquisition, Acquisition.acquisid == ObjectHeader.acquisid)
+            .join(Sample, Sample.sampleid == Acquisition.acq_sample_id)
+            .outerjoin(Image, Image.objid == ObjectHeader.objid)
+            .where(
+                ObjectHeader.objid.op("<@")(func.obj_in_prj(proj_id)),
+                Acquisition.acquisid.op("<@")(func.acq_in_prj(proj_id)),
+                Sample.projid == proj_id,
+            )
+            .group_by(ObjectHeader.objid)
+            .having(func.count(Image.imgid) < cnn_image_position)
+            .subquery()
+        )
+        non_compliant_count = session.execute(
+            select(func.count()).select_from(non_compliant_subq)
+        ).scalar_one()
+        assert non_compliant_count == 0, (
+            f"Cannot set cnn_image_position to {cnn_image_position}: "
+            f"{non_compliant_count} object(s) have fewer than {cnn_image_position} image(s)."
+        )
 
     def get_all_num_columns_values(self, session: Session):
         """

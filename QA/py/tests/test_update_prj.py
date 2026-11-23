@@ -215,6 +215,14 @@ def test_update_prj(fastapi):
     rsp = fastapi.put(url, headers=ADMIN_AUTH, json=invalid_pos_upd)
     assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
+    # Invalid cnn_image_position (not enough images per object)
+    too_high_pos_upd = deepcopy(upd_json)
+    too_high_pos_upd["cnn_image_position"] = 3
+    url = PROJECT_UPDATE_URL.format(project_id=prj_id)
+    rsp = fastapi.put(url, headers=ADMIN_AUTH, json=too_high_pos_upd)
+    assert rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert "15 object(s)" in rsp.json()["detail"]
+
     # For ecotaxa/ecotaxa_dev#602
     # Set no contact at all
     no_contact_upd = deepcopy(read_json)
