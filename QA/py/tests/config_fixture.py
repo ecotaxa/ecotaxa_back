@@ -10,7 +10,7 @@ from typing import Any, Generator
 
 import pytest
 
-from BG_operations import JobScheduler
+from BG_operations import JobsManager
 
 # Import services under test as a library
 # TODO: Not here
@@ -48,7 +48,7 @@ def config() -> Generator[EcoTaxaConfig, Any, None]:
     # Avoid testing time explosion.
     # Comment for a better coverage of Process jobs. But some tests will fail
     # due to the fresh process.
-    JobScheduler.JobRunner = JobScheduler.ThreadJobRunner
+    JobsManager.JobRunner = JobsManager.ThreadJobRunner
     # Empty Vault
     vault = Vault((HERE / "vault").as_posix())
     shutil.rmtree(vault.path.joinpath("0000").as_posix(), ignore_errors=True)

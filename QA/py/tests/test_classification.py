@@ -922,6 +922,7 @@ def test_revert_to_predicted(fastapi):
         if an_entry["histo_classif_date"] is not None:
             an_entry["histo_classif_date"] = "JUSTNOW"
         an_entry["objid"] -= min_obj_id - 1
+    stats["last_entries"].sort(key=lambda an_entry: an_entry["objid"])
     assert stats == {
         "classif_info": {},
         "last_entries": [

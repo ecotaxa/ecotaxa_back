@@ -300,3 +300,26 @@ def test_timing_middleware_log(fastapi, caplog, monkeypatch):
     auth_log = auth_logs[-1]
     assert "GET /users/me 200" in auth_log
     assert f"| U:{ADMIN_USER_ID}" in auth_log
+
+
+def test_service_unavailable_exception(fastapi, mocker):
+    from DB.helpers.Connection import Connection, DatabaseConnectionException
+    from helpers.CustomException import ServiceUnavailableException
+
+    mocker.patch.object(
+        Connection,
+        "get_session",
+        side_effect=DatabaseConnectionException("Failed to get a DB connection"),
+    )
+    response = fastapi.get("/users/me", headers=ADMIN_AUTH)
+    assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+    assert response.json() == {"detail": "Failed to get a DB connection"}
+
+    mocker.patch.object(
+        Connection,
+        "get_session",
+        side_effect=ServiceUnavailableException("Service temporarily unavailable"),
+    )
+    response = fastapi.get("/users/me", headers=ADMIN_AUTH)
+    assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+    assert response.json() == {"detail": "Service temporarily unavailable"}

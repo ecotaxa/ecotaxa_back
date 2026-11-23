@@ -122,7 +122,7 @@ class JobServiceBase(Service, LogEmitter, ABC):
 
     def create_job(self, job_type: str, user_id: UserIDT):
         args = self.init_args({})
-        # Add a pending job, to pick by runner thread, @see JobScheduler.py
+        # Add a pending job, to pick by runner thread, @see JobsManager.py
         new_job = JobBO.create_job(user_id, job_type, args)
         self.session.add(new_job)
         # self.session.commit() # Uncomment to see the race condition in def test_log_file_exists_if_job_exists

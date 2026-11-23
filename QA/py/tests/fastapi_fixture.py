@@ -14,13 +14,14 @@ os.environ["CORS_ALLOWED_ORIGIN_REGEX"] = (
 )
 
 import pytest
-from BG_operations.JobScheduler import JobScheduler
 from fastapi.testclient import TestClient
 
 # from starlette.testclient import TestClient
 
 from tests.jobs import clear_all_jobs
 from tests.prj_utils import sce_check_consistency
+
+background_worker = None
 
 
 # noinspection PyProtectedMember
@@ -30,6 +31,7 @@ from tests.prj_utils import sce_check_consistency
 def fastapi(config, database, tstlogs, request) -> Generator[TestClient, Any, None]:
     # Overwrite a method in URLSafeTimedSerializer
     from helpers import fastApiUtils
+    from BG_operations import BackgroundWorker as BackgroundWorkerMod
     import main
 
     serializer = fastApiUtils.build_serializer()
@@ -38,9 +40,11 @@ def fastapi(config, database, tstlogs, request) -> Generator[TestClient, Any, No
     serializer.loads = lambda s, max_age: {"user_id": s}
 
     client = TestClient(main.app)
-    main.JOB_INTERVAL = 0.01
+    BackgroundWorkerMod.JOB_INTERVAL = 0.01
 
-    with client:  # Trigger the fastapi 'startup' event -> launches the JobScheduler
+    with client:  # Trigger the fastapi 'startup' event -> launches the JobsManager
+        global background_worker
+        background_worker = BackgroundWorkerMod.BackgroundWorker()
         yield client
     # Teardown, once per module
     consistency_exception = None
@@ -51,7 +55,19 @@ def fastapi(config, database, tstlogs, request) -> Generator[TestClient, Any, No
     except AssertionError as e:
         consistency_exception = e
     serializer.loads = sav_loads
-    JobScheduler.shutdown()
+    background_worker.shutdown()
     if consistency_exception is not None:
         clear_all_jobs()  # Don't leak failed/unfinished jobs to next tests
         raise consistency_exception
+
+
+@pytest.fixture
+def no_scheduler():
+    """
+    Disable the BackgroundWorker during the test.
+    """
+    from BG_operations import BackgroundWorker as BackgroundWorkerMod
+
+    background_worker.shutdown()
+    yield
+    background_worker.launch_at_interval(BackgroundWorkerMod.JOB_INTERVAL)

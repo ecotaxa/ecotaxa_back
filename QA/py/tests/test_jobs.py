@@ -6,7 +6,7 @@ from random import random
 
 import pytest
 from API_operations.helpers.JobService import JobServiceBase, ArgsDict
-from BG_operations.JobScheduler import JobScheduler
+from BG_operations.JobsManager import JobsManager
 from helpers.DynamicLogs import get_logger, LogsSwitcher, rewire_loggers_after_fork
 
 from tests.credentials import ADMIN_USER_ID
@@ -39,12 +39,12 @@ class FakeRandomJob(JobServiceBase):
 def launchSchedulerSubProcess():
     # Release DB-related resources, which cannot be shared with other process
     rewire_loggers_after_fork()
-    JobScheduler.launch_at_interval(0.01)
+    JobsManager.launch_at_interval(0.01)
     while True:
         time.sleep(10)
     # time.sleep(30)
-    # JobScheduler.shutdown()
-    # assert JobScheduler.is_sane_on_shutdown()
+    # JobsManager.shutdown()
+    # assert JobsManager.is_sane_on_shutdown()
 
 
 # It's quite long to run so comment out or remove below line to execute
@@ -54,7 +54,7 @@ def test_log_file_exists_if_job_exists(fastapi):
     # What was randomly seen is the message in https://github.com/ecotaxa/ecotaxa_front/issues/688:
     #     File "/usr/lib/python3.8/threading.py", line 890, in _bootstrap self._bootstrap_inner()
     #     File "/usr/lib/python3.8/threading.py", line 932, in _bootstrap_inner self.run()
-    #     File "/app/BG_operations/JobScheduler.py", line 40, in run sce.run_in_background()
+    #     File "/app/BG_operations/JobsManager.py", line 40, in run sce.run_in_background()
     #     File "/app/API_operations/helpers/JobService.py", line 72, in run_in_background self.do_background()
     #     File "/app/API_operations/imports/Import.py", line 71, in do_background with LogsSwitcher(self):
     #     File "/app/helpers/DynamicLogs.py", line 81, in enter self.switch()
@@ -66,7 +66,7 @@ def test_log_file_exists_if_job_exists(fastapi):
     # And more funny, a message in the log file indicating it cannot create the log file.
     #     File "/usr/lib/python3.8/threading.py", line 890, in _bootstrap self._bootstrap_inner()
     #     File "/usr/lib/python3.8/threading.py", line 932, in _bootstrap_inner self.run()
-    #     File "/app/BG_operations/JobScheduler.py", line 39, in run sce.run_in_background()
+    #     File "/app/BG_operations/JobsManager.py", line 39, in run sce.run_in_background()
     #     File "/app/API_operations/helpers/JobService.py", line 76, in run_in_background self.do_background()
     #     File "/app/API_operations/admin/NightlyJob.py", line 54, in do_background with LogsSwitcher(self):
     #     File "/app/helpers/DynamicLogs.py", line 85, in __enter__ self.switch()
@@ -78,10 +78,10 @@ def test_log_file_exists_if_job_exists(fastapi):
     # Note: both problems occur in the job runner thread.
 
     # Shutdown the default scheduler which is too slow and single
-    JobScheduler.shutdown()
-    JobScheduler.do_run.wait()
-    assert JobScheduler.the_runner is None
-    assert JobScheduler.the_timer is None
+    JobsManager.shutdown()
+    JobsManager.do_run.wait()
+    assert JobsManager.the_runner is None
+    assert JobsManager.the_timer is None
     # Cleanup any previous run
     for jt in database.jobs_dir.glob("task*"):
         shutil.rmtree(jt)

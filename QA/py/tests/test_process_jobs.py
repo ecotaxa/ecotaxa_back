@@ -1,12 +1,13 @@
 import os
 import re
 import time
+from unittest.mock import patch
 
 import pytest
 
 from API_operations.helpers.JobService import JobServiceBase, ArgsDict
-from BG_operations import JobScheduler as JobSchedulerMod
-from BG_operations.JobScheduler import ProcessJobRunner, JobScheduler
+from BG_operations import JobsManager as JobsManagerMod
+from BG_operations.JobsManager import ProcessJobRunner
 from helpers.DynamicLogs import LogsSwitcher, get_logger
 from tests.api_wrappers import (
     api_wait_for_stable_job,
@@ -22,12 +23,12 @@ from tests.credentials import ADMIN_USER_ID, ADMIN_AUTH
 @pytest.fixture
 def jobs_as_process():
     """
-    Switch JobScheduler to ProcessJobRunner for the duration of the test.
+    Switch JobsManager to ProcessJobRunner for the duration of the test.
     """
-    old_runner = JobSchedulerMod.JobRunner
-    JobSchedulerMod.JobRunner = ProcessJobRunner
+    old_runner = JobsManagerMod.JobRunner
+    JobsManagerMod.JobRunner = ProcessJobRunner
     yield
-    JobSchedulerMod.JobRunner = old_runner
+    JobsManagerMod.JobRunner = old_runner
 
 
 # Define a job that reports its PID in the result
@@ -107,7 +108,7 @@ def test_job_process_behavior(fastapi, jobs_as_process):
 
     # Check if we are in a state where processes are expected
     assert (
-        JobSchedulerMod.JobRunner == ProcessJobRunner
+        JobsManagerMod.JobRunner == ProcessJobRunner
     ), "JobRunner should be ProcessJobRunner when not debugging"
 
     # Retrieve the PID reported by the job from its results
@@ -221,18 +222,6 @@ def test_job_kill(fastapi, jobs_as_process):
     api_check_job_ok(fastapi, job2_id)
 
 
-@pytest.fixture
-def no_scheduler():
-    """
-    Disable the JobScheduler during the test.
-    """
-    JobScheduler.shutdown()
-    yield
-    import main
-
-    JobScheduler.launch_at_interval(main.JOB_INTERVAL)
-
-
 def test_job_delete_pending(fastapi, no_scheduler, jobs_as_process):
     """
     Verify that a pending job can be deleted and it goes to Error state with Killed message.
@@ -291,7 +280,7 @@ class HardExitJob(JobServiceBase):
 def test_job_hard_exit_reconciled(fastapi, jobs_as_process):
     """
     Verify that when a process exits abruptly (e.g. crash/os._exit),
-    JobScheduler interprets the exitcode and reconciles the DB job state to Error.
+    JobsManager interprets the exitcode and reconciles the DB job state to Error.
     """
     with HardExitJob(exit_code=42) as job:
         job.run(ADMIN_USER_ID)
@@ -302,20 +291,309 @@ def test_job_hard_exit_reconciled(fastapi, jobs_as_process):
     assert "exit code 42" in job_info.progress_msg
 
 
-def test_jobscheduler_launch_waits_and_interprets(fastapi, no_scheduler, jobs_as_process):
-    """
-    Verify that calling JobScheduler.launch() directly when do_run is not set
-    waits for the runner to finish and interprets its result.
-    """
-    with HardExitJob(exit_code=17) as job:
-        job.run(ADMIN_USER_ID)
-        job_id = job.job_id
+class ParallelSleepJob(JobServiceBase):
+    JOB_TYPE = "ParallelSleep"
+    logger = get_logger(__name__)
 
-    # Single-run invocation of JobScheduler.launch
-    JobScheduler.launch(0)
+    def __init__(self, duration: float = 1.0):
+        super().__init__()
+        self.duration = duration
 
-    job_get_url = JOB_QUERY_URL.format(job_id=job_id)
-    rsp = fastapi.get(job_get_url, headers=ADMIN_AUTH)
-    job_data = rsp.json()
-    assert job_data["state"] == "E"
-    assert "exit code 17" in job_data["progress_msg"]
+    def init_args(self, args: ArgsDict) -> ArgsDict:
+        super().init_args(args)
+        args["duration"] = self.duration
+        return args
+
+    def run(self, current_user_id: int) -> None:
+        self.create_job(self.JOB_TYPE, current_user_id)
+
+    def do_background(self) -> None:
+        start = time.monotonic()
+        time.sleep(self.duration)
+        end = time.monotonic()
+        self.set_job_result(
+            errors=[], infos={"start": start, "end": end, "pid": os.getpid()}
+        )
+
+
+def test_parallel_jobs_execution(fastapi, jobs_as_process):
+    """
+    Verify that JobsManager runs multiple jobs in parallel and defines MAX_PARALLEL_JOBS.
+    """
+    assert JobsManagerMod.MAX_PARALLEL_JOBS == 8
+
+    job_ids = []
+    t0 = time.monotonic()
+    for _ in range(4):
+        with ParallelSleepJob(duration=1.0) as job:
+            job.run(ADMIN_USER_ID)
+            job_ids.append(job.job_id)
+
+    results = []
+    for job_id in job_ids:
+        job_info = api_wait_for_stable_job(fastapi, job_id)
+        api_check_job_ok(fastapi, job_id)
+        results.append(job_info.result)
+
+    elapsed = time.monotonic() - t0
+    assert elapsed < 3.5, f"4 x 1s jobs took {elapsed:.2f}s, expected parallel execution"
+    pids = {r["pid"] for r in results}
+    assert len(pids) == 4, f"Expected 4 distinct job PIDs, got {pids}"
+    # All 4 jobs should have overlapped in time
+    max_start = max(r["start"] for r in results)
+    min_end = min(r["end"] for r in results)
+    assert max_start < min_end, f"Jobs did not overlap in time: {results}"
+
+
+def test_parallel_jobs_limit_respected(fastapi, no_scheduler, jobs_as_process):
+    """
+    Verify that JobsManager never runs more than MAX_PARALLEL_JOBS concurrently.
+    """
+    job_ids = []
+    for _ in range(4):
+        with ParallelSleepJob(duration=0.6) as job:
+            job.run(ADMIN_USER_ID)
+            job_ids.append(job.job_id)
+
+    with patch.object(JobsManagerMod, "MAX_PARALLEL_JOBS", 2):
+        for _ in range(3):
+            with JobsManagerMod.JobsManager() as mgr:
+                mgr.run_one()
+        assert len(JobsManagerMod.JobsManager.the_runners) == 2
+
+        deadline = time.monotonic() + 15
+        while JobsManagerMod.JobsManager.the_runners and time.monotonic() < deadline:
+            time.sleep(0.1)
+            with JobsManagerMod.JobsManager() as mgr:
+                mgr.run_one()
+            assert len(JobsManagerMod.JobsManager.the_runners) <= 2
+
+        assert len(JobsManagerMod.JobsManager.the_runners) == 0
+
+    for job_id in job_ids:
+        job_info = api_wait_for_stable_job(fastapi, job_id, max_wait=5)
+        assert job_info.state == "F"
+
+
+def test_wait_runners_reaps_finished_before_head_finishes(
+    fastapi, no_scheduler, jobs_as_process
+):
+    """
+    Verify that wait_runners() reaps and reconciles a fast-exiting runner
+    without waiting for an earlier long-running runner (no head-of-line blocking).
+    """
+    import threading
+
+    with ParallelSleepJob(duration=2.5) as slow_job:
+        slow_job.run(ADMIN_USER_ID)
+        slow_id = slow_job.job_id
+
+    with JobsManagerMod.JobsManager() as mgr:
+        mgr.run_one()
+
+    # Wait for the slow job process to actually start and reach Running ('R')
+    # before launching the fast-crashing job, so it isn't still in Pending ('P')
+    # on slower CI runners when the fast job finishes.
+    start_deadline = time.monotonic() + 5.0
+    slow_state = None
+    while time.monotonic() < start_deadline:
+        rsp_slow = fastapi.get(
+            JOB_QUERY_URL.format(job_id=slow_id), headers=ADMIN_AUTH
+        )
+        slow_state = rsp_slow.json()["state"]
+        if slow_state == "R":
+            break
+        time.sleep(0.05)
+    assert slow_state == "R", f"Slow job did not enter Running state, got {slow_state}"
+
+    with HardExitJob(exit_code=42) as fast_crash_job:
+        fast_crash_job.run(ADMIN_USER_ID)
+        fast_id = fast_crash_job.job_id
+
+    with JobsManagerMod.JobsManager() as mgr:
+        mgr.run_one()
+
+    assert len(JobsManagerMod.JobsManager.the_runners) == 2
+    # Ensure the slow job is first in the_runners (head-of-line)
+    assert JobsManagerMod.JobsManager.the_runners[0].db_job.id == slow_id
+
+    wait_thread = threading.Thread(target=JobsManagerMod.JobsManager.wait_runners)
+    wait_thread.start()
+
+    try:
+        # Fast crashing job should be reaped and reconciled to Error well before the 2.5s slow job finishes
+        deadline = time.monotonic() + 2.0
+        fast_state = None
+        while time.monotonic() < deadline:
+            rsp = fastapi.get(JOB_QUERY_URL.format(job_id=fast_id), headers=ADMIN_AUTH)
+            fast_state = rsp.json()["state"]
+            if fast_state == "E":
+                break
+            time.sleep(0.05)
+
+        assert fast_state == "E", "Fast crashing runner was blocked behind slow runner"
+        # Slow job should still be running at this point
+        rsp_slow = fastapi.get(
+            JOB_QUERY_URL.format(job_id=slow_id), headers=ADMIN_AUTH
+        )
+        assert rsp_slow.json()["state"] == "R"
+    finally:
+        wait_thread.join(timeout=10)
+
+    assert not wait_thread.is_alive()
+    assert len(JobsManagerMod.JobsManager.the_runners) == 0
+    slow_info = api_wait_for_stable_job(fastapi, slow_id, max_wait=5)
+    assert slow_info.state == "F"
+
+
+def test_run_one_launches_single_job(fastapi, no_scheduler, jobs_as_process):
+    """
+    Verify that JobsManager.run_one() launches only a single job per call,
+    even when multiple pending jobs exist and more parallel slots are available.
+    """
+    job_ids = []
+    for _ in range(3):
+        with ParallelSleepJob(duration=0.5) as job:
+            job.run(ADMIN_USER_ID)
+            job_ids.append(job.job_id)
+
+    with JobsManagerMod.JobsManager() as mgr:
+        mgr.run_one()
+    assert len(JobsManagerMod.JobsManager.the_runners) == 1
+
+    with JobsManagerMod.JobsManager() as mgr:
+        mgr.run_one()
+    assert len(JobsManagerMod.JobsManager.the_runners) == 2
+
+    with JobsManagerMod.JobsManager() as mgr:
+        mgr.run_one()
+    assert len(JobsManagerMod.JobsManager.the_runners) == 3
+
+    JobsManagerMod.JobsManager.wait_runners()
+    assert len(JobsManagerMod.JobsManager.the_runners) == 0
+
+    for job_id in job_ids:
+        job_info = api_wait_for_stable_job(fastapi, job_id, max_wait=5)
+        assert job_info.state == "F"
+
+
+def test_wait_runners_with_thread_runners(fastapi, no_scheduler):
+    """
+    Verify that wait_runners() handles ThreadJobRunner instances cleanly.
+    """
+    old_runner = JobsManagerMod.JobRunner
+    JobsManagerMod.JobRunner = JobsManagerMod.ThreadJobRunner
+    try:
+        job_ids = []
+        for dur in (0.3, 0.05):
+            with ParallelSleepJob(duration=dur) as job:
+                job.run(ADMIN_USER_ID)
+                job_ids.append(job.job_id)
+
+        for _ in range(2):
+            with JobsManagerMod.JobsManager() as mgr:
+                mgr.run_one()
+
+        assert len(JobsManagerMod.JobsManager.the_runners) == 2
+        JobsManagerMod.JobsManager.wait_runners()
+        assert len(JobsManagerMod.JobsManager.the_runners) == 0
+
+        for job_id in job_ids:
+            job_info = api_wait_for_stable_job(fastapi, job_id, max_wait=5)
+            assert job_info.state == "F"
+    finally:
+        JobsManagerMod.JobRunner = old_runner
+
+
+def test_fail_running_jobs(fastapi, no_scheduler):
+    """
+    Verify that JobsManager.fail_running_jobs() sets positive-ID Running jobs
+    (respecting FILTER) to Error, leaving negative-ID, Pending, Finished,
+    and filtered jobs untouched, and that BackgroundWorker triggers it on start.
+    """
+    from API_operations.Prediction import PredictForProject
+    from API_operations.helpers.Service import Service
+    from BG_operations.BackgroundWorker import BackgroundWorker
+    from BO.Job import JobBO
+    from DB.Job import Job, DBJobStateEnum
+
+    created_ids = []
+    try:
+        with Service() as svc:
+            j_running = JobBO.create_job(ADMIN_USER_ID, ParallelSleepJob.JOB_TYPE, {})
+            j_running.state = DBJobStateEnum.Running
+            svc.session.add(j_running)
+
+            j_archived = JobBO.create_job(ADMIN_USER_ID, ParallelSleepJob.JOB_TYPE, {})
+            j_archived.state = DBJobStateEnum.Running
+            svc.session.add(j_archived)
+
+            j_pending = JobBO.create_job(ADMIN_USER_ID, ParallelSleepJob.JOB_TYPE, {})
+            j_pending.state = DBJobStateEnum.Pending
+            svc.session.add(j_pending)
+
+            j_finished = JobBO.create_job(ADMIN_USER_ID, ParallelSleepJob.JOB_TYPE, {})
+            j_finished.state = DBJobStateEnum.Finished
+            svc.session.add(j_finished)
+
+            j_filtered = JobBO.create_job(ADMIN_USER_ID, PredictForProject.JOB_TYPE, {})
+            j_filtered.state = DBJobStateEnum.Running
+            svc.session.add(j_filtered)
+
+            svc.session.flush()
+            # Negate ID to simulate an archived Running job
+            j_archived.id = -j_archived.id
+            running_id = j_running.id
+            archived_id = j_archived.id
+            pending_id = j_pending.id
+            finished_id = j_finished.id
+            filtered_id = j_filtered.id
+            created_ids = [running_id, archived_id, pending_id, finished_id, filtered_id]
+            svc.session.commit()
+
+        with JobsManagerMod.JobsManager() as mgr:
+            old_filter = JobsManagerMod.JobsManager.FILTER
+            JobsManagerMod.JobsManager.FILTER = [PredictForProject.JOB_TYPE]
+            try:
+                mgr.fail_running_jobs()
+            finally:
+                JobsManagerMod.JobsManager.FILTER = old_filter
+
+        with Service() as svc:
+            assert svc.session.get(Job, running_id).state == DBJobStateEnum.Error
+            assert svc.session.get(Job, archived_id).state == DBJobStateEnum.Running
+            assert svc.session.get(Job, pending_id).state == DBJobStateEnum.Pending
+            assert svc.session.get(Job, finished_id).state == DBJobStateEnum.Finished
+            assert svc.session.get(Job, filtered_id).state == DBJobStateEnum.Running
+
+            # Reset running_id to Running and delete pending_id so BackgroundWorker doesn't run it
+            svc.session.get(Job, running_id).state = DBJobStateEnum.Running
+            svc.session.delete(svc.session.get(Job, pending_id))
+            svc.session.commit()
+
+        # BackgroundWorker sets FILTER=[PredictForProject.JOB_TYPE] and runs fail_running_jobs() on start
+        worker = BackgroundWorker()
+        try:
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                with Service() as svc:
+                    job_row = svc.session.get(Job, running_id)
+                    if job_row is not None and job_row.state == DBJobStateEnum.Error:
+                        break
+                time.sleep(0.05)
+        finally:
+            worker.shutdown()
+
+        with Service() as svc:
+            assert svc.session.get(Job, running_id).state == DBJobStateEnum.Error
+            assert svc.session.get(Job, archived_id).state == DBJobStateEnum.Running
+            assert svc.session.get(Job, finished_id).state == DBJobStateEnum.Finished
+            assert svc.session.get(Job, filtered_id).state == DBJobStateEnum.Running
+    finally:
+        if created_ids:
+            with Service() as svc:
+                for jid in created_ids:
+                    row = svc.session.get(Job, jid)
+                    if row is not None:
+                        svc.session.delete(row)
+                svc.session.commit()

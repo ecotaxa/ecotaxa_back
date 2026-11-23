@@ -14,6 +14,7 @@ from API_models.crud import UserModelWithRights
 from API_operations.CRUD.Users import UserService, OpenIDAccountConflict
 from DB.User import UserStatus
 from helpers.AppConfig import Config
+from helpers.DevMode import is_local_https_url
 from helpers.DynamicLogs import get_logger
 from helpers.fastApiUtils import issue_access_token
 from helpers.httpexception import (
@@ -48,9 +49,7 @@ def init_openid():
         logger.info("OpenID provider NOT registered (missing config).")
         return
     # For self-signed local https in dev
-    strict_verify = (
-        False if server_metadata_url.startswith("https://localhost") else True
-    )
+    strict_verify = not is_local_https_url(server_metadata_url)
     oauth.register(
         name=THE_PROVIDER,
         client_id=client_id,

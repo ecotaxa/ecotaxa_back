@@ -162,7 +162,8 @@ from API_operations.exports.ForProject import (
 )
 from API_operations.imports.Import import FileImport
 from API_operations.imports.SimpleImport import SimpleImport
-from BG_operations.JobScheduler import JobScheduler
+from BG_operations.BackgroundWorker import BackgroundWorker
+from BG_operations.ResourceCleaner import ResourceCleaner
 from BO.Classification import HistoricalClassification, ClassifIDT
 from BO.Collection import (
     CollectionBO,
@@ -186,6 +187,8 @@ from DB.User import GuestIDT, OrganizationIDT, User, UserIDT
 from FS.Unpack import UnpackStatus
 from FS.UserFilesDir import sweep_stale_unpacks
 from helpers.AppConfig import Config
+from helpers.CustomException import ServiceUnavailableException
+from helpers.DevMode import is_dev_mode
 from helpers.DynamicLogs import get_logger, get_api_logger, MONITOR_LOG_PATH
 from helpers.fastApiUtils import (
     internal_server_error_handler,
@@ -195,7 +198,6 @@ from helpers.fastApiUtils import (
     get_optional_current_user,
     MyORJSONResponse,
     ValidityThrower,
-    regular_mem_cleanup,
 )
 from helpers.httpexception import DETAIL_UNKNOWN_ERROR
 from helpers.login import LoginService
@@ -229,7 +231,7 @@ app = FastAPI(
 init_openid()
 
 app.include_router(openid_router)
-app.include_router(openid_router, prefix="/api")
+app.include_router(openid_router, prefix="/api", include_in_schema=False)
 
 app.add_middleware(
     SessionMiddleware,
@@ -4602,7 +4604,7 @@ def get_image(
 #     return Response(sce.run(), media_type="text/plain")
 
 app.include_router(app_router)
-app.include_router(app_router, prefix="/api")
+app.include_router(app_router, prefix="/api", include_in_schema=False)
 
 
 # Instrument a bit
@@ -4640,9 +4642,8 @@ app.add_exception_handler(
 
 dump_openapi(app, __file__)
 
-# Can be overwritten for testing
-# Note: in PROD there are 16 workers, statistically the jobs will start very fast
-JOB_INTERVAL = 5
+# Can be overwritten for testing. Looks for what to do at this interval.
+CLEANUP_INTERVAL = 10
 
 
 def register_exception(app: FastAPI):
@@ -4660,6 +4661,21 @@ def register_exception(app: FastAPI):
         content = {"status_code": 10422, "message": exc_str, "data": None}
         return JSONResponse(
             content=content, status_code=status.HTTP_422_UNPROCESSABLE_CONTENT
+        )
+
+    @app.exception_handler(ServiceUnavailableException)
+    async def service_unavailable_exception_handler(
+        request: Request, exc: ServiceUnavailableException
+    ):
+        logger.error(
+            "503 %s %s | Service unavailable: %s",
+            request.method,
+            request.url.path,
+            exc.message,
+        )
+        return JSONResponse(
+            content={"detail": exc.message},
+            status_code=exc.status_code,
         )
 
 
@@ -4684,18 +4700,28 @@ async def lifespan(app: FastAPI):
     # The router for big files needs a valid USERSFILESAREA config
     big_files_router = create_big_files_router()
     app.include_router(big_files_router)
-    app.include_router(big_files_router, prefix="/api")
+    app.include_router(big_files_router, prefix="/api", include_in_schema=False)
 
-    # Clean memory every minute
-    JobScheduler.todo_on_idle = regular_mem_cleanup
-    # Don't run predictions, they are left to a specialized runner
-    JobScheduler.FILTER = [PredictForProject.JOB_TYPE]
-    JobScheduler.launch_at_interval(JOB_INTERVAL)
+    # ResourceCleaner runs on all processes for periodic idle maintenance
+    # (connection pool expiration & memory cleanup).
+    ResourceCleaner.launch_at_interval(CLEANUP_INTERVAL)
 
-    yield
+    if is_dev_mode():
+        background_worker = BackgroundWorker()
+    else:
+        pass  # Rely on worker in an external process
 
-    # Shutdown logic
-    JobScheduler.shutdown()
+    try:
+        yield
+    except Exception as e:
+        logger.error("Error during server operation: %s", str(e), exc_info=True)
+        raise
+    finally:
+        if is_dev_mode():
+            background_worker.shutdown()
+            logger.info("BackgroundWorker shutdown complete")
+        ResourceCleaner.shutdown()
+        logger.info("MaintenanceScheduler shutdown complete")
 
 
 app.router.lifespan_context = lifespan

@@ -33,3 +33,10 @@ class UnprocessableEntityException(BaseAppException):
 
     def __init__(self, message: str):
         super().__init__(message, status_code=422)
+
+
+class ServiceUnavailableException(BaseAppException):
+    """Raised when a required service or resource is unavailable"""
+
+    def __init__(self, message: str):
+        super().__init__(message, status_code=503)

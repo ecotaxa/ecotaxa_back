@@ -4,7 +4,7 @@
 #
 import logging
 import time
-from typing import ClassVar
+from typing import ClassVar, Optional
 
 import sqlalchemy
 from sqlalchemy import MetaData
@@ -12,6 +12,7 @@ from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import QueuePool
 from sqlalchemy.util.queue import Queue
 
+from helpers.CustomException import ServiceUnavailableException
 from helpers.DynamicLogs import get_logger
 
 logger = get_logger(__name__)
@@ -45,11 +46,15 @@ class TimeEvictedQueue(Queue):
 
     def put(self, item, block=True, timeout=None):
         super().put(item, block, timeout)
+        self.evict()
+
+    def evict(self) -> int:
         now = time.time()
         if now - self.last_cleanup < self.CLEAN_INTERVAL:
-            return
+            return 0
         self.last_cleanup = now
         with self.mutex:
+            ret = 0
             for a_conn in self.queue:  # type: sqlalchemy.pool.base._ConnectionRecord
                 if (
                     a_conn.dbapi_connection
@@ -58,6 +63,8 @@ class TimeEvictedQueue(Queue):
                     # Note: invalidation is logged at INFO by the pool logger,
                     # which is set to WARNING below.
                     a_conn.invalidate()
+                    ret += 1
+            return ret
 
 
 class TimeEvictedQueuePool(QueuePool):
@@ -76,6 +83,10 @@ class TimeEvictedQueuePool(QueuePool):
     # def _do_get(self):
     #     logger.info("Stats: %s", self.status())
     #     return QueuePool._do_get(self)
+
+
+class DatabaseConnectionException(ServiceUnavailableException):
+    """Raised when a database connection cannot be obtained from the pool"""
 
 
 class Connection(object):
@@ -117,7 +128,7 @@ class Connection(object):
             pool_use_lifo=True,
             # We have our own age-based eviction strategy; invalidated records stay in
             # the pool and reconnect on their next checkout.
-            pool_size=8,
+            pool_size=6,
             max_overflow=4,
             # In case something goes unexpected, user will wait for this time for a free connection (or failure)
             pool_timeout=60,
@@ -136,8 +147,7 @@ class Connection(object):
             # Default cache_size is up to 500*1.5, but we have big text in queries, e.g. all obj_field columns
         )
         self.session_factory = sessionmaker(bind=engine)
-        self._meta: MetaData = sqlalchemy.MetaData()
-        self._meta.reflect(bind=engine)
+        self._meta: Optional[MetaData] = None
         self.engine = engine
 
     def get_session(self) -> Session:
@@ -145,7 +155,20 @@ class Connection(object):
         Get a fresh or recycled session from the connection.
         """
         ret = self.session_factory()
+        # SQLAlchemy 2.0 is lazy, only feeds a real PG session when used.
+        # But it delays problems if we run out of resources.
+        try:
+            ret.connection()
+        except Exception as exc:
+            try:
+                ret.close()
+            except Exception:
+                pass
+            raise DatabaseConnectionException("Failed to get a DB connection") from exc
         return ret
+
+    def cleanup_pool(self) -> int:
+        return self.engine.pool._pool.evict()  # type: ignore
 
     def exec_outside_transaction(self, statement: str) -> None:
         """
@@ -158,6 +181,10 @@ class Connection(object):
 
     def get_metadata(self) -> MetaData:
         """
-        Get the metadata (for admin operations).
+        Get the metadata (for admin operations). Reflected on first use only, as
+        reflecting the whole schema is slow and not needed for regular serving.
         """
+        if self._meta is None:
+            self._meta = sqlalchemy.MetaData()
+            self._meta.reflect(bind=self.engine)
         return self._meta
