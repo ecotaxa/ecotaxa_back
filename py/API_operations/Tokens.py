@@ -101,8 +101,13 @@ class RefreshTokenService(Service):
         )
 
     def purge_expired(self, grace_days: int = 7) -> int:
+        return self.purge_expired_tokens(self.session, grace_days)
+
+    @staticmethod
+    def purge_expired_tokens(session: Session, grace_days: int = 7) -> int:
+        """Purge expired/old-revoked refresh tokens in the caller's session, which commits."""
         now = _now()
-        res = self.session.execute(
+        res = session.execute(
             delete(UserRefreshToken).where(
                 or_(
                     UserRefreshToken.expires_at < now,
@@ -110,7 +115,7 @@ class RefreshTokenService(Service):
                 )
             )
         )
-        self.session.commit()
+        session.commit()
         return res.rowcount  # type: ignore
 
     def _add_token(

@@ -13,7 +13,9 @@ from BO.Rights import RightsBO
 from BO.Taxonomy import TaxonomyBO
 from DB.Taxonomy import Taxonomy
 from DB.User import UserIDT
+from DB.helpers.ORM import Session
 from helpers import DateTime
+from helpers.AppConfig import Config
 from helpers.DynamicLogs import get_logger
 from providers.EcoTaxoServer import EcoTaxoServerClient
 from .helpers.Service import Service
@@ -28,10 +30,14 @@ class CentralTaxonomyService(Service):
 
     def __init__(self) -> None:
         super().__init__()
-        url = self.config.get_taxoserver_url()
-        my_id = self.config.get_taxoserver_instance_id()
-        my_key = self.config.get_taxoserver_shared_secret()
-        self.client = EcoTaxoServerClient(url, my_id, my_key)
+        self.client = self.build_client(self.config)
+
+    @staticmethod
+    def build_client(config: Config) -> EcoTaxoServerClient:
+        url = config.get_taxoserver_url()
+        my_id = config.get_taxoserver_instance_id()
+        my_key = config.get_taxoserver_shared_secret()
+        return EcoTaxoServerClient(url, my_id, my_key)
 
     def get_taxon_by_id(self, taxon_id: int) -> str:
         """Read all taxon data from EcoTaxoServer"""
@@ -69,14 +75,26 @@ class CentralTaxonomyService(Service):
         """
         Push taxa usage statistics to EcoTaxoServer.
         """
+        return self._push_stats(self.ro_session, self.session, self.client)
+
+    @staticmethod
+    def push_stats_for(ro_session: Session, session: Session, config: Config) -> Any:
+        return CentralTaxonomyService._push_stats(
+            ro_session, session, CentralTaxonomyService.build_client(config)
+        )
+
+    @staticmethod
+    def _push_stats(
+        ro_session: Session, session: Session, client: EcoTaxoServerClient
+    ) -> Any:
         # Get data for update
-        stats = TaxonomyBO.get_full_stats(self.ro_session)
+        stats = TaxonomyBO.get_full_stats(ro_session)
         # Push to central
         params = {"data": json.dumps(stats)}
-        ret = self.client.call("/setstat/", params)
+        ret = client.call("/setstat/", params)
         retstat = ret.json()
         if "msg" in retstat:
-            TaxonomyBO.update_tree_status(self.session)
+            TaxonomyBO.update_tree_status(session)
         return retstat
 
     # The columns received from EcoTaxoServer which can update the local tree
@@ -100,13 +118,25 @@ class CentralTaxonomyService(Service):
         """
         Pull taxa changes from EcoTaxoServer
         """
+        return self._pull_updates(self.session, self.client)
+
+    @staticmethod
+    def pull_updates_for(session: Session, config: Config) -> Dict[str, Any]:
+        return CentralTaxonomyService._pull_updates(
+            session, CentralTaxonomyService.build_client(config)
+        )
+
+    @classmethod
+    def _pull_updates(
+        cls, session: Session, client: EcoTaxoServerClient
+    ) -> Dict[str, Any]:
         # Get latest update date for local taxonomy
-        max_updated = TaxonomyBO.get_latest_update(self.session)
+        max_updated = TaxonomyBO.get_latest_update(session)
         if max_updated is None:
             max_updated = datetime.datetime(2000, 1, 1)
         # Ask central what changed since
         max_updated_str = max_updated.strftime("%Y-%m-%d %H:%M:%S")
-        ret = self.client.call(
+        ret = client.call(
             "/gettaxon/", {"filtertype": "since", "startdate": max_updated_str}
         )
         updates = ret.json()
@@ -133,7 +163,7 @@ class CentralTaxonomyService(Service):
             )
             must_delete = a_json_taxon["taxostatus"] == "X"
             # Read taxon from DB
-            taxon = self.session.get(Taxonomy, json_taxon_id)
+            taxon = session.get(Taxonomy, json_taxon_id)
             if taxon is not None:
                 if must_delete:
                     to_delete.append(json_taxon_id)
@@ -149,18 +179,18 @@ class CentralTaxonomyService(Service):
                 nbr_inserts += 1
                 taxon = Taxonomy()
                 taxon.id = json_taxon_id
-                self.session.add(taxon)
+                session.add(taxon)
             # We have a taxon, either brand new or already there, update it
-            for a_col in self.UpdatableCols:
+            for a_col in cls.UpdatableCols:
                 setattr(taxon, a_col, a_json_taxon[a_col])
             taxon.lastupdate_datetime = lastupdate_datetime
             # TODO: Below is mandatory as we alter trigger for fast deletion
             # But we lose, in case of failure, the facility to re-sync, which is based on last
             # updated date of taxonomy entries, nothing for deletes here.
-            self.session.commit()
+            session.commit()
         if len(to_delete) > 0:
-            TaxonomyBO.do_deletes(self.session, to_delete)
-            self.session.commit()
+            TaxonomyBO.do_deletes(session, to_delete)
+            session.commit()
 
         # if gvp('updatestat') == 'Y':
         #     msg = DoSyncStatUpdate()

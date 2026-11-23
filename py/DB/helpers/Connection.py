@@ -128,7 +128,7 @@ class Connection(object):
             pool_use_lifo=True,
             # We have our own age-based eviction strategy; invalidated records stay in
             # the pool and reconnect on their next checkout.
-            pool_size=8,
+            pool_size=6,
             max_overflow=4,
             # In case something goes unexpected, user will wait for this time for a free connection (or failure)
             pool_timeout=60,

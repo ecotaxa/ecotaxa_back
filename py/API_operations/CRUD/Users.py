@@ -17,7 +17,6 @@ from API_models.crud import (
     ResetPasswordReq,
     UserActivateReq,
 )
-
 from API_operations.Tokens import RefreshTokenService
 from BO.Classification import ClassifIDListT
 from BO.Preferences import Preferences
@@ -42,6 +41,7 @@ from DB.User import (
     UserType,
 )
 from helpers import DateTime
+from helpers.AppConfig import Config
 from helpers.DynamicLogs import get_logger
 from helpers.httpexception import (
     DETAIL_VALIDATION_NOT_ACTIVE,
@@ -62,7 +62,7 @@ from helpers.httpexception import (
     DETAIL_OPENID_ACCOUNT_BLOCKED,
     DETAIL_OPENID_ACCOUNT_NOT_ACTIVE,
 )
-from helpers.login import LoginService
+from helpers.login import PasswordHasher
 from helpers.pydantic import BaseModel, Field
 from providers.HomeCaptcha import HomeCaptcha
 from ..helpers.Service import Service
@@ -107,6 +107,7 @@ class UserService(Service):
         self.account_validation = self.config.get_account_validation() == "on"
         if self.verify_email or self.account_validation:
             self._uservalidation = UserValidation()
+        self._pw_hasher = PasswordHasher(self.config)
 
     COMMON_UPDATABLE_COLS = [
         User.email,
@@ -451,9 +452,37 @@ class UserService(Service):
         )
 
     @staticmethod
-    def _verify_and_update_password_throw(new_password: str, usr: User):
-        with LoginService() as sce:
-            verified = sce.verify_and_update_password(new_password, usr)
+    def registration_email_from_token_for(config: Config, token: str) -> str:
+        """
+        The email of an unlogged user creating an account, from the token sent by email,
+        without opening a DB session.
+        """
+        verify_email = config.get_user_email_verification() == "on"
+        account_validation = config.get_account_validation() == "on"
+        if not (verify_email or account_validation):
+            raise HTTPException(
+                status_code=422,
+                detail=[DETAIL_VALIDATION_NOT_ACTIVE],
+            )
+        uservalidation = UserValidation()
+        token_email = uservalidation.get_email_from_token(token, False)
+        token_user_id = uservalidation.get_id_from_token(token, False)
+        if token_user_id != -1 or (
+            uservalidation.get_email_from_token(
+                token, short=False, action=ActivationType.create.value
+            )
+            is None
+        ):
+            raise HTTPException(
+                status_code=422,
+                detail=[DETAIL_INVALID_PARAMETER],
+            )
+        return str(token_email)
+
+    def _verify_and_update_password_throw(self, new_password: str, usr: User):
+        verified = self._pw_hasher.verify_and_update_password(
+            new_password, usr, self.session
+        )
         if not verified:
             raise HTTPException(
                 status_code=403,
@@ -770,13 +799,13 @@ class UserService(Service):
                 )
                 setattr(user_to_update, "organization_id", org_id)
             else:
+                value: Any
                 if update_src.id == -1 and col == User.usercreationdate:
                     value = DateTime.now_time()
                 elif col == User.password:
                     value = getattr(update_src, User.password.name)
                     if value not in ("", None):
-                        with LoginService() as sce:
-                            value = sce.hash_password(value)
+                        value = self._pw_hasher.hash_password(value)
                 else:
                     value = getattr(update_src, col.name)
                 if update_src.id == -1 or value is not None:
@@ -1421,9 +1450,8 @@ class UserService(Service):
             return current_user.has_role(Role.USERS_ADMINISTRATOR)
         return is_admin
 
-    @staticmethod
     def _verify_temp_password(
-        temp_password: str, temp: Optional[TempPasswordReset]
+        self, temp_password: str, temp: Optional[TempPasswordReset]
     ) -> bool:
         """
         Returns ``True`` if the temporary password is valid for the specified user id.
@@ -1431,14 +1459,15 @@ class UserService(Service):
         """
         if temp is None:
             return False
-        with LoginService() as sce:
-            if sce.use_double_hash(temp.temp_password):
-                verified = sce.pwd_context.verify(
-                    sce.get_hmac(temp_password), temp.temp_password
-                )
-            else:
-                # Try with plaintext password.
-                verified = sce.pwd_context.verify(temp_password, temp.temp_password)
+        if self._pw_hasher.use_double_hash(temp.temp_password):
+            verified = self._pw_hasher.pwd_context.verify(
+                self._pw_hasher.get_hmac(temp_password), temp.temp_password
+            )
+        else:
+            # Try with plaintext password.
+            verified = self._pw_hasher.pwd_context.verify(
+                temp_password, temp.temp_password
+            )
         if not verified:
             raise HTTPException(
                 status_code=401,
@@ -1532,11 +1561,10 @@ class UserService(Service):
             if user_ask_reset is not None:
                 user_id = user_ask_reset.id
                 temp_password = uuid4().hex
-                with LoginService() as sce:
-                    hash_temp_password = sce.hash_password(temp_password)
-                    temp_rs: Optional[TempPasswordReset] = self.session.get(
-                        TempPasswordReset, user_id
-                    )
+                hash_temp_password = self._pw_hasher.hash_password(temp_password)
+                temp_rs: Optional[TempPasswordReset] = self.session.get(
+                    TempPasswordReset, user_id
+                )
                 if temp_rs is None:
                     temp_rs = TempPasswordReset()
                     temp_rs.user_id = user_id

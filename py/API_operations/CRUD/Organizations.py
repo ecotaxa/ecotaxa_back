@@ -27,9 +27,9 @@ from helpers.httpexception import (
     DETAIL_CANT_CHECK_VALIDITY,
 )
 from providers.EDMO import EDMOFetcher, EDMOOrganization
+from .Users import UserService
 from ..helpers.Service import Service
 from ..helpers.UserValidation import ActivationType
-from .Users import UserService
 
 logger = get_logger(__name__)
 
@@ -199,15 +199,13 @@ class OrganizationService(Service):
             self._is_registering_throw(token)
         return EDMOFetcher.search(name_part)
 
-    @staticmethod
-    def _is_registering_throw(token: Optional[str]) -> str:
+    def _is_registering_throw(self, token: Optional[str]) -> str:
         """
         check if unlogged user is creating an account, with the token received by email, return the email
         """
         if not token:
             raise HTTPException(status_code=403, detail=[NOT_AUTHORIZED])
-        with UserService() as sce:
-            return sce.registration_email_from_token(token)
+        return UserService.registration_email_from_token_for(self.config, token)
 
     def _unused_orgs_of(self, creator_email: str) -> List[Organization]:
         """

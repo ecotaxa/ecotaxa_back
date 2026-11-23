@@ -34,8 +34,8 @@ from DB.helpers import Result
 from DB.helpers import Session
 from DB.helpers.Direct import text
 from FS.TempDirForTasks import TempDirForTasks
-from FS.Uploads import CLAIM_SUFFIX, get_tus_files_dir, get_tus_info_dir
 from FS.Unpack import PROGRESS_PREFIX, UnpackStatus, active_stagings
+from FS.Uploads import CLAIM_SUFFIX, get_tus_files_dir, get_tus_info_dir
 from FS.UserFilesDir import UserFilesDirectory, get_unpack_registry_dir
 from helpers.DynamicLogs import get_logger, LogsSwitcher
 
@@ -141,8 +141,7 @@ class NightlyJobService(JobServiceBase):
         """
         self.update_progress(start, "Pulling taxonomy updates from central")
         logger.info("Starting pull of taxonomy updates from central")
-        with CentralTaxonomyService() as sce:
-            ret = sce.pull_updates()
+        ret = CentralTaxonomyService.pull_updates_for(self.session, self.config)
         if ret.get("error"):
             logger.error(
                 "Pull of taxonomy updates from central failed: %s", ret["error"]
@@ -201,8 +200,9 @@ class NightlyJobService(JobServiceBase):
         """
         self.update_progress(start, "Pushing taxonomy stats to central")
         logger.info("Starting push of taxonomy stats to central")
-        with CentralTaxonomyService() as sce:
-            ret = sce.push_stats()
+        ret = CentralTaxonomyService.push_stats_for(
+            self.ro_session, self.session, self.config
+        )
         logger.info("Push of taxonomy stats to central done: %s", ret)
 
     def clean_old_jobs(self, start: int) -> None:
@@ -247,8 +247,7 @@ class NightlyJobService(JobServiceBase):
 
     def clean_refresh_tokens(self, start: int) -> None:
         self.update_progress(start, "Cleaning expired refresh tokens")
-        with RefreshTokenService() as sce:
-            nb_deleted = sce.purge_expired()
+        nb_deleted = RefreshTokenService.purge_expired_tokens(self.session)
         logger.info("Cleaned %d refresh tokens", nb_deleted)
 
     def clean_old_prediction_histo(self, start: int) -> None:
