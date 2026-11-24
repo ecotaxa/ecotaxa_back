@@ -10,6 +10,7 @@ import json
 import os
 import re
 import shutil
+import struct
 import tarfile
 import tempfile
 import time
@@ -20,10 +21,12 @@ from functools import partial
 from pathlib import Path
 from typing import (
     Any,
+    BinaryIO,
     Callable,
     Dict,
     Generator,
     IO,
+    Iterable,
     List,
     Literal,
     Optional,
@@ -32,6 +35,7 @@ from typing import (
     Union,
 )
 
+import stream_unzip
 from magic_rs import from_bytes
 
 from API_models.constants import DEFAULT_ARCHIVES, DEFAULT_MIMETYPES
@@ -69,6 +73,7 @@ TEXT_EXTENSIONS = {"csv", "txt", "tsv"}
 # What a broken archive, sent by the user, raises while being read
 CORRUPT_ARCHIVE_EXCEPTIONS = (
     zipfile.BadZipFile,
+    stream_unzip.UnzipError,
     zlib.error,
     tarfile.TarError,
     gzip.BadGzipFile,
@@ -220,60 +225,142 @@ class _NewEntryReporter(object):
             self.on_new_entry(path, header, is_file)
 
 
-class FilteredZipFile(_NewEntryReporter, zipfile.ZipFile):
+class FilteredZipFile(_NewEntryReporter):
     """
-    Subclass of ZipFile that reports each extracted member to an on_new_entry
-    callback, along with its first bytes.
+    Zip archive reader that scans the central directory without keeping members
+    in memory and extracts members in a single streaming pass via stream-unzip,
+    reporting each extracted member to an on_new_entry callback with its first bytes.
     """
 
     def __init__(
         self,
-        *args: Any,
-        **kwargs: Any,
+        file: Union[str, os.PathLike[str]],
+        mode: str = "r",
+        allowZip64: bool = True,
     ) -> None:
-        super().__init__(*args, **kwargs)
-        self._peek: _HeaderPeekStream = _HeaderPeekStream(None)
+        if mode != "r":
+            raise ValueError(f"Unsupported mode: {mode}")
+        self._file_path = Path(file)
+        self._fp: Optional[BinaryIO] = None
 
-    def open(self, name, mode="r", pwd=None, *, force_zip64=False):
-        raw = super().open(name, mode=mode, pwd=pwd, force_zip64=force_zip64)
-        if mode == "r":
-            self._peek.reset(raw)
-            return self._peek
-        return raw
+    def __enter__(self) -> "FilteredZipFile":
+        self._fp = open(self._file_path, "rb")
+        return self
 
-    def _extract_member(  # type: ignore[misc]
-        self,
-        member: Union[str, zipfile.ZipInfo],  # In our case it's always str
-        targetpath: str,
-        pwd: Optional[bytes] = None,
-    ) -> str:
-        extracted_str: str = super()._extract_member(member, targetpath, pwd)  # type: ignore[misc]
-        extracted = Path(extracted_str)
-        extracted_is_dir = extracted.is_dir()
-        if extracted_is_dir:
-            header = b""
-        else:
-            header, self._peek.header = self._peek.header, b""
-        self._notify_new_entry(extracted, header, not extracted_is_dir)
-        return extracted_str
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        self.close()
+
+    def close(self) -> None:
+        if self._fp is not None:
+            self._fp.close()
+            self._fp = None
+
+    def scan_entries(self) -> Generator[Tuple[str, int, bool], None, None]:
+        """
+        Yield `(name, file_size, is_dir)` for each member in the central directory
+        without retaining any member in memory.
+        """
+        fp = self._fp
+        assert fp is not None
+        try:
+            endrec = zipfile._EndRecData(fp)  # type: ignore[attr-defined]
+        except OSError as e:
+            raise zipfile.BadZipFile("File is not a zip file") from e
+        if not endrec:
+            raise zipfile.BadZipFile("File is not a zip file")
+        offset_cd, concat = zipfile._handle_prepended_data(endrec)  # type: ignore[attr-defined]
+        start_dir = offset_cd + concat
+        if start_dir < 0:
+            raise zipfile.BadZipFile("Bad offset for central directory")
+        cd_size = endrec[zipfile._ECD_SIZE]  # type: ignore[attr-defined]
+
+        size_central_dir = zipfile.sizeCentralDir  # type: ignore[attr-defined]
+        fp.seek(start_dir)
+        total = 0
+        while total < cd_size:
+            raw_header = fp.read(size_central_dir)
+            if len(raw_header) != size_central_dir:
+                raise zipfile.BadZipFile("Truncated central directory")
+            centdir = struct.unpack(zipfile.structCentralDir, raw_header)  # type: ignore[attr-defined]
+            if centdir[zipfile._CD_SIGNATURE] != zipfile.stringCentralDir:  # type: ignore[attr-defined]
+                raise zipfile.BadZipFile("Bad magic number for central directory")
+            name_len = centdir[zipfile._CD_FILENAME_LENGTH]  # type: ignore[attr-defined]
+            extra_len = centdir[zipfile._CD_EXTRA_FIELD_LENGTH]  # type: ignore[attr-defined]
+            comment_len = centdir[zipfile._CD_COMMENT_LENGTH]  # type: ignore[attr-defined]
+            filename = fp.read(name_len)
+            raw_name_crc = zlib.crc32(filename)
+            flags = centdir[zipfile._CD_FLAG_BITS]  # type: ignore[attr-defined]
+            if flags & zipfile._MASK_UTF_FILENAME:  # type: ignore[attr-defined]
+                name = filename.decode("utf-8")
+            else:
+                name = filename.decode("cp437")
+            info = zipfile.ZipInfo(name)
+            info.extra = fp.read(extra_len)
+            fp.seek(comment_len, os.SEEK_CUR)
+            info.header_offset = centdir[zipfile._CD_LOCAL_HEADER_OFFSET]  # type: ignore[attr-defined]
+            info.compress_size = centdir[zipfile._CD_COMPRESSED_SIZE]  # type: ignore[attr-defined]
+            info.file_size = centdir[zipfile._CD_UNCOMPRESSED_SIZE]  # type: ignore[attr-defined]
+            info._decodeExtra(raw_name_crc)  # type: ignore[attr-defined]
+
+            yield info.filename, info.file_size, info.is_dir()
+
+            total += size_central_dir + name_len + extra_len + comment_len
 
     @staticmethod
-    def get_unique_root(info_list) -> Optional[str]:
-        ret: Optional[str] = None
-        for info in info_list:
-            name = info.filename
-            if name.startswith("__MACOSX/"):
+    def _decode_name(raw_name: bytes) -> str:
+        try:
+            return raw_name.decode("utf-8")
+        except UnicodeDecodeError:
+            return raw_name.decode("cp437")
+
+    @staticmethod
+    def _safe_rel_path(name: str) -> Optional[Path]:
+        if "\x00" in name:
+            raise stream_unzip.DataError(f"Null byte in archive member name: {name!r}")
+        normalized = name.replace("\\", "/")
+        if len(normalized) >= 2 and normalized[1] == ":" and normalized[0].isalpha():
+            normalized = normalized[2:]
+        parts = [p for p in normalized.split("/") if p not in ("", ".")]
+        if ".." in parts:
+            raise UnprocessableEntityException(
+                f"{DETAIL_ARCHIVE_MEMBER_REFUSED}: {name}"
+            )
+        if not parts:
+            return None
+        return Path(*parts)
+
+    def extractall(self, path: str) -> None:
+        assert self._fp is not None
+        target_dir = Path(path)
+        target_dir.mkdir(parents=True, exist_ok=True)
+        self._fp.seek(0)
+        for file_name_bytes, _file_size, unzipped_chunks in stream_unzip.stream_unzip(
+            iter(partial(self._fp.read, BUFFER_SIZE), b"")
+        ):
+            name = self._decode_name(file_name_bytes)
+            is_dir = name.endswith("/") or name.endswith("\\")
+            rel_path = self._safe_rel_path(name)
+            if rel_path is None:
+                for _ in unzipped_chunks:
+                    pass
                 continue
-            top, sep, _ = name.partition("/")
-            if not top or top == ".DS_Store":
-                continue
-            if not sep and not info.is_dir():
-                return None  # File at root level
-            if ret is None:
-                ret = top
-            elif top != ret:
-                return None
-        return ret
+            dest = target_dir / rel_path
+            if is_dir:
+                for _ in unzipped_chunks:
+                    pass
+                dest.mkdir(parents=True, exist_ok=True)
+                self._notify_new_entry(dest, b"", False)
+            else:
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                header = b""
+                with open(dest, "wb") as f_out:
+                    for chunk in unzipped_chunks:
+                        if not chunk:
+                            continue
+                        if len(header) < 512:
+                            header += chunk[: 512 - len(header)]
+                        f_out.write(chunk)
+                self._notify_new_entry(dest, header, True)
 
 
 class FilteredTarFile(_NewEntryReporter, tarfile.TarFile):
@@ -287,6 +374,7 @@ class FilteredTarFile(_NewEntryReporter, tarfile.TarFile):
         *args: Any,
         **kwargs: Any,
     ) -> None:
+        kwargs.setdefault("stream", True)
         super().__init__(*args, **kwargs)
         self._peek: _HeaderPeekStream = _HeaderPeekStream(None)
 
@@ -305,23 +393,15 @@ class FilteredTarFile(_NewEntryReporter, tarfile.TarFile):
         finally:
             self.fileobj = orig_fileobj
 
-    @staticmethod
-    def get_unique_root(member_list) -> Optional[str]:
-        ret: Optional[str] = None
-        for member in member_list:
-            name = member.name.removeprefix("./")
-            if not name:
-                continue
-            top, sep, _ = name.partition("/")
-            if not top or top == ".DS_Store" or top.startswith("._"):
-                continue
-            if not sep and not member.isdir():
-                return None  # File at root level
-            if ret is None:
-                ret = top
-            elif top != ret:
-                return None
-        return ret
+    def scan_entries(self) -> Generator[Tuple[str, int, bool], None, None]:
+        """
+        Yield `(name, size, is_dir)` for each member in one streaming pass
+        without retaining any member in memory.
+        """
+        assert self.name is not None
+        with FilteredTarFile.open(self.name, "r|*", bufsize=BUFFER_SIZE) as tar:
+            for member in tar:
+                yield member.name, member.size, member.isdir()
 
 
 class UnpackStatus(object):
@@ -422,6 +502,41 @@ class Unpacker(object):
         self.status_reporter: Optional[Callable[[Dict[str, Any]], None]] = None
         self._status_fields: Dict[str, Any] = {}
 
+    @staticmethod
+    def _inspect_entries(
+        entries: Iterable[Tuple[str, int, bool]],
+    ) -> Tuple[int, int, Optional[str]]:
+        """
+        Count the entries, sum their declared sizes, and find their unique root
+        directory if all entries live under a single top-level folder.
+        """
+        nb_entries = 0
+        declared_size = 0
+        root: Optional[str] = None
+        several_roots = False
+        for raw_name, size, is_dir in entries:
+            nb_entries += 1
+            declared_size += size
+            if not several_roots:
+                name = raw_name.removeprefix("./")
+                if not name:
+                    continue
+                top, sep, _ = name.partition("/")
+                if (
+                    not top
+                    or top == "__MACOSX"
+                    or top == ".DS_Store"
+                    or top.startswith("._")
+                ):
+                    continue
+                if not sep and not is_dir:
+                    several_roots = True  # File at root level
+                elif root is None:
+                    root = top
+                elif top != root:
+                    several_roots = True
+        return nb_entries, declared_size, None if several_roots else root
+
     def extract_archive(
         self, archive: FilteredZipFile | FilteredTarFile, filepath: str, path: Path
     ) -> None:
@@ -430,21 +545,14 @@ class Unpacker(object):
         handling subfolder placement, recursive decompression of nested archives,
         and filtering out unaccepted file formats.
 
-        :param archive: An open ZipFile or TarFile archive instance.
+        :param archive: An open FilteredZipFile or FilteredTarFile archive instance.
         :param filepath: Full path of the archive file.
         :param path: Target directory Path where archive contents are to be extracted.
         """
-        # Retrieve member file names and declared size in a single pass
-        if isinstance(archive, zipfile.ZipFile):
-            info_list = archive.infolist()
-            declared_size = sum(info.file_size for info in info_list)
-            nb_entries = len(info_list)
-            get_unique_root = partial(FilteredZipFile.get_unique_root, info_list)
-        else:
-            member_list = archive.getmembers()
-            declared_size = sum(member.size for member in member_list)
-            nb_entries = len(member_list)
-            get_unique_root = partial(FilteredTarFile.get_unique_root, member_list)
+        # Retrieve member count, declared size and unique root folder in a single pass
+        nb_entries, declared_size, unique_root = self._inspect_entries(
+            archive.scan_entries()
+        )
 
         if nb_entries == 0:
             raise EmptyArchiveException()
@@ -461,7 +569,7 @@ class Unpacker(object):
         # are already in such a folder. So nothing goes outside that folder.
         if own_name == "temp" and archive_path.parent == path:
             pass  # Zipfile sent by client, its content goes directly into path
-        elif get_unique_root() == own_name:
+        elif unique_root == own_name:
             path = archive_path.parent  # Already wrapped
         else:
             path = archive_path.parent / own_name
@@ -471,7 +579,7 @@ class Unpacker(object):
         # what depends on the entry's format is decided there (keep, refuse, or unpack later).
         embedded: List[Tuple[Path, ArchiveKind]] = []
         archive.on_new_entry = partial(self._on_new_entry, embedded)
-        if isinstance(archive, zipfile.ZipFile):
+        if isinstance(archive, FilteredZipFile):
             archive.extractall(path.as_posix())
         else:
             # No absolute paths, no escape out of path, no links outside, no devices
@@ -607,7 +715,8 @@ class Unpacker(object):
         try:
             with FilteredTarFile.open(
                 input_path,
-                "r",
+                "r|*",
+                bufsize=BUFFER_SIZE,
             ) as archive:
                 self.extract_archive(archive, str(input_path), path)
         except Exception as e:

@@ -5,7 +5,6 @@
 import configparser
 import random
 import shutil
-import zipfile
 from pathlib import Path
 # noinspection PyPackageRequirements
 from typing import Callable, List, Dict, Tuple, Generator
@@ -24,6 +23,7 @@ from DB.Project import ProjectIDT, Project
 from DB.Sample import Sample
 from DB.helpers import Session
 from DB.helpers.Caches import RanksPerObject
+from FS.Unpack import FilteredZipFile
 from helpers.DynamicLogs import get_logger
 from helpers.Timer import CodeTimer
 
@@ -403,7 +403,7 @@ class UVP6Bundle(InBundle):
                 shutil.rmtree(sample_dir.as_posix())
         if not sample_dir.exists():
             sample_dir.mkdir()
-            with zipfile.ZipFile(path.as_posix(), "r") as z:
+            with FilteredZipFile(path.as_posix(), "r") as z:
                 z.extractall(sample_dir.as_posix())
         super().__init__(sample_dir.as_posix(), user_loc, temp_dir)
 

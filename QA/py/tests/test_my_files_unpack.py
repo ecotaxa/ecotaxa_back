@@ -67,6 +67,53 @@ def test_zip_nested(tmp_path):
     ]
 
 
+def test_zip_members_not_kept_in_memory(tmp_path):
+    """
+    A backup export can have millions of members. Loading them all, as ZipFile does,
+    costs several GB and the worker is OOM-killed, so members are streamed instead
+    via stream-unzip.
+    """
+    root, parent = _setup(tmp_path)
+    members = {f"name/d{i // 50:02d}/f{i}.tsv": TSV for i in range(200)}
+    archive = _upload(parent, "name.zip", zip_bytes(members))
+    make_user_dir(root).unpacker.dispatch_unpack(archive, parent)
+    assert (parent / "name" / "d00" / "f0.tsv").read_bytes() == TSV
+    assert len(list((parent / "name").rglob("*.tsv"))) == len(members)
+
+
+def test_tar_members_not_kept_in_memory(tmp_path, monkeypatch):
+    """
+    A backup export can have millions of members. Loading them all via
+    TarFile.getmembers() costs several GB, so tar archives are streamed
+    with stream=True without retaining TarInfo objects in TarFile.members.
+    """
+    root, parent = _setup(tmp_path)
+    members = {f"name/d{i // 50:02d}/f{i}.tsv": TSV for i in range(200)}
+    archive = _upload(parent, "name.tgz", tar_bytes(members, mode="w:gz"))
+
+    observed_members_len = []
+    observed_stream = []
+    orig_extractall = tarfile.TarFile.extractall
+
+    def spy_extractall(self, *args, **kwargs):
+        res = orig_extractall(self, *args, **kwargs)
+        observed_stream.append(self.stream)
+        observed_members_len.append(len(self.members))
+        return res
+
+    def forbid_getmembers(self, *args, **kwargs):
+        raise AssertionError("getmembers() must not be called when streaming tar")
+
+    monkeypatch.setattr(tarfile.TarFile, "extractall", spy_extractall)
+    monkeypatch.setattr(tarfile.TarFile, "getmembers", forbid_getmembers)
+
+    make_user_dir(root).unpacker.dispatch_unpack(archive, parent)
+    assert observed_stream == [True]
+    assert observed_members_len == [0]
+    assert (parent / "name" / "d00" / "f0.tsv").read_bytes() == TSV
+    assert len(list((parent / "name").rglob("*.tsv"))) == len(members)
+
+
 def test_zip_unaccepted_member_removed(tmp_path):
     root, parent = _setup(tmp_path)
     archive = _upload(
@@ -340,6 +387,7 @@ def test_dir_over_file_collision(tmp_path):
 # Plain (not archive) uploads: same type check as for archive members.
 #
 import gzip
+import stream_unzip
 
 
 @pytest.mark.parametrize("name", ["ecotaxa_a.tsv", "b.csv", "c.txt", "d.png"])
@@ -484,13 +532,13 @@ _RANDOM = os.urandom(2000) + TSV * 200
             _deflated_zip(TSV * 200)[:45]
             + b"\xff" * 20
             + _deflated_zip(TSV * 200)[65:],
-            zlib.error,
+            stream_unzip.DeflateError,
         ),
         ("name.tar", _tar("w", TSV * 200)[:700], tarfile.ReadError),
         (
             "name.tar.gz",
             _tar("w:gz", _RANDOM)[: len(_tar("w:gz", _RANDOM)) // 2],
-            EOFError,
+            tarfile.ReadError,
         ),
         ("a.tsv.gz", gzip.compress(TSV * 200)[:20], EOFError),
     ],
@@ -977,3 +1025,15 @@ def test_detect_archive_type_with_and_without_header(tmp_path):
     tsv_head = tsv_file.read_bytes()[:512]
     assert Unpacker.detect_archive_type(tsv_file) is None
     assert Unpacker.detect_archive_type(tsv_file, header=tsv_head) is None
+
+
+def test_refused_zip_member_traversal(tmp_path):
+    root, parent = _setup(tmp_path)
+    archive = _upload(
+        parent, "name.zip", zip_bytes({"a.tsv": TSV, "../escape.tsv": TSV})
+    )
+    with pytest.raises(UnprocessableEntityException) as exc:
+        make_user_dir(root).unpacker.dispatch_unpack(archive, parent)
+    assert exc.value.message.startswith(DETAIL_ARCHIVE_MEMBER_REFUSED)
+    _nothing_left(parent)
+    assert list(tmp_path.rglob("escape.tsv")) == []
