@@ -6,15 +6,7 @@ import signal
 from threading import Event
 from typing import Any
 
-# Ensure all JobServiceBase subclasses are registered for JobsManager
-# TODO it's ugly
-import API_operations.Prediction  # noqa: F401
-import API_operations.Subset  # noqa: F401
-import API_operations.admin.NightlyJob  # noqa: F401
-import API_operations.exports.DarwinCore  # noqa: F401
-import API_operations.exports.ForProject  # noqa: F401
-import API_operations.imports.Import  # noqa: F401
-import API_operations.imports.SimpleImport  # noqa: F401
+from BG_operations import AllJobServices  # noqa: F401
 from BG_operations.BackgroundWorker import BackgroundWorker
 from helpers.DynamicLogs import get_logger
 
