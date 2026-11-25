@@ -11,6 +11,7 @@ their module is enough. Keep this list in sync when adding a new job type in a n
 
 import API_operations.Prediction  # noqa: F401
 import API_operations.Subset  # noqa: F401
+import API_operations.admin.FilesCleanup  # noqa: F401
 import API_operations.admin.NightlyJob  # noqa: F401
 import API_operations.exports.DarwinCore  # noqa: F401
 import API_operations.exports.ForProject  # noqa: F401

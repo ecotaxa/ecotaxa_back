@@ -151,6 +151,7 @@ from API_operations.TaxonomyService import TaxonomyService
 from API_operations.Tokens import RefreshTokenService
 from API_operations.UserFilesFolder import UserFilesFolderService
 from API_operations.admin.Database import DatabaseService
+from API_operations.admin.FilesCleanup import FilesCleanupService
 from API_operations.admin.ImageManager import ImageManagerService
 from API_operations.admin.NightlyJob import NightlyJobService
 from API_operations.exports.DarwinCore import DarwinCoreExport
@@ -3912,6 +3913,24 @@ def nightly_maintenance(current_user: int = Depends(get_current_user)) -> int:
     with NightlyJobService() as sce:
         with RightsThrower():
             ret: int = sce.run(current_user)
+    return ret
+
+
+@app_router.get(
+    "/admin/files_cleanup",
+    operation_id="files_cleanup",
+    tags=["WIP"],
+    include_in_schema=False,
+    response_model=int,
+)
+def files_cleanup(
+    older_than: Optional[int] = Query(default=None, ge=1),
+    current_user: int = Depends(get_current_user),
+) -> int:
+    """Clean up old user files and temporary uploads."""
+    with FilesCleanupService() as sce:
+        with RightsThrower():
+            ret: int = sce.run(current_user, older_than)
     return ret
 
 

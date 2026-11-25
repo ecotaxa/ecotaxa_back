@@ -5,13 +5,9 @@
 # Maintenance operations on the DB.
 #
 import datetime
-import os
-import shutil
 import time
 from dataclasses import dataclass
-from glob import glob
-from pathlib import Path
-from typing import Tuple, Any, List, Optional
+from typing import Tuple, Any, List
 
 from sqlalchemy import select, delete
 
@@ -23,7 +19,7 @@ from BO.Project import ProjectBO
 from BO.Rights import RightsBO
 from BO.Taxonomy import TaxonomyBO
 from DB.Acquisition import ACQ_PRJ_OFFSET
-from DB.Job import JobIDT, Job
+from DB.Job import JobIDT, Job, DBJobStateEnum
 from DB.Object import OBJ_PRJ_OFFSET, ObjectHeader, PREDICTED_CLASSIF_QUAL
 from DB.Prediction import PredictionHisto, Prediction
 from DB.Project import Project, ProjectIDListT
@@ -34,21 +30,9 @@ from DB.helpers import Result
 from DB.helpers import Session
 from DB.helpers.Direct import text
 from FS.TempDirForTasks import TempDirForTasks
-from FS.Unpack import PROGRESS_PREFIX, UnpackStatus, active_stagings
-from FS.Uploads import CLAIM_SUFFIX, get_tus_files_dir, get_tus_info_dir
-from FS.UserFilesDir import UserFilesDirectory, get_unpack_registry_dir
 from helpers.DynamicLogs import get_logger, LogsSwitcher
 
 logger = get_logger(__name__)
-
-# A TUS upload, or its metadata, untouched for this long (s) can't be retried by the client
-TUS_RETRY_AGE = 24 * 3600
-# TUS upload metadata files, and their temporary version while written
-INFO_SUFFIXES = (".info", ".info.tmp")
-# The daily log of the users files removals, after its date
-MAINTENANCE_LOG_SUFFIX = "-users_files_maintenance.log"
-# An archive extraction folder not registered, untouched for this long (s), is removed
-STAGING_ORPHAN_AGE = 24 * 3600
 
 
 class NightlyJobService(JobServiceBase):
@@ -64,7 +48,6 @@ class NightlyJobService(JobServiceBase):
     def __init__(self) -> None:
         super().__init__()
         self.curr = 0
-        self.trashdirpattern = ""
 
     def init_args(self, args: ArgsDict) -> ArgsDict:
         """No job param"""
@@ -99,6 +82,7 @@ class NightlyJobService(JobServiceBase):
     def do_start(self) -> None:
         logger.info("Job starting")
         self.update_progress(0, "Starting")
+        files_cleanup_job_id = self._enqueue_files_cleanup()
         all_prj_ids = [
             proj_id for proj_id in self.ro_session.scalars(select(Project.projid))
         ]
@@ -115,8 +99,8 @@ class NightlyJobService(JobServiceBase):
         self.clean_old_prediction_histo(78)
         self.clean_aborted_trainings(80)
         self.clean_refresh_tokens(81)
-        const_status = self.check_consistency(82, 92)
-        self.users_files_maintenance(92, 97)
+        const_status = self.check_consistency(82, 97)
+        self._wait_for_files_cleanup(files_cleanup_job_id)
         if not const_status:
             self.set_job_result(
                 errors=["See log for consistency problems"], infos={"status": "error"}
@@ -125,6 +109,59 @@ class NightlyJobService(JobServiceBase):
             self.set_job_result(errors=[], infos={"status": "ok"})
         self.update_progress(100, "Done")
         logger.info("Job done")
+
+    def _enqueue_files_cleanup(self) -> JobIDT:
+        """Insert a FilesCleanup job directly so the scheduler can run it concurrently."""
+        cleanup_job = JobBO.create_job(self._get_owner_id(), "FilesCleanup", {})
+        self.session.add(cleanup_job)
+        self.session.flush()
+        cleanup_job_id = cleanup_job.id
+        self.session.commit()
+        logger.info("Queued FilesCleanup job #%d", cleanup_job_id)
+        return cleanup_job_id
+
+    def _wait_for_files_cleanup(self, cleanup_job_id: JobIDT) -> None:
+        """Wait for the queued FilesCleanup job to reach a terminal state."""
+        self.update_progress(97, f"Waiting for FilesCleanup job #{cleanup_job_id}")
+        deadline = time.monotonic() + 5 * 60
+        while True:
+            if time.monotonic() >= deadline:
+                logger.warning(
+                    "Timed out waiting for FilesCleanup job #%d after 5 minutes",
+                    cleanup_job_id,
+                )
+                return
+            cleanup_job = self.ro_session.execute(
+                select(Job.state, Job.progress_msg).where(Job.id == cleanup_job_id)
+            ).one_or_none()
+            self.ro_session.commit()
+            if time.monotonic() >= deadline:
+                logger.warning(
+                    "Timed out waiting for FilesCleanup job #%d after 5 minutes",
+                    cleanup_job_id,
+                )
+                return
+            if cleanup_job is None:
+                logger.warning(
+                    f"FilesCleanup job #{cleanup_job_id} disappeared before completion"
+                )
+                return
+            state, progress_msg = cleanup_job
+            if state == DBJobStateEnum.Finished:
+                logger.info("FilesCleanup job #%d completed", cleanup_job_id)
+                return
+            if state == DBJobStateEnum.Error:
+                logger.warning(
+                    f"FilesCleanup job #{cleanup_job_id} failed: {progress_msg}"
+                )
+                return
+            if state not in (DBJobStateEnum.Pending, DBJobStateEnum.Running):
+                logger.warning(
+                    f"FilesCleanup job #{cleanup_job_id} reached unexpected state "
+                    f"{state}"
+                )
+                return
+            time.sleep(min(1, max(0, deadline - time.monotonic())))
 
     def stats_progress_update(
         self, stage: str, start: int, chunk: ProjectIDListT, total: int, end: int
@@ -415,287 +452,6 @@ class NightlyJobService(JobServiceBase):
                 self.session.commit()
                 logger.info(" project %s has no more empty samples", str(prj))
         self.update_progress(end, "Empty samples deleted")
-
-    @staticmethod
-    def _delete_definitely(
-        loggerfilename: str, item: Path, tf: int, prefix: Optional[str] = None
-    ) -> bool:
-        """Remove item, and log it in loggerfilename. Return whether it was removed."""
-        if prefix is None:
-            name = str(item)
-        else:
-            name = str(item).replace(prefix, "")
-        if item.is_dir():
-            try:
-                shutil.rmtree(item)
-                with open(loggerfilename, "a", encoding="utf-8") as loggerfile:
-                    loggerfile.write(
-                        "Directory '%s' removed '%s'\n" % (name, time.ctime(tf))
-                    )
-            except Exception as e:
-                logger.error("Error deleting directory '%s' '%s' ", name, str(e))
-                return False
-        else:
-            try:
-                os.remove(item)
-                with open(loggerfilename, "a", encoding="utf-8") as loggerfile:
-                    loggerfile.write(
-                        "File '%s' removed '%s'\n" % (name, time.ctime(tf))
-                    )
-            except Exception as e:
-                logger.error("Error deleting file '%s' '%s' ", name, str(e))
-                return False
-        return True
-
-    def users_files_maintenance(self, start: int, end: int) -> None:
-        """
-        delete users directories older than TIME_TO_LIVE
-        """
-        logger.info("Start Users Files Maintenance")
-        self.update_progress(start, "User Files Maintenance")
-        timelive = self.config.get_time_to_live()
-        if int(timelive) >= 1:
-            # 10 times less for trash to live
-            trashlive = int(timelive) / 10
-            if trashlive < 1:
-                trashlive = 1
-        else:
-            # keep at least one day
-            return None
-        time_to_live = int(timelive) * 3600 * 24  # in seconds
-        trash_to_live = trashlive * 3600 * 24  # in seconds
-        usersfiles = self.config.get_users_files_dir()
-        users_files_dir = usersfiles
-        # loggerfilename - file in root users myfiles where deletions are logged ( too long for the main job log)
-        today = datetime.datetime.now()
-        loggerfilename = "%s/%s%s" % (
-            users_files_dir,
-            today.strftime("%Y-%m-%d"),
-            MAINTENANCE_LOG_SUFFIX,
-        )
-        logger.info("Starting removing directories older than %s day(s)", str(timelive))
-        logger.info(
-            "Log file: %s",
-            today.strftime("%Y-%m-%d") + MAINTENANCE_LOG_SUFFIX,
-        )
-        now = time.time()
-        old = now - time_to_live
-        old = int(old)
-        trashtime = now - trash_to_live
-        td = time.ctime(old)
-        logger.info("Find and remove directories created before %s", str(td))
-        userdirpattern = UserFilesDirectory.USER_DIR_PATTERN.replace("%d", "")
-        self.trashdirpattern = UserFilesDirectory.TRASH_DIRECTORY.replace("%d", "")
-        # remove trashed dir and files older than trash_to_live
-        nb_trash, nb_hidden_trash = 0, 0
-        for entry in glob(
-            users_files_dir
-            + os.path.sep
-            + userdirpattern
-            + "*"
-            + os.path.sep
-            + self.trashdirpattern
-            + "*"
-            + os.path.sep
-            + "*",
-            include_hidden=True,  # Trashed dot files too, nobody else removes them
-        ):
-            item = Path(entry)
-            tf = int(os.path.getctime(item))
-            if tf < trashtime:
-                if self._delete_definitely(loggerfilename, item, tf, users_files_dir):
-                    nb_trash += 1
-                    if item.name.startswith("."):
-                        nb_hidden_trash += 1
-        logger.info(
-            "Removed %d trash entries older than %s day(s), %d of them hidden",
-            nb_trash,
-            str(trashlive),
-            nb_hidden_trash,
-        )
-        # remove old files in TUS uploads directory
-        extracted_old = int(now - TUS_RETRY_AGE)
-        nb_tus_old, nb_tus_extracted = 0, 0
-        for entry in glob(get_tus_files_dir() + os.path.sep + "*"):
-            item = Path(entry)
-            tf = int(os.path.getctime(item))
-            if tf < old:
-                if self._delete_definitely(loggerfilename, item, tf, users_files_dir):
-                    nb_tus_old += 1
-            elif self._extracted_upload(item, extracted_old):
-                if self._delete_definitely(loggerfilename, item, tf, users_files_dir):
-                    nb_tus_extracted += 1
-        logger.info(
-            "Removed %d TUS upload files older than %s day(s), "
-            "and %d extracted more than a day ago",
-            nb_tus_old,
-            str(timelive),
-            nb_tus_extracted,
-        )
-        # then the metadata of TUS uploads which are gone
-        nb_infos = self._clean_tus_infos(loggerfilename, now)
-        logger.info("Removed %d TUS upload metadata files without upload", nb_infos)
-        # the archive extractions in progress, to keep
-        active = [
-            a_staging.absolute()
-            for a_staging in active_stagings(get_unpack_registry_dir())
-        ]
-        orphan_old = int(now - STAGING_ORPHAN_AGE)
-        nb_dirs, nb_orphans = 0, 0
-        # bottom to top scandir
-        for entry in glob(users_files_dir + os.path.sep + userdirpattern + "*"):
-            item = Path(entry)
-            if not item.is_dir():
-                continue
-            pathtodelete = []
-            for root, dirs, files in os.walk(entry, topdown=False):
-                for a_dir in dirs:
-                    if a_dir.startswith(self.trashdirpattern):
-                        continue
-                    dirpath = Path(root).joinpath(a_dir)
-                    if self._holds_extraction(dirpath, active):
-                        continue  # Not even if all is old, the extraction would be lost
-                    # An archive extraction folder not registered, i.e. left by a failed
-                    # cleanup, goes once untouched long enough for no extraction to be alive
-                    too_old = orphan_old if a_dir.startswith(PROGRESS_PREFIX) else old
-                    ptime = int(os.path.getctime(dirpath))
-                    if ptime < too_old:
-                        candelete = self._can_delete_dir(
-                            str(dirpath), too_old, self.trashdirpattern
-                        )
-                        if candelete:
-                            todel: Tuple[Path, int] = (dirpath, ptime)
-                            pathtodelete.append(todel)
-
-            for dirpath, ptime in pathtodelete:
-                if self._delete_definitely(
-                    loggerfilename,
-                    dirpath,
-                    ptime,
-                    users_files_dir,
-                ):
-                    if dirpath.name.startswith(PROGRESS_PREFIX):
-                        nb_orphans += 1
-                    else:
-                        nb_dirs += 1
-        logger.info(
-            "Removed %d directories older than %s day(s), "
-            "and %d orphan archive extraction folders",
-            nb_dirs,
-            str(timelive),
-            nb_orphans,
-        )
-        # and the logs of this maintenance
-        nb_logs = self._clean_maintenance_logs(users_files_dir, old)
-        logger.info(
-            "Removed %d users files maintenance logs older than %s day(s)",
-            nb_logs,
-            str(timelive),
-        )
-        logger.info("End removing directories older than %s day(s)", str(timelive))
-        self.update_progress(end, "Users Files Maintenance terminated")
-        return None
-
-    @staticmethod
-    def _extracted_upload(item: Path, too_old: int) -> bool:
-        """
-        Whether item is a TUS upload extracted, successfully, before too_old. Its content is
-        in My Files, and the client can't retry it anymore.
-        """
-        upload_id = item.name
-        if "." in upload_id:
-            return False  # Claim, status... not an upload
-        try:
-            if not item.is_file():
-                return False
-            # Treated by the completion hook, not released for a retry
-            if not Path(get_tus_files_dir(), upload_id + CLAIM_SUFFIX).exists():
-                return False
-            status = UnpackStatus.read(upload_id)
-            if status is None or status.get("state") != "done":
-                return False
-            return int(os.path.getctime(UnpackStatus.path_for(upload_id))) < too_old
-        except (ValueError, OSError):
-            return False
-
-    @staticmethod
-    def _holds_extraction(dirpath: Path, active: List[Path]) -> bool:
-        """Whether dirpath is, or holds at any depth, an archive extraction in progress"""
-        abs_path = dirpath.absolute()
-        return any(
-            a_staging == abs_path or abs_path in a_staging.parents
-            for a_staging in active
-        )
-
-    @staticmethod
-    def _clean_maintenance_logs(users_files_dir: str, too_old: int) -> int:
-        """
-        Remove the logs of this maintenance created before too_old. Return how many.
-        Not logged in today's log, it would be the log logging its own rotation.
-        """
-        ret = 0
-        pattern = users_files_dir + os.path.sep + "*" + MAINTENANCE_LOG_SUFFIX
-        for entry in glob(pattern):
-            try:
-                if int(os.path.getctime(entry)) >= too_old:
-                    continue
-                os.remove(entry)
-                ret += 1
-            except OSError as e:
-                logger.error("Error deleting file '%s' '%s' ", entry, str(e))
-        return ret
-
-    def _clean_tus_infos(self, loggerfilename: str, now: float) -> int:
-        """
-        Remove the TUS metadata files (<upload id>.info) whose upload is gone, once old enough.
-        Return how many.
-        While the upload is there, the client may still ask for it, e.g. retrying its last
-        request, and without the metadata the upload would be unknown, so sent again.
-        """
-        info_dir = get_tus_info_dir()
-        try:
-            entries = list(os.scandir(info_dir))
-        except OSError:
-            return 0  # No TUS upload in this container, yet
-        tus_dir = get_tus_files_dir()
-        ret = 0
-        for an_entry in entries:
-            name = an_entry.name
-            if name.startswith(".") or not name.endswith(INFO_SUFFIXES):
-                continue
-            try:
-                if not an_entry.is_file(follow_symlinks=False):
-                    continue
-                mtime = an_entry.stat(follow_symlinks=False).st_mtime
-            except OSError:
-                continue
-            upload_id = name.split(".", 1)[0]
-            if os.path.lexists(os.path.join(tus_dir, upload_id)):
-                continue
-            if now - mtime < TUS_RETRY_AGE:
-                continue
-            if self._delete_definitely(
-                loggerfilename, Path(an_entry.path), int(mtime), info_dir
-            ):
-                ret += 1
-        return ret
-
-    @staticmethod
-    def _can_delete_dir(startpath: str, ptime: int, excluded: str) -> bool:
-        for root, dirs, files in os.walk(startpath, topdown=True):
-            for a_file in files:
-                filepath = Path(root).joinpath(a_file)
-                tf = int(os.path.getctime(filepath))
-                if tf >= ptime:
-                    return False
-            for a_dir in dirs:
-                if a_dir.startswith(excluded):
-                    continue
-                dirpath = Path(root).joinpath(a_dir)
-                tf = int(os.path.getctime(dirpath))
-                if tf >= ptime:
-                    return False
-        return True
 
 
 @dataclass
