@@ -10,7 +10,6 @@ import json
 import os
 import re
 import shutil
-import struct
 import tarfile
 import tempfile
 import time
@@ -40,6 +39,7 @@ from magic_rs import from_bytes
 
 from API_models.constants import DEFAULT_ARCHIVES, DEFAULT_MIMETYPES
 from DB.User import UserIDT
+from FS import ZipUtils
 from FS.Uploads import get_tus_files_dir
 from helpers.AppConfig import Config
 from helpers.CustomException import BaseAppException, UnprocessableEntityException
@@ -225,6 +225,49 @@ class _NewEntryReporter(object):
             self.on_new_entry(path, header, is_file)
 
 
+class _StreamBudget(object):
+    """
+    Charge an Unpacker for entries and bytes actually streamed from an archive,
+    once they exceed the totals declared in the archive metadata. The declared
+    totals are already charged before extraction; this only adds the excess, so
+    metadata that understates the content cannot bypass the limits.
+    """
+
+    def __init__(
+        self,
+        unpacker: "Unpacker",
+        declared_entries: int,
+        declared_size: int,
+        where: Path,
+    ) -> None:
+        self._unpacker = unpacker
+        self._declared_entries = declared_entries
+        self._declared_size = declared_size
+        self._where = where
+        self._entries = 0
+        self._size = 0
+        self._charged_entries = 0
+        self._charged_size = 0
+
+    def entry(self) -> None:
+        self._entries += 1
+        excess = self._entries - self._declared_entries
+        if excess > self._charged_entries:
+            self._unpacker._consume_unpack_budget(
+                excess - self._charged_entries, 0, self._where
+            )
+            self._charged_entries = excess
+
+    def bytes(self, size: int) -> None:
+        self._size += size
+        excess = self._size - self._declared_size
+        if excess > self._charged_size:
+            self._unpacker._consume_unpack_budget(
+                0, excess - self._charged_size, self._where
+            )
+            self._charged_size = excess
+
+
 class FilteredZipFile(_NewEntryReporter):
     """
     Zip archive reader that scans the central directory without keeping members
@@ -244,7 +287,7 @@ class FilteredZipFile(_NewEntryReporter):
         self._fp: Optional[BinaryIO] = None
 
     def __enter__(self) -> "FilteredZipFile":
-        self._fp = open(self._file_path, "rb")
+        self._fp = open(self._file_path, "rb", buffering=1024 * 1024)
         return self
 
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
@@ -262,74 +305,9 @@ class FilteredZipFile(_NewEntryReporter):
         """
         fp = self._fp
         assert fp is not None
-        try:
-            endrec = zipfile._EndRecData(fp)  # type: ignore[attr-defined]
-        except OSError as e:
-            raise zipfile.BadZipFile("File is not a zip file") from e
-        if not endrec:
-            raise zipfile.BadZipFile("File is not a zip file")
-        offset_cd, concat = zipfile._handle_prepended_data(endrec)  # type: ignore[attr-defined]
-        start_dir = offset_cd + concat
-        if start_dir < 0:
-            raise zipfile.BadZipFile("Bad offset for central directory")
-        cd_size = endrec[zipfile._ECD_SIZE]  # type: ignore[attr-defined]
+        yield from ZipUtils.scan_entries(fp)
 
-        size_central_dir = zipfile.sizeCentralDir  # type: ignore[attr-defined]
-        fp.seek(start_dir)
-        total = 0
-        while total < cd_size:
-            raw_header = fp.read(size_central_dir)
-            if len(raw_header) != size_central_dir:
-                raise zipfile.BadZipFile("Truncated central directory")
-            centdir = struct.unpack(zipfile.structCentralDir, raw_header)  # type: ignore[attr-defined]
-            if centdir[zipfile._CD_SIGNATURE] != zipfile.stringCentralDir:  # type: ignore[attr-defined]
-                raise zipfile.BadZipFile("Bad magic number for central directory")
-            name_len = centdir[zipfile._CD_FILENAME_LENGTH]  # type: ignore[attr-defined]
-            extra_len = centdir[zipfile._CD_EXTRA_FIELD_LENGTH]  # type: ignore[attr-defined]
-            comment_len = centdir[zipfile._CD_COMMENT_LENGTH]  # type: ignore[attr-defined]
-            filename = fp.read(name_len)
-            raw_name_crc = zlib.crc32(filename)
-            flags = centdir[zipfile._CD_FLAG_BITS]  # type: ignore[attr-defined]
-            if flags & zipfile._MASK_UTF_FILENAME:  # type: ignore[attr-defined]
-                name = filename.decode("utf-8")
-            else:
-                name = filename.decode("cp437")
-            info = zipfile.ZipInfo(name)
-            info.extra = fp.read(extra_len)
-            fp.seek(comment_len, os.SEEK_CUR)
-            info.header_offset = centdir[zipfile._CD_LOCAL_HEADER_OFFSET]  # type: ignore[attr-defined]
-            info.compress_size = centdir[zipfile._CD_COMPRESSED_SIZE]  # type: ignore[attr-defined]
-            info.file_size = centdir[zipfile._CD_UNCOMPRESSED_SIZE]  # type: ignore[attr-defined]
-            info._decodeExtra(raw_name_crc)  # type: ignore[attr-defined]
-
-            yield info.filename, info.file_size, info.is_dir()
-
-            total += size_central_dir + name_len + extra_len + comment_len
-
-    @staticmethod
-    def _decode_name(raw_name: bytes) -> str:
-        try:
-            return raw_name.decode("utf-8")
-        except UnicodeDecodeError:
-            return raw_name.decode("cp437")
-
-    @staticmethod
-    def _safe_rel_path(name: str) -> Optional[Path]:
-        if "\x00" in name:
-            raise stream_unzip.DataError(f"Null byte in archive member name: {name!r}")
-        normalized = name.replace("\\", "/")
-        if len(normalized) >= 2 and normalized[1] == ":" and normalized[0].isalpha():
-            normalized = normalized[2:]
-        parts = [p for p in normalized.split("/") if p not in ("", ".")]
-        if ".." in parts:
-            raise UnprocessableEntityException(
-                f"{DETAIL_ARCHIVE_MEMBER_REFUSED}: {name}"
-            )
-        if not parts:
-            return None
-        return Path(*parts)
-
-    def extractall(self, path: str) -> None:
+    def extractall(self, path: str, budget: Optional["_StreamBudget"] = None) -> None:
         assert self._fp is not None
         target_dir = Path(path)
         target_dir.mkdir(parents=True, exist_ok=True)
@@ -337,17 +315,21 @@ class FilteredZipFile(_NewEntryReporter):
         for file_name_bytes, _file_size, unzipped_chunks in stream_unzip.stream_unzip(
             iter(partial(self._fp.read, BUFFER_SIZE), b"")
         ):
-            name = self._decode_name(file_name_bytes)
-            is_dir = name.endswith("/") or name.endswith("\\")
-            rel_path = self._safe_rel_path(name)
+            if budget is not None:
+                budget.entry()
+            name = ZipUtils.decode_name(file_name_bytes)
+            is_dir = ZipUtils.is_dir_name(name)
+            rel_path = ZipUtils.safe_rel_path(name)
             if rel_path is None:
-                for _ in unzipped_chunks:
-                    pass
+                for chunk in unzipped_chunks:
+                    if budget is not None:
+                        budget.bytes(len(chunk))
                 continue
             dest = target_dir / rel_path
             if is_dir:
-                for _ in unzipped_chunks:
-                    pass
+                for chunk in unzipped_chunks:
+                    if budget is not None:
+                        budget.bytes(len(chunk))
                 dest.mkdir(parents=True, exist_ok=True)
                 self._notify_new_entry(dest, b"", False)
             else:
@@ -357,6 +339,8 @@ class FilteredZipFile(_NewEntryReporter):
                     for chunk in unzipped_chunks:
                         if not chunk:
                             continue
+                        if budget is not None:
+                            budget.bytes(len(chunk))
                         if len(header) < 512:
                             header += chunk[: 512 - len(header)]
                         f_out.write(chunk)
@@ -580,7 +564,10 @@ class Unpacker(object):
         embedded: List[Tuple[Path, ArchiveKind]] = []
         archive.on_new_entry = partial(self._on_new_entry, embedded)
         if isinstance(archive, FilteredZipFile):
-            archive.extractall(path.as_posix())
+            # Declared totals were charged above. Charge anything the stream actually
+            # contains beyond them, so metadata that lies cannot bypass the limits.
+            budget = _StreamBudget(self, nb_entries, declared_size, path)
+            archive.extractall(path.as_posix(), budget)
         else:
             # No absolute paths, no escape out of path, no links outside, no devices
             archive.extractall(path.as_posix(), filter="data")
@@ -939,7 +926,9 @@ class Unpacker(object):
         Never raises.
         """
         code, message = self.unpack_failure(archive_name, e)
-        when = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        when = datetime.datetime.now(datetime.timezone.utc).strftime(
+            "%Y-%m-%d %H:%M:%S"
+        )
         log = "%s UTC %s" % (when, message)
         logger.info("Unpack failure in %s: %s", parent, log)
         self._status(state="error", status_code=code, message=message, log=log)
