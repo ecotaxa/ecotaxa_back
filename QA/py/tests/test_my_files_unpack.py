@@ -2,6 +2,8 @@
 # My Files unpacking: resulting layout on success.
 # These freeze the layout produced before extraction was staged, it must not change.
 #
+import struct
+import zlib
 from pathlib import Path
 
 from tests.userfiles_helpers import (
@@ -65,6 +67,53 @@ def test_zip_nested(tmp_path):
         "name/top/ecotaxa_inner.tsv",
         "name/top/x.png",
     ]
+
+
+def test_zip_members_not_kept_in_memory(tmp_path):
+    """
+    A backup export can have millions of members. Loading them all, as ZipFile does,
+    costs several GB and the worker is OOM-killed, so members are streamed instead
+    via stream-unzip.
+    """
+    root, parent = _setup(tmp_path)
+    members = {f"name/d{i // 50:02d}/f{i}.tsv": TSV for i in range(200)}
+    archive = _upload(parent, "name.zip", zip_bytes(members))
+    make_user_dir(root).unpacker.dispatch_unpack(archive, parent)
+    assert (parent / "name" / "d00" / "f0.tsv").read_bytes() == TSV
+    assert len(list((parent / "name").rglob("*.tsv"))) == len(members)
+
+
+def test_tar_members_not_kept_in_memory(tmp_path, monkeypatch):
+    """
+    A backup export can have millions of members. Loading them all via
+    TarFile.getmembers() costs several GB, so tar archives are streamed
+    with stream=True without retaining TarInfo objects in TarFile.members.
+    """
+    root, parent = _setup(tmp_path)
+    members = {f"name/d{i // 50:02d}/f{i}.tsv": TSV for i in range(200)}
+    archive = _upload(parent, "name.tgz", tar_bytes(members, mode="w:gz"))
+
+    observed_members_len = []
+    observed_stream = []
+    orig_extractall = tarfile.TarFile.extractall
+
+    def spy_extractall(self, *args, **kwargs):
+        res = orig_extractall(self, *args, **kwargs)
+        observed_stream.append(self.stream)
+        observed_members_len.append(len(self.members))
+        return res
+
+    def forbid_getmembers(self, *args, **kwargs):
+        raise AssertionError("getmembers() must not be called when streaming tar")
+
+    monkeypatch.setattr(tarfile.TarFile, "extractall", spy_extractall)
+    monkeypatch.setattr(tarfile.TarFile, "getmembers", forbid_getmembers)
+
+    make_user_dir(root).unpacker.dispatch_unpack(archive, parent)
+    assert observed_stream == [True]
+    assert observed_members_len == [0]
+    assert (parent / "name" / "d00" / "f0.tsv").read_bytes() == TSV
+    assert len(list((parent / "name").rglob("*.tsv"))) == len(members)
 
 
 def test_zip_unaccepted_member_removed(tmp_path):
@@ -340,6 +389,7 @@ def test_dir_over_file_collision(tmp_path):
 # Plain (not archive) uploads: same type check as for archive members.
 #
 import gzip
+import stream_unzip
 
 
 @pytest.mark.parametrize("name", ["ecotaxa_a.tsv", "b.csv", "c.txt", "d.png"])
@@ -484,13 +534,13 @@ _RANDOM = os.urandom(2000) + TSV * 200
             _deflated_zip(TSV * 200)[:45]
             + b"\xff" * 20
             + _deflated_zip(TSV * 200)[65:],
-            zlib.error,
+            stream_unzip.DeflateError,
         ),
         ("name.tar", _tar("w", TSV * 200)[:700], tarfile.ReadError),
         (
             "name.tar.gz",
             _tar("w:gz", _RANDOM)[: len(_tar("w:gz", _RANDOM)) // 2],
-            EOFError,
+            tarfile.ReadError,
         ),
         ("a.tsv.gz", gzip.compress(TSV * 200)[:20], EOFError),
     ],
@@ -620,7 +670,7 @@ def test_nested_fake_tgz_removed(tmp_path):
 from collections import namedtuple
 
 import FS.Unpack as UnpackModule
-from FS.Unpack import InsufficientStorageException
+from FS.Unpack import FilteredZipFile, InsufficientStorageException
 from helpers.httpexception import (
     DETAIL_UNPACK_TOO_LARGE,
     DETAIL_UNPACK_TOO_MANY_ENTRIES,
@@ -722,6 +772,148 @@ def test_entries_limit(tmp_path):
         parent,
         DETAIL_UNPACK_TOO_MANY_ENTRIES,
     )
+
+
+def _eocd_and_cd(data: bytes) -> tuple:
+    eocd = data.rfind(b"PK\x05\x06")
+    assert eocd >= 0
+    cd_offset = struct.unpack_from("<L", data, eocd + 16)[0]
+    cd_size = struct.unpack_from("<L", data, eocd + 12)[0]
+    return eocd, cd_offset, cd_size
+
+
+def test_size_limit_zip_lying_central_directory(tmp_path):
+    """
+    Sizes in the central directory and local header are only metadata. A zip that
+    claims a tiny size, but whose stream contains much more, must still hit the
+    limit before the whole member is written.
+    """
+    root, parent = _setup(tmp_path)
+    archive_bytes = bytearray(_deflated_zip(b"\x00" * 100_000))
+    _eocd, cd_offset, _cd_size = _eocd_and_cd(archive_bytes)
+    # Uncompressed size is at offset 24 in the central directory entry...
+    struct.pack_into("<L", archive_bytes, cd_offset + 24, 1)
+    # ...and at offset 22 in the local header, so stream-unzip's own size check
+    # would only fail after streaming the whole member.
+    local_offset = struct.unpack_from("<L", archive_bytes, cd_offset + 42)[0]
+    struct.pack_into("<L", archive_bytes, local_offset + 22, 1)
+    archive = _upload(parent, "name.zip", bytes(archive_bytes))
+    _refused(
+        _limited(root, max_unpacked_size=50_000),
+        archive,
+        parent,
+        DETAIL_UNPACK_TOO_LARGE,
+    )
+
+
+def test_entries_limit_zip_lying_central_directory(tmp_path):
+    """
+    A central directory can advertise fewer members than the local headers contain.
+    The limit must apply to what is actually streamed.
+    """
+    root, parent = _setup(tmp_path)
+    archive_bytes = bytearray(zip_bytes({"a.tsv": TSV, "b.tsv": TSV}))
+    eocd, cd_offset, _cd_size = _eocd_and_cd(archive_bytes)
+    last_entry = archive_bytes.rfind(b"PK\x01\x02", cd_offset, eocd)
+    assert last_entry > cd_offset
+    # Point the EOCD at only the last central directory entry.
+    struct.pack_into("<L", archive_bytes, eocd + 16, last_entry)
+    struct.pack_into("<L", archive_bytes, eocd + 12, eocd - last_entry)
+    struct.pack_into("<H", archive_bytes, eocd + 10, 1)
+    struct.pack_into("<H", archive_bytes, eocd + 8, 1)
+    archive = _upload(parent, "name.zip", bytes(archive_bytes))
+    _refused(
+        _limited(root, max_unpack_entries=1),
+        archive,
+        parent,
+        DETAIL_UNPACK_TOO_MANY_ENTRIES,
+    )
+
+
+def test_zip64_extra_field_is_read(tmp_path):
+    """Sizes above 4 GiB are stored in the ZIP64 extra field of a CD entry."""
+    root, parent = _setup(tmp_path)
+    archive_bytes = bytearray(zip_bytes({"a.tsv": TSV}))
+    eocd, cd_offset, cd_size = _eocd_and_cd(archive_bytes)
+    name_len = struct.unpack_from("<H", archive_bytes, cd_offset + 28)[0]
+    extra_len = struct.unpack_from("<H", archive_bytes, cd_offset + 30)[0]
+    assert extra_len == 0
+    struct.pack_into("<L", archive_bytes, cd_offset + 24, 0xFFFFFFFF)
+    zip64_extra = struct.pack("<HHQ", 0x0001, 8, len(TSV))
+    insert_at = cd_offset + 46 + name_len
+    archive_bytes[insert_at:insert_at] = zip64_extra
+    struct.pack_into("<H", archive_bytes, cd_offset + 30, len(zip64_extra))
+    eocd += len(zip64_extra)
+    struct.pack_into("<L", archive_bytes, eocd + 12, cd_size + len(zip64_extra))
+    archive = _upload(parent, "name.zip", bytes(archive_bytes))
+    make_user_dir(root).unpacker.dispatch_unpack(archive, parent)
+    assert tree(parent) == ["name/", "name/a.tsv"]
+
+
+@pytest.mark.parametrize("sentinel", [False, True])
+def test_zip64_end_of_central_directory_is_read(tmp_path, sentinel):
+    """A ZIP64 end of central directory record locates the central directory."""
+    root, parent = _setup(tmp_path)
+    data = zip_bytes({"a.tsv": TSV})
+    eocd, cd_offset, cd_size = _eocd_and_cd(data)
+    entries = struct.unpack_from("<H", data, eocd + 10)[0]
+    record = struct.pack(
+        "<4sQ2H2L4Q",
+        b"PK\x06\x06",
+        44,  # Size of the rest of the record
+        45,
+        45,
+        0,
+        0,
+        entries,
+        entries,
+        cd_size,
+        cd_offset,
+    )
+    locator = struct.pack("<4sLQL", b"PK\x06\x07", 0, eocd, 1)
+    if sentinel:
+        classic = (0, 0, 0xFFFF, 0xFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0)
+    else:
+        # Some writers emit a ZIP64 record while keeping 32-bit values in the EOCD.
+        classic = (0, 0, entries, entries, cd_size, cd_offset, 0)
+    zip64_eocd = struct.pack("<4s4H2LH", b"PK\x05\x06", *classic)
+    archive = _upload(parent, "name.zip", data[:eocd] + record + locator + zip64_eocd)
+    make_user_dir(root).unpacker.dispatch_unpack(archive, parent)
+    assert tree(parent) == ["name/", "name/a.tsv"]
+
+
+def test_unicode_path_extra_field_is_read(tmp_path):
+    """The Unicode Path extra field (0x7075) overrides the raw member name."""
+    root, parent = _setup(tmp_path)
+    archive_bytes = bytearray(zip_bytes({"a.tsv": TSV}))
+    eocd, cd_offset, cd_size = _eocd_and_cd(archive_bytes)
+    name_len = struct.unpack_from("<H", archive_bytes, cd_offset + 28)[0]
+    raw_name = bytes(archive_bytes[cd_offset + 46 : cd_offset + 46 + name_len])
+    unicode_name = "b.tsv".encode("utf-8")
+    extra = (
+        struct.pack("<HH", 0x7075, 5 + len(unicode_name))
+        + b"\x01"
+        + struct.pack("<L", zlib.crc32(raw_name))
+        + unicode_name
+    )
+    insert_at = cd_offset + 46 + name_len
+    archive_bytes[insert_at:insert_at] = extra
+    struct.pack_into("<H", archive_bytes, cd_offset + 30, len(extra))
+    eocd += len(extra)
+    struct.pack_into("<L", archive_bytes, eocd + 12, cd_size + len(extra))
+    archive = _upload(parent, "name.zip", bytes(archive_bytes))
+    with FilteredZipFile(archive) as zip_file:
+        assert list(zip_file.scan_entries()) == [("b.tsv", len(TSV), False)]
+
+
+def test_zip_scan_does_not_use_private_zipfile_helpers(tmp_path, monkeypatch):
+    """The CD walk must not depend on CPython's private zipfile internals."""
+    root, parent = _setup(tmp_path)
+    archive = _upload(parent, "name.zip", zip_bytes({"a.tsv": TSV}))
+    monkeypatch.delattr(zipfile, "_handle_prepended_data", raising=False)
+    monkeypatch.delattr(zipfile.ZipInfo, "_decodeExtra", raising=False)
+    make_user_dir(root).unpacker.dispatch_unpack(archive, parent)
+    assert tree(parent) == ["name/", "name/a.tsv"]
 
 
 def _nested_zips(depth: int) -> bytes:
@@ -977,3 +1169,15 @@ def test_detect_archive_type_with_and_without_header(tmp_path):
     tsv_head = tsv_file.read_bytes()[:512]
     assert Unpacker.detect_archive_type(tsv_file) is None
     assert Unpacker.detect_archive_type(tsv_file, header=tsv_head) is None
+
+
+def test_refused_zip_member_traversal(tmp_path):
+    root, parent = _setup(tmp_path)
+    archive = _upload(
+        parent, "name.zip", zip_bytes({"a.tsv": TSV, "../escape.tsv": TSV})
+    )
+    with pytest.raises(UnprocessableEntityException) as exc:
+        make_user_dir(root).unpacker.dispatch_unpack(archive, parent)
+    assert exc.value.message.startswith(DETAIL_ARCHIVE_MEMBER_REFUSED)
+    _nothing_left(parent)
+    assert list(tmp_path.rglob("escape.tsv")) == []

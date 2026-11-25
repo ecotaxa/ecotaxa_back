@@ -20,10 +20,12 @@ from functools import partial
 from pathlib import Path
 from typing import (
     Any,
+    BinaryIO,
     Callable,
     Dict,
     Generator,
     IO,
+    Iterable,
     List,
     Literal,
     Optional,
@@ -32,10 +34,12 @@ from typing import (
     Union,
 )
 
+import stream_unzip
 from magic_rs import from_bytes
 
 from API_models.constants import DEFAULT_ARCHIVES, DEFAULT_MIMETYPES
 from DB.User import UserIDT
+from FS import ZipUtils
 from FS.Uploads import get_tus_files_dir
 from helpers.AppConfig import Config
 from helpers.CustomException import BaseAppException, UnprocessableEntityException
@@ -69,6 +73,7 @@ TEXT_EXTENSIONS = {"csv", "txt", "tsv"}
 # What a broken archive, sent by the user, raises while being read
 CORRUPT_ARCHIVE_EXCEPTIONS = (
     zipfile.BadZipFile,
+    stream_unzip.UnzipError,
     zlib.error,
     tarfile.TarError,
     gzip.BadGzipFile,
@@ -220,60 +225,126 @@ class _NewEntryReporter(object):
             self.on_new_entry(path, header, is_file)
 
 
-class FilteredZipFile(_NewEntryReporter, zipfile.ZipFile):
+class _StreamBudget(object):
     """
-    Subclass of ZipFile that reports each extracted member to an on_new_entry
-    callback, along with its first bytes.
+    Charge an Unpacker for entries and bytes actually streamed from an archive,
+    once they exceed the totals declared in the archive metadata. The declared
+    totals are already charged before extraction; this only adds the excess, so
+    metadata that understates the content cannot bypass the limits.
     """
 
     def __init__(
         self,
-        *args: Any,
-        **kwargs: Any,
+        unpacker: "Unpacker",
+        declared_entries: int,
+        declared_size: int,
+        where: Path,
     ) -> None:
-        super().__init__(*args, **kwargs)
-        self._peek: _HeaderPeekStream = _HeaderPeekStream(None)
+        self._unpacker = unpacker
+        self._declared_entries = declared_entries
+        self._declared_size = declared_size
+        self._where = where
+        self._entries = 0
+        self._size = 0
+        self._charged_entries = 0
+        self._charged_size = 0
 
-    def open(self, name, mode="r", pwd=None, *, force_zip64=False):
-        raw = super().open(name, mode=mode, pwd=pwd, force_zip64=force_zip64)
-        if mode == "r":
-            self._peek.reset(raw)
-            return self._peek
-        return raw
+    def entry(self) -> None:
+        self._entries += 1
+        excess = self._entries - self._declared_entries
+        if excess > self._charged_entries:
+            self._unpacker._consume_unpack_budget(
+                excess - self._charged_entries, 0, self._where
+            )
+            self._charged_entries = excess
 
-    def _extract_member(  # type: ignore[misc]
+    def bytes(self, size: int) -> None:
+        self._size += size
+        excess = self._size - self._declared_size
+        if excess > self._charged_size:
+            self._unpacker._consume_unpack_budget(
+                0, excess - self._charged_size, self._where
+            )
+            self._charged_size = excess
+
+
+class FilteredZipFile(_NewEntryReporter):
+    """
+    Zip archive reader that scans the central directory without keeping members
+    in memory and extracts members in a single streaming pass via stream-unzip,
+    reporting each extracted member to an on_new_entry callback with its first bytes.
+    """
+
+    def __init__(
         self,
-        member: Union[str, zipfile.ZipInfo],  # In our case it's always str
-        targetpath: str,
-        pwd: Optional[bytes] = None,
-    ) -> str:
-        extracted_str: str = super()._extract_member(member, targetpath, pwd)  # type: ignore[misc]
-        extracted = Path(extracted_str)
-        extracted_is_dir = extracted.is_dir()
-        if extracted_is_dir:
-            header = b""
-        else:
-            header, self._peek.header = self._peek.header, b""
-        self._notify_new_entry(extracted, header, not extracted_is_dir)
-        return extracted_str
+        file: Union[str, os.PathLike[str]],
+        mode: str = "r",
+        allowZip64: bool = True,
+    ) -> None:
+        if mode != "r":
+            raise ValueError(f"Unsupported mode: {mode}")
+        self._file_path = Path(file)
+        self._fp: Optional[BinaryIO] = None
 
-    @staticmethod
-    def get_unique_root(info_list) -> Optional[str]:
-        ret: Optional[str] = None
-        for info in info_list:
-            name = info.filename
-            if name.startswith("__MACOSX/"):
+    def __enter__(self) -> "FilteredZipFile":
+        self._fp = open(self._file_path, "rb", buffering=1024 * 1024)
+        return self
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        self.close()
+
+    def close(self) -> None:
+        if self._fp is not None:
+            self._fp.close()
+            self._fp = None
+
+    def scan_entries(self) -> Generator[Tuple[str, int, bool], None, None]:
+        """
+        Yield `(name, file_size, is_dir)` for each member in the central directory
+        without retaining any member in memory.
+        """
+        fp = self._fp
+        assert fp is not None
+        yield from ZipUtils.scan_entries(fp)
+
+    def extractall(self, path: str, budget: Optional["_StreamBudget"] = None) -> None:
+        assert self._fp is not None
+        target_dir = Path(path)
+        target_dir.mkdir(parents=True, exist_ok=True)
+        self._fp.seek(0)
+        for file_name_bytes, _file_size, unzipped_chunks in stream_unzip.stream_unzip(
+            iter(partial(self._fp.read, BUFFER_SIZE), b"")
+        ):
+            if budget is not None:
+                budget.entry()
+            name = ZipUtils.decode_name(file_name_bytes)
+            is_dir = ZipUtils.is_dir_name(name)
+            rel_path = ZipUtils.safe_rel_path(name)
+            if rel_path is None:
+                for chunk in unzipped_chunks:
+                    if budget is not None:
+                        budget.bytes(len(chunk))
                 continue
-            top, sep, _ = name.partition("/")
-            if not top or top == ".DS_Store":
-                continue
-            if not sep and not info.is_dir():
-                return None  # File at root level
-            if ret is None:
-                ret = top
-            elif top != ret:
-                return None
-        return ret
+            dest = target_dir / rel_path
+            if is_dir:
+                for chunk in unzipped_chunks:
+                    if budget is not None:
+                        budget.bytes(len(chunk))
+                dest.mkdir(parents=True, exist_ok=True)
+                self._notify_new_entry(dest, b"", False)
+            else:
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                header = b""
+                with open(dest, "wb") as f_out:
+                    for chunk in unzipped_chunks:
+                        if not chunk:
+                            continue
+                        if budget is not None:
+                            budget.bytes(len(chunk))
+                        if len(header) < 512:
+                            header += chunk[: 512 - len(header)]
+                        f_out.write(chunk)
+                self._notify_new_entry(dest, header, True)
 
 
 class FilteredTarFile(_NewEntryReporter, tarfile.TarFile):
@@ -287,6 +358,7 @@ class FilteredTarFile(_NewEntryReporter, tarfile.TarFile):
         *args: Any,
         **kwargs: Any,
     ) -> None:
+        kwargs.setdefault("stream", True)
         super().__init__(*args, **kwargs)
         self._peek: _HeaderPeekStream = _HeaderPeekStream(None)
 
@@ -305,23 +377,15 @@ class FilteredTarFile(_NewEntryReporter, tarfile.TarFile):
         finally:
             self.fileobj = orig_fileobj
 
-    @staticmethod
-    def get_unique_root(member_list) -> Optional[str]:
-        ret: Optional[str] = None
-        for member in member_list:
-            name = member.name.removeprefix("./")
-            if not name:
-                continue
-            top, sep, _ = name.partition("/")
-            if not top or top == ".DS_Store" or top.startswith("._"):
-                continue
-            if not sep and not member.isdir():
-                return None  # File at root level
-            if ret is None:
-                ret = top
-            elif top != ret:
-                return None
-        return ret
+    def scan_entries(self) -> Generator[Tuple[str, int, bool], None, None]:
+        """
+        Yield `(name, size, is_dir)` for each member in one streaming pass
+        without retaining any member in memory.
+        """
+        assert self.name is not None
+        with FilteredTarFile.open(self.name, "r|*", bufsize=BUFFER_SIZE) as tar:
+            for member in tar:
+                yield member.name, member.size, member.isdir()
 
 
 class UnpackStatus(object):
@@ -422,6 +486,41 @@ class Unpacker(object):
         self.status_reporter: Optional[Callable[[Dict[str, Any]], None]] = None
         self._status_fields: Dict[str, Any] = {}
 
+    @staticmethod
+    def _inspect_entries(
+        entries: Iterable[Tuple[str, int, bool]],
+    ) -> Tuple[int, int, Optional[str]]:
+        """
+        Count the entries, sum their declared sizes, and find their unique root
+        directory if all entries live under a single top-level folder.
+        """
+        nb_entries = 0
+        declared_size = 0
+        root: Optional[str] = None
+        several_roots = False
+        for raw_name, size, is_dir in entries:
+            nb_entries += 1
+            declared_size += size
+            if not several_roots:
+                name = raw_name.removeprefix("./")
+                if not name:
+                    continue
+                top, sep, _ = name.partition("/")
+                if (
+                    not top
+                    or top == "__MACOSX"
+                    or top == ".DS_Store"
+                    or top.startswith("._")
+                ):
+                    continue
+                if not sep and not is_dir:
+                    several_roots = True  # File at root level
+                elif root is None:
+                    root = top
+                elif top != root:
+                    several_roots = True
+        return nb_entries, declared_size, None if several_roots else root
+
     def extract_archive(
         self, archive: FilteredZipFile | FilteredTarFile, filepath: str, path: Path
     ) -> None:
@@ -430,21 +529,14 @@ class Unpacker(object):
         handling subfolder placement, recursive decompression of nested archives,
         and filtering out unaccepted file formats.
 
-        :param archive: An open ZipFile or TarFile archive instance.
+        :param archive: An open FilteredZipFile or FilteredTarFile archive instance.
         :param filepath: Full path of the archive file.
         :param path: Target directory Path where archive contents are to be extracted.
         """
-        # Retrieve member file names and declared size in a single pass
-        if isinstance(archive, zipfile.ZipFile):
-            info_list = archive.infolist()
-            declared_size = sum(info.file_size for info in info_list)
-            nb_entries = len(info_list)
-            get_unique_root = partial(FilteredZipFile.get_unique_root, info_list)
-        else:
-            member_list = archive.getmembers()
-            declared_size = sum(member.size for member in member_list)
-            nb_entries = len(member_list)
-            get_unique_root = partial(FilteredTarFile.get_unique_root, member_list)
+        # Retrieve member count, declared size and unique root folder in a single pass
+        nb_entries, declared_size, unique_root = self._inspect_entries(
+            archive.scan_entries()
+        )
 
         if nb_entries == 0:
             raise EmptyArchiveException()
@@ -461,7 +553,7 @@ class Unpacker(object):
         # are already in such a folder. So nothing goes outside that folder.
         if own_name == "temp" and archive_path.parent == path:
             pass  # Zipfile sent by client, its content goes directly into path
-        elif get_unique_root() == own_name:
+        elif unique_root == own_name:
             path = archive_path.parent  # Already wrapped
         else:
             path = archive_path.parent / own_name
@@ -471,8 +563,11 @@ class Unpacker(object):
         # what depends on the entry's format is decided there (keep, refuse, or unpack later).
         embedded: List[Tuple[Path, ArchiveKind]] = []
         archive.on_new_entry = partial(self._on_new_entry, embedded)
-        if isinstance(archive, zipfile.ZipFile):
-            archive.extractall(path.as_posix())
+        if isinstance(archive, FilteredZipFile):
+            # Declared totals were charged above. Charge anything the stream actually
+            # contains beyond them, so metadata that lies cannot bypass the limits.
+            budget = _StreamBudget(self, nb_entries, declared_size, path)
+            archive.extractall(path.as_posix(), budget)
         else:
             # No absolute paths, no escape out of path, no links outside, no devices
             archive.extractall(path.as_posix(), filter="data")
@@ -607,7 +702,8 @@ class Unpacker(object):
         try:
             with FilteredTarFile.open(
                 input_path,
-                "r",
+                "r|*",
+                bufsize=BUFFER_SIZE,
             ) as archive:
                 self.extract_archive(archive, str(input_path), path)
         except Exception as e:
@@ -830,7 +926,9 @@ class Unpacker(object):
         Never raises.
         """
         code, message = self.unpack_failure(archive_name, e)
-        when = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        when = datetime.datetime.now(datetime.timezone.utc).strftime(
+            "%Y-%m-%d %H:%M:%S"
+        )
         log = "%s UTC %s" % (when, message)
         logger.info("Unpack failure in %s: %s", parent, log)
         self._status(state="error", status_code=code, message=message, log=log)

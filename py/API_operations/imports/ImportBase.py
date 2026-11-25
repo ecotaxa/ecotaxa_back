@@ -3,7 +3,6 @@
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
 import os
-import zipfile
 from abc import ABC
 from typing import Union, Optional
 
@@ -14,7 +13,7 @@ from API_models.imports import ImportReq, SimpleImportReq
 from API_operations.helpers.JobService import JobServiceOnProjectBase, ArgsDict
 from DB.User import UserIDT
 from FS.CommonDir import CommonFolder
-from FS.Unpack import PROGRESS_PREFIX
+from FS.Unpack import PROGRESS_PREFIX, FilteredZipFile
 from FS.UserFilesDir import UserFilesDirectory
 from FS.Vault import Vault
 from helpers.DynamicLogs import get_logger
@@ -90,7 +89,7 @@ class ImportServiceBase(JobServiceOnProjectBase, ABC):
             input_path = source_dir_or_zip
             assert self.job_id
             source_dir_or_zip = self.temp_for_jobs.unzipped_dir_for(self.job_id)
-            with zipfile.ZipFile(input_path, "r") as z:
+            with FilteredZipFile(input_path, "r") as z:
                 z.extractall(source_dir_or_zip)
         return source_dir_or_zip
 
