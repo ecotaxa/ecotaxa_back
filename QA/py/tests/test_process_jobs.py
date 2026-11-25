@@ -17,7 +17,13 @@ from tests.api_wrappers import (
     JOB_DELETE_URL,
 )
 from tests.export_shared import JOB_LOG_DOWNLOAD_URL
-from tests.credentials import ADMIN_USER_ID, ADMIN_AUTH
+from tests.credentials import (
+    ADMIN_USER_ID,
+    ADMIN_AUTH,
+    ORDINARY_USER_USER_ID,
+    CREATOR_USER_ID,
+    ORDINARY_USER2_USER_ID,
+)
 
 
 @pytest.fixture
@@ -323,9 +329,15 @@ def test_parallel_jobs_execution(fastapi, jobs_as_process):
 
     job_ids = []
     t0 = time.monotonic()
-    for _ in range(4):
+    users = [
+        ADMIN_USER_ID,
+        ORDINARY_USER_USER_ID,
+        CREATOR_USER_ID,
+        ORDINARY_USER2_USER_ID,
+    ]
+    for user_id in users:
         with ParallelSleepJob(duration=1.0) as job:
-            job.run(ADMIN_USER_ID)
+            job.run(user_id)
             job_ids.append(job.job_id)
 
     results = []
@@ -351,9 +363,15 @@ def test_parallel_jobs_limit_respected(fastapi, no_scheduler, jobs_as_process):
     Verify that JobsManager never runs more than MAX_PARALLEL_JOBS concurrently.
     """
     job_ids = []
-    for _ in range(4):
+    users = [
+        ADMIN_USER_ID,
+        ORDINARY_USER_USER_ID,
+        CREATOR_USER_ID,
+        ORDINARY_USER2_USER_ID,
+    ]
+    for user_id in users:
         with ParallelSleepJob(duration=0.6) as job:
-            job.run(ADMIN_USER_ID)
+            job.run(user_id)
             job_ids.append(job.job_id)
 
     with patch.object(JobsManagerMod, "MAX_PARALLEL_JOBS", 2):
@@ -449,9 +467,9 @@ def test_run_one_launches_single_job(fastapi, no_scheduler, jobs_as_process):
     even when multiple pending jobs exist and more parallel slots are available.
     """
     job_ids = []
-    for _ in range(3):
+    for user_id in (ADMIN_USER_ID, ORDINARY_USER_USER_ID, CREATOR_USER_ID):
         with ParallelSleepJob(duration=0.5) as job:
-            job.run(ADMIN_USER_ID)
+            job.run(user_id)
             job_ids.append(job.job_id)
 
     with JobsManagerMod.JobsManager() as mgr:
@@ -482,9 +500,9 @@ def test_wait_runners_with_thread_runners(fastapi, no_scheduler):
     JobsManagerMod.JobRunner = JobsManagerMod.ThreadJobRunner
     try:
         job_ids = []
-        for dur in (0.3, 0.05):
+        for user_id, dur in ((ADMIN_USER_ID, 0.3), (ORDINARY_USER_USER_ID, 0.05)):
             with ParallelSleepJob(duration=dur) as job:
-                job.run(ADMIN_USER_ID)
+                job.run(user_id)
                 job_ids.append(job.job_id)
 
         for _ in range(2):
@@ -592,6 +610,192 @@ def test_fail_running_jobs(fastapi, no_scheduler):
             assert svc.session.get(Job, archived_id).state == DBJobStateEnum.Running
             assert svc.session.get(Job, finished_id).state == DBJobStateEnum.Finished
             assert svc.session.get(Job, filtered_id).state == DBJobStateEnum.Running
+    finally:
+        if created_ids:
+            with Service() as svc:
+                for jid in created_ids:
+                    row = svc.session.get(Job, jid)
+                    if row is not None:
+                        svc.session.delete(row)
+                svc.session.commit()
+
+
+class ParallelSleepJob2(ParallelSleepJob):
+    JOB_TYPE = "ParallelSleep2"
+
+
+def test_max_one_running_job_per_user_and_type(fastapi, no_scheduler, jobs_as_process):
+    """
+    Verify the business rule: maximum one running job per user and job type.
+    - Same user, same type: second job stays Pending while first is active, then runs after first finishes.
+    - Different user, same type: allowed to run in parallel.
+    - Same user, different type: allowed to run in parallel.
+    """
+    # 1. Queue two jobs for ADMIN_USER_ID of the same type
+    with ParallelSleepJob(duration=0.8) as job1:
+        job1.run(ADMIN_USER_ID)
+        job1_id = job1.job_id
+    with ParallelSleepJob(duration=0.2) as job2:
+        job2.run(ADMIN_USER_ID)
+        job2_id = job2.job_id
+
+    # Calling run_one() twice should only start job1; job2 must wait
+    with JobsManagerMod.JobsManager() as mgr:
+        mgr.run_one()
+        mgr.run_one()
+    assert len(JobsManagerMod.JobsManager.the_runners) == 1
+    assert JobsManagerMod.JobsManager.the_runners[0].db_job.id == job1_id
+    assert fastapi.get(JOB_QUERY_URL.format(job_id=job2_id), headers=ADMIN_AUTH).json()["state"] == "P"
+
+    # 2. Queue a job for a DIFFERENT user of the SAME type -> runs in parallel
+    with ParallelSleepJob(duration=0.3) as job_other_user:
+        job_other_user.run(ORDINARY_USER_USER_ID)
+        job_other_user_id = job_other_user.job_id
+
+    with JobsManagerMod.JobsManager() as mgr:
+        mgr.run_one()
+    assert len(JobsManagerMod.JobsManager.the_runners) == 2
+    assert {r.db_job.id for r in JobsManagerMod.JobsManager.the_runners} == {
+        job1_id,
+        job_other_user_id,
+    }
+
+    # 3. Queue a job for the SAME user of a DIFFERENT type -> runs in parallel
+    with ParallelSleepJob2(duration=0.3) as job_other_type:
+        job_other_type.run(ADMIN_USER_ID)
+        job_other_type_id = job_other_type.job_id
+
+    with JobsManagerMod.JobsManager() as mgr:
+        mgr.run_one()
+    assert len(JobsManagerMod.JobsManager.the_runners) == 3
+    assert {r.db_job.id for r in JobsManagerMod.JobsManager.the_runners} == {
+        job1_id,
+        job_other_user_id,
+        job_other_type_id,
+    }
+
+    # 4. Wait for all active runners to finish, then run_one() should pick up job2
+    JobsManagerMod.JobsManager.wait_runners()
+    assert len(JobsManagerMod.JobsManager.the_runners) == 0
+
+    with JobsManagerMod.JobsManager() as mgr:
+        mgr.run_one()
+    assert len(JobsManagerMod.JobsManager.the_runners) == 1
+    assert JobsManagerMod.JobsManager.the_runners[0].db_job.id == job2_id
+
+    JobsManagerMod.JobsManager.wait_runners()
+    for jid in (job1_id, job2_id, job_other_user_id, job_other_type_id):
+        job_info = api_wait_for_stable_job(fastapi, jid, max_wait=5)
+        assert job_info.state == "F"
+
+
+def test_max_one_running_job_respects_db_running_state(fastapi, no_scheduler, jobs_as_process):
+    """
+    Verify that even when JobsManager.the_runners is empty (e.g. another worker process
+    is running the job), a DB row in Running state blocks another Pending job
+    with the same (owner_id, type), while allowing a different user or type.
+    """
+    from API_operations.helpers.Service import Service
+    from BO.Job import JobBO
+    from DB.Job import Job, DBJobStateEnum
+
+    created_ids = []
+    try:
+        with Service() as svc:
+            db_running = JobBO.create_job(ADMIN_USER_ID, ParallelSleepJob.JOB_TYPE, {})
+            db_running.state = DBJobStateEnum.Running
+            svc.session.add(db_running)
+            svc.session.flush()
+            db_running_id = db_running.id
+            created_ids.append(db_running_id)
+            svc.session.commit()
+
+        # Queue a pending job for same user & same type, plus one for a different user
+        with ParallelSleepJob(duration=0.2) as blocked_job:
+            blocked_job.run(ADMIN_USER_ID)
+            blocked_id = blocked_job.job_id
+            created_ids.append(blocked_id)
+
+        with ParallelSleepJob(duration=0.2) as allowed_job:
+            allowed_job.run(ORDINARY_USER_USER_ID)
+            allowed_id = allowed_job.job_id
+            created_ids.append(allowed_id)
+
+        # run_one() must skip blocked_job and pick allowed_job
+        with JobsManagerMod.JobsManager() as mgr:
+            mgr.run_one()
+            mgr.run_one()
+        assert len(JobsManagerMod.JobsManager.the_runners) == 1
+        assert JobsManagerMod.JobsManager.the_runners[0].db_job.id == allowed_id
+        assert fastapi.get(JOB_QUERY_URL.format(job_id=blocked_id), headers=ADMIN_AUTH).json()["state"] == "P"
+
+        JobsManagerMod.JobsManager.wait_runners()
+        assert api_wait_for_stable_job(fastapi, allowed_id, max_wait=5).state == "F"
+    finally:
+        if created_ids:
+            with Service() as svc:
+                for jid in created_ids:
+                    row = svc.session.get(Job, jid)
+                    if row is not None:
+                        svc.session.delete(row)
+                svc.session.commit()
+
+
+def test_max_one_running_job_respects_db_starting_state_and_fail_running_jobs(
+    fastapi, no_scheduler, jobs_as_process
+):
+    """
+    Verify that a DB row in Starting state blocks another Pending job with the same
+    (owner_id, type), and that fail_running_jobs() cleans up Starting jobs on startup.
+    """
+    from API_operations.helpers.Service import Service
+    from BO.Job import JobBO
+    from DB.Job import Job, DBJobStateEnum
+
+    created_ids = []
+    try:
+        with Service() as svc:
+            db_starting = JobBO.create_job(ADMIN_USER_ID, ParallelSleepJob.JOB_TYPE, {})
+            db_starting.state = DBJobStateEnum.Starting
+            svc.session.add(db_starting)
+            svc.session.flush()
+            db_starting_id = db_starting.id
+            created_ids.append(db_starting_id)
+            svc.session.commit()
+
+        with ParallelSleepJob(duration=0.2) as blocked_job:
+            blocked_job.run(ADMIN_USER_ID)
+            blocked_id = blocked_job.job_id
+            created_ids.append(blocked_id)
+
+        with JobsManagerMod.JobsManager() as mgr:
+            mgr.run_one()
+        assert len(JobsManagerMod.JobsManager.the_runners) == 0
+        assert (
+            fastapi.get(
+                JOB_QUERY_URL.format(job_id=blocked_id), headers=ADMIN_AUTH
+            ).json()["state"]
+            == "P"
+        )
+
+        # fail_running_jobs() must mark the orphaned Starting job as Error
+        with JobsManagerMod.JobsManager() as mgr:
+            mgr.fail_running_jobs()
+        assert (
+            fastapi.get(
+                JOB_QUERY_URL.format(job_id=db_starting_id), headers=ADMIN_AUTH
+            ).json()["state"]
+            == "E"
+        )
+
+        # Now blocked_job can be picked up and run
+        with JobsManagerMod.JobsManager() as mgr:
+            mgr.run_one()
+        assert len(JobsManagerMod.JobsManager.the_runners) == 1
+        assert JobsManagerMod.JobsManager.the_runners[0].db_job.id == blocked_id
+
+        JobsManagerMod.JobsManager.wait_runners()
+        assert api_wait_for_stable_job(fastapi, blocked_id, max_wait=5).state == "F"
     finally:
         if created_ids:
             with Service() as svc:

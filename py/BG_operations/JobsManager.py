@@ -12,8 +12,8 @@ from os import EX_TEMPFAIL
 from threading import Thread
 from typing import Any, Optional, List, Type, Union, ClassVar
 
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy import exists, select
+from sqlalchemy.orm import Session, aliased
 
 from API_operations.helpers.JobService import JobServiceBase
 from API_operations.helpers.Service import Service
@@ -66,7 +66,7 @@ class BaseJobRunner:
             return 1
         with sce:
             db_job = sce.session.get(Job, self.db_job.id)
-            assert db_job is not None and db_job.state == DBJobStateEnum.Pending
+            assert db_job is not None and db_job.state == DBJobStateEnum.Starting
             db_job.state = DBJobStateEnum.Running
             sce.session.commit()
             with LogsSwitcher(sce):
@@ -179,10 +179,13 @@ class JobsManager(Service):
 
     def fail_running_jobs(self) -> None:
         """
-        Set state of any Running jobs (with positive id) to Error.
+        Set state of any Starting or Running jobs (with positive id) to Error.
         Called when BackgroundWorker starts to clean up orphaned jobs from a previous run.
         """
-        stmt = select(Job).where(Job.id > 0, Job.state == DBJobStateEnum.Running)
+        stmt = select(Job).where(
+            Job.id > 0,
+            Job.state.in_((DBJobStateEnum.Starting, DBJobStateEnum.Running)),
+        )
         if self.INCLUDE:
             stmt = stmt.where(Job.type.in_(tuple(self.INCLUDE)))
         for a_type in self.FILTER:
@@ -194,8 +197,9 @@ class JobsManager(Service):
         now = DateTime.now_time()
         for a_job in running_jobs:
             logger.warning(
-                "Job #%d was in Running state on worker startup; marking as Error",
+                "Job #%d was in %s state on worker startup; marking as Error",
                 a_job.id,
+                a_job.state,
             )
             a_job.state = DBJobStateEnum.Error
             a_job.progress_msg = "Background worker restarted"
@@ -205,6 +209,7 @@ class JobsManager(Service):
     def run_one(self) -> None:
         """
         Pick a single pending job and run it in parallel with active runners, up to MAX_PARALLEL_JOBS.
+        Enforces at most one running job per (owner_id, type).
         This is an instance method, so there is DB session to work with, released straight away.
         """
         cls = JobsManager
@@ -213,27 +218,39 @@ class JobsManager(Service):
         if len(cls.the_runners) >= MAX_PARALLEL_JOBS:
             return
 
-        # Pick a pending job which is not already managed by another runner
-        active_ids = [r.db_job.id for r in cls.the_runners]
-        stmt = select(Job).where(Job.id > 0, Job.state == DBJobStateEnum.Pending)
+        # Pick a pending job that does not share (owner_id, type) with any
+        # Starting or Running job in the database.
+        active_job = aliased(Job)
+        stmt = select(Job).where(
+            Job.id > 0,
+            Job.state == DBJobStateEnum.Pending,
+            ~exists().where(
+                active_job.id > 0,
+                active_job.state.in_(
+                    (DBJobStateEnum.Starting, DBJobStateEnum.Running)
+                ),
+                active_job.owner_id == Job.owner_id,
+                active_job.type == Job.type,
+            ),
+        )
         if self.INCLUDE:
             stmt = stmt.where(Job.type.in_(tuple(self.INCLUDE)))
         for a_type in self.FILTER:
             stmt = stmt.where(Job.type != a_type)
-        if active_ids:
-            stmt = stmt.where(Job.id.notin_(active_ids))
         stmt = stmt.order_by(Job.id).limit(1).with_for_update(skip_locked=True)
         to_run: Optional[Job] = self.session.scalars(stmt).first()
         if to_run is None:
             return
 
         logger.info("Found job to run: %s", str(to_run))
-        self.session.commit()  # Release locks for jobs to come
+        to_run.state = DBJobStateEnum.Starting
+        self.session.commit()  # Claim job as Starting and release locks for jobs to come
 
         # Detach the job DB line from session, as JobRunner is in another process/thread
         # and SQLAlchemy objects are linked to sessions, and sessions cannot be shared b/w processes.
         job_clone = clone_of(to_run)
         job_clone.id = to_run.id
+        job_clone.owner_id = to_run.owner_id
         try:
             # Run the service background
             runner = JobRunner(JobBO(job_clone))
@@ -308,13 +325,32 @@ class JobsManager(Service):
             if the_job is None:
                 return  # Someone stole our job
             match the_job.state:
-                case DBJobStateEnum.Pending:  # It did not manage to go to Running state
+                case DBJobStateEnum.Pending:  # Unexpected, job was not claimed as Starting
                     msg = exit_msg or "Process ended unexpectedly"
                     logger.warning(
                         "Job #%d could not reach Running state: %s",
                         job_id,
                         msg,
                     )
+                case DBJobStateEnum.Starting:  # Did not manage to reach Running state
+                    msg = exit_msg or "Process ended unexpectedly"
+                    if exitcode == EX_TEMPFAIL:
+                        the_job.state = DBJobStateEnum.Pending
+                        session.commit()
+                        logger.warning(
+                            "Job #%d could not reach Running state (%s); reset to Pending",
+                            job_id,
+                            msg,
+                        )
+                    else:
+                        the_job.state = DBJobStateEnum.Error
+                        the_job.progress_msg = msg
+                        session.commit()
+                        logger.error(
+                            "Job #%d ended unexpectedly while in Starting state. Updated state to Error: %s",
+                            job_id,
+                            msg,
+                        )
                 case DBJobStateEnum.Running:
                     msg = exit_msg or "Process ended unexpectedly"
                     the_job.state = DBJobStateEnum.Error

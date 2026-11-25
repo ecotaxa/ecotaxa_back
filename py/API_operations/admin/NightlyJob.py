@@ -155,7 +155,11 @@ class NightlyJobService(JobServiceBase):
                     f"FilesCleanup job #{cleanup_job_id} failed: {progress_msg}"
                 )
                 return
-            if state not in (DBJobStateEnum.Pending, DBJobStateEnum.Running):
+            if state not in (
+                DBJobStateEnum.Pending,
+                DBJobStateEnum.Starting,
+                DBJobStateEnum.Running,
+            ):
                 logger.warning(
                     f"FilesCleanup job #{cleanup_job_id} reached unexpected state "
                     f"{state}"

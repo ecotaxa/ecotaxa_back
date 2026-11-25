@@ -159,7 +159,7 @@ class JobCRUDService(Service):
                 # TODO: Set the job to a state e.g. Trashed and erase in background, better for responsiveness
                 temp_for_job.archive_for(job_id, {JobServiceBase.JOB_LOG_FILE_NAME})
                 job_bo.archive()
-            elif job_bo.state in (DBJobStateEnum.Running,):
+            elif job_bo.state in (DBJobStateEnum.Starting, DBJobStateEnum.Running):
                 # Set the status in DB immediately before anything else
                 job_bo.state = DBJobStateEnum.Error
                 job_bo.progress_msg = JobBO.KILLED_MESSAGE

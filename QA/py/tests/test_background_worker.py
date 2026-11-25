@@ -16,6 +16,8 @@ from BG_operations.JobsManager import (
 from DB.Job import DBJobStateEnum, Job
 from DB.helpers.Connection import DatabaseConnectionException
 
+from tests.credentials import ADMIN_USER_ID
+
 
 def _mock_scheduler_service():
     p1 = patch.object(Service, "__init__", lambda self: None)
@@ -244,7 +246,9 @@ def test_tech_error_opens_service_session_when_none_provided():
     mock_service.__enter__.return_value = mock_service
     mock_service.__exit__.return_value = None
 
-    with patch("BG_operations.JobsManager.Service", return_value=mock_service) as mock_service_cls:
+    with patch(
+        "BG_operations.JobsManager.Service", return_value=mock_service
+    ) as mock_service_cls:
         BaseJobRunner.tech_error(43, RuntimeError("no session"))
 
     mock_service_cls.assert_called_once_with()
@@ -257,7 +261,9 @@ def test_tech_error_opens_service_session_when_none_provided():
 def test_jobs_manager_run_one_passes_session_to_tech_error():
     mgr = JobsManager.__new__(JobsManager)
     mgr.session = MagicMock()
-    pending_job = SimpleNamespace(id=99, type="TestJob", params={})
+    pending_job = SimpleNamespace(
+        id=99, owner_id=ADMIN_USER_ID, type="TestJob", params={}, state=DBJobStateEnum.Pending
+    )
     mgr.session.scalars.return_value.first.return_value = pending_job
 
     start_err = RuntimeError("cannot spawn")
@@ -270,4 +276,33 @@ def test_jobs_manager_run_one_passes_session_to_tech_error():
     ):
         mgr.run_one()
 
+    assert pending_job.state == DBJobStateEnum.Starting
+    mgr.session.commit.assert_called_once_with()
     mock_tech_error.assert_called_once_with(99, start_err, session=mgr.session)
+
+
+def test_interpret_runner_result_starting_tempfail_resets_to_pending():
+    from os import EX_TEMPFAIL
+
+    session = MagicMock()
+    the_job = SimpleNamespace(id=50, state=DBJobStateEnum.Starting, progress_msg="")
+    session.get.return_value = the_job
+    runner = SimpleNamespace(db_job=SimpleNamespace(id=50), exitcode=EX_TEMPFAIL)
+
+    JobsManager._interpret_runner_result(runner, session)
+
+    assert the_job.state == DBJobStateEnum.Pending
+    session.commit.assert_called_once_with()
+
+
+def test_interpret_runner_result_starting_failure_marks_error():
+    session = MagicMock()
+    the_job = SimpleNamespace(id=51, state=DBJobStateEnum.Starting, progress_msg="")
+    session.get.return_value = the_job
+    runner = SimpleNamespace(db_job=SimpleNamespace(id=51), exitcode=1)
+
+    JobsManager._interpret_runner_result(runner, session)
+
+    assert the_job.state == DBJobStateEnum.Error
+    assert "exit code 1" in the_job.progress_msg
+    session.commit.assert_called_once_with()

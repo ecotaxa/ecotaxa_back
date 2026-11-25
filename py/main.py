@@ -3999,7 +3999,7 @@ def list_jobs(
     job_status: Optional[DBJobStateEnum] = Query(
         None,
         title="Job status",
-        description="The job status: P(ending), R(unning), A(sking), E(rror), F(inished).",
+        description="The job status: P(ending), S(tarting), R(unning), A(sking), E(rror), F(inished).",
         examples=[DBJobStateEnum.Finished],
     ),
     current_user: int = Depends(get_current_user),

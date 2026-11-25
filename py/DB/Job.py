@@ -20,8 +20,9 @@ if TYPE_CHECKING:
 
 
 class DBJobStateEnum(str, Enum):
-    Pending = "P"  # Waiting for an execution thread
-    Running = "R"  # Being executed inside a thread
+    Pending = "P"  # Waiting for an execution thread/process
+    Starting = "S"  # Claimed by a worker, starting execution thread/process
+    Running = "R"  # Being executed inside a thread/process
     Asking = "A"  # Needing user information before resuming
     Error = "E"  # Stopped with error
     Finished = "F"  # Done

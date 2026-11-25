@@ -1160,7 +1160,7 @@ class _Job2Model(DescriptiveModel):
     )
     state: str = Field(
         title="state",
-        description="What the job is doing. Could be 'P' for Pending (Waiting for an execution thread), 'R' for Running (Being executed inside a thread), 'A' for Asking (Needing user information before resuming), 'E' for Error (Stopped with error), 'F' for Finished (Done).",
+        description="What the job is doing. Could be 'P' for Pending (Waiting for an execution thread), 'S' for Starting, 'R' for Running (Being executed), 'A' for Asking (Needing user information before resuming), 'E' for Error (Stopped with error), 'F' for Finished (Done).",
         examples=[DBJobStateEnum.Finished],
     )
     step: str = Field(
