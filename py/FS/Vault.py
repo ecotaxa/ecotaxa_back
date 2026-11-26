@@ -4,7 +4,7 @@
 #
 import shutil
 from pathlib import Path, PurePath
-from typing import Set, Tuple
+from typing import Optional, Set, Tuple
 
 
 class Vault(object):
@@ -79,20 +79,26 @@ class Vault(object):
         if not is_there:
             import requests
             import tempfile
-            from os import unlink
 
             file_end = 9 if "_mini" in sub_path else 5 if ".jpeg" in sub_path else 4
-            fout = tempfile.mktemp(suffix=sub_path[-file_end:])
-            r = requests.get(self.BASE_URL % sub_path, stream=True)
-            if r.status_code != 200:
-                return False
-            with open(fout, "wb") as f:
-                for chunk in r.iter_content(65536):
-                    f.write(chunk)
-            f.close()
-            img_id = int(sub_path[:-file_end].replace("/", ""))
-            self.store_image(Path(fout), img_id, file_end == 9)
-            unlink(fout)
+            fout: Optional[Path] = None
+            try:
+                with requests.get(
+                    self.BASE_URL % sub_path, stream=True, timeout=30
+                ) as r:
+                    if r.status_code != 200:
+                        return False
+                    with tempfile.NamedTemporaryFile(
+                        suffix=sub_path[-file_end:], delete=False
+                    ) as f:
+                        fout = Path(f.name)
+                        for chunk in r.iter_content(65536):
+                            f.write(chunk)
+                img_id = int(sub_path[:-file_end].replace("/", ""))
+                self.store_image(fout, img_id, file_end == 9)
+            finally:
+                if fout is not None:
+                    fout.unlink(missing_ok=True)
         return is_there
 
     def image_from_bkp(self, img_maybe: Path, sub_path: str) -> bool:  # pragma:nocover
