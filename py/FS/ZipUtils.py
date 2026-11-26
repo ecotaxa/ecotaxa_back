@@ -38,10 +38,11 @@ def get_file_size(fp: BinaryIO) -> int:
     return fp.tell()
 
 
-def central_directory(fp: BinaryIO) -> Tuple[int, int]:
+def _central_directory(fp: BinaryIO) -> Tuple[int, int, int]:
     """
-    Return the absolute offset and size of the central directory, from the
-    End Of Central Directory record and, when present, its ZIP64 version.
+    Return the absolute offset and size of the central directory, plus the base
+    concatenation offset, from the End Of Central Directory record and, when
+    present, its ZIP64 version.
     """
     size = get_file_size(fp)
     tail_size = min(size, ZIP_EOCD_SIZE + ZIP_MAX_COMMENT)
@@ -89,6 +90,15 @@ def central_directory(fp: BinaryIO) -> Tuple[int, int]:
     start = cd_offset + concat
     if start < 0 or start + cd_size > size:
         raise zipfile.BadZipFile("Bad offset for central directory")
+    return start, cd_size, concat
+
+
+def central_directory(fp: BinaryIO) -> Tuple[int, int]:
+    """
+    Return the absolute offset and size of the central directory, from the
+    End Of Central Directory record and, when present, its ZIP64 version.
+    """
+    start, cd_size, _ = _central_directory(fp)
     return start, cd_size
 
 
@@ -246,12 +256,9 @@ def safe_rel_path(name: str) -> Optional[Path]:
     return Path(*parts)
 
 
-def scan_entries(fp: BinaryIO) -> Generator[Tuple[str, int, bool], None, None]:
-    """
-    Yield `(name, file_size, is_dir)` for each member in the central directory
-    without retaining any member in memory.
-    """
-    cd_start, cd_size = central_directory(fp)
+def _scan_cd(
+    fp: BinaryIO, cd_start: int, cd_size: int, concat: int
+) -> Generator[Tuple[str, int, bool, int], None, None]:
     fp.seek(cd_start)
     remaining = cd_size
     while remaining:
@@ -303,6 +310,44 @@ def scan_entries(fp: BinaryIO) -> Generator[Tuple[str, int, bool], None, None]:
             ) = zip64_entry_sizes(
                 extra, uncompressed_size, compressed_size, local_header_offset
             )
+        abs_offset = concat + local_header_offset
+        if abs_offset < 0 or abs_offset > cd_start:
+            raise zipfile.BadZipFile("Bad offset for local header")
         name = unicode_path_name(extra, raw_name) or decode_cd_name(raw_name, flags)
-        yield name, uncompressed_size, is_dir_name(name)
+        yield name, uncompressed_size, is_dir_name(name), abs_offset
         remaining -= entry_size
+
+
+def scan_entries_with_offsets(
+    fp: BinaryIO,
+) -> Tuple[int, Generator[Tuple[str, int, bool, int], None, None]]:
+    """
+    Return `(cd_start, entries_gen)` where `entries_gen` yields
+    `(name, file_size, is_dir, abs_local_header_offset)` for each member
+    in the central directory without retaining any member in memory.
+    """
+    cd_start, cd_size, concat = _central_directory(fp)
+    return cd_start, _scan_cd(fp, cd_start, cd_size, concat)
+
+
+def data_start_offset(fp: BinaryIO) -> int:
+    """
+    Return the file offset of the first local header referenced in the
+    central directory (or `cd_start` if the archive has no entries).
+    """
+    cd_start, entries = scan_entries_with_offsets(fp)
+    min_offset: Optional[int] = None
+    for _, _, _, abs_offset in entries:
+        if min_offset is None or abs_offset < min_offset:
+            min_offset = abs_offset
+    return cd_start if min_offset is None else min_offset
+
+
+def scan_entries(fp: BinaryIO) -> Generator[Tuple[str, int, bool], None, None]:
+    """
+    Yield `(name, file_size, is_dir)` for each member in the central directory
+    without retaining any member in memory.
+    """
+    _, entries = scan_entries_with_offsets(fp)
+    for name, uncompressed_size, is_dir, _ in entries:
+        yield name, uncompressed_size, is_dir

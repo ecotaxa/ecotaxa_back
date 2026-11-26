@@ -285,6 +285,8 @@ class FilteredZipFile(_NewEntryReporter):
             raise ValueError(f"Unsupported mode: {mode}")
         self._file_path = Path(file)
         self._fp: Optional[BinaryIO] = None
+        self._start_offset: Optional[int] = None
+        self.current_entry: Optional[str] = None
 
     def __enter__(self) -> "FilteredZipFile":
         self._fp = open(self._file_path, "rb", buffering=1024 * 1024)
@@ -305,25 +307,38 @@ class FilteredZipFile(_NewEntryReporter):
         """
         fp = self._fp
         assert fp is not None
-        yield from ZipUtils.scan_entries(fp)
+        cd_start, entries = ZipUtils.scan_entries_with_offsets(fp)
+        min_offset: Optional[int] = None
+        for name, file_size, is_dir, header_offset in entries:
+            if min_offset is None or header_offset < min_offset:
+                min_offset = header_offset
+            yield name, file_size, is_dir
+        self._start_offset = cd_start if min_offset is None else min_offset
 
     def extractall(self, path: str, budget: Optional["_StreamBudget"] = None) -> None:
         assert self._fp is not None
         target_dir = Path(path)
         target_dir.mkdir(parents=True, exist_ok=True)
-        self._fp.seek(0)
+        start_offset = (
+            self._start_offset
+            if self._start_offset is not None
+            else ZipUtils.data_start_offset(self._fp)
+        )
+        self._fp.seek(start_offset)
         for file_name_bytes, _file_size, unzipped_chunks in stream_unzip.stream_unzip(
             iter(partial(self._fp.read, BUFFER_SIZE), b"")
         ):
             if budget is not None:
                 budget.entry()
             name = ZipUtils.decode_name(file_name_bytes)
+            self.current_entry = name
             is_dir = ZipUtils.is_dir_name(name)
             rel_path = ZipUtils.safe_rel_path(name)
             if rel_path is None:
                 for chunk in unzipped_chunks:
                     if budget is not None:
                         budget.bytes(len(chunk))
+                self.current_entry = None
                 continue
             dest = target_dir / rel_path
             if is_dir:
@@ -345,6 +360,7 @@ class FilteredZipFile(_NewEntryReporter):
                             header += chunk[: 512 - len(header)]
                         f_out.write(chunk)
                 self._notify_new_entry(dest, header, True)
+            self.current_entry = None
 
 
 class FilteredTarFile(_NewEntryReporter, tarfile.TarFile):
@@ -361,12 +377,15 @@ class FilteredTarFile(_NewEntryReporter, tarfile.TarFile):
         kwargs.setdefault("stream", True)
         super().__init__(*args, **kwargs)
         self._peek: _HeaderPeekStream = _HeaderPeekStream(None)
+        self.current_entry: Optional[str] = None
 
     def _extract_member(self, tarinfo, targetpath, *args, **kwargs) -> None:
+        self.current_entry = tarinfo.name
         super()._extract_member(tarinfo, targetpath, *args, **kwargs)
         header, self._peek.header = self._peek.header, b""
         # Only regular files are checked for their format, not dirs and links
         self._notify_new_entry(Path(os.fsdecode(targetpath)), header, tarinfo.isreg())
+        self.current_entry = None
 
     def makefile(self, tarinfo, targetpath) -> None:
         orig_fileobj = self.fileobj
@@ -385,7 +404,9 @@ class FilteredTarFile(_NewEntryReporter, tarfile.TarFile):
         assert self.name is not None
         with FilteredTarFile.open(self.name, "r|*", bufsize=BUFFER_SIZE) as tar:
             for member in tar:
+                self.current_entry = member.name
                 yield member.name, member.size, member.isdir()
+            self.current_entry = None
 
 
 class UnpackStatus(object):
@@ -685,7 +706,17 @@ class Unpacker(object):
         # Binary type known from the header: settled, no need to look further
         return "accepted" if mime_type in cls.ACCEPTED_MIME_TYPES else None
 
+    @staticmethod
+    def _error_context(
+        input_path: Path,
+        archive: Optional[Union[FilteredZipFile, FilteredTarFile]] = None,
+    ) -> str:
+        if archive is not None and archive.current_entry:
+            return f"{input_path} (entry: {archive.current_entry})"
+        return str(input_path)
+
     def unpack_zip(self, input_path: Path, path: Path) -> None:
+        archive: Optional[FilteredZipFile] = None
         try:
             with FilteredZipFile(
                 input_path,
@@ -694,11 +725,12 @@ class Unpacker(object):
             ) as archive:
                 self.extract_archive(archive, str(input_path), path)
         except Exception as e:
-            _unpack_exception_throw(e, str(self.compressed_origin))
+            _unpack_exception_throw(e, self._error_context(input_path, archive))
         finally:
             input_path.unlink(missing_ok=True)
 
     def unpack_tar(self, input_path: Path, path: Path) -> None:
+        archive: Optional[FilteredTarFile] = None
         try:
             with FilteredTarFile.open(
                 input_path,
@@ -707,7 +739,7 @@ class Unpacker(object):
             ) as archive:
                 self.extract_archive(archive, str(input_path), path)
         except Exception as e:
-            _unpack_exception_throw(e, str(self.compressed_origin))
+            _unpack_exception_throw(e, self._error_context(input_path, archive))
         finally:
             input_path.unlink(missing_ok=True)
 
@@ -730,7 +762,7 @@ class Unpacker(object):
         except Exception as e:
             if decompressed_path.exists():
                 decompressed_path.unlink()
-            _unpack_exception_throw(e, str(self.compressed_origin))
+            _unpack_exception_throw(e, self._error_context(input_path))
         finally:
             input_path.unlink(missing_ok=True)
 

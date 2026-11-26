@@ -12,13 +12,14 @@ from os import EX_TEMPFAIL
 from threading import Thread
 from typing import Any, Optional, List, Type, Union, ClassVar
 
-from sqlalchemy import exists, select
+from sqlalchemy import exists, or_, select
 from sqlalchemy.orm import Session, aliased
 
 from API_operations.helpers.JobService import JobServiceBase
 from API_operations.helpers.Service import Service
 from BO.Job import JobBO
 from DB.Job import Job, DBJobStateEnum, JobIDT
+from DB.User import Role, UserRole
 from DB.helpers.Connection import DatabaseConnectionException
 from DB.helpers.ORM import clone_of
 from helpers import DateTime
@@ -209,7 +210,7 @@ class JobsManager(Service):
     def run_one(self) -> None:
         """
         Pick a single pending job and run it in parallel with active runners, up to MAX_PARALLEL_JOBS.
-        Enforces at most one running job per (owner_id, type).
+        Enforces at most one running job per (owner_id, type), unless the owner has admin rights.
         This is an instance method, so there is DB session to work with, released straight away.
         """
         cls = JobsManager
@@ -218,19 +219,27 @@ class JobsManager(Service):
         if len(cls.the_runners) >= MAX_PARALLEL_JOBS:
             return
 
-        # Pick a pending job that does not share (owner_id, type) with any
-        # Starting or Running job in the database.
+        # Pick a pending job that either belongs to an admin user, or does not share
+        # (owner_id, type) with any Starting or Running job in the database.
         active_job = aliased(Job)
+        owner_is_admin = exists().where(
+            UserRole.user_id == Job.owner_id,
+            UserRole.role_id == Role.id,
+            Role.name == Role.APP_ADMINISTRATOR,
+        )
         stmt = select(Job).where(
             Job.id > 0,
             Job.state == DBJobStateEnum.Pending,
-            ~exists().where(
-                active_job.id > 0,
-                active_job.state.in_(
-                    (DBJobStateEnum.Starting, DBJobStateEnum.Running)
+            or_(
+                owner_is_admin,
+                ~exists().where(
+                    active_job.id > 0,
+                    active_job.state.in_(
+                        (DBJobStateEnum.Starting, DBJobStateEnum.Running)
+                    ),
+                    active_job.owner_id == Job.owner_id,
+                    active_job.type == Job.type,
                 ),
-                active_job.owner_id == Job.owner_id,
-                active_job.type == Job.type,
             ),
         )
         if self.INCLUDE:

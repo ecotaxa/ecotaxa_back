@@ -816,11 +816,12 @@ def test_entries_limit_zip_lying_central_directory(tmp_path):
     eocd, cd_offset, _cd_size = _eocd_and_cd(archive_bytes)
     last_entry = archive_bytes.rfind(b"PK\x01\x02", cd_offset, eocd)
     assert last_entry > cd_offset
-    # Point the EOCD at only the last central directory entry.
-    struct.pack_into("<L", archive_bytes, eocd + 16, last_entry)
-    struct.pack_into("<L", archive_bytes, eocd + 12, eocd - last_entry)
-    struct.pack_into("<H", archive_bytes, eocd + 10, 1)
-    struct.pack_into("<H", archive_bytes, eocd + 8, 1)
+    # Drop the last central directory entry so the EOCD advertises only the
+    # first entry while streaming from its local header still encounters both.
+    del archive_bytes[last_entry:eocd]
+    struct.pack_into("<L", archive_bytes, last_entry + 12, last_entry - cd_offset)
+    struct.pack_into("<H", archive_bytes, last_entry + 10, 1)
+    struct.pack_into("<H", archive_bytes, last_entry + 8, 1)
     archive = _upload(parent, "name.zip", bytes(archive_bytes))
     _refused(
         _limited(root, max_unpack_entries=1),
@@ -1181,3 +1182,103 @@ def test_refused_zip_member_traversal(tmp_path):
     assert exc.value.message.startswith(DETAIL_ARCHIVE_MEMBER_REFUSED)
     _nothing_left(parent)
     assert list(tmp_path.rglob("escape.tsv")) == []
+
+
+def _zip_with_truncated_duplicate_prefix(members: dict[str, bytes]) -> bytes:
+    """
+    Build a zip whose first half is a truncated copy of itself, followed by
+    the complete zip with offsets automatically shifted by ZipFile.
+    """
+    import io
+    import zipfile
+
+    raw = zip_bytes(members)
+    buf = io.BytesIO(raw[: len(raw) // 2])
+    buf.seek(0, io.SEEK_END)
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for name, content in members.items():
+            zf.writestr(name, content)
+    return buf.getvalue()
+
+
+def test_zip_with_truncated_duplicate_prefix(tmp_path):
+    from FS.Unpack import FilteredZipFile
+
+    root, parent = _setup(tmp_path)
+    members = {
+        "a.tsv": TSV * 20,
+        "sub/b.tsv": TSV * 30,
+        "img/x.png": PNG_1X1,
+    }
+    data = _zip_with_truncated_duplicate_prefix(members)
+    archive = _upload(parent, "name.zip", data)
+
+    # Full unpacker path (scan_entries + extractall)
+    make_user_dir(root).unpacker.dispatch_unpack(archive, parent)
+    assert tree(parent) == [
+        "name/",
+        "name/a.tsv",
+        "name/img/",
+        "name/img/x.png",
+        "name/sub/",
+        "name/sub/b.tsv",
+    ]
+    assert (parent / "name" / "a.tsv").read_bytes() == TSV * 20
+    assert (parent / "name" / "sub" / "b.tsv").read_bytes() == TSV * 30
+
+    # Direct FilteredZipFile.extractall without prior scan_entries()
+    archive2 = tmp_path / "direct.zip"
+    archive2.write_bytes(data)
+    direct_out = tmp_path / "direct_out"
+    with FilteredZipFile(archive2, "r") as zf:
+        zf.extractall(direct_out.as_posix())
+    assert (direct_out / "a.tsv").read_bytes() == TSV * 20
+    assert (direct_out / "sub" / "b.tsv").read_bytes() == TSV * 30
+
+
+def test_zip_with_concatenated_prefix(tmp_path):
+    from FS.Unpack import FilteredZipFile
+
+    archive = tmp_path / "concat.zip"
+    archive.write_bytes(b"SFX_STUB_PREFIX" + zip_bytes({"a.tsv": TSV, "img/x.png": PNG_1X1}))
+
+    out1 = tmp_path / "out1"
+    with FilteredZipFile(archive, "r") as zf:
+        entries = list(zf.scan_entries())
+        assert len(entries) == 2
+        zf.extractall(out1.as_posix())
+    assert (out1 / "a.tsv").read_bytes() == TSV
+    assert (out1 / "img" / "x.png").read_bytes() == PNG_1X1
+
+    out2 = tmp_path / "out2"
+    with FilteredZipFile(archive, "r") as zf:
+        zf.extractall(out2.as_posix())
+    assert (out2 / "a.tsv").read_bytes() == TSV
+    assert (out2 / "img" / "x.png").read_bytes() == PNG_1X1
+
+
+def test_corrupt_archive_logs_filename(tmp_path, monkeypatch):
+    import FS.Unpack as unpack_mod
+
+    root, parent = _setup(tmp_path)
+    inner = _deflated_zip(TSV * 200)
+    bad_inner = inner[:45] + b"\xff" * 20 + inner[65:]
+    archive = _upload(
+        parent,
+        "name.zip",
+        zip_bytes({"a.tsv": TSV, "sub/inner_Images.zip": bad_inner}),
+    )
+    logged: list[str] = []
+    orig_error = unpack_mod.logger.error
+
+    def spy_error(msg, *args, **kwargs):
+        logged.append(msg % args if args else str(msg))
+        return orig_error(msg, *args, **kwargs)
+
+    monkeypatch.setattr(unpack_mod.logger, "error", spy_error)
+    with pytest.raises(UnprocessableEntityException):
+        make_user_dir(root).unpacker.dispatch_unpack(archive, parent)
+    assert any(
+        "422" in m and "inner_Images.zip" in m and "(entry: a.tsv)" in m
+        for m in logged
+    ), logged

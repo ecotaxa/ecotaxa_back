@@ -626,17 +626,17 @@ class ParallelSleepJob2(ParallelSleepJob):
 
 def test_max_one_running_job_per_user_and_type(fastapi, no_scheduler, jobs_as_process):
     """
-    Verify the business rule: maximum one running job per user and job type.
+    Verify the business rule: maximum one running job per non-admin user and job type.
     - Same user, same type: second job stays Pending while first is active, then runs after first finishes.
     - Different user, same type: allowed to run in parallel.
     - Same user, different type: allowed to run in parallel.
     """
-    # 1. Queue two jobs for ADMIN_USER_ID of the same type
+    # 1. Queue two jobs for ORDINARY_USER_USER_ID of the same type
     with ParallelSleepJob(duration=0.8) as job1:
-        job1.run(ADMIN_USER_ID)
+        job1.run(ORDINARY_USER_USER_ID)
         job1_id = job1.job_id
     with ParallelSleepJob(duration=0.2) as job2:
-        job2.run(ADMIN_USER_ID)
+        job2.run(ORDINARY_USER_USER_ID)
         job2_id = job2.job_id
 
     # Calling run_one() twice should only start job1; job2 must wait
@@ -649,7 +649,7 @@ def test_max_one_running_job_per_user_and_type(fastapi, no_scheduler, jobs_as_pr
 
     # 2. Queue a job for a DIFFERENT user of the SAME type -> runs in parallel
     with ParallelSleepJob(duration=0.3) as job_other_user:
-        job_other_user.run(ORDINARY_USER_USER_ID)
+        job_other_user.run(ORDINARY_USER2_USER_ID)
         job_other_user_id = job_other_user.job_id
 
     with JobsManagerMod.JobsManager() as mgr:
@@ -662,7 +662,7 @@ def test_max_one_running_job_per_user_and_type(fastapi, no_scheduler, jobs_as_pr
 
     # 3. Queue a job for the SAME user of a DIFFERENT type -> runs in parallel
     with ParallelSleepJob2(duration=0.3) as job_other_type:
-        job_other_type.run(ADMIN_USER_ID)
+        job_other_type.run(ORDINARY_USER_USER_ID)
         job_other_type_id = job_other_type.job_id
 
     with JobsManagerMod.JobsManager() as mgr:
@@ -702,7 +702,7 @@ def test_max_one_running_job_respects_db_running_state(fastapi, no_scheduler, jo
     created_ids = []
     try:
         with Service() as svc:
-            db_running = JobBO.create_job(ADMIN_USER_ID, ParallelSleepJob.JOB_TYPE, {})
+            db_running = JobBO.create_job(ORDINARY_USER_USER_ID, ParallelSleepJob.JOB_TYPE, {})
             db_running.state = DBJobStateEnum.Running
             svc.session.add(db_running)
             svc.session.flush()
@@ -712,12 +712,12 @@ def test_max_one_running_job_respects_db_running_state(fastapi, no_scheduler, jo
 
         # Queue a pending job for same user & same type, plus one for a different user
         with ParallelSleepJob(duration=0.2) as blocked_job:
-            blocked_job.run(ADMIN_USER_ID)
+            blocked_job.run(ORDINARY_USER_USER_ID)
             blocked_id = blocked_job.job_id
             created_ids.append(blocked_id)
 
         with ParallelSleepJob(duration=0.2) as allowed_job:
-            allowed_job.run(ORDINARY_USER_USER_ID)
+            allowed_job.run(ORDINARY_USER2_USER_ID)
             allowed_id = allowed_job.job_id
             created_ids.append(allowed_id)
 
@@ -755,7 +755,7 @@ def test_max_one_running_job_respects_db_starting_state_and_fail_running_jobs(
     created_ids = []
     try:
         with Service() as svc:
-            db_starting = JobBO.create_job(ADMIN_USER_ID, ParallelSleepJob.JOB_TYPE, {})
+            db_starting = JobBO.create_job(ORDINARY_USER_USER_ID, ParallelSleepJob.JOB_TYPE, {})
             db_starting.state = DBJobStateEnum.Starting
             svc.session.add(db_starting)
             svc.session.flush()
@@ -764,7 +764,7 @@ def test_max_one_running_job_respects_db_starting_state_and_fail_running_jobs(
             svc.session.commit()
 
         with ParallelSleepJob(duration=0.2) as blocked_job:
-            blocked_job.run(ADMIN_USER_ID)
+            blocked_job.run(ORDINARY_USER_USER_ID)
             blocked_id = blocked_job.job_id
             created_ids.append(blocked_id)
 
@@ -804,3 +804,32 @@ def test_max_one_running_job_respects_db_starting_state_and_fail_running_jobs(
                     if row is not None:
                         svc.session.delete(row)
                 svc.session.commit()
+
+
+def test_admin_bypasses_max_one_running_job_per_user_and_type(
+    fastapi, no_scheduler, jobs_as_process
+):
+    """
+    Verify that accounts with admin rights (Application Administrator) can bypass
+    the restriction on simultaneous jobs of the same type per user.
+    """
+    with ParallelSleepJob(duration=0.5) as job1:
+        job1.run(ADMIN_USER_ID)
+        job1_id = job1.job_id
+    with ParallelSleepJob(duration=0.5) as job2:
+        job2.run(ADMIN_USER_ID)
+        job2_id = job2.job_id
+
+    with JobsManagerMod.JobsManager() as mgr:
+        mgr.run_one()
+        mgr.run_one()
+
+    assert len(JobsManagerMod.JobsManager.the_runners) == 2
+    assert {r.db_job.id for r in JobsManagerMod.JobsManager.the_runners} == {
+        job1_id,
+        job2_id,
+    }
+
+    JobsManagerMod.JobsManager.wait_runners()
+    for jid in (job1_id, job2_id):
+        assert api_wait_for_stable_job(fastapi, jid, max_wait=5).state == "F"
