@@ -75,7 +75,6 @@ class ConfigKey(StrEnum):
     USERSFILESAREA = "USERSFILESAREA"
     DIR_MAIL_TEMPLATES = "DIR_MAIL_TEMPLATES"
     TIMETOLIVE = "TIMETOLIVE"
-    MAX_UPLOAD_SIZE = "MAX_UPLOAD_SIZE"
     # Security & Authentication
     SECRET_KEY = "SECRET_KEY"
     SECURITY_PASSWORD_HASH = "SECURITY_PASSWORD_HASH"
@@ -113,6 +112,7 @@ class ConfigKey(StrEnum):
     CORS_ALLOWED_ORIGINS = "CORS_ALLOWED_ORIGINS"
     CORS_ALLOWED_ORIGIN_REGEX = "CORS_ALLOWED_ORIGIN_REGEX"
     # Disk space / Unpack
+    MAX_UPLOAD_SIZE = "MAX_UPLOAD_SIZE"
     UNPACK_MIN_FREE_DISK = "UNPACK_MIN_FREE_DISK"
     MAX_UNPACK_ENTRIES = "MAX_UNPACK_ENTRIES"
     MAX_UNPACKED_SIZE = "MAX_UNPACKED_SIZE"
@@ -301,7 +301,7 @@ class Config(object):
         return int(self._get(ConfigKey.MAX_CAPTCHA_TOKEN_LENGTH, "4096"))
 
     def get_max_upload_size(self) -> int:
-        return int(self._get(ConfigKey.MAX_UPLOAD_SIZE, "665600"))
+        return int(self._get(ConfigKey.MAX_UPLOAD_SIZE, "681574400"))
 
     def get_cors_allowed_origins(self) -> List[str]:
         # Exact origins (scheme://host[:port]) of third-party browser apps allowed to read API responses, or '*' for any
