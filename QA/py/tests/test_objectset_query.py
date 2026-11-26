@@ -486,8 +486,12 @@ def test_total_ids_and_parents(fastapi):
     rsp = fastapi.post("/object_set/parents", headers=CREATOR_AUTH, json=full["object_ids"])
     assert rsp.status_code == status.HTTP_200_OK
     parents = rsp.json()
-    assert full["acquisition_ids"] == parents["acquisition_ids"]
-    assert full["sample_ids"] == parents["sample_ids"]
+    # /object_set/parents has no ORDER BY: compare per object, not per position
+    assert dict(
+        zip(full["object_ids"], zip(full["acquisition_ids"], full["sample_ids"]))
+    ) == dict(
+        zip(parents["object_ids"], zip(parents["acquisition_ids"], parents["sample_ids"]))
+    )
     assert len(set(full["sample_ids"])) > 1  # the test covers several samples
 
     def check(params: str, nb_rows: int, total: int = nb, **filters):
