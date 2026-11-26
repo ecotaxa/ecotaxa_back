@@ -172,7 +172,6 @@ from BO.Collection import (
 )
 from BO.ColumnUpdate import ColUpdateList
 from BO.Job import JobBO
-from BO.Object import ObjectBO
 from BO.Project import ProjectBO, ProjectUserStats
 from BO.ProjectSet import ProjectSetColumnStats
 from BO.Sample import SampleTaxoStats
@@ -1116,7 +1115,7 @@ def list_collections(
         examples=["*default,fieldlist"],
     ),  # TODO: Unused param
     current_user: int = Depends(get_current_user),
-) -> List[CollectionBO]:
+) -> List[CollectionModel]:
     """
     **Search for collections.**
 
@@ -1125,7 +1124,7 @@ def list_collections(
     with CollectionsService() as sce:
         with RightsThrower():
             matching_collections = sce.list(current_user, collection_ids)
-    return matching_collections
+        return [CollectionModel.model_validate(c) for c in matching_collections]
 
 
 @app_router.get(
@@ -1148,7 +1147,7 @@ def search_collections(
         examples=["*default,fieldlist"],
     ),
     current_user: int = Depends(get_current_user),
-) -> List[CollectionBO]:
+) -> List[CollectionModel]:
     """
     **Search for collections.**
 
@@ -1157,7 +1156,7 @@ def search_collections(
     with CollectionsService() as sce:
         with RightsThrower():
             matching_collections = sce.search(current_user, title)
-    return matching_collections
+        return [CollectionModel.model_validate(c) for c in matching_collections]
 
 
 @app_router.get(
@@ -1173,7 +1172,7 @@ def collection_by_title(
         description="Search by **exact** title.",
         examples=["My collection"],
     )
-) -> CollectionBO:
+) -> CollectionModel:
     """
     Return the **single collection with this title**.
 
@@ -1184,7 +1183,7 @@ def collection_by_title(
     with CollectionsService() as sce:
         with RightsThrower():
             matching_collection = sce.query_by_title(q)
-    return matching_collection
+        return CollectionModel.model_validate(matching_collection)
 
 
 @app_router.get(
@@ -1200,7 +1199,7 @@ def collection_by_short_title(
         description="Search by **exact** short title.",
         examples=["My coll"],
     )
-) -> CollectionBO:
+) -> CollectionModel:
     """
     Return the **single collection with this short title**.
 
@@ -1211,7 +1210,7 @@ def collection_by_short_title(
     with CollectionsService() as sce:
         with RightsThrower():
             matching_collection = sce.query_by_short_title(q)
-    return matching_collection
+        return CollectionModel.model_validate(matching_collection)
 
 
 @app_router.get(
@@ -1258,7 +1257,7 @@ def get_collection(
         examples=[1],
     ),
     current_user: int = Depends(get_current_user),
-) -> CollectionBO:
+) -> CollectionModel:
     """
     Returns **information about the collection** corresponding to the given id.
 
@@ -1271,7 +1270,7 @@ def get_collection(
             )
         if present_collection is None:
             raise HTTPException(status_code=404, detail="Collection not found")
-        return present_collection
+        return CollectionModel.model_validate(present_collection)
 
 
 @app_router.put(
@@ -1477,10 +1476,10 @@ def list_projects(
             window_start=window_start or 0,
             window_size=window_size or 0,
         )
-    # Pagination and sorting on genuine columns already happened in SQL above.
-    # This only covers derived/computed order fields that SQL can't sort on.
-    ret = sort_and_prune(ret, order_field, project_model_columns)
-    return MyORJSONResponse(ret)
+        # Pagination and sorting on genuine columns already happened in SQL above.
+        # This only covers derived/computed order fields that SQL can't sort on.
+        ret = sort_and_prune(ret, order_field, project_model_columns)
+        return MyORJSONResponse(ret)
 
 
 @app_router.get(
@@ -1574,10 +1573,10 @@ def search_projects(
             window_start=window_start,
             window_size=window_size,
         )
-    # Pagination and sorting on genuine columns already happened in SQL above.
-    # This only covers derived/computed order fields that SQL can't sort on.
-    ret = sort_and_prune(ret, order_field, project_model_columns)
-    return MyORJSONResponse(ret)
+        # Pagination and sorting on genuine columns already happened in SQL above.
+        # This only covers derived/computed order fields that SQL can't sort on.
+        ret = sort_and_prune(ret, order_field, project_model_columns)
+        return MyORJSONResponse(ret)
 
 
 @app_router.post(
@@ -1650,7 +1649,7 @@ def project_query(
         examples=[False],
     ),
     current_user: Optional[int] = Depends(get_optional_current_user),
-) -> ProjectBO:
+) -> ProjectModel:
     """
     **Returns project** if it exists for current user, eventually for managing it.
     """
@@ -1658,7 +1657,7 @@ def project_query(
         for_managing = bool(for_managing)
         with RightsThrower():
             ret = sce.query(current_user, project_id, for_managing, for_update=False)
-        return ret
+        return ProjectModel.model_validate(ret)
 
 
 @app_router.get(
@@ -3206,7 +3205,7 @@ def object_query(
         ..., description="Internal, the unique numeric id of this object.", examples=[1]
     ),
     current_user: Optional[int] = Depends(get_optional_current_user),
-) -> ObjectBO:
+) -> ObjectModel:
     """
     Returns **information about the object** corresponding to the given id.
 
@@ -3217,7 +3216,7 @@ def object_query(
             ret = sce.query(current_user, object_id)
         if ret is None:
             raise HTTPException(status_code=404, detail="Object not found")
-        return ret
+        return ObjectModel.model_validate(ret)
 
 
 @app_router.get(
@@ -4003,7 +4002,7 @@ def list_jobs(
         examples=[DBJobStateEnum.Finished],
     ),
     current_user: int = Depends(get_current_user),
-) -> List[JobBO]:
+) -> List[JobModel]:
     """
     **Return the jobs** for current user, or all of them if admin is asked for.
     Optional filters on type and status can be provided.
@@ -4011,7 +4010,7 @@ def list_jobs(
     with JobCRUDService() as sce:
         with RightsThrower():
             ret: List[JobBO] = sce.list(current_user, for_admin, job_type, job_status)
-    return ret
+        return [JobModel.model_validate(j) for j in ret]
 
 
 @app_router.get(
@@ -4024,14 +4023,14 @@ def get_job(
         examples=[47445],
     ),
     current_user: int = Depends(get_current_user),
-) -> JobBO:
+) -> JobModel:
     """
     Returns **information about the job** corresponding to the given id.
     """
     with JobCRUDService() as sce:
         with RightsThrower():
             ret: JobBO = sce.query(current_user, job_id)
-    return ret
+        return JobModel.model_validate(ret)
 
 
 @app_router.post(

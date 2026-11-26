@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import threading
 from unittest.mock import MagicMock
 
 import pytest
@@ -27,6 +28,8 @@ def mock_session(mocker):
 
 def _response(status_code=200, bindings=None):
     response = MagicMock()
+    response.__enter__.return_value = response
+    response.__exit__.return_value = False
     response.status_code = status_code
     response.ok = 200 <= status_code < 300
     response.json.return_value = {"results": {"bindings": bindings or []}}
@@ -119,3 +122,96 @@ def test_search(mock_session):
 def test_search_too_short(mock_session):
     assert EDMOFetcher.search(" ab ") == []
     mock_session.get.assert_not_called()
+
+
+def test_response_closed_on_early_return_and_json_error(mocker, mock_session):
+    rsp_204 = _response(status_code=204)
+    mock_session.get.return_value = rsp_204
+    assert EDMOFetcher.find_by_name("anything") == []
+    rsp_204.__enter__.assert_called_once()
+    rsp_204.__exit__.assert_called_once()
+
+    rsp_500 = _response(status_code=500)
+    mock_session.get.return_value = rsp_500
+    assert EDMOFetcher.find_by_name("anything") == []
+    rsp_500.__enter__.assert_called_once()
+    rsp_500.__exit__.assert_called_once()
+
+    rsp_bad_json = _response(status_code=200)
+    rsp_bad_json.json.side_effect = ValueError("invalid json")
+    mock_session.get.return_value = rsp_bad_json
+    spy_invalidate = mocker.spy(EDMOFetcher, "invalidate_session")
+    assert EDMOFetcher.find_by_name("anything") == []
+    rsp_bad_json.__enter__.assert_called_once()
+    rsp_bad_json.__exit__.assert_called_once()
+    assert spy_invalidate.called
+
+
+def test_invalidate_session_closes_session(mocker):
+    EDMOFetcher.invalidate_session()
+    created_sessions = []
+    session_cls = requests.Session
+
+    def make_session():
+        sess = MagicMock(spec=session_cls)
+        created_sessions.append(sess)
+        return sess
+
+    mocker.patch("providers.EDMO.requests.Session", side_effect=make_session)
+
+    session = EDMOFetcher.get_session()
+    assert session is created_sessions[0]
+    assert EDMOFetcher.the_session is session
+
+    EDMOFetcher.invalidate_session()
+    assert EDMOFetcher.the_session is None
+    session.close.assert_called_once()
+
+    # Subsequent invalidation is a no-op
+    EDMOFetcher.invalidate_session()
+    session.close.assert_called_once()
+
+
+def test_get_session_and_invalidate_thread_safe(mocker):
+    EDMOFetcher.invalidate_session()
+    created_sessions = []
+    barrier = threading.Barrier(8)
+    session_cls = requests.Session
+
+    def make_session():
+        sess = MagicMock(spec=session_cls)
+        created_sessions.append(sess)
+        return sess
+
+    mocker.patch("providers.EDMO.requests.Session", side_effect=make_session)
+
+    results = []
+
+    def worker():
+        barrier.wait()
+        results.append(EDMOFetcher.get_session())
+
+    threads = [threading.Thread(target=worker) for _ in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert len(created_sessions) == 1
+    assert all(s is created_sessions[0] for s in results)
+
+    # Concurrent invalidations should close the session exactly once
+    inv_barrier = threading.Barrier(8)
+
+    def inv_worker():
+        inv_barrier.wait()
+        EDMOFetcher.invalidate_session()
+
+    inv_threads = [threading.Thread(target=inv_worker) for _ in range(8)]
+    for t in inv_threads:
+        t.start()
+    for t in inv_threads:
+        t.join()
+
+    assert EDMOFetcher.the_session is None
+    created_sessions[0].close.assert_called_once()

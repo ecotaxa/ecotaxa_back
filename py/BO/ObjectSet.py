@@ -587,11 +587,11 @@ class EnumeratedObjectSet(MappedTable):
 
     def delete(
         self, chunk_size: int, do_with_files: Optional[Callable[[List[str]], None]]
-    ) -> Tuple[int, int, List[str]]:
+    ) -> Tuple[int, int, int]:
         """
         Delete all objects in this set, in 'small' DB transactions.
         """
-        nb_objs, nb_img_rows, img_files = 0, 0, []
+        nb_objs, nb_img_rows, nb_img_files = 0, 0, 0
         # Pick chunks of object ids
         for a_chunk in self.get_objectid_chunks(chunk_size):
             # Delete them
@@ -601,9 +601,9 @@ class EnumeratedObjectSet(MappedTable):
             nb_img_rows += r
             if do_with_files:
                 do_with_files(i)
-            img_files.extend(i)
+            nb_img_files += len(i)
 
-        return nb_objs, nb_img_rows, img_files
+        return nb_objs, nb_img_rows, nb_img_files
 
     def force_to_predicted(
         self, training: TrainingBO

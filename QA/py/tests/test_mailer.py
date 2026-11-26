@@ -231,7 +231,7 @@ def test_get_ticket_success(mocker):
     provider.TICKET_MATCH = r"\[Ticket#\d+\]"
 
     mock_imap = mocker.Mock()
-    mocker.patch("imaplib.IMAP4_SSL", return_value=mock_imap)
+    imap_cls = mocker.patch("imaplib.IMAP4_SSL", return_value=mock_imap)
 
     # Mock search result: one message UID
     mock_imap.uid.side_effect = [
@@ -244,6 +244,9 @@ def test_get_ticket_success(mocker):
 
     # Assert
     assert ticket == "[Ticket#999]"
+    imap_cls.assert_called_once_with(
+        "smtp.example.com", 993, timeout=MailProvider.IMAP_TIMEOUT
+    )
     mock_imap.login.assert_called_once()
     mock_imap.select.assert_called_once_with("INBOX")
     mock_imap.logout.assert_called_once()
@@ -282,6 +285,7 @@ def test_get_ticket_imap_error_logs_and_returns_none(mocker):
 
     # Assert
     assert ticket is None
+    mock_imap.logout.assert_called_once()
     # Verify that it didn't crash and returned None as expected in except block
 
 
@@ -299,7 +303,27 @@ def test_get_ticket_imap_weirdness_logs_and_returns_none(mocker):
 
     # Assert
     assert ticket is None
+    mock_imap.logout.assert_called_once()
     # Verify that it didn't crash and returned None as expected in except block
+
+
+def test_get_ticket_closes_connection_on_uid_and_logout_errors(mocker):
+    # Arrange
+    provider = make_provider()
+    provider.ADD_TICKET = "support@example.com"
+
+    mock_imap = mocker.Mock()
+    mocker.patch("imaplib.IMAP4_SSL", return_value=mock_imap)
+    mock_imap.uid.side_effect = RuntimeError("UID fetch failed")
+    mock_imap.logout.side_effect = OSError("Broken pipe")
+
+    # Act
+    ticket = provider._get_ticket("user@example.com", 123)
+
+    # Assert
+    assert ticket is None
+    mock_imap.logout.assert_called_once()
+    mock_imap.shutdown.assert_called_once()
 
 
 @pytest.mark.parametrize(

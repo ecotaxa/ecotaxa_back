@@ -601,7 +601,8 @@ class ProjectBO(object):
             elif modelfield == "cnn_image_position":
                 if (
                     projectreq.cnn_image_position is not None
-                    and projectreq.cnn_image_position != self._project.cnn_image_position
+                    and projectreq.cnn_image_position
+                    != self._project.cnn_image_position
                 ):
                     self.validate_cnn_image_position(
                         session, projectreq.cnn_image_position
@@ -699,40 +700,34 @@ class ProjectBO(object):
         """
         Get all numerical free fields values for all objects in a project.
         """
-        from DB.helpers.ORM import MetaData
-
-        metadata = MetaData()
-        # TODO: Cache in a member
         mappings = ProjectMapping().load_from_project(self._project)
-        num_fields_cols = set(
-            [
-                col
-                for col in mappings.object_mappings.tsv_cols_to_real.values()
-                if col[0] == "n"
-            ]
-        )
+        num_fields_cols = {
+            col
+            for col in mappings.object_mappings.tsv_cols_to_real.values()
+            if col[0] == "n"
+        }
         obj_fields_tbl = minimal_table_of(
-            metadata, ObjectFields, num_fields_cols, exact_floats=True
+            ObjectFields, num_fields_cols, exact_floats=True
         )
-        qry = session.query(Project)
         qry = (
-            qry.join(Project.all_samples)
+            select(Acquisition.acquisid, Acquisition.orig_id, obj_fields_tbl)
+            .select_from(Project)
+            .join(Project.all_samples)
             .join(Sample.all_acquisitions)
             .join(Acquisition.all_objects)
+            .join(obj_fields_tbl, ObjectHeader.objid == obj_fields_tbl.c.objfid)
+            .where(Project.projid == self._project.projid)
+            .order_by(Acquisition.acquisid)
         )
-        qry = qry.join(obj_fields_tbl, ObjectHeader.objid == obj_fields_tbl.c.objfid)
-        qry = qry.filter(Project.projid == self._project.projid)
-        qry = qry.order_by(Acquisition.acquisid)
-        qry = qry.with_entities(
-            Acquisition.acquisid, Acquisition.orig_id, obj_fields_tbl
-        )
-        return qry.all()
+        return session.execute(qry).all()
 
     @staticmethod
     def update_taxo_stats(session: Session, projid: int):
-        sql = text(f"""
+        sql = text(
+            f"""
         SELECT 1 FROM projects WHERE projid = :prjid FOR NO KEY UPDATE;
-         """)  # Prevent simultaneous updates from e.g. jobs without blocking child FK checks
+         """
+        )  # Prevent simultaneous updates from e.g. jobs without blocking child FK checks
         session.execute(sql, {"prjid": projid})
         sql = text(f"""
         DELETE FROM projects_taxo_stat pts

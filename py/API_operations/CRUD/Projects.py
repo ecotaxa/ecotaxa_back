@@ -272,26 +272,24 @@ class ProjectsService(Service):
         obj_set = EnumeratedObjectSet(self.session, all_object_ids)
 
         # Prepare a remover thread that will run in // with DB queries
-        remover = VaultRemover(self.config, logger).do_start()
-        # Do the deletion itself.
-        nb_objs, nb_img_rows, img_files = obj_set.delete(
-            self.DELETE_CHUNK_SIZE, remover.add_files
-        )
+        with VaultRemover(self.config, logger) as remover:
+            # Do the deletion itself.
+            nb_objs, nb_img_rows, nb_img_files = obj_set.delete(
+                self.DELETE_CHUNK_SIZE, remover.add_files
+            )
 
-        ProjectBO.delete_object_parents(self.session, projid)
+            ProjectBO.delete_object_parents(self.session, projid)
 
-        if only_objects:
-            # Update stats, should all be 0...
-            ProjectBO.update_taxo_stats(self.session, projid)
-            # Stats depend on taxo stats
-            ProjectBO.update_stats(self.session, projid)
-        else:
-            ProjectBO.delete(self.session, projid)
+            if only_objects:
+                # Update stats, should all be 0...
+                ProjectBO.update_taxo_stats(self.session, projid)
+                # Stats depend on taxo stats
+                ProjectBO.update_stats(self.session, projid)
+            else:
+                ProjectBO.delete(self.session, projid)
 
-        self.session.commit()
-        # Wait for the files handled
-        remover.wait_for_done()
-        return nb_objs, 0, nb_img_rows, len(img_files)
+            self.session.commit()
+        return nb_objs, 0, nb_img_rows, nb_img_files
 
     def recompute_geo(self, current_user_id: int, prj_id: ProjectIDT) -> None:
         # Security barrier

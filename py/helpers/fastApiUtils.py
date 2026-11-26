@@ -462,9 +462,19 @@ def regular_mem_cleanup():
         last_mem_cleanup = now
 
 
+_libc: Optional[ctypes.CDLL]
+try:
+    _libc = ctypes.CDLL("libc.so.6")
+    _libc.malloc_trim.argtypes = [ctypes.c_size_t]
+    _libc.malloc_trim.restype = ctypes.c_int
+except OSError:
+    _libc = None
+
+
 def _trim_memory() -> int:
-    libc = ctypes.CDLL("libc.so.6")
-    return libc.malloc_trim(0)
+    if _libc is not None:
+        return _libc.malloc_trim(0)
+    return 0
 
 
 class SuppressNoResponseReturnedMiddleware(BaseHTTPMiddleware):

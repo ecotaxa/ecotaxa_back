@@ -7,7 +7,7 @@ from typing import List, Optional, ClassVar
 from helpers.DynamicLogs import get_logger
 from .Bean import Bean
 from .Direct import text
-from .ORM import Session, MetaData, minimal_table_of
+from .ORM import Session, TableClause, minimal_table_of
 from .Postgres import SequenceCache, LocalSequenceCache
 from ..CNNFeatureVector import ObjectCNNFeatureVector
 from ..Image import Image
@@ -34,7 +34,9 @@ class DBWriter(object):
         self.session = session
 
         self.obj_tbl = ObjectHeader.__table__
-        self.obj_fields_tbl = ObjectFields.__table__  # Slow by default @see narrow_to
+        self.obj_fields_tbl: TableClause = (
+            ObjectFields.__table__
+        )  # Slow by default @see narrow_to
         self.img_tbl = Image.__table__
         self.obj_cnn_vector_tbl = ObjectCNNFeatureVector.__table__
         self.obj_history_tbl = ObjectsClassifHisto.__table__
@@ -59,8 +61,7 @@ class DBWriter(object):
 
     def narrow_to(self, target_fields: set):
         # Small optimization, the below allows minimal SQLAlchemy SQL sent to DB for large fields table
-        metadata = MetaData()
-        self.obj_fields_tbl = minimal_table_of(metadata, ObjectFields, target_fields)
+        self.obj_fields_tbl = minimal_table_of(ObjectFields, target_fields)
 
     def do_bulk_save(self) -> None:
         nb_bulks = "%d/%d/%d/%d/%d/%d" % (

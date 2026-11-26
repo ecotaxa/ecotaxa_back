@@ -5,11 +5,13 @@
 import abc
 import logging
 import sys
+import threading
 import time
+import weakref
 from abc import ABC
 from logging import Logger, Handler, LogRecord
-from threading import get_ident
-from typing import Dict
+from threading import Lock
+from typing import List, Optional
 
 from helpers.AppConfig import Config
 
@@ -68,27 +70,49 @@ class PerThreadHandler(Handler):
     def __init__(self, handler: Handler):
         super().__init__()
         self.handler = handler
-        self.alt_handlers: Dict[int, Handler] = {}
+        self._local = threading.local()
+        self._handlers_lock = Lock()
+        self._active_handlers: weakref.WeakSet[Handler] = weakref.WeakSet()
         self.level = handler.level
 
     def emit(self, record):
-        alt_handler = self.alt_handlers.get(get_ident())
-        if alt_handler:
+        alt_handler: Optional[Handler] = getattr(self._local, "alt_handler", None)
+        if alt_handler is not None:
             alt_handler.emit(record)
         else:
             self.handler.emit(record)
 
-    def switch_to(self, new_filename_or_stream):
+    def switch_to(self, new_filename_or_stream) -> Handler:
         alt_handler = logging.FileHandler(new_filename_or_stream)
         alt_handler.setLevel(self.level)
         alt_handler.setFormatter(LogFormatter(ALT_LOGGING_FORMAT))
-        self.alt_handlers[get_ident()] = alt_handler
+        old_handler: Optional[Handler] = getattr(self._local, "alt_handler", None)
+        self._local.alt_handler = alt_handler
+        with self._handlers_lock:
+            if old_handler is not None:
+                self._active_handlers.discard(old_handler)
+            self._active_handlers.add(alt_handler)
+        if old_handler is not None:
+            old_handler.close()
+        return alt_handler
 
-    def stop_switch(self):
-        alt_handler = self.alt_handlers.get(get_ident())
-        if alt_handler:
+    def stop_switch(self) -> None:
+        alt_handler: Optional[Handler] = getattr(self._local, "alt_handler", None)
+        if alt_handler is not None:
+            self._local.alt_handler = None
+            with self._handlers_lock:
+                self._active_handlers.discard(alt_handler)
             alt_handler.close()
-            del self.alt_handlers[get_ident()]
+
+    def close(self) -> None:
+        with self._handlers_lock:
+            to_close = list(self._active_handlers)
+            self._active_handlers.clear()
+        self._local.alt_handler = None
+        for h in to_close:
+            h.close()
+        self.handler.close()
+        super().close()
 
 
 def _create_the_handler():
@@ -102,18 +126,26 @@ def _create_the_handler():
 _the_handler = _create_the_handler()
 
 
+def _close_and_clear_handlers(handlers: List[Handler]) -> None:
+    for h in list(handlers):
+        h.close()
+    handlers.clear()
+
+
 def rewire_loggers_after_fork():
     """Re-wire log handlers after a fork."""
     global _the_handler
-    Logger.manager.root.handlers.clear()
+    _close_and_clear_handlers(Logger.manager.root.handlers)
+    old_the_handler = _the_handler
     _the_handler = _create_the_handler()
     for _name, a_logger in Logger.manager.loggerDict.items():
         if isinstance(a_logger, Logger):
-            a_logger.handlers.clear()
+            _close_and_clear_handlers(a_logger.handlers)
             a_logger.addHandler(_the_handler)
             # a_logger.propagate = False # Leave root handlers emit, in case the subprocess is remoted one day
         elif isinstance(a_logger, logging.PlaceHolder):
             a_logger.loggerMap.clear()
+    old_the_handler.close()
 
 
 def get_logger(name) -> logging.Logger:
@@ -145,6 +177,7 @@ class LogsSwitcher(object):
     def __init__(self, log_emitter: LogEmitter):
         self.emitter = log_emitter
         self.emitter.switcher = self
+        self._switched = False
 
     def __enter__(self):
         self.switch()
@@ -156,9 +189,11 @@ class LogsSwitcher(object):
             # Log the fact that we switch to a new file, to current log file.
             logging.log(logging.INFO, "Switching logs to %s", switch_to)
             _the_handler.switch_to(switch_to)
+            self._switched = True
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if self.emitter.log_file_path():
+        if self._switched:
+            self._switched = False
             _the_handler.stop_switch()
 
 

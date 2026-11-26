@@ -48,22 +48,53 @@ class TimeEvictedQueue(Queue):
         super().put(item, block, timeout)
         self.evict()
 
-    def evict(self) -> int:
+    def _put(self, item) -> None:
+        if item.dbapi_connection is None:
+            self.queue.appendleft(item)
+            return
         now = time.time()
-        if now - self.last_cleanup < self.CLEAN_INTERVAL:
-            return 0
-        self.last_cleanup = now
+        if now - item.starttime > self.DB_SESSION_MAX_AGE:
+            try:
+                item.invalidate()
+            except Exception as exc:
+                logger.warning(
+                    "Failed to invalidate expired DB connection on put: %s", exc
+                )
+            self.queue.appendleft(item)
+            return
+        self.queue.append(item)
+
+    def evict(self) -> int:
         with self.mutex:
+            now = time.time()
+            if now - self.last_cleanup < self.CLEAN_INTERVAL:
+                return 0
             ret = 0
-            for a_conn in self.queue:  # type: sqlalchemy.pool.base._ConnectionRecord
-                if (
-                    a_conn.dbapi_connection
+            seen_live = False
+            for a_conn in tuple(
+                self.queue
+            ):  # type: sqlalchemy.pool.base._ConnectionRecord
+                is_expired = (
+                    a_conn.dbapi_connection is not None
                     and now - a_conn.starttime > self.DB_SESSION_MAX_AGE
-                ):
+                )
+                if is_expired:
                     # Note: invalidation is logged at INFO by the pool logger,
                     # which is set to WARNING below.
-                    a_conn.invalidate()
-                    ret += 1
+                    try:
+                        a_conn.invalidate()
+                        ret += 1
+                    except Exception as exc:
+                        logger.warning(
+                            "Failed to invalidate expired DB connection: %s", exc
+                        )
+                if a_conn.dbapi_connection is None or is_expired:
+                    if seen_live:
+                        self.queue.remove(a_conn)
+                        self.queue.appendleft(a_conn)
+                else:
+                    seen_live = True
+            self.last_cleanup = now
             return ret
 
 

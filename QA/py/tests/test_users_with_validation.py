@@ -1113,3 +1113,52 @@ def test_user_email_change_typo(monkeypatch, fastapi):
     assert err == []
     rsp = fastapi.post(LOGIN_URL, json={"username": email, "password": "zero6"})
     assert rsp.status_code != 200
+
+
+def test_login_pending_user_with_validation(monkeypatch, fastapi):
+    set_config_on(monkeypatch, "on")
+    email = "pending_login_user@test.org"
+    password = "Password123!"
+    db_user_id = create_db_user(
+        email=email,
+        name="Pending Login User",
+        organisation="Test Org",
+        password=password,
+        status=UserStatus.pending.value,
+        mail_status=True,
+    )
+
+    rsp = fastapi.post(LOGIN_URL, json={"username": email, "password": password})
+    assert rsp.status_code == 401
+    detail = rsp.json()["detail"][0]
+    assert detail["id"] == db_user_id
+    assert detail["email"] == email
+    assert detail["status"] == UserStatus.pending.value
+    for excluded_key in [
+        "password",
+        "_sa_instance_state",
+        "mail_status",
+        "status_date",
+        "mail_status_date",
+        "usercreationdate",
+        "preferences",
+        "organization",
+    ]:
+        assert excluded_key not in detail
+
+    # Also verify directly that verify_status_throw does not mutate ORM __dict__
+    # or break SQLAlchemy InstanceState tracking during session.close()
+    from fastapi import HTTPException
+    from sqlalchemy import inspect
+    from DB.User import User
+    from helpers.login import LoginService
+
+    with LoginService() as sce:
+        db_user = sce.session.get(User, db_user_id)
+        assert db_user is not None
+        with pytest.raises(HTTPException) as exc_info:
+            sce.verify_status_throw(db_user, True)
+        assert exc_info.value.status_code == 401
+        assert "_sa_instance_state" in db_user.__dict__
+        assert "password" in db_user.__dict__
+        assert inspect(db_user).session is sce.session

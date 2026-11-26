@@ -24,7 +24,6 @@ from typing import (
 from BO.Mappings import TableMapping, ProjectMapping
 from BO.ProjectVars import ProjectVar
 from DB.Project import Project
-from DB.helpers.ORM import Session
 from helpers.DynamicLogs import get_logger
 
 logger = get_logger(__name__)
@@ -42,8 +41,7 @@ class MappedEntity(metaclass=ABCMeta):
     MAPPING_IN_PROJECT: ClassVar[str]
     """ Where in the @See ProjectMapping class are the specific to the subclass """
 
-    def __init__(self, session: Session):
-        self._session = session
+    def __init__(self) -> None:
         # Extension
         self.free_columns: OrderedDictT = OrderedDict()
 

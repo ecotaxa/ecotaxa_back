@@ -33,7 +33,9 @@ TUS_PREFIX = "/user_files/upload"
 
 logger = get_logger(__name__)
 
-background_tasks: Set[asyncio.Task[Any]] = set()
+background_tasks: Set[asyncio.Task[Any]] = (
+    set()
+)  # MEM: Unbounded but low (1 or 2) in practice
 
 
 async def tus_auth(
@@ -302,6 +304,8 @@ class SplitLocalFileStorage(LocalFileStorage):
     - Heavy payload data files   -> GPFS / NFS mount / ordinary FS
     """
 
+    MAX_PENDING_BYTES = 4 * 1024 * 1024  # 4 MiB cap per in-flight upload buffer
+
     def __init__(self, files_dir: str, info_dir: str):
         super().__init__(files_dir)
         self.info_dir = info_dir
@@ -314,18 +318,43 @@ class SplitLocalFileStorage(LocalFileStorage):
         _validate_uid_within_dir(self.info_dir, uid)
         return os.path.join(self.info_dir, f"{uid}.info")
 
+    async def append(self, uid: str, chunk: bytes) -> None:
+        buf = self._pending[uid]
+        buf.extend(chunk)
+        if len(buf) >= self.MAX_PENDING_BYTES:
+            await self.flush(uid)
+
     @contextlib.asynccontextmanager
     async def lock(self, uid: str):  # type: ignore
         """Advisory file lock, shared with any other process using this dir."""
         path = self._path(uid)
-        cm = await asyncio.to_thread(
-            lambda: acquire_upload_lock(path, locks_dir=self.locks_dir, blocking=True)
-        )
-        await asyncio.to_thread(cm.__enter__)
+        cm = acquire_upload_lock(path, locks_dir=self.locks_dir, blocking=True)
+        enter_task = asyncio.ensure_future(asyncio.to_thread(cm.__enter__))
+        entered = False
         try:
+            await asyncio.shield(enter_task)
+            entered = True
             yield
+        except BaseException:
+            if not entered:
+
+                def _cleanup_on_cancel(fut: asyncio.Future[Any]) -> None:
+                    if not fut.cancelled() and fut.exception() is None:
+                        try:
+                            cm.__exit__(None, None, None)
+                        except Exception:
+                            logger.warning(
+                                "Error releasing cancelled lock for %s",
+                                uid,
+                                exc_info=True,
+                            )
+
+                enter_task.add_done_callback(_cleanup_on_cancel)
+            raise
         finally:
-            await asyncio.to_thread(cm.__exit__, None, None, None)
+            self._pending.pop(uid, None)
+            if entered:
+                await asyncio.shield(asyncio.to_thread(cm.__exit__, None, None, None))
 
 
 hybrid_storage = SplitLocalFileStorage(

@@ -218,8 +218,7 @@ class LoginService(Service):
 
             if the_user.status == UserStatus.pending.value:
                 # remove sensible infos
-                userdata = the_user.__dict__
-                for key in [
+                excluded_keys = {
                     "password",
                     "_sa_instance_state",
                     "mail_status",
@@ -227,8 +226,13 @@ class LoginService(Service):
                     "mail_status_date",
                     "usercreationdate",
                     "preferences",
-                ]:
-                    del userdata[key]
+                    "organization",
+                }
+                userdata = {
+                    k: v
+                    for k, v in the_user.__dict__.items()
+                    if k not in excluded_keys
+                }
             else:
                 userdata = {
                     "id": the_user.id,

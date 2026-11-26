@@ -12,7 +12,6 @@ from DB.helpers.Caches import RanksPerObject
 from DB.helpers.DDL import Index, ForeignKey, Sequence
 from DB.helpers.Direct import text
 from DB.helpers.Postgres import CHAR, BIGINT, VARCHAR, BYTEA, SMALLINT
-from .helpers import Result
 from .helpers.ORM import Model, Mapped
 from .helpers.VirtualColumn import VirtualColumnSet, VirtualColumn
 
@@ -51,19 +50,19 @@ class Image(Model):
             "  JOIN images img ON img.objid = obh.objid "
             " WHERE sam.projid = :prj"
         )
-        res: Result = session.execute(
-            sql.execution_options(
-                stream_results=True, max_row_buffer=SQL.DB_CHUNK_SIZE * 15  # 3 columns
-            ),
-            {"prj": prj_id},
-        )
         existing_images: Set[str] = set()
         ranks_per_obj: RanksPerObject[str] = RanksPerObject()
         imgs_add = existing_images.add
         ranks_add = ranks_per_obj.add
-        for orig_id, orig_file_name, imgrank in res:
-            imgs_add(f"{orig_id}*{orig_file_name}")
-            ranks_add(orig_id, imgrank)
+        with session.execute(
+            sql.execution_options(
+                stream_results=True, max_row_buffer=SQL.DB_CHUNK_SIZE * 15  # 3 columns
+            ),
+            {"prj": prj_id},
+        ) as res:
+            for orig_id, orig_file_name, imgrank in res:
+                imgs_add(f"{orig_id}*{orig_file_name}")
+                ranks_add(orig_id, imgrank)
         return existing_images, ranks_per_obj
 
     def img_to_file(self):

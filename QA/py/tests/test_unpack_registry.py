@@ -27,9 +27,7 @@ def dirs(tmp_path, monkeypatch):
     parent = root / "up"
     parent.mkdir(parents=True)
     registry = tmp_path / "tus" / ".unpacking"
-    monkeypatch.setattr(
-        Unpack, "get_tus_files_dir", lambda: str(tmp_path / "tus")
-    )
+    monkeypatch.setattr(Unpack, "get_tus_files_dir", lambda: str(tmp_path / "tus"))
     return users, root, parent, registry
 
 
@@ -145,7 +143,9 @@ def test_dead_owner_cleaned_up(dirs):
     assert Unpack.sweep_stale(registry, users) == 1
     # Reported in the status only, no file left
     assert tree(parent) == []
-    message = "Extraction of 'x.zip' failed, nothing was kept: " + DETAIL_UNPACK_INTERRUPTED
+    message = (
+        "Extraction of 'x.zip' failed, nothing was kept: " + DETAIL_UNPACK_INTERRUPTED
+    )
     status = UnpackStatus.read(UPLOAD_ID)
     assert status is not None
     assert status["state"] == "error" and status["status_code"] == 500
@@ -297,3 +297,100 @@ def test_planted_journal_ignored(dirs, tmp_path):
     assert Unpack.sweep_stale(registry, users) == 1
     assert victim.exists() and not (root / "moved.tsv").exists()
     assert tree(parent) == []
+
+
+def test_registered_unlink_oserror_does_not_leak_live_or_fd(dirs, monkeypatch):
+    users, root, parent, registry = dirs
+    info = {
+        "staging": str(_staging(parent)),
+        "parent": str(parent),
+        "name": "x.zip",
+        "user_id": 1,
+        "upload_id": UPLOAD_ID,
+    }
+    orig_unlink = Path.unlink
+    created: list[Path] = []
+
+    def flaky_unlink(self: Path, missing_ok: bool = False) -> None:
+        if created and self == created[0]:
+            raise PermissionError("cannot unlink registry entry")
+        orig_unlink(self, missing_ok=missing_ok)
+
+    monkeypatch.setattr(Path, "unlink", flaky_unlink)
+    with Unpack.registered(registry, info):
+        entries = _entries(registry)
+        assert len(entries) == 1
+        created.append(entries[0])
+        assert str(created[0]) in Unpack._LIVE
+        assert _is_locked(created[0])
+
+    assert str(created[0]) not in Unpack._LIVE
+    assert not _is_locked(created[0])
+
+
+def test_registered_unlink_oserror_preserves_body_exception(dirs, monkeypatch):
+    users, root, parent, registry = dirs
+    info = {
+        "staging": str(_staging(parent)),
+        "parent": str(parent),
+        "name": "x.zip",
+        "user_id": 1,
+        "upload_id": UPLOAD_ID,
+    }
+    orig_unlink = Path.unlink
+    created: list[Path] = []
+
+    def flaky_unlink(self: Path, missing_ok: bool = False) -> None:
+        if created and self == created[0]:
+            raise OSError("stale NFS handle")
+        orig_unlink(self, missing_ok=missing_ok)
+
+    monkeypatch.setattr(Path, "unlink", flaky_unlink)
+    with pytest.raises(RuntimeError, match="unpack failed"):
+        with Unpack.registered(registry, info):
+            entries = _entries(registry)
+            assert len(entries) == 1
+            created.append(entries[0])
+            assert str(created[0]) in Unpack._LIVE
+            raise RuntimeError("unpack failed")
+
+    assert str(created[0]) not in Unpack._LIVE
+    assert not _is_locked(created[0])
+
+
+def test_registered_setup_error_and_tmp_unlink_oserror_closes_fd(dirs, monkeypatch):
+    users, root, parent, registry = dirs
+    info = {
+        "staging": str(_staging(parent)),
+        "parent": str(parent),
+        "name": "x.zip",
+        "user_id": 1,
+        "upload_id": UPLOAD_ID,
+    }
+    closed_fds: list[int] = []
+    orig_close = os.close
+    orig_unlink = Path.unlink
+
+    def spy_close(fd: int) -> None:
+        closed_fds.append(fd)
+        orig_close(fd)
+
+    def fail_replace(src, dst) -> None:
+        raise OSError("replace failed")
+
+    def fail_tmp_unlink(self: Path, missing_ok: bool = False) -> None:
+        if self.name.endswith(Unpack.TMP_SUFFIX):
+            raise PermissionError("tmp unlink failed")
+        orig_unlink(self, missing_ok=missing_ok)
+
+    monkeypatch.setattr(Unpack.os, "close", spy_close)
+    monkeypatch.setattr(Unpack.os, "replace", fail_replace)
+    monkeypatch.setattr(Path, "unlink", fail_tmp_unlink)
+
+    ran = False
+    with Unpack.registered(registry, info):
+        ran = True
+
+    assert ran
+    assert len(closed_fds) == 1
+    assert not Unpack._LIVE

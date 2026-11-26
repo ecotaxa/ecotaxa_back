@@ -18,6 +18,8 @@ RECAPTCHA_API_SITEVERIFY = "https://www.google.com/recaptcha/api/siteverify"
 class HomeCaptcha(object):
     """ """
 
+    TIMEOUT = 20
+
     def __init__(self, homecaptcha_secret: str):
         self.secret = homecaptcha_secret
 
@@ -59,7 +61,9 @@ class HomeCaptcha(object):
             url_captcha = Config().get_account_validation_url() + str(
                 "gui/checkcaptcha"
             )
-        rsp = requests.request("GET", url=url_captcha, params=params)
+        rsp = requests.request(
+            "GET", url=url_captcha, params=params, timeout=self.TIMEOUT
+        )
         rspjson = rsp.json()
         if (
             int(rsp.status_code) != 200

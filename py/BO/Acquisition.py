@@ -37,7 +37,7 @@ class AcquisitionBO(MappedEntity):
     MAPPING_IN_PROJECT: ClassVar = "acquisition_mappings"
 
     def __init__(self, session: Session, acquisition_id: AcquisitionIDT):
-        super().__init__(session)
+        super().__init__()
         self.acquis = session.get(Acquisition, acquisition_id)
 
     def __getattr__(self, item):

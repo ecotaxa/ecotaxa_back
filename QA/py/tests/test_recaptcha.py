@@ -80,6 +80,7 @@ def test_validate_google_recaptcha_success(monkeypatch, mock_request):
             "secret": "google_secret",
             "remoteip": "192.168.1.1",
         },
+        timeout=HomeCaptcha.TIMEOUT,
     )
 
 
@@ -147,6 +148,7 @@ def test_validate_homecaptcha_gui_success(monkeypatch, mock_request):
         params={
             "r": "valid_token",
         },
+        timeout=HomeCaptcha.TIMEOUT,
     )
 
 
@@ -274,6 +276,7 @@ def test_verify_captcha_success(client, mock_request):
             "secret": "test_secret",
             "remoteip": "192.168.1.1",
         },
+        timeout=HomeCaptcha.TIMEOUT,
     )
 
 

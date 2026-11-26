@@ -84,7 +84,7 @@ class SampleBO(MappedEntity):
     MAPPING_IN_PROJECT: ClassVar = "sample_mappings"
 
     def __init__(self, session: Session, sample_id: SampleIDT):
-        super().__init__(session)
+        super().__init__()
         self.sample = session.get(Sample, sample_id)
 
     def __getattr__(self, item):

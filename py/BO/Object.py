@@ -8,8 +8,6 @@
 #
 from typing import Tuple, List, Optional, Any, ClassVar, Union
 
-from sqlalchemy import MetaData
-
 from BO.Classification import HistoricalClassificationListT, HistoricalClassification
 from BO.Mappings import TableMapping
 from BO.helpers.MappedEntity import MappedEntity
@@ -34,8 +32,12 @@ from DB.helpers.ORM import (
     Session,
     joinedload,
     subqueryload,
+    select,
+    Select,
+    Bundle,
+    Row,
     Model,
-    minimal_model_of,
+    minimal_table_of,
     text,
     case,
 )
@@ -71,15 +73,15 @@ class ObjectBO(MappedEntity):
         session: Session,
         object_id: ObjectIDT,
         db_object: Optional[ObjectHeader] = None,
-        db_fields: Optional[Model] = None,
+        db_fields: Optional[Union[Model, Row[Any]]] = None,
     ):
-        super().__init__(session)
+        super().__init__()
         # Below is needed because validity test reads the attribute
-        self.fields: Optional[Union[ObjectFields, Model]] = None
+        self.fields: Optional[Union[ObjectFields, Model, Row[Any]]] = None
         self.header: ObjectHeader
         if db_object is None:
             # Initialize from the unique ID
-            qry = self._session.query(ObjectHeader)
+            qry = session.query(ObjectHeader)
             qry = qry.filter(ObjectHeader.objid == object_id)
             qry = qry.options(joinedload(ObjectHeader.fields))
             qry = qry.options(subqueryload(ObjectHeader.all_images))
@@ -105,12 +107,12 @@ class ObjectBO(MappedEntity):
         # Emulate previous behavior
         OBJECT_VIRTUAL_COLUMNS.add_to_model(self)
 
-    def get_history(self) -> HistoricalClassificationListT:
+    def get_history(self, session: Session) -> HistoricalClassificationListT:
         """
         Return classification history, user-displayable with names lookup but keeping IDs.
         """
         och = ObjectsClassifHisto
-        qry = self._session.query(
+        qry = session.query(
             och.objid,
             och.classif_id,
             och.classif_date,
@@ -206,20 +208,19 @@ class ObjectBOSet(object):
     """
 
     def __init__(self, session: Session, object_ids: Any, obj_mapping: TableMapping):
-        needed_cols = obj_mapping.real_cols_to_tsv.keys()
-        # noinspection PyPep8Naming
-        ReducedObjectFields = minimal_model_of(
-            MetaData(), ObjectFields, set(needed_cols)
+        needed_cols = set(obj_mapping.real_cols_to_tsv.keys())
+        reduced_fields = minimal_table_of(ObjectFields, needed_cols)
+        qry: Select[Any] = (
+            select(ObjectHeader, Bundle("fields", *reduced_fields.c))
+            .where(ObjectHeader.objid.in_(object_ids))
+            .join(
+                reduced_fields,
+                ObjectHeader.objid == reduced_fields.c.objfid,
+            )
+            .options(joinedload(ObjectHeader.all_images))
         )
-        qry = session.query(ObjectHeader, ReducedObjectFields)
-        qry = qry.filter(ObjectHeader.objid.in_(object_ids))
-        # noinspection PyUnresolvedReferences
-        qry = qry.join(
-            ReducedObjectFields,
-            ObjectHeader.objid == ReducedObjectFields.objfid,  # type: ignore
-        )
-        qry = qry.options(joinedload(ObjectHeader.all_images))
         # No yield_per() here: it is incompatible with joinedload of a collection.
         self.all = [
-            ObjectBO(session, 0, an_obj, its_fields) for an_obj, its_fields in qry
+            ObjectBO(session, 0, an_obj, its_fields)
+            for an_obj, its_fields in session.execute(qry).unique()
         ]

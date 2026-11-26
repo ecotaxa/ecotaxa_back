@@ -5,6 +5,7 @@
 # https://edmo.seadatanet.org/ European Directory of Marine Organisations, via its SPARQL endpoint
 #
 
+import threading
 from typing import List, NamedTuple, Optional, Dict, Any
 
 import requests
@@ -33,7 +34,8 @@ class EDMOFetcher(object):
     # EDMO returns its matches in no particular order, enough of them so that the wanted one is among them
     MAX_SEARCH_RESULTS = 200
     MIN_SEARCH_LEN = 3
-    the_session = None
+    the_session: Optional[requests.Session] = None
+    _session_lock = threading.Lock()
 
     PREFIXES = """PREFIX org: <http://www.w3.org/ns/org#>
 PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
@@ -111,7 +113,7 @@ PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
         """Run the query, EDMO being unavailable must not prevent the caller from working"""
         session = cls.get_session()
         try:
-            response = session.get(
+            with session.get(
                 cls.SPARQL_URL,
                 params={"query": sparql},
                 headers={
@@ -119,28 +121,33 @@ PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
                     "User-Agent": cls.USER_AGENT,
                 },
                 timeout=cls.TIMEOUT,
-            )
-            if not response.ok:
-                logger.warning("EDMO query failed with status %d", response.status_code)
-                cls.invalidate_session()
-                return []
-            if response.status_code == 204:  # No content
-                return []
-            return response.json()["results"]["bindings"]
+            ) as response:
+                if not response.ok:
+                    logger.warning(
+                        "EDMO query failed with status %d", response.status_code
+                    )
+                    cls.invalidate_session()
+                    return []
+                if response.status_code == 204:  # No content
+                    return []
+                return response.json()["results"]["bindings"]
         except (requests.RequestException, ValueError, KeyError, TypeError) as e:
             logger.warning("EDMO query failed: %s", e)
             cls.invalidate_session()
             return []
 
     @classmethod
-    def get_session(cls):
+    def get_session(cls) -> requests.Session:
         """Cache the session to base site, for speed and saving resources"""
-        session = cls.the_session
-        if session is None:
-            session = requests.Session()
-            cls.the_session = session
-        return cls.the_session
+        with cls._session_lock:
+            if cls.the_session is None:
+                cls.the_session = requests.Session()
+            return cls.the_session
 
     @classmethod
-    def invalidate_session(cls):
-        cls.the_session = None
+    def invalidate_session(cls) -> None:
+        with cls._session_lock:
+            session = cls.the_session
+            cls.the_session = None
+        if session is not None:
+            session.close()

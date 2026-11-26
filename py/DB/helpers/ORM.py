@@ -11,6 +11,8 @@ from sqlalchemy import (
     inspect,
     MetaData,
     Table,
+    TableClause,
+    table,
     any_ as _pg_any,
     all_ as _pg_all,
     not_,
@@ -47,13 +49,14 @@ from sqlalchemy.orm import (
     InstrumentedAttribute,
     DeclarativeBase,
     load_only,
+    Bundle,
 )
 
 # noinspection PyUnresolvedReferences
 from sqlalchemy.orm import relationship, RelationshipProperty, aliased, Mapped
 
 # noinspection PyUnresolvedReferences
-from sqlalchemy.sql import Delete, Update, Insert, ColumnElement
+from sqlalchemy.sql import Select, Delete, Update, Insert, ColumnElement
 
 # noinspection PyUnresolvedReferences
 from sqlalchemy.sql.elements import Label, CollectionAggregate
@@ -174,45 +177,28 @@ def non_key_cols(orm_clazz: ModelT) -> Set[str]:
 
 
 def minimal_table_of(
-    metadata: MetaData, clazz, to_keep: Set[str], exact_floats=False
-) -> Table:
+    clazz: ModelT, to_keep: Set[str], exact_floats: bool = False
+) -> TableClause:
     """
-        Return a Table, i.e. a SQLAlchemy mapper, with only the given fields.
-    :param metadata: SQLAlchemy metadata repository.
+        Return a TableClause, without MetaData, with only the given fields.
     :param clazz: the base mapper class
     :param to_keep: the column (fields) names to keep
     :param exact_floats: if set, FLOAT columns will be returned as Double (exact value)
-    :return: new Table
+    :return: new TableClause
     """
-    # Create the ORM clone with PK + mandatory fields + wanted fields
+    # Create the lightweight table clause with PK + mandatory fields + wanted fields
     insp = inspect(clazz)
     cols = []
-    a_col: Column
+    a_col: Column[Any]
     for a_col in insp.columns:
         if a_col.primary_key or not a_col.nullable or a_col.name in to_keep:
-            # noinspection PyProtectedMember
-            clone_col = a_col._copy()  # type: ignore
-            if exact_floats and isinstance(clone_col.type, FLOAT):
-                clone_col.type = Float(asdecimal=True)
-            cols.append(clone_col)
-    args = [clazz.__tablename__, metadata]
-    args.extend(cols)
-
-    return Table(*args)
-
-
-def minimal_model_of(
-    metadata: MetaData, clazz, to_keep: Set[str], exact_floats=False
-) -> Type[Model]:
-    """
-    Same as just above, but return a proper Model.
-    """
-    min_tbl = minimal_table_of(metadata, clazz, to_keep, exact_floats)
-
-    class Ret(Model):
-        __table__ = min_tbl
-
-    return Ret
+            col_type = (
+                Float(asdecimal=True)
+                if exact_floats and isinstance(a_col.type, FLOAT)
+                else a_col.type
+            )
+            cols.append(column(a_col.name, col_type))
+    return table(clazz.__tablename__, *cols)
 
 
 def any_(items_list: Union[List[int], List[str]]) -> CollectionAggregate[bool]:

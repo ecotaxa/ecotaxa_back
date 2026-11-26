@@ -196,55 +196,55 @@ class ImageManagerService(Service):
         ko_not_same = 0
         ko_except = 0
         # Prepare & start a remover thread that will run in // with DB queries
-        remover = VaultRemover(self.config, logger).do_start()
-        filecmp.clear_cache()
-        deleted_imgids: Set[int] = set()
-        for orig_file_name, orig_img_id, an_image, an_image_file in to_do:
-            # The query returns multiple rows if there are more than 2 duplicates
-            if orig_img_id in deleted_imgids or an_image.imgid in deleted_imgids:
-                continue
-            # Even if MD5s match, be paranoid and compare files
-            orig_img_file_name = Image.img_from_id_and_orig(orig_img_id, orig_file_name)
-            orig_path = self.vault.image_path(orig_img_file_name)
-            img_file_name = Image.img_from_id_and_orig(
-                an_image.imgid, an_image.orig_file_name
-            )
-            dup_path = self.vault.image_path(img_file_name)
-            assert orig_path != dup_path
-            orig_exists = exists(orig_path)
-            dup_exists = exists(dup_path)
-            if orig_exists:
-                if dup_exists:
-                    try:
-                        same = filecmp.cmp(orig_path, dup_path, False)
-                    except Exception as exc:
-                        logger.info(
-                            "Exception while comparing orig:%s and dup:%s: %s",
-                            orig_path,
-                            dup_path,
-                            str(exc),
-                        )
-                        ko_except += 1
-                        continue
-                    if not same:
-                        ko_not_same += 1
-                        continue
+        with VaultRemover(self.config, logger) as remover:
+            filecmp.clear_cache()
+            deleted_imgids: Set[int] = set()
+            for orig_file_name, orig_img_id, an_image, an_image_file in to_do:
+                # The query returns multiple rows if there are more than 2 duplicates
+                if orig_img_id in deleted_imgids or an_image.imgid in deleted_imgids:
+                    continue
+                # Even if MD5s match, be paranoid and compare files
+                orig_img_file_name = Image.img_from_id_and_orig(
+                    orig_img_id, orig_file_name
+                )
+                orig_path = self.vault.image_path(orig_img_file_name)
+                img_file_name = Image.img_from_id_and_orig(
+                    an_image.imgid, an_image.orig_file_name
+                )
+                dup_path = self.vault.image_path(img_file_name)
+                assert orig_path != dup_path
+                orig_exists = exists(orig_path)
+                dup_exists = exists(dup_path)
+                if orig_exists:
+                    if dup_exists:
+                        try:
+                            same = filecmp.cmp(orig_path, dup_path, False)
+                        except Exception as exc:
+                            logger.info(
+                                "Exception while comparing orig:%s and dup:%s: %s",
+                                orig_path,
+                                dup_path,
+                                str(exc),
+                            )
+                            ko_except += 1
+                            continue
+                        if not same:
+                            ko_not_same += 1
+                            continue
+                    else:
+                        # Duplicate is gone already
+                        pass
                 else:
-                    # Duplicate is gone already
-                    pass
-            else:
-                # DB record of physical file is wrong
-                # TODO
-                continue
-            # Do the cleanup
-            deleted_imgids.add(an_image.imgid)
-            if dup_exists:
-                remover.add_files([img_file_name])
-            self.session.delete(an_image)
-            self.session.delete(an_image_file)
-        # Wait for the files handled
-        self.session.commit()
-        remover.wait_for_done()
+                    # DB record of physical file is wrong
+                    # TODO
+                    continue
+                # Do the cleanup
+                deleted_imgids.add(an_image.imgid)
+                if dup_exists:
+                    remover.add_files([img_file_name])
+                self.session.delete(an_image)
+                self.session.delete(an_image_file)
+            self.session.commit()
         return (
             "Dupl remover for %s dup images done but %d problems %d false file comp"
             % (len(deleted_imgids), ko_except, ko_not_same)

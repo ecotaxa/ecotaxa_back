@@ -6,11 +6,13 @@ import csv
 import datetime
 import sys
 from collections import OrderedDict
+from contextlib import contextmanager
 from itertools import chain
 from pathlib import Path
 from typing import (
     Dict,
     Iterable,
+    Iterator,
     Set,
     Any,
     Mapping,
@@ -122,39 +124,44 @@ class TSVFile(object):
         # value: TSV type e.g. [f]
         self.type_line: Dict[str, str]
 
-    # noinspection PyAttributeOutsideInit
-    def open(self) -> TextIO:
+    @contextmanager
+    def open(self) -> Iterator[TextIO]:
         csv_file = open(self.path.as_posix(), encoding="latin_1")
-        first_3 = csv_file.read(3)
-        if first_3 == "ï»¿":
-            # BOM in latin-1 in unicode...
-            csv_file.close()
-            csv_file = open(self.path.as_posix(), encoding="utf-8-sig")
-        else:
-            # Rewind stream to avoid damaging the header
-            csv_file.seek(0)
-        # Read as a dict, first line gives the format
-        self.rdr = csv.DictReader(csv_file, delimiter="\t", quotechar='"')
-        # Cleanup field names, keeping original ones as key.
-        clean_fields: OrderedDict[str, str] = OrderedDict()
-        if self.rdr.fieldnames is not None:
-            for raw_field in self.rdr.fieldnames:
-                if raw_field is None:
-                    continue
-                clean_fields[raw_field] = raw_field.strip(" \t").lower()
-        self.clean_fields = clean_fields
-        # Read types line (2nd line in file)
         try:
-            line_2 = self.rdr.__next__()
-            self.type_line = {
-                clean_fields[raw_field]: v
-                for raw_field, v in line_2.items()
-                if raw_field is not None
-            }
-        except StopIteration:
-            self.type_line = {}
-        # When called using "with", the file will be closed on code block leave
-        return csv_file
+            first_3 = csv_file.read(3)
+            if first_3 == "ï»¿":
+                # BOM in latin-1 in unicode...
+                csv_file.close()
+                csv_file = open(self.path.as_posix(), encoding="utf-8-sig")
+            else:
+                # Rewind stream to avoid damaging the header
+                csv_file.seek(0)
+            # Read as a dict, first line gives the format
+            self.rdr = csv.DictReader(csv_file, delimiter="\t", quotechar='"')
+            # Cleanup field names, keeping original ones as key.
+            clean_fields: OrderedDict[str, str] = OrderedDict()
+            if self.rdr.fieldnames is not None:
+                for raw_field in self.rdr.fieldnames:
+                    if raw_field is None:
+                        continue
+                    clean_fields[raw_field] = raw_field.strip(" \t").lower()
+            self.clean_fields = clean_fields
+            # Read types line (2nd line in file)
+            try:
+                line_2 = self.rdr.__next__()
+                self.type_line = {
+                    clean_fields[raw_field]: v
+                    for raw_field, v in line_2.items()
+                    if raw_field is not None
+                }
+            except StopIteration:
+                self.type_line = {}
+            # When called using "with", the file will be closed on code block leave
+            yield csv_file
+        finally:
+            if hasattr(self, "rdr"):
+                del self.rdr
+            csv_file.close()
 
     REPORT_EVERY: ClassVar = 100
 
@@ -337,11 +344,11 @@ class TSVFile(object):
                         # Get original image dimensions
                         img_path = where.vault.image_path(sub_path)
                         with open(img_path, "rb") as img_fd:
-                            im = PIL_Image.open(img_fd)
-                            (
-                                backup_img_to_write.width,
-                                backup_img_to_write.height,
-                            ) = im.size
+                            with PIL_Image.open(img_fd) as im:
+                                (
+                                    backup_img_to_write.width,
+                                    backup_img_to_write.height,
+                                ) = im.size
 
                 if new_records > 0:
                     self.deal_with_images(where, how, image_to_write, instead_image)

@@ -53,5 +53,5 @@ class ObjectService(Service):
                 self.session, current_user_id, Action.READ, projid
             )
             assert project is not None
-        ret = the_obj.get_history()
+        ret = the_obj.get_history(self.ro_session)
         return ret

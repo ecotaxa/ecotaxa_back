@@ -35,7 +35,7 @@ class ProcessBO(MappedEntity):
     MAPPING_IN_PROJECT: ClassVar = "process_mappings"
 
     def __init__(self, session: Session, process_id: ProcessIDT):
-        super().__init__(session)
+        super().__init__()
         self.process = session.get(Process, process_id)
 
     def __getattr__(self, item):

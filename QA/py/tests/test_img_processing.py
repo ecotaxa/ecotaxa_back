@@ -146,3 +146,66 @@ def test_dimensions_and_resize_with_resize(temp_vault, img_path):
     assert compare_images(
         thumb_abs, ref_image
     ), f"Thumbnail {thumb_abs} differs from reference {ref_image}"
+
+
+def _track_pil_open(monkeypatch, target: str):
+    opened = []
+    real_open = PIL_Image.open
+
+    def tracking_open(*args, **kwargs):
+        im = real_open(*args, **kwargs)
+        opened.append(im)
+        return im
+
+    monkeypatch.setattr(target, tracking_open)
+    return opened
+
+
+@pytest.mark.parametrize("img_path", TEST_IMAGES)
+def test_dimensions_and_resize_closes_source_handle(temp_vault, monkeypatch, img_path):
+    img_id = 789
+    sub_path = temp_vault.store_image(img_path, img_id)
+    image_to_write = Bean()
+    image_to_write.imgid = img_id
+
+    opened = _track_pil_open(monkeypatch, "BO.Image.PIL_Image.open")
+    ImageBO.dimensions_and_resize(10, temp_vault, sub_path, image_to_write)
+
+    assert len(opened) == 1
+    assert opened[0].fp is None
+
+
+def test_validate_image_closes_handle_on_errors(monkeypatch):
+    opened = _track_pil_open(monkeypatch, "BO.Image.PIL_Image.open")
+
+    # DecompressionBombError during load()
+    old_max = PIL_Image.MAX_IMAGE_PIXELS
+    with PIL_Image.open(TEST_IMAGE) as im:
+        pixels = im.size[0] * im.size[1]
+    PIL_Image.MAX_IMAGE_PIXELS = pixels // 2
+    try:
+        with pytest.raises(ImportError, match="Image too large"):
+            ImageBO.validate_image(str(TEST_IMAGE))
+    finally:
+        PIL_Image.MAX_IMAGE_PIXELS = old_max
+
+    assert len(opened) == 1
+    assert opened[0].fp is None
+
+    # SyntaxError during load()
+    monkeypatch.undo()
+    opened.clear()
+    real_open = PIL_Image.open
+
+    def open_raising_syntax_on_load(*args, **kwargs):
+        im = real_open(*args, **kwargs)
+        opened.append(im)
+        monkeypatch.setattr(im, "load", lambda: (_ for _ in ()).throw(SyntaxError("bad png")))
+        return im
+
+    monkeypatch.setattr("BO.Image.PIL_Image.open", open_raising_syntax_on_load)
+    with pytest.raises(ImportError, match="Corrupted PNG"):
+        ImageBO.validate_image(str(TEST_IMAGE))
+
+    assert len(opened) == 1
+    assert opened[0].fp is None

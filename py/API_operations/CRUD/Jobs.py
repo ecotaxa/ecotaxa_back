@@ -71,17 +71,21 @@ class JobCRUDService(Service):
         """
         Return a single job BO, from DB, by its id.
         """
-        # Sanity & security checks
+        # Sanity & security checks before acquiring the FOR UPDATE row lock
+        ro_job = self.ro_session.get(Job, job_id)
+        assert ro_job is not None, NOT_FOUND
+        current_user: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
+        is_admin = current_user.has_role(Role.APP_ADMINISTRATOR)
+        assert (ro_job.owner_id == current_user_id) or is_admin, NOT_AUTHORIZED
+
         try:
             job = JobBO.get_for_update(self.session, job_id)
         except ValueError:
             assert False, NOT_FOUND
-        # current_user = self.ro_session.get(User,current_user_id)
-        current_user: User = RightsBO.get_user_throw(self.ro_session, current_user_id)
-        # assert current_user is not None
-        assert (job.owner_id == current_user_id) or (
-            current_user.has_role(Role.APP_ADMINISTRATOR)
-        ), NOT_AUTHORIZED
+        if not ((job.owner_id == current_user_id) or is_admin):
+            self.session.rollback()
+            job._session = None
+            assert False, NOT_AUTHORIZED
         return job
 
     def get_file(

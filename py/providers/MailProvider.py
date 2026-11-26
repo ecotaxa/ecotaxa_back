@@ -82,6 +82,7 @@ class MailProvider(object):
 
     MODEL_KEYS = ("email", "link", "action", "assistance", "reason")
     REPLACE_KEYS = ("token", "data", "url", "ticket", "reason")
+    IMAP_TIMEOUT = 30
 
     def __init__(
         self,
@@ -472,9 +473,10 @@ class MailProvider(object):
             sender_user,
         ) = self._extract_sender_config(self.SENDER_ACCOUNT)
         ticket = None
+        mail = None
         try:
             # set connection
-            mail = imaplib.IMAP4_SSL(sender_dns, imap_port)
+            mail = imaplib.IMAP4_SSL(sender_dns, imap_port, timeout=self.IMAP_TIMEOUT)
             # login
             mail.login(sender_user, sender_pwd)
             # select inbox
@@ -503,13 +505,21 @@ class MailProvider(object):
                         match = re.match(self.TICKET_MATCH, email_message["Subject"])
                         if match:
                             ticket = match.group(0)
-            mail.logout()
         except imaplib.IMAP4.error as e:
             code = 422
             detail = DETAIL_IMAP4_ERROR + str(e.args)
             logger.info(str(code) + ":" + detail)
         except Exception as e:
             _, _ = self._log_error_code(e)
+        finally:
+            if mail is not None:
+                try:
+                    mail.logout()
+                except Exception:
+                    try:
+                        mail.shutdown()
+                    except Exception:
+                        pass
 
         return ticket
 

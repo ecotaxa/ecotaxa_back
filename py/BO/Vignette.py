@@ -47,8 +47,8 @@ class VignetteMaker(object):
         return self.keep_original
 
     def make_vignette(self, in_file_path: Path):
-        pil_image_file = Image.open(self.src_base / in_file_path)
-        np_img = np.array(pil_image_file)
+        with Image.open(self.src_base / in_file_path) as pil_image_file:
+            np_img = np.array(pil_image_file)
         scalebarsize_px = int(
             round(self.scalebarsize_mm * 1000 / self.pixel_size, 0) * self.scale
         )

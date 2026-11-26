@@ -186,10 +186,12 @@ class FeatureConsistentProjectSet(object):
         """
         Read the dataset as a numpy array. NULL and infinities become an np NaN.
         """
-        res = self.read_all()
         obj_ids: List[int] = []
         classif_ids: ClassifIDListT = []
-        np_table = self.np_read(res, 0, self.column_names, obj_ids, classif_ids, {})
+        with self.read_all() as res:
+            np_table = self.np_read(
+                res, 0, self.column_names, obj_ids, classif_ids, {}
+            )
         return np_table, obj_ids, classif_ids
 
     @staticmethod
@@ -206,19 +208,20 @@ class FeatureConsistentProjectSet(object):
         features_list = []
         isfinite = math.isfinite  # not float("inf"), float("-inf") or NaN
         limit = nb_lines if nb_lines > 0 else None
-        for row in islice(res, limit):
-            objid, classif_id, *vals = row
-            vals = [
-                (
-                    repl_get(a_col, nan)
-                    if a_val is None or not isfinite(a_val)
-                    else a_val
-                )
-                for a_val, a_col in zip(vals, columns)
-            ]  # Map all absent values
-            obj_ids.append(objid)
-            classif_ids.append(classif_id)
-            features_list.append(vals)
+        with res:
+            for row in islice(res, limit):
+                objid, classif_id, *vals = row
+                vals = [
+                    (
+                        repl_get(a_col, nan)
+                        if a_val is None or not isfinite(a_val)
+                        else a_val
+                    )
+                    for a_val, a_col in zip(vals, columns)
+                ]  # Map all absent values
+                obj_ids.append(objid)
+                classif_ids.append(classif_id)
+                features_list.append(vals)
         # TODO: float32 is a shameless attempt to save memory
         np_table = np.array(features_list, dtype=np.float32)
         return np_table

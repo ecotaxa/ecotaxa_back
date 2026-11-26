@@ -388,22 +388,20 @@ class ObjectManager(Service):
             )
 
         # Prepare & start a remover thread that will run in // with DB queries
-        remover = VaultRemover(self.config, logger).do_start()
-        # Do the deletion itself.
-        nb_objs, nb_img_rows, img_files = obj_set.delete(
-            self.CHUNK_SIZE, remover.add_files
-        )
+        with VaultRemover(self.config, logger) as remover:
+            # Do the deletion itself.
+            nb_objs, nb_img_rows, nb_img_files = obj_set.delete(
+                self.CHUNK_SIZE, remover.add_files
+            )
 
-        # Update stats on impacted project(s) in deterministic order to prevent deadlocks
-        for prj_id in sorted(prj_ids):
-            ProjectBO.update_taxo_stats(self.session, prj_id)
-            # Stats depend on taxo stats
-            ProjectBO.update_stats(self.session, prj_id)
+            # Update stats on impacted project(s) in deterministic order to prevent deadlocks
+            for prj_id in sorted(prj_ids):
+                ProjectBO.update_taxo_stats(self.session, prj_id)
+                # Stats depend on taxo stats
+                ProjectBO.update_stats(self.session, prj_id)
 
-        self.session.commit()
-        # Wait for the files handled
-        remover.wait_for_done()
-        return nb_objs, 0, nb_img_rows, len(img_files)
+            self.session.commit()
+        return nb_objs, 0, nb_img_rows, nb_img_files
 
     def force_to_predicted(
         self, current_user_id: UserIDT, proj_id: ProjectIDT, filters: ProjectFiltersDict

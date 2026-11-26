@@ -9,7 +9,7 @@ from logging import Logger
 from os import unlink
 from queue import Queue
 from threading import Thread
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from helpers.AppConfig import Config
 from helpers.Timer import CodeTimer
@@ -22,12 +22,18 @@ class VaultRemover(Thread):
     """
 
     def __init__(self, config: Config, logger: Logger):
-        super().__init__(name="Vault remover")
+        super().__init__(name="Vault remover", daemon=True)
         self.vault = Vault(config.vault_dir())
         # TODO: a collection.deque is faster
         # TODO: or store the file lists, e.g. in chunks of 10, instead of filling the queue with individual items
         self.files_queue: Queue[Optional[str]] = Queue()
         self.logger = logger
+
+    def __enter__(self) -> "VaultRemover":
+        return self.do_start()
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        self.wait_for_done()
 
     def do_start(self) -> "VaultRemover":
         """
@@ -53,14 +59,16 @@ class VaultRemover(Thread):
             a_file = queue.get()
             if a_file is None:
                 break
-            file_in_vault = self.vault.image_path(a_file)
             try:
+                file_in_vault = self.vault.image_path(a_file)
                 unlink(file_in_vault)
             except FileNotFoundError:
                 problems.append(a_file)
                 if len(problems) > 10:
                     self.logger.error("Could not remove files %s", ",".join(problems))
                     problems.clear()
+            except Exception as exc:
+                self.logger.error("Could not remove file %s: %s", a_file, exc)
         if len(problems) > 0:
             self.logger.error("Could not remove file(s) %s", ",".join(problems))
 
@@ -72,5 +80,6 @@ class VaultRemover(Thread):
             "Approximately %d files in deletion queue", self.files_queue.qsize()
         )
         self.files_queue.put(None)
-        with CodeTimer("Wait for files removal: ", self.logger):
-            self.join()
+        if self.ident is not None:
+            with CodeTimer("Wait for files removal: ", self.logger):
+                self.join()

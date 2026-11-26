@@ -1031,7 +1031,7 @@ class Unpacker(object):
         if kind is None:
             compressed_path.unlink(missing_ok=True)
             logger.info(
-                "File format not accepted '%s' '%s' , user_id '%s'",
+                "Top-level file format not accepted '%s' '%s' , user_id '%s'",
                 str(to_path),
                 str(compressed_path),
                 str(self.user_id),
@@ -1077,7 +1077,10 @@ class Unpacker(object):
                 except Exception as e:
                     if isinstance(e, PartialPublishException):
                         # They hold what the extraction replaced, for a recovery
-                        logger.error("Kept %s(~replaced), publish not undone", staging)
+                        logger.error(
+                            "Kept %s(~replaced), publish not undone during unpack",
+                            staging,
+                        )
                     else:
                         shutil.rmtree(staging, ignore_errors=True)
                         shutil.rmtree(_backup_of(staging), ignore_errors=True)
@@ -1124,7 +1127,7 @@ class Unpacker(object):
         elif kind is None:
             os.remove(compressed_path)
             logger.info(
-                "File format not accepted '%s' '%s' , user_id '%s'",
+                "Nested file format not accepted '%s' '%s' , user_id '%s'",
                 str(to_path),
                 str(compressed_path),
                 str(self.user_id),
@@ -1157,19 +1160,36 @@ def registered(
             _LIVE.add(str(entry))
         except Exception as e:
             logger.error("Could not register unpacking %s: %s", info, e)
-            if tmp_name is not None:
-                Path(tmp_name).unlink(missing_ok=True)
-            if fd is not None:
-                os.close(fd)
+            try:
+                if tmp_name is not None:
+                    try:
+                        Path(tmp_name).unlink(missing_ok=True)
+                    except OSError:
+                        pass
+            finally:
+                if fd is not None:
+                    try:
+                        os.close(fd)
+                    except OSError:
+                        pass
             fd, entry = None, None
     try:
         yield
     finally:
-        if entry is not None:
-            entry.unlink(missing_ok=True)
-            _LIVE.discard(str(entry))
-        if fd is not None:
-            os.close(fd)
+        try:
+            if entry is not None:
+                try:
+                    entry.unlink(missing_ok=True)
+                except OSError as e:
+                    logger.error("Could not unregister unpacking %s: %s", entry, e)
+                finally:
+                    _LIVE.discard(str(entry))
+        finally:
+            if fd is not None:
+                try:
+                    os.close(fd)
+                except OSError as e:
+                    logger.error("Could not close unpack registry fd %s: %s", entry, e)
 
 
 def active_stagings(registry_dir: Path) -> List[Path]:
@@ -1277,7 +1297,9 @@ def _clean_up(info: Dict[str, Any], users_files_dir: Path) -> None:
             shutil.rmtree(staging, ignore_errors=True)
             shutil.rmtree(backup, ignore_errors=True)
         except PartialPublishException:
-            logger.error("Kept %s(~replaced), publish not undone", staging)
+            logger.error(
+                "Kept %s(~replaced), publish not undone during stale cleanup", staging
+            )
             outcome = "part of it may have been kept: " + DETAIL_UNPACK_PARTIAL
     else:
         logger.error("Not removing unexpected staging path %s", staging)

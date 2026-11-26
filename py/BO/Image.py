@@ -30,10 +30,9 @@ class ImageBO(object):
         Validate the (probable) image file at given path.
         """
         try:
-            im = PIL_Image.open(img_path)
-            im.load()
-            img_format = im.format
-            del im
+            with PIL_Image.open(img_path) as im:
+                im.load()
+                img_format = im.format
             if img_format not in SUPPORTED_FORMATS:
                 raise ImportError(
                     "Unsupported image format: %s, please convert to one of %s"
@@ -54,28 +53,35 @@ class ImageBO(object):
         Get dimensions from given image, return a string with the error in case of issue.
         It is assumed that the image is valid, i.e. did not throw an exception in above validate()
         """
-        im: PIL_Image.Image = PIL_Image.open(vault.image_path(sub_path))
-        image_to_write.width = im.size[0]
-        image_to_write.height = im.size[1]
-        # Generate a thumbnail if image is too large
-        if (im.size[0] > max_dim) or (im.size[1] > max_dim):
-            if im.mode == "P" or im.mode[0] == "I" or im.mode == "RGBA":
-                # (8-bit pixels, mapped to any other mode using a color palette)
-                # from https://pillow.readthedocs.io/en/latest/handbook/concepts.html#modes
-                # Tested using a PNG with palette
-                im = im.convert("RGB")
-            im.thumbnail((max_dim, max_dim))
-            thumb_relative_path, thumb_full_path = vault.thumbnail_paths(
-                image_to_write.imgid
-            )
-            im.save(thumb_full_path)  # TODO: Should be in Vault, no IO here
-            image_to_write.thumb_width = im.size[0]
-            image_to_write.thumb_height = im.size[1]
-        else:
-            # Close the PIL image, when resized it was done during im.save
-            # Otherwise there is a FD exhaustion on PyPy
-            im.close()
-            # Need empty fields for bulk insert
-            image_to_write.thumb_width = None
-            image_to_write.thumb_height = None
+        with PIL_Image.open(vault.image_path(sub_path)) as src_im:
+            image_to_write.width = src_im.size[0]
+            image_to_write.height = src_im.size[1]
+            # Generate a thumbnail if image is too large
+            if (src_im.size[0] > max_dim) or (src_im.size[1] > max_dim):
+                if (
+                    src_im.mode == "P"
+                    or src_im.mode[0] == "I"
+                    or src_im.mode == "RGBA"
+                ):
+                    # (8-bit pixels, mapped to any other mode using a color palette)
+                    # from https://pillow.readthedocs.io/en/latest/handbook/concepts.html#modes
+                    # Tested using a PNG with palette
+                    work_im: PIL_Image.Image = src_im.convert("RGB")
+                else:
+                    work_im = src_im
+                try:
+                    work_im.thumbnail((max_dim, max_dim))
+                    thumb_relative_path, thumb_full_path = vault.thumbnail_paths(
+                        image_to_write.imgid
+                    )
+                    work_im.save(thumb_full_path)  # TODO: Should be in Vault, no IO here
+                    image_to_write.thumb_width = work_im.size[0]
+                    image_to_write.thumb_height = work_im.size[1]
+                finally:
+                    if work_im is not src_im:
+                        work_im.close()
+            else:
+                # Need empty fields for bulk insert
+                image_to_write.thumb_width = None
+                image_to_write.thumb_height = None
         return None

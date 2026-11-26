@@ -55,3 +55,23 @@ def test_vignette1():
     img_expected = np.array(Image.open(expected_file))
 
     assert np.array_equal(img_target, img_expected)
+
+
+def test_vignette_closes_source_handle(monkeypatch):
+    opened = []
+    real_open = Image.open
+
+    def tracking_open(*args, **kwargs):
+        im = real_open(*args, **kwargs)
+        opened.append(im)
+        return im
+
+    monkeypatch.setattr("BO.Vignette.Image.open", tracking_open)
+
+    conf = configparser.ConfigParser()
+    conf.read_string(CONFIG)
+    maker = VignetteMaker(conf, IMAGES_DIR, "0128_vig.png")
+    maker.make_vignette("0128.png")
+
+    assert len(opened) == 1
+    assert opened[0].fp is None

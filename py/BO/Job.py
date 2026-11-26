@@ -144,8 +144,15 @@ class JobBO(object):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self._session.commit()
-        self._session = None
+        if self._session is None:
+            return
+        try:
+            if exc_type is not None:
+                self._session.rollback()
+            else:
+                self._session.commit()
+        finally:
+            self._session = None
 
     @classmethod
     def create_job(cls, user_id: UserIDT, job_type: str, args: Dict) -> Job:

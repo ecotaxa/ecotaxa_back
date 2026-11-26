@@ -143,8 +143,9 @@ class Project(Model):
             .execution_options(yield_per=SQL.DB_CHUNK_SIZE * 20)  # 2 columns
         )
         add_rank = ret.add
-        for objid, imgrank in session.execute(stmt).tuples():
-            add_rank(objid, imgrank)
+        with session.execute(stmt) as res:
+            for objid, imgrank in res.tuples():
+                add_rank(objid, imgrank)
         return ret
 
 

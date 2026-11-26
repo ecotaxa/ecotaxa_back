@@ -58,6 +58,22 @@ def test_project_stats(fastapi):
     actual = rsp.json()
     assert actual == expected
 
+    # Repeated calls should reuse the compiled query cache and not register dynamic mappers
+    from API_operations.helpers.Service import Service
+    from DB.helpers.ORM import Model
+
+    assert Service.the_connection is not None
+    cache = Service.the_connection.engine._compiled_cache
+    assert cache is not None
+    cache_size_before = len(cache)
+    mappers_before = len(list(Model.registry.mappers))
+    for _ in range(5):
+        rsp = fastapi.get(url, headers=ADMIN_AUTH)
+        assert rsp.status_code == 200
+        assert rsp.json() == expected
+    assert len(cache) == cache_size_before
+    assert len(list(Model.registry.mappers)) == mappers_before
+
 
 def test_project_redo_sunpos(fastapi):
 

@@ -15,6 +15,8 @@ class EcoTaxoServerClient(object):
     A class encapsulating the dialog with EcoTaxoServer.
     """
 
+    TIMEOUT = 60
+
     def __init__(self, url: str, instance_id: str, secret_key: str):
         """
         :param instance_id: EcoTaxa instance identifier.
@@ -38,10 +40,10 @@ class EcoTaxoServerClient(object):
         params.update(endpoint_params)
         if method == "get":
             r = requests.get(
-                self.url + endpoint, params
+                self.url + endpoint, params, timeout=self.TIMEOUT
             )  # TODO: Use some async lib instead of requests
         else:
             r = requests.post(
-                self.url + endpoint, params
+                self.url + endpoint, params, timeout=self.TIMEOUT
             )  # TODO: Use some async lib instead of requests
         return r
