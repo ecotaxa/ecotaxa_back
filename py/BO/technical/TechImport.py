@@ -5,15 +5,30 @@
 # Technical PG dump-like import of a single project.
 #
 import json
-import os
 import shutil
 import tarfile
-import tempfile
 import time
+from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
-from typing import Any, Dict, IO, List, Optional, Tuple
+from typing import Any, Callable, Dict, IO, List, Optional, Tuple
 
-from DB.Project import Project
+from DB.Acquisition import Acquisition
+from DB.CNNFeatureVector import ObjectCNNFeatureVector
+from DB.Collection import Collection, CollectionProject
+from DB.Image import Image, ImageFile
+from DB.Instrument import Instrument
+from DB.Object import ObjectFields, ObjectHeader, ObjectsClassifHisto
+from DB.Prediction import Prediction, PredictionHisto
+from DB.Process import Process
+from DB.Project import Project, ProjectTaxoStat
+from DB.ProjectPrivilege import ProjectPrivilege
+from DB.ProjectVariables import ProjectVariables
+from DB.Sample import Sample
+from DB.TaxoRecast import TaxoRecast
+from DB.Taxonomy import Taxonomy
+from DB.Training import Training
+from DB.User import Organization, User
+from DB.UserPreferences import UserPreferences
 from DB.helpers import Session
 from DB.helpers.DDL import Sequence
 from helpers.CustomException import UnprocessableEntityException
@@ -23,37 +38,66 @@ logger = get_logger(__name__)
 
 COPY_CHUNK_SIZE = 1024 * 1024
 
+ProgressCallback = Callable[[int, str], None]
+
+
+@dataclass
+class _TarImportState:
+    cur: Any
+    table_columns: Dict[str, List[str]] = field(default_factory=dict)
+    metadata_seen: bool = False
+    row_counts: Dict[str, int] = field(default_factory=dict)
+    next_table_idx: int = 0
+    vault_files: int = 0
+    vault_started: bool = False
+    last_report_at: float = field(default_factory=time.monotonic)
+
 
 class TechnicalImport:
     """
     Restore a PostgreSQL COPY-based dump of a single project and its vault images
-    from a .tar.zst file, a .tar file, or an extracted directory.
+    from a .tar.zst file.
     """
 
     IMAGES_REPORT_INTERVAL_SECONDS: float = 5.0
 
-    # Must match TechnicalDump._table_queries dependency order
-    IMPORT_TABLE_ORDER: Tuple[str, ...] = (
-        "projects",
-        "projectspriv",
-        "projects_taxo_stat",
-        "projects_variables",
-        "taxo_recast",
-        "collection_project",
-        "user_preferences",
-        "training",
-        "samples",
-        "acquisitions",
-        "process",
-        "obj_head",
-        "obj_field",
-        "images",
-        "image_file",
-        "objectsclassifhisto",
-        "obj_cnn_features_vector",
-        "prediction",
-        "prediction_histo",
+    _IMPORT_MODELS: Tuple[Any, ...] = (
+        Instrument,
+        Organization,
+        User,
+        Taxonomy,
+        Collection,
+        Project,
+        ProjectPrivilege,
+        ProjectTaxoStat,
+        ProjectVariables,
+        TaxoRecast,
+        CollectionProject,
+        UserPreferences,
+        Training,
+        Sample,
+        Acquisition,
+        Process,
+        ObjectHeader,
+        ObjectFields,
+        Image,
+        ImageFile,
+        ObjectsClassifHisto,
+        ObjectCNNFeatureVector,
+        Prediction,
+        PredictionHisto,
     )
+    _CONFLICT_TOLERANT_TABLES: Tuple[str, ...] = (
+        Instrument.__tablename__,
+        Organization.__tablename__,
+        User.__tablename__,
+        Taxonomy.__tablename__,
+        Collection.__tablename__,
+        Training.__tablename__,
+    )
+
+    # Must match TechnicalDump._table_queries dependency order
+    IMPORT_TABLE_ORDER: Tuple[str, ...] = tuple(m.__tablename__ for m in _IMPORT_MODELS)
 
     def __init__(self, session: Session, vault_dir: str):
         self.session = session
@@ -89,33 +133,44 @@ class TechnicalImport:
             return stem
         return None
 
+    @staticmethod
+    def _require_table_columns(
+        table_columns: Dict[str, List[str]], table_name: str
+    ) -> List[str]:
+        cols = table_columns.get(table_name)
+        if not cols:
+            raise UnprocessableEntityException(
+                f"Missing metadata columns for table '{table_name}'"
+            )
+        return cols
+
+    @staticmethod
     def _copy_table_stream(
-        self,
         cur: Any,
         table_name: str,
         src: IO[bytes],
-        columns: Optional[List[str]] = None,
+        columns: List[str],
     ) -> int:
-        cols_sql = ""
-        if columns:
-            quoted_cols = ", ".join(f'"{c}"' for c in columns)
-            cols_sql = f" ({quoted_cols})"
+        quoted_cols = ", ".join(f'"{c}"' for c in columns)
+        cols_sql = f" ({quoted_cols})"
 
-        if table_name == "training":
-            # A referenced training row (e.g. shared model) may already exist in target DB
+        if table_name in TechnicalImport._CONFLICT_TOLERANT_TABLES:
+            # Shared/reference rows may already exist in target DB
+            tmp_table = f"_tmp_{table_name}"
             cur.execute(
-                "CREATE TEMP TABLE IF NOT EXISTS _tmp_training (LIKE training) ON COMMIT DROP"
+                f"CREATE TEMP TABLE IF NOT EXISTS {tmp_table} (LIKE {table_name}) ON COMMIT DROP"
             )
-            cur.execute("TRUNCATE _tmp_training")
-            with cur.copy(f"COPY _tmp_training{cols_sql} FROM STDIN") as copy:
+            cur.execute(f"TRUNCATE {tmp_table}")
+            with cur.copy(f"COPY {tmp_table}{cols_sql} FROM STDIN") as copy:
                 while True:
                     chunk = src.read(COPY_CHUNK_SIZE)
                     if not chunk:
                         break
                     copy.write(chunk)
             cur.execute(
-                "INSERT INTO training SELECT * FROM _tmp_training "
-                "ON CONFLICT (training_id) DO NOTHING"
+                f"INSERT INTO {table_name}{cols_sql} "
+                f"SELECT {quoted_cols} FROM {tmp_table} "
+                "ON CONFLICT DO NOTHING"
             )
             return max(cur.rowcount or 0, 0)
 
@@ -127,16 +182,30 @@ class TechnicalImport:
                 copy.write(chunk)
         return max(cur.rowcount or 0, 0)
 
-    def _reset_sequences(self, cur: Any, imported_tables: set[str]) -> None:
+    @staticmethod
+    def _reset_sequences(cur: Any, imported_tables: set[str]) -> None:
         for a_table in Project.metadata.sorted_tables:
             if a_table.name not in imported_tables:
                 continue
             for a_col in a_table.columns:
+                seq_name: Optional[str] = None
                 if isinstance(a_col.default, Sequence):
+                    seq_name = a_col.default.name
+                elif a_col.identity is not None or (
+                    a_col.primary_key and a_col.autoincrement is not False
+                ):
+                    cur.execute(
+                        "SELECT pg_get_serial_sequence(%s, %s)",
+                        (a_table.name, a_col.name),
+                    )
+                    row = cur.fetchone()
+                    if row and row[0]:
+                        seq_name = row[0]
+                if seq_name is not None:
                     cur.execute(
                         f"SELECT setval(%s, GREATEST(COALESCE((SELECT max({a_col.name}) FROM {a_table.name}), 0), 1), "
                         f"(SELECT count(*) > 0 FROM {a_table.name}))",
-                        (a_col.default.name,),
+                        (seq_name,),
                     )
 
     def _parse_metadata(self, meta_bytes: bytes) -> Dict[str, List[str]]:
@@ -160,258 +229,223 @@ class TechnicalImport:
         with open(dest_path, "wb") as dst:
             shutil.copyfileobj(src, dst, length=COPY_CHUNK_SIZE)
 
-    @staticmethod
-    def _resolve_dir_root(dir_path: Path) -> Path:
-        if (dir_path / "0_metadata.json").is_file() or (
-            dir_path / "01_projects.copy"
-        ).is_file():
-            return dir_path
-        children = [p for p in dir_path.iterdir() if p.is_dir()]
-        if len(children) == 1:
-            sub = children[0]
-            if (sub / "0_metadata.json").is_file() or (
-                sub / "01_projects.copy"
-            ).is_file():
-                return sub
-        return dir_path
-
-    def _import_from_directory(
-        self, dir_path: Path, cur: Any
-    ) -> Tuple[Dict[str, int], int]:
-        root = self._resolve_dir_root(dir_path)
-        meta_path = root / "0_metadata.json"
-        table_columns: Dict[str, List[str]] = {}
-        if meta_path.is_file():
-            table_columns = self._parse_metadata(meta_path.read_bytes())
-
-        logger.info(
-            "%sStarting technical import from directory %s", self._log_prefix, root
+    def _import_table_stream(
+        self,
+        cur: Any,
+        table_name: str,
+        src: IO[bytes],
+        table_columns: Dict[str, List[str]],
+        row_counts: Dict[str, int],
+        source_name: Optional[str] = None,
+    ) -> None:
+        rows = self._copy_table_stream(
+            cur,
+            table_name,
+            src,
+            columns=self._require_table_columns(table_columns, table_name),
         )
-        row_counts: Dict[str, int] = {}
-        copy_files_by_table: Dict[str, Path] = {}
-        for entry in root.iterdir():
-            if entry.is_file():
-                tbl = self._table_from_copy_filename(entry.name)
-                if tbl is not None:
-                    copy_files_by_table[tbl] = entry
-
-        if not copy_files_by_table:
-            raise UnprocessableEntityException(
-                f"No project .copy files found in directory: {dir_path.name}"
-            )
-
-        for table_name in self.IMPORT_TABLE_ORDER:
-            copy_path = copy_files_by_table.get(table_name)
-            if copy_path is None:
-                continue
-            with open(copy_path, "rb") as f:
-                rows = self._copy_table_stream(
-                    cur, table_name, f, columns=table_columns.get(table_name)
-                )
-            row_counts[table_name] = rows
+        row_counts[table_name] = rows
+        if source_name is not None:
             logger.info(
                 "%sImported %d rows into %s from %s",
                 self._log_prefix,
                 rows,
                 table_name,
-                copy_path.name,
+                source_name,
+            )
+        else:
+            logger.info(
+                "%sImported %d rows into %s",
+                self._log_prefix,
+                rows,
+                table_name,
             )
 
-        vault_files = 0
-        vault_src = root / "vault"
-        if vault_src.is_dir():
-            logger.info("%sRestoring vault images", self._log_prefix)
-            last_report_at = time.monotonic()
-            for dirpath, _dirnames, filenames in os.walk(vault_src):
-                for fname in sorted(filenames):
-                    src_file = Path(dirpath) / fname
-                    rel_sub = src_file.relative_to(vault_src).as_posix()
-                    with open(src_file, "rb") as f:
-                        self._copy_vault_file(rel_sub, f)
-                    vault_files += 1
-                    now = time.monotonic()
-                    if now - last_report_at >= self.IMAGES_REPORT_INTERVAL_SECONDS:
-                        last_report_at = now
-                        logger.info(
-                            "%sRestored %d vault files", self._log_prefix, vault_files
-                        )
-            logger.info("%sRestored %d vault files", self._log_prefix, vault_files)
+    def _handle_tar_copy_member(
+        self,
+        tfile: tarfile.TarFile,
+        member: tarfile.TarInfo,
+        norm_name: str,
+        state: _TarImportState,
+        progress_start: int = 1,
+        vault_progress_start: int = 75,
+        progress_cb: Optional[ProgressCallback] = None,
+    ) -> None:
+        if not norm_name.endswith(".copy"):
+            return
+        if not state.metadata_seen:
+            raise UnprocessableEntityException(
+                f"Unexpected table file '{norm_name}' before 0_metadata.json"
+            )
+        tbl = self._table_from_copy_filename(norm_name)
+        if tbl is None:
+            raise UnprocessableEntityException(
+                f"Unexpected table file '{norm_name}' in archive"
+            )
+        tbl_idx = self.IMPORT_TABLE_ORDER.index(tbl)
+        if tbl_idx < state.next_table_idx:
+            raise UnprocessableEntityException(
+                f"Unexpected out-of-order table '{tbl}' in archive (file '{norm_name}')"
+            )
+        if progress_cb is not None:
+            pct = progress_start + int(
+                (vault_progress_start - progress_start)
+                * tbl_idx
+                / len(self.IMPORT_TABLE_ORDER)
+            )
+            progress_cb(pct, f"Importing table {tbl}")
+        extracted = tfile.extractfile(member)
+        if extracted is None:
+            return
+        self._import_table_stream(
+            state.cur,
+            tbl,
+            extracted,
+            state.table_columns,
+            state.row_counts,
+            source_name=norm_name,
+        )
+        state.next_table_idx = tbl_idx + 1
 
-        return row_counts, vault_files
+    def _handle_tar_vault_member(
+        self,
+        tfile: tarfile.TarFile,
+        member: tarfile.TarInfo,
+        norm_name: str,
+        state: _TarImportState,
+        vault_progress_start: int = 75,
+        progress_end: int = 99,
+        progress_cb: Optional[ProgressCallback] = None,
+    ) -> None:
+        if not state.vault_started:
+            state.vault_started = True
+            state.last_report_at = time.monotonic()
+            logger.info("%sRestoring vault images", self._log_prefix)
+            if progress_cb is not None:
+                progress_cb(vault_progress_start, "Restoring vault images")
+        extracted = tfile.extractfile(member)
+        if extracted is None:
+            return
+        rel_sub = norm_name[len("vault/") :]
+        self._copy_vault_file(rel_sub, extracted)
+        state.vault_files += 1
+        now = time.monotonic()
+        if now - state.last_report_at >= self.IMAGES_REPORT_INTERVAL_SECONDS:
+            state.last_report_at = now
+            msg = f"Restored {state.vault_files} vault files"
+            logger.info(
+                "%s%s",
+                self._log_prefix,
+                msg,
+            )
+            if progress_cb is not None:
+                pct = min(
+                    progress_end - 1,
+                    vault_progress_start + (state.vault_files // 100),
+                )
+                progress_cb(pct, msg)
 
     def _import_from_tar(
-        self, archive_path: Path, tar_mode: str, cur: Any
+        self,
+        archive_path: Path,
+        cur: Any,
+        progress_start: int = 1,
+        progress_end: int = 99,
+        progress_cb: Optional[ProgressCallback] = None,
     ) -> Tuple[Dict[str, int], int]:
         logger.info(
             "%sStarting technical import from archive %s",
             self._log_prefix,
             archive_path.name,
         )
-        table_columns: Dict[str, List[str]] = {}
-        row_counts: Dict[str, int] = {}
-        deferred_copies: Dict[str, IO[bytes]] = {}
-        next_table_idx = 0
-        vault_files = 0
-        last_report_at = time.monotonic()
-        vault_started = False
-
-        def _flush_ready_deferred() -> None:
-            nonlocal next_table_idx
-            while next_table_idx < len(self.IMPORT_TABLE_ORDER):
-                expected_tbl = self.IMPORT_TABLE_ORDER[next_table_idx]
-                buf = deferred_copies.pop(expected_tbl, None)
-                if buf is None:
-                    break
-                try:
-                    buf.seek(0)
-                    rows = self._copy_table_stream(
-                        cur,
-                        expected_tbl,
-                        buf,
-                        columns=table_columns.get(expected_tbl),
+        vault_progress_start = max(progress_start, progress_end - 25)
+        state = _TarImportState(cur=cur)
+        with tarfile.open(name=archive_path, mode="r:zst") as tfile:
+            for member in tfile:
+                if not member.isfile():
+                    continue
+                norm_name = self._normalize_member_name(member.name)
+                if norm_name == "0_metadata.json":
+                    extracted = tfile.extractfile(member)
+                    if extracted is not None:
+                        state.table_columns = self._parse_metadata(extracted.read())
+                    state.metadata_seen = True
+                elif "/" not in norm_name:
+                    self._handle_tar_copy_member(
+                        tfile,
+                        member,
+                        norm_name,
+                        state,
+                        progress_start=progress_start,
+                        vault_progress_start=vault_progress_start,
+                        progress_cb=progress_cb,
                     )
-                    row_counts[expected_tbl] = rows
-                    logger.info(
-                        "%sImported %d rows into %s",
-                        self._log_prefix,
-                        rows,
-                        expected_tbl,
+                elif norm_name.startswith("vault/"):
+                    self._handle_tar_vault_member(
+                        tfile,
+                        member,
+                        norm_name,
+                        state,
+                        vault_progress_start=vault_progress_start,
+                        progress_end=progress_end,
+                        progress_cb=progress_cb,
                     )
-                finally:
-                    buf.close()
-                next_table_idx += 1
+        if not state.metadata_seen:
+            raise UnprocessableEntityException(
+                f"Missing 0_metadata.json in archive: {archive_path.name}"
+            )
 
-        try:
-            with tarfile.open(name=archive_path, mode=tar_mode) as tfile:  # type: ignore[call-overload]
-                for member in tfile:
-                    if not member.isfile():
-                        continue
-                    norm_name = self._normalize_member_name(member.name)
-                    if norm_name == "0_metadata.json":
-                        extracted = tfile.extractfile(member)
-                        if extracted is not None:
-                            table_columns = self._parse_metadata(extracted.read())
-                        continue
-
-                    if "/" not in norm_name:
-                        tbl = self._table_from_copy_filename(norm_name)
-                        if tbl is not None:
-                            extracted = tfile.extractfile(member)
-                            if extracted is None:
-                                continue
-                            # Stream directly if this table is the next expected one (or all predecessors are done)
-                            tbl_idx = self.IMPORT_TABLE_ORDER.index(tbl)
-                            if tbl_idx == next_table_idx:
-                                rows = self._copy_table_stream(
-                                    cur,
-                                    tbl,
-                                    extracted,
-                                    columns=table_columns.get(tbl),
-                                )
-                                row_counts[tbl] = rows
-                                logger.info(
-                                    "%sImported %d rows into %s from %s",
-                                    self._log_prefix,
-                                    rows,
-                                    tbl,
-                                    norm_name,
-                                )
-                                next_table_idx += 1
-                                _flush_ready_deferred()
-                            else:
-                                # Out-of-order archive: spool until predecessors are imported
-                                tmp = tempfile.SpooledTemporaryFile(
-                                    max_size=16 * 1024 * 1024
-                                )
-                                shutil.copyfileobj(
-                                    extracted, tmp, length=COPY_CHUNK_SIZE
-                                )
-                                deferred_copies[tbl] = tmp
-                            continue
-
-                    if norm_name.startswith("vault/"):
-                        # Flush any remaining deferred DB tables before vault files
-                        while next_table_idx < len(self.IMPORT_TABLE_ORDER):
-                            if (
-                                self.IMPORT_TABLE_ORDER[next_table_idx]
-                                in deferred_copies
-                            ):
-                                _flush_ready_deferred()
-                            else:
-                                next_table_idx += 1
-                        if not vault_started:
-                            vault_started = True
-                            last_report_at = time.monotonic()
-                            logger.info("%sRestoring vault images", self._log_prefix)
-                        extracted = tfile.extractfile(member)
-                        if extracted is None:
-                            continue
-                        rel_sub = norm_name[len("vault/") :]
-                        self._copy_vault_file(rel_sub, extracted)
-                        vault_files += 1
-                        now = time.monotonic()
-                        if now - last_report_at >= self.IMAGES_REPORT_INTERVAL_SECONDS:
-                            last_report_at = now
-                            logger.info(
-                                "%sRestored %d vault files",
-                                self._log_prefix,
-                                vault_files,
-                            )
-        finally:
-            # Ensure any remaining deferred buffers are flushed or closed
-            while next_table_idx < len(self.IMPORT_TABLE_ORDER) and deferred_copies:
-                if self.IMPORT_TABLE_ORDER[next_table_idx] in deferred_copies:
-                    _flush_ready_deferred()
-                else:
-                    next_table_idx += 1
-            for buf in deferred_copies.values():
-                buf.close()
-
-        if not row_counts:
+        if not state.row_counts:
             raise UnprocessableEntityException(
                 f"No project .copy files found in archive: {archive_path.name}"
             )
-        if vault_started:
-            logger.info("%sRestored %d vault files", self._log_prefix, vault_files)
+        if state.vault_started:
+            msg = f"Restored {state.vault_files} vault files"
+            logger.info("%s%s", self._log_prefix, msg)
+            if progress_cb is not None:
+                progress_cb(progress_end - 1, msg)
 
-        return row_counts, vault_files
+        return state.row_counts, state.vault_files
 
-    def import_project(self, source_path: Path) -> Dict[str, Any]:
+    def import_project(
+        self,
+        source_path: Path,
+        progress_start: int = 1,
+        progress_end: int = 99,
+        progress_cb: Optional[ProgressCallback] = None,
+    ) -> Dict[str, Any]:
         """
-        Restore a project from a .tar.zst file, .tar file, or directory.
+        Restore a project from a .tar.zst file.
         Returns a summary dict with project_id, rowcount, tables, and vault_files.
         """
+        if not source_path.is_file() or not source_path.name.lower().endswith(".tar.zst"):
+            raise UnprocessableEntityException(
+                f"Unsupported archive format for '{source_path.name}': expected a .tar.zst file"
+            )
+
         started_at = time.monotonic()
         sa_conn = self.session.connection()
         raw_conn: Any = sa_conn.connection.driver_connection
         assert raw_conn is not None, "Missing DBAPI driver connection"
 
         with raw_conn.cursor() as cur:
-            if source_path.is_dir():
-                row_counts, vault_files = self._import_from_directory(source_path, cur)
-            elif source_path.is_file():
-                lower_name = source_path.name.lower()
-                if lower_name.endswith(".tar.zst"):
-                    tar_mode = "r:zst"
-                elif lower_name.endswith(".tar"):
-                    tar_mode = "r:"
-                else:
-                    raise UnprocessableEntityException(
-                        f"Unsupported archive format for '{source_path.name}': expected .tar, .tar.zst, or directory"
-                    )
-                row_counts, vault_files = self._import_from_tar(
-                    source_path, tar_mode, cur
-                )
-            else:
-                raise UnprocessableEntityException(
-                    f"Archive path is neither a file nor a directory: {source_path.name}"
-                )
+            row_counts, vault_files = self._import_from_tar(
+                source_path,
+                cur,
+                progress_start=progress_start,
+                progress_end=progress_end,
+                progress_cb=progress_cb,
+            )
 
+            if progress_cb is not None:
+                progress_cb(progress_end, "Resetting sequences")
             self._reset_sequences(cur, set(row_counts.keys()))
 
             imported_proj_id: Optional[int] = self._project_id
             if imported_proj_id is None:
-                cur.execute("SELECT projid FROM projects ORDER BY projid DESC LIMIT 1")
+                cur.execute(
+                    f"SELECT projid FROM {Project.__tablename__} ORDER BY projid DESC LIMIT 1"
+                )
                 proj_row = cur.fetchone()
                 imported_proj_id = int(proj_row[0]) if proj_row is not None else None
 

@@ -10,12 +10,26 @@ import json
 import tarfile
 import tempfile
 import time
-from contextlib import nullcontext
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from DB.Image import Image
-from DB.Project import ProjectIDT
+from DB.Acquisition import Acquisition
+from DB.CNNFeatureVector import ObjectCNNFeatureVector
+from DB.Collection import Collection, CollectionProject
+from DB.Image import Image, ImageFile
+from DB.Instrument import Instrument
+from DB.Object import ObjectFields, ObjectHeader, ObjectsClassifHisto
+from DB.Prediction import Prediction, PredictionHisto
+from DB.Process import Process
+from DB.Project import Project, ProjectIDT, ProjectTaxoStat
+from DB.ProjectPrivilege import ProjectPrivilege
+from DB.ProjectVariables import ProjectVariables
+from DB.Sample import Sample
+from DB.TaxoRecast import TaxoRecast
+from DB.Taxonomy import Taxonomy
+from DB.Training import Training
+from DB.User import Organization, User
+from DB.UserPreferences import UserPreferences
 from DB.helpers import SQL, Session
 from DB.helpers.Direct import text
 from FS.Vault import Vault
@@ -25,37 +39,6 @@ from helpers.DynamicLogs import get_logger
 logger = get_logger(__name__)
 
 ProgressCallback = Callable[[int, str], None]
-
-
-class _StreamingSink(io.RawIOBase):
-    """Non-seekable writable stream that buffers chunks for incremental yielding."""
-
-    def __init__(self) -> None:
-        self._chunks: List[bytes] = []
-        self._pos: int = 0
-
-    def writable(self) -> bool:
-        return True
-
-    def seekable(self) -> bool:
-        return False
-
-    def tell(self) -> int:
-        return self._pos
-
-    def write(self, b: Any) -> int:
-        data = bytes(b)
-        if data:
-            self._chunks.append(data)
-            self._pos += len(data)
-        return len(data)
-
-    def drain(self) -> bytes:
-        if not self._chunks:
-            return b""
-        out = b"".join(self._chunks)
-        self._chunks.clear()
-        return out
 
 
 class _PhasedZstdStream(io.RawIOBase):
@@ -131,103 +114,230 @@ class TechnicalDump:
         now = DateTime.now_time()
         return f"export__TEK_{project_id}_{now.strftime('%Y%m%d_%H%M')}.tar.zst"
 
+    _EXPORT_MODELS: Tuple[Any, ...] = (
+        Instrument,
+        Organization,
+        User,
+        Taxonomy,
+        Collection,
+        Project,
+        ProjectPrivilege,
+        ProjectTaxoStat,
+        ProjectVariables,
+        TaxoRecast,
+        CollectionProject,
+        UserPreferences,
+        Training,
+        Sample,
+        Acquisition,
+        Process,
+        ObjectHeader,
+        ObjectFields,
+        Image,
+        ImageFile,
+        ObjectsClassifHisto,
+        ObjectCNNFeatureVector,
+        Prediction,
+        PredictionHisto,
+    )
+    _MODEL_BY_TABLE: Dict[str, Any] = {
+        m.__tablename__: m for m in _EXPORT_MODELS
+    }
+
+    @staticmethod
+    def _model_columns(model: Any) -> List[str]:
+        return [col.name for col in model.__table__.columns]
+
+    @staticmethod
+    def _quoted_columns(model: Any, alias: Optional[str] = None) -> str:
+        prefix = f"{alias}." if alias else ""
+        return ", ".join(f'{prefix}"{col.name}"' for col in model.__table__.columns)
+
     @staticmethod
     def _table_queries(projid: int) -> List[Tuple[str, str]]:
         """
         Return ordered (table_name, select_sql) pairs in FK dependency order
         for restoring a single project.
         """
+        qcols = TechnicalDump._quoted_columns
         acq_sub = (
-            f"SELECT acquisid FROM acquisitions "
+            f"SELECT acquisid FROM {Acquisition.__tablename__} "
             f"WHERE acquisid <@ acq_in_prj({projid}) "
-            f"AND acq_sample_id IN (SELECT sampleid FROM samples WHERE projid = {projid})"
+            f"AND acq_sample_id IN (SELECT sampleid FROM {Sample.__tablename__} WHERE projid = {projid})"
         )
         obj_sub = (
-            f"SELECT objid FROM obj_head "
+            f"SELECT objid FROM {ObjectHeader.__tablename__} "
             f"WHERE objid <@ obj_in_prj({projid}) "
             f"AND acquisid IN ({acq_sub})"
         )
+        coll_sub = (
+            f"SELECT collection_id FROM {CollectionProject.__tablename__} WHERE project_id = {projid} "
+            f"UNION "
+            f"SELECT collection_id FROM {TaxoRecast.__tablename__} WHERE project_id = {projid}"
+        )
+        training_where = (
+            f"projid = {projid} "
+            f"OR training_id IN ("
+            f"SELECT DISTINCT training_id FROM {Prediction.__tablename__} WHERE object_id <@ obj_in_prj({projid})"
+            f") "
+            f"OR training_id IN ("
+            f"SELECT DISTINCT training_id FROM {PredictionHisto.__tablename__} WHERE object_id <@ obj_in_prj({projid})"
+            f")"
+        )
+        users_sub = (
+            f"SELECT member FROM {ProjectPrivilege.__tablename__} WHERE projid = {projid} "
+            f"UNION "
+            f"SELECT user_id FROM {UserPreferences.__tablename__} WHERE project_id = {projid} "
+            f"UNION "
+            f"SELECT training_author FROM {Training.__tablename__} WHERE {training_where} "
+            f"UNION "
+            f"SELECT classif_who FROM {ObjectHeader.__tablename__} "
+            f"WHERE objid <@ obj_in_prj({projid}) AND acquisid IN ({acq_sub}) AND classif_who IS NOT NULL "
+            f"UNION "
+            f"SELECT classif_who FROM {ObjectsClassifHisto.__tablename__} "
+            f"WHERE objid <@ obj_in_prj({projid}) AND classif_who IS NOT NULL "
+            f"UNION "
+            f"SELECT provider_user_id FROM {Collection.__tablename__} "
+            f"WHERE id IN ({coll_sub}) AND provider_user_id IS NOT NULL "
+            f"UNION "
+            f"SELECT contact_user_id FROM {Collection.__tablename__} "
+            f"WHERE id IN ({coll_sub}) AND contact_user_id IS NOT NULL"
+        )
+        taxo_seed_sub = (
+            f"SELECT classif_id FROM {ObjectHeader.__tablename__} "
+            f"WHERE objid <@ obj_in_prj({projid}) AND acquisid IN ({acq_sub}) AND classif_id IS NOT NULL "
+            f"UNION "
+            f"SELECT classif_id FROM {ObjectsClassifHisto.__tablename__} "
+            f"WHERE objid <@ obj_in_prj({projid}) AND classif_id IS NOT NULL "
+            f"UNION "
+            f"SELECT classif_id FROM {Prediction.__tablename__} "
+            f"WHERE object_id <@ obj_in_prj({projid}) AND classif_id IS NOT NULL "
+            f"UNION "
+            f"SELECT classif_id FROM {PredictionHisto.__tablename__} "
+            f"WHERE object_id <@ obj_in_prj({projid}) AND classif_id IS NOT NULL "
+            f"UNION "
+            f"SELECT id FROM {ProjectTaxoStat.__tablename__} WHERE projid = {projid}"
+        )
         return [
-            ("projects", f"SELECT * FROM projects WHERE projid = {projid}"),
-            ("projectspriv", f"SELECT * FROM projectspriv WHERE projid = {projid}"),
             (
-                "projects_taxo_stat",
-                f"SELECT * FROM projects_taxo_stat WHERE projid = {projid}",
+                Instrument.__tablename__,
+                f"SELECT {qcols(Instrument)} FROM {Instrument.__tablename__} "
+                f"WHERE instrument_id IN (SELECT instrument_id FROM {Project.__tablename__} WHERE projid = {projid})",
             ),
             (
-                "projects_variables",
-                f"SELECT * FROM projects_variables WHERE project_id = {projid}",
+                Organization.__tablename__,
+                f"SELECT {qcols(Organization)} FROM {Organization.__tablename__} "
+                f"WHERE id IN (SELECT organization_id FROM {User.__tablename__} WHERE id IN ({users_sub}) AND organization_id IS NOT NULL)",
             ),
             (
-                "taxo_recast",
-                f"SELECT * FROM taxo_recast WHERE project_id = {projid}",
+                User.__tablename__,
+                f"SELECT {qcols(User)} FROM {User.__tablename__} WHERE id IN ({users_sub})",
             ),
             (
-                "collection_project",
-                f"SELECT * FROM collection_project WHERE project_id = {projid}",
+                Taxonomy.__tablename__,
+                f"WITH RECURSIVE _taxo_tree AS ("
+                f"SELECT {qcols(Taxonomy)} FROM {Taxonomy.__tablename__} WHERE id IN ({taxo_seed_sub}) "
+                f"UNION "
+                f"SELECT {qcols(Taxonomy, alias='t')} FROM {Taxonomy.__tablename__} t "
+                f"JOIN _taxo_tree tt ON t.id = tt.parent_id OR t.id = tt.rename_to"
+                f") SELECT {qcols(Taxonomy)} FROM _taxo_tree",
             ),
             (
-                "user_preferences",
-                f"SELECT * FROM user_preferences WHERE project_id = {projid}",
+                Collection.__tablename__,
+                f"SELECT {qcols(Collection)} FROM {Collection.__tablename__} WHERE id IN ({coll_sub})",
             ),
             (
-                "training",
-                f"SELECT * FROM training "
+                Project.__tablename__,
+                f"SELECT {qcols(Project)} FROM {Project.__tablename__} WHERE projid = {projid}",
+            ),
+            (
+                ProjectPrivilege.__tablename__,
+                f"SELECT {qcols(ProjectPrivilege)} FROM {ProjectPrivilege.__tablename__} WHERE projid = {projid}",
+            ),
+            (
+                ProjectTaxoStat.__tablename__,
+                f"SELECT {qcols(ProjectTaxoStat)} FROM {ProjectTaxoStat.__tablename__} WHERE projid = {projid}",
+            ),
+            (
+                ProjectVariables.__tablename__,
+                f"SELECT {qcols(ProjectVariables)} FROM {ProjectVariables.__tablename__} WHERE project_id = {projid}",
+            ),
+            (
+                TaxoRecast.__tablename__,
+                f"SELECT {qcols(TaxoRecast)} FROM {TaxoRecast.__tablename__} WHERE project_id = {projid}",
+            ),
+            (
+                CollectionProject.__tablename__,
+                f"SELECT {qcols(CollectionProject)} FROM {CollectionProject.__tablename__} WHERE project_id = {projid}",
+            ),
+            (
+                UserPreferences.__tablename__,
+                f"SELECT {qcols(UserPreferences)} FROM {UserPreferences.__tablename__} WHERE project_id = {projid}",
+            ),
+            (
+                Training.__tablename__,
+                f"SELECT {qcols(Training)} FROM {Training.__tablename__} "
                 f"WHERE projid = {projid} "
                 f"OR training_id IN ("
-                f"SELECT DISTINCT training_id FROM prediction WHERE object_id <@ obj_in_prj({projid})"
+                f"SELECT DISTINCT training_id FROM {Prediction.__tablename__} WHERE object_id <@ obj_in_prj({projid})"
                 f") "
                 f"OR training_id IN ("
-                f"SELECT DISTINCT training_id FROM prediction_histo WHERE object_id <@ obj_in_prj({projid})"
+                f"SELECT DISTINCT training_id FROM {PredictionHisto.__tablename__} WHERE object_id <@ obj_in_prj({projid})"
                 f")",
             ),
-            ("samples", f"SELECT * FROM samples WHERE projid = {projid}"),
             (
-                "acquisitions",
-                f"SELECT * FROM acquisitions "
-                f"WHERE acquisid <@ acq_in_prj({projid}) "
-                f"AND acq_sample_id IN (SELECT sampleid FROM samples WHERE projid = {projid})",
+                Sample.__tablename__,
+                f"SELECT {qcols(Sample)} FROM {Sample.__tablename__} WHERE projid = {projid}",
             ),
-            ("process", f"SELECT * FROM process WHERE processid IN ({acq_sub})"),
             (
-                "obj_head",
-                f"SELECT * FROM obj_head "
+                Acquisition.__tablename__,
+                f"SELECT {qcols(Acquisition)} FROM {Acquisition.__tablename__} "
+                f"WHERE acquisid <@ acq_in_prj({projid}) "
+                f"AND acq_sample_id IN (SELECT sampleid FROM {Sample.__tablename__} WHERE projid = {projid})",
+            ),
+            (
+                Process.__tablename__,
+                f"SELECT {qcols(Process)} FROM {Process.__tablename__} WHERE processid IN ({acq_sub})",
+            ),
+            (
+                ObjectHeader.__tablename__,
+                f"SELECT {qcols(ObjectHeader)} FROM {ObjectHeader.__tablename__} "
                 f"WHERE objid <@ obj_in_prj({projid}) "
                 f"AND acquisid IN ({acq_sub})",
             ),
             (
-                "obj_field",
-                f"SELECT * FROM obj_field "
+                ObjectFields.__tablename__,
+                f"SELECT {qcols(ObjectFields)} FROM {ObjectFields.__tablename__} "
                 f"WHERE objfid <@ obj_in_prj({projid}) "
                 f"AND objfid IN ({obj_sub})",
             ),
             (
-                "images",
-                f"SELECT * FROM images "
+                Image.__tablename__,
+                f"SELECT {qcols(Image)} FROM {Image.__tablename__} "
                 f"WHERE objid <@ obj_in_prj({projid}) "
                 f"AND objid IN ({obj_sub})",
             ),
             (
-                "image_file",
-                f"SELECT DISTINCT imf.* FROM image_file imf "
-                f"JOIN images img ON img.imgid = imf.imgid "
+                ImageFile.__tablename__,
+                f"SELECT DISTINCT {qcols(ImageFile, alias='imf')} FROM {ImageFile.__tablename__} imf "
+                f"JOIN {Image.__tablename__} img ON img.imgid = imf.imgid "
                 f"WHERE img.objid <@ obj_in_prj({projid})",
             ),
             (
-                "objectsclassifhisto",
-                f"SELECT * FROM objectsclassifhisto WHERE objid <@ obj_in_prj({projid})",
+                ObjectsClassifHisto.__tablename__,
+                f"SELECT {qcols(ObjectsClassifHisto)} FROM {ObjectsClassifHisto.__tablename__} WHERE objid <@ obj_in_prj({projid})",
             ),
             (
-                "obj_cnn_features_vector",
-                f"SELECT * FROM obj_cnn_features_vector WHERE objcnnid <@ obj_in_prj({projid})",
+                ObjectCNNFeatureVector.__tablename__,
+                f"SELECT {qcols(ObjectCNNFeatureVector)} FROM {ObjectCNNFeatureVector.__tablename__} WHERE objcnnid <@ obj_in_prj({projid})",
             ),
             (
-                "prediction",
-                f"SELECT * FROM prediction WHERE object_id <@ obj_in_prj({projid})",
+                Prediction.__tablename__,
+                f"SELECT {qcols(Prediction)} FROM {Prediction.__tablename__} WHERE object_id <@ obj_in_prj({projid})",
             ),
             (
-                "prediction_histo",
-                f"SELECT * FROM prediction_histo WHERE object_id <@ obj_in_prj({projid})",
+                PredictionHisto.__tablename__,
+                f"SELECT {qcols(PredictionHisto)} FROM {PredictionHisto.__tablename__} WHERE object_id <@ obj_in_prj({projid})",
             ),
         ]
 
@@ -270,14 +380,20 @@ class TechnicalDump:
                 """,
                 (table_name,),
             )
-            columns = [
-                {
+            pg_cols_by_name = {
+                col_name: {
                     "name": col_name,
                     "type": col_type,
                     "nullable": bool(nullable),
                     "default": col_default,
                 }
                 for col_name, col_type, nullable, col_default in cur.fetchall()
+            }
+            model = self._MODEL_BY_TABLE[table_name]
+            columns = [
+                pg_cols_by_name[col_name]
+                for col_name in self._model_columns(model)
+                if col_name in pg_cols_by_name
             ]
 
             cur.execute(
@@ -336,15 +452,14 @@ class TechnicalDump:
             "tables": tables_meta,
         }
 
-    def _iter_vault_images(
+    def _copy_vault_images(
         self,
         tfile: tarfile.TarFile,
-        sink: Optional[_StreamingSink] = None,
         progress_start: int = 75,
         progress_end: int = 95,
         progress_cb: Optional[ProgressCallback] = None,
         total_image_rows: int = 0,
-    ) -> Iterator[bytes]:
+    ) -> None:
         """
         Copy project images and thumbnails from the Vault into the tar archive under vault/.
         """
@@ -378,20 +493,12 @@ class TechnicalDump:
                 if img_path.exists():
                     tfile.add(img_path, arcname=f"vault/{sub_path}")
                     added += 1
-                    if sink is not None:
-                        data = sink.drain()
-                        if data:
-                            yield data
                 thumb_sub = Image.thumb_img_from_id_if_there(imgid, thumb_height)
                 if thumb_sub is not None:
                     thumb_path = Path(vault.image_path(thumb_sub))
                     if thumb_path.exists():
                         tfile.add(thumb_path, arcname=f"vault/{thumb_sub}")
                         added += 1
-                        if sink is not None:
-                            data = sink.drain()
-                            if data:
-                                yield data
                 now = time.monotonic()
                 if now - last_report_at >= self.IMAGES_REPORT_INTERVAL_SECONDS:
                     last_report_at = now
@@ -415,29 +522,26 @@ class TechnicalDump:
         if progress_cb is not None:
             progress_cb(progress_end, f"Copied {added} vault files")
 
-    def _iter_dump_project(
+    def dump_project(
         self,
-        dest: Optional[Path] = None,
-        sink: Optional[_StreamingSink] = None,
+        archive_path: Path,
         progress_start: int = 1,
         progress_end: int = 95,
-        row_counts: Optional[Dict[str, int]] = None,
         progress_cb: Optional[ProgressCallback] = None,
         extra_files: Optional[List[Tuple[Path, str]]] = None,
-    ) -> Iterator[bytes]:
+    ) -> Dict[str, int]:
         """
-        Dump all project-scoped tables via PostgreSQL COPY TO STDOUT and vault images into a .tar.zst archive.
-        When sink is provided, yields compressed .tar.zst byte chunks incrementally.
+        Dump all project-scoped tables via PostgreSQL COPY TO STDOUT and vault images into archive_path (.tar.zst).
+        Returns a mapping of table_name -> exported row count.
         """
         started_at = time.monotonic()
         queries = self._table_queries(self.project_id)
         db_progress_end = progress_end - 20
         total_tables = len(queries)
-        if row_counts is None:
-            row_counts = {}
+        row_counts: Dict[str, int] = {}
         restore_lines: List[str] = [
             f"-- Technical project dump for projid={self.project_id}",
-            "-- Prerequisite: referenced rows in instrument, taxonomy, users, and collection must exist.",
+            "-- Includes referenced rows from instrument, organizations, users, taxonomy, and collection.",
             "-- Run with: psql -v ON_ERROR_STOP=1 -f restore.sql",
         ]
 
@@ -445,10 +549,7 @@ class TechnicalDump:
         raw_conn: Any = sa_conn.connection.driver_connection
         assert raw_conn is not None, "Missing DBAPI driver connection"
 
-        out_ctx: Any = (
-            nullcontext(sink) if sink is not None else open(dest, "wb")  # type: ignore[arg-type]
-        )
-        with out_ctx as out_stream:
+        with open(archive_path, "wb") as out_stream:
             with _PhasedZstdStream(out_stream, level=self.DB_ZSTD_LEVEL) as zstream:
                 with tarfile.open(fileobj=zstream, mode="w|") as tfile:
                     with raw_conn.cursor() as cur:
@@ -459,10 +560,6 @@ class TechnicalDump:
                         meta_info = tarfile.TarInfo(name="0_metadata.json")
                         meta_info.size = len(meta_bytes)
                         tfile.addfile(meta_info, io.BytesIO(meta_bytes))
-                        if sink is not None:
-                            data = sink.drain()
-                            if data:
-                                yield data
 
                         for idx, (table_name, select_sql) in enumerate(
                             queries, start=1
@@ -489,13 +586,12 @@ class TechnicalDump:
                                 info = tarfile.TarInfo(name=copy_filename)
                                 info.size = size
                                 tfile.addfile(info, tmp)
-                            if sink is not None:
-                                data = sink.drain()
-                                if data:
-                                    yield data
                             row_counts[table_name] = rows_in_table
+                            quoted_cols = self._quoted_columns(
+                                self._MODEL_BY_TABLE[table_name]
+                            )
                             restore_lines.append(
-                                f"\\copy {table_name} FROM '{copy_filename}'"
+                                f"\\copy {table_name} ({quoted_cols}) FROM '{copy_filename}'"
                             )
                             logger.info(
                                 "%sDumped %d rows from %s into %s",
@@ -512,18 +608,13 @@ class TechnicalDump:
 
                     # Switch to fast compression for already-compressed Vault images.
                     zstream.switch_level(self.VAULT_ZSTD_LEVEL)
-                    if sink is not None:
-                        data = sink.drain()
-                        if data:
-                            yield data
 
-                    yield from self._iter_vault_images(
+                    self._copy_vault_images(
                         tfile,
-                        sink=sink,
                         progress_start=db_progress_end,
                         progress_end=progress_end,
                         progress_cb=progress_cb,
-                        total_image_rows=row_counts.get("images", 0),
+                        total_image_rows=row_counts.get(Image.__tablename__, 0),
                     )
 
                     if extra_files:
@@ -531,47 +622,10 @@ class TechnicalDump:
                             if src_path.exists():
                                 tfile.add(src_path, arcname=arcname)
 
-        if sink is not None:
-            data = sink.drain()
-            if data:
-                yield data
         logger.info(
             "%sFinished dump (%d total rows in %.1fs)",
             self._log_prefix,
             sum(row_counts.values()),
             time.monotonic() - started_at,
         )
-
-    def dump_project(
-        self,
-        archive_path: Path,
-        progress_start: int = 1,
-        progress_end: int = 95,
-        progress_cb: Optional[ProgressCallback] = None,
-        extra_files: Optional[List[Tuple[Path, str]]] = None,
-    ) -> Dict[str, int]:
-        """
-        Dump all project-scoped tables via PostgreSQL COPY TO STDOUT into archive_path (.tar.zst).
-        Returns a mapping of table_name -> exported row count.
-        """
-        row_counts: Dict[str, int] = {}
-        for _ in self._iter_dump_project(
-            dest=archive_path,
-            sink=None,
-            progress_start=progress_start,
-            progress_end=progress_end,
-            row_counts=row_counts,
-            progress_cb=progress_cb,
-            extra_files=extra_files,
-        ):
-            pass
         return row_counts
-
-    def stream_archive(self) -> Iterator[bytes]:
-        """
-        Stream the technical project .tar.zst archive incrementally as byte chunks.
-        """
-        sink = _StreamingSink()
-        yield from self._iter_dump_project(
-            dest=None, sink=sink, progress_cb=None, extra_files=None
-        )

@@ -5,7 +5,7 @@
 # Technical PG dump-like export of a single project.
 #
 from pathlib import Path
-from typing import Iterator, Optional
+from typing import Optional
 
 from API_models.exports import ExportRsp
 from BO.Rights import RightsBO, Action
@@ -73,15 +73,6 @@ class Technical(JobServiceBase):
         """
         with LogsSwitcher(self):
             self.do_export()
-
-    def stream_project_archive(self) -> Iterator[bytes]:
-        """
-        Stream the technical project .tar.zst archive incrementally as byte chunks.
-        """
-        dumper = TechnicalDump(
-            self.ro_session, self.project_id, self.config.vault_dir()
-        )
-        yield from dumper.stream_archive()
 
     def do_export(self) -> None:
         """

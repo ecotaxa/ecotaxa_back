@@ -113,6 +113,8 @@ class JobCRUDService(Service):
             media_type = "application/zip"
         elif out_file_name.endswith(".tsv"):
             media_type = "text/tab-separated-values"
+        elif out_file_name.endswith(".tar.zst"):
+            media_type = "application/zstd"
         else:
             media_type = "unknown"
         return out_file_path, out_file_name, media_type
