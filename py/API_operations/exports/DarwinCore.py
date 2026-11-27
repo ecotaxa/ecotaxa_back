@@ -99,6 +99,13 @@ AbundancePerAcquisitionT = Dict[AcquisitionIDT, Dict[ClassifIDT, int]]
 LsidT = str  # Life Science Identifier @see https://en.wikipedia.org/wiki/LSID
 OccIDT = str  # An occurenceId, sampleid+taxon ID
 WoRMSAggregT = Dict[LsidT, Tuple[OccIDT, SampleAggregForTaxon, WoRMSBO]]
+# For absent records: per sample WoRMS taxa & occurrence IDs written as 'present',
+# and for the collection a representative EcoTaxa taxon per WoRMS taxon
+PresenceT = Tuple[
+    Dict[str, Set[LsidT]],
+    Dict[str, Set[OccIDT]],
+    Dict[LsidT, Tuple[ClassifIDT, WoRMSBO]],
+]
 ROLE_FOR_ASSOCIATE = "originator"
 
 
@@ -336,45 +343,76 @@ class DarwinCoreExport(JobServiceBase):
         done_infos.update({"wrns": self.warnings})
         self.set_job_result(self.errors, infos=done_infos)
 
-    def add_absent_occurrences(
-        self, taxa_per_sample: Dict[str, Set[ClassifIDT]], arch: DwcArchive
+    @staticmethod
+    def note_present_occurrences(
+        event_id: str,
+        written: Iterable[WoRMSAggregT],
+        presence: PresenceT,
     ) -> None:
+        """
+        Remember, for the absent pass, which WoRMS taxa got a 'present' occurrence record in the sample,
+        under which occurrenceIDs, and a collection-wide representative EcoTaxa taxon per WoRMS taxon.
+        """
+        lsids_per_sample, occ_ids_per_sample, lsid_repr = presence
+        lsids = lsids_per_sample.setdefault(event_id, set())
+        occ_ids = occ_ids_per_sample.setdefault(event_id, set())
+        for an_aggreg in written:
+            for a_lsid, (occurrence_id, aggreg_for_lsid, worms) in an_aggreg.items():
+                lsids.add(a_lsid)
+                occ_ids.add(occurrence_id)
+                if a_lsid not in lsid_repr:
+                    lsid_repr[a_lsid] = (aggreg_for_lsid.taxo_id, worms)
+
+    @staticmethod
+    def compute_absent_occurrences(
+        presence: PresenceT,
+        warnings: List[str],
+    ) -> List[Tuple[str, OccIDT, WoRMSBO]]:
+        """
+        Return (event_id, occurrence_id, worms) for each WoRMS taxon seen in the collection
+        but without any 'present' occurrence record in the sample.
+        Comparison is done per WoRMS taxon, as 'present' records are one per WoRMS taxon,
+        possibly grouping several EcoTaxa taxa, and come from both occurrence & eMoF recasts.
+        """
+        lsids_per_sample, occ_ids_per_sample, lsid_repr = presence
+        # Work with the representative EcoTaxa IDs, which are used for building occurrence IDs
+        lsid_for_taxo = {taxo_id: a_lsid for a_lsid, (taxo_id, _w) in lsid_repr.items()}
+        all_taxa: ClassifIDSetT = set(lsid_for_taxo.keys())
+        ret = []
+        for an_event_id, present_lsids in lsids_per_sample.items():
+            present_taxa = {lsid_repr[a_lsid][0] for a_lsid in present_lsids}
+            written_ids = occ_ids_per_sample[an_event_id]
+            for a_missing_id in all_taxa.difference(present_taxa):
+                occurrence_id = an_event_id + "_" + str(a_missing_id)
+                if occurrence_id in written_ids:
+                    # Should not happen, but never issue 2 records with the same ID
+                    warnings.append(
+                        "Absent occurrence %s not produced, its ID is already used"
+                        % occurrence_id
+                    )
+                    continue
+                worms = lsid_repr[lsid_for_taxo[a_missing_id]][1]
+                ret.append((an_event_id, occurrence_id, worms))
+        return ret
+
+    def add_absent_occurrences(self, presence: PresenceT, arch: DwcArchive) -> None:
         """
         Second pass, occurrence creations for absent taxa.
         """
-        all_taxa = self.compute_all_seen_taxa(taxa_per_sample)
-        occurrence_targets: Dict[int, WoRMSBO] = {}
-        for k, v in self.computations_occurrence.items():
-            if v is not None:
-                occurrence_targets.update({int(k): self.coverage_taxa[v]})
         # For what's missing, issue an 'absent' record
-        for an_event_id, an_id_set in taxa_per_sample.items():
-            missing_for_sample = all_taxa.difference(an_id_set)
-            for a_missing_id in missing_for_sample:
-                occurrence_id = an_event_id + "_" + str(a_missing_id)
-                # No need to catch any exception here, the lookup worked during the
-                # "present" records generation.
-                worms = occurrence_targets[a_missing_id]
-                occ = DwC_Occurrence(
-                    eventID=an_event_id,
-                    occurrenceID=occurrence_id,
-                    scientificName=worms.name,  # ETS stores scientificname as name,
-                    scientificNameID=get_scientific_name_id(worms),
-                    kingdom=worms.kingdom,
-                    occurrenceStatus=OccurrenceStatusEnum.absent,
-                    basisOfRecord=BasisOfRecordEnum.machineObservation,
-                )
-                arch.occurrences.add(occ)
-
-    @staticmethod
-    def compute_all_seen_taxa(
-        taxa_per_sample: Dict[str, Set[ClassifIDT]],
-    ) -> ClassifIDSetT:
-        # Cumulate all categories
-        all_taxa: ClassifIDSetT = set()
-        for an_id_set in taxa_per_sample.values():
-            all_taxa.update(an_id_set)
-        return all_taxa
+        for an_event_id, occurrence_id, worms in self.compute_absent_occurrences(
+            presence, self.warnings
+        ):
+            occ = DwC_Occurrence(
+                eventID=an_event_id,
+                occurrenceID=occurrence_id,
+                scientificName=worms.name,  # ETS stores scientificname as name,
+                scientificNameID=get_scientific_name_id(worms),
+                kingdom=worms.kingdom,
+                occurrenceStatus=OccurrenceStatusEnum.absent,
+                basisOfRecord=BasisOfRecordEnum.machineObservation,
+            )
+            arch.occurrences.add(occ)
 
     @staticmethod
     def organisation_to_eml_person(an_org: Organization) -> EMLPerson:
@@ -758,8 +796,8 @@ class DarwinCoreExport(JobServiceBase):
         samples_in_several_prjs = self.the_collection.homonym_samples(self.ro_session)
         if len(samples_in_several_prjs) > 0:
             logger.info("Homonym samples: %s", samples_in_several_prjs)
-        # Per_sample taxa, in plain taxo "space"
-        taxa_per_sample: Dict[str, Set[ClassifIDT]] = {}
+        # What was written as 'present', per sample and per WoRMS taxon, for the absent pass
+        presence: PresenceT = ({}, {}, {})
         nb_sample = 0
         sample_count = self._get_fast_count(self.the_collection.project_ids)
         progress_range = 99
@@ -803,9 +841,6 @@ class DarwinCoreExport(JobServiceBase):
                 added_occurences = self.add_occurrences_for_sample(
                     sample=a_sample, arch=arch, event_id=event_id, predicted=False
                 )
-                taxa_per_sample[event_id] = {
-                    val[1].taxo_id for val in added_occurences.values()
-                }
                 nb_added = len(added_occurences)
                 by_ml_added_occurences: WoRMSAggregT = {}
                 if self.include_predicted:
@@ -813,9 +848,6 @@ class DarwinCoreExport(JobServiceBase):
                         sample=a_sample, arch=arch, event_id=event_id, predicted=True
                     )
                     nb_added += len(by_ml_added_occurences)
-                    taxa_per_sample[event_id].update(
-                        {val[1].taxo_id for val in by_ml_added_occurences.values()}
-                    )
                 if nb_added == 0:
                     self.warnings.append(
                         "No occurrence added for sample %s"
@@ -849,6 +881,11 @@ class DarwinCoreExport(JobServiceBase):
                 self.cover_EMOF_in_occurrences(
                     arch, event_id, added_occurences, added_emofs
                 )
+                self.note_present_occurrences(
+                    event_id,
+                    (added_occurences, by_ml_added_occurences, added_emofs),
+                    presence,
+                )
                 # Sample-level eMoFs
                 self.add_instrument_eMoFs_about_sample(
                     sample=a_sample, arch=arch, event_id=event_id
@@ -858,7 +895,7 @@ class DarwinCoreExport(JobServiceBase):
         # For https://github.com/ecotaxa/ecotaxa_dev/issues/603
         # Loop over taxa which are in the collection but not in present sample
         if self.with_absent:
-            self.add_absent_occurrences(taxa_per_sample, arch)
+            self.add_absent_occurrences(presence, arch)
 
     nine_nine_re = re.compile("999+.0$")
 
