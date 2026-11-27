@@ -15,5 +15,6 @@ import API_operations.admin.FilesCleanup  # noqa: F401
 import API_operations.admin.NightlyJob  # noqa: F401
 import API_operations.exports.DarwinCore  # noqa: F401
 import API_operations.exports.ForProject  # noqa: F401
+import API_operations.exports.Technical  # noqa: F401
 import API_operations.imports.Import  # noqa: F401
 import API_operations.imports.SimpleImport  # noqa: F401

@@ -11,7 +11,7 @@ import time
 from contextlib import asynccontextmanager
 from dataclasses import asdict
 from logging import ERROR
-from typing import Union, Tuple, List, Dict, Any, cast
+from typing import Union, Tuple, List, Dict, Any, Iterator, cast
 
 from fastapi import (
     FastAPI,
@@ -30,7 +30,7 @@ from fastapi import (
 )
 from fastapi.exceptions import RequestValidationError
 from fastapi.logger import logger as fastapi_logger
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -154,6 +154,7 @@ from API_operations.admin.Database import DatabaseService
 from API_operations.admin.FilesCleanup import FilesCleanupService
 from API_operations.admin.ImageManager import ImageManagerService
 from API_operations.admin.NightlyJob import NightlyJobService
+from API_operations.admin.TechnicalImport import TechnicalImportService
 from API_operations.exports.DarwinCore import DarwinCoreExport
 from API_operations.exports.ForProject import (
     ProjectExport,
@@ -161,6 +162,7 @@ from API_operations.exports.ForProject import (
     SummaryProjectExport,
     BackupProjectExport,
 )
+from API_operations.exports.Technical import Technical
 from API_operations.imports.Import import FileImport
 from API_operations.imports.SimpleImport import SimpleImport
 from BG_operations.BackgroundWorker import BackgroundWorker
@@ -3973,6 +3975,72 @@ def direct_db_query(
         with RightsThrower():
             hdr, data = sce.execute_query(current_user, q)
     ret = {"header": hdr, "data": data}
+    return MyORJSONResponse(ret)
+
+
+@app_router.get(
+    "/admin/technical_export",
+    operation_id="technical_export",
+    tags=["admin"],
+    include_in_schema=True,
+    responses={
+        200: {
+            "content": {"application/zstd": {}},
+            "description": "Stream the technical PG dump-like .tar.zst archive for the project.",
+        }
+    },
+)
+def technical_export(
+    project_id: int = Query(
+        ..., description="Internal, numeric id of the project.", examples=[1]
+    ),
+    current_user: int = Depends(get_current_user),
+) -> StreamingResponse:
+    """
+    Stream a technical PG dump-like .tar.zst archive for the given project, including its vault images.
+
+    🔒 Current user needs *Manage* right on the requested project (or Admin).
+    """
+    with Technical(project_id=project_id) as sce:
+        with RightsThrower():
+            sce.check_rights(current_user)
+    file_name = Technical.archive_filename(project_id)
+
+    def _stream_archive() -> Iterator[bytes]:
+        with Technical(project_id=project_id) as sce:
+            yield from sce.stream_project_archive()
+
+    return StreamingResponse(
+        _stream_archive(),
+        media_type="application/zstd",
+        headers={"Content-Disposition": f'attachment; filename="{file_name}"'},
+    )
+
+
+@app_router.post(
+    "/admin/technical_import",
+    operation_id="technical_import",
+    tags=["admin"],
+    include_in_schema=True,
+    response_class=MyORJSONResponse,
+)
+def technical_import(
+    archive_name: str = Query(
+        ...,
+        description="Name (or relative path) of the archive in the current user's directory (.tar, .tar.zst, or extracted directory).",
+        examples=["export__TEK_1_20261127_0742.tar.zst"],
+    ),
+    current_user: int = Depends(get_current_user),
+) -> MyORJSONResponse:
+    """
+    Restore a technical PG dump-like project archive (.tar, .tar.zst, or extracted directory)
+    from the current user's directory.
+
+    🔒 Admin only.
+    """
+    with TechnicalImportService() as sce:
+        with RightsThrower():
+            ret = sce.run(current_user, archive_name)
     return MyORJSONResponse(ret)
 
 
