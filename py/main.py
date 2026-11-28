@@ -4016,15 +4016,22 @@ def technical_import(
         description="Name (or relative path) of the .tar.zst archive in the current user's directory.",
         examples=["export__TEK_1_20261127_0742.tar.zst"],
     ),
+    target_project_id: Optional[int] = Query(
+        None,
+        description="Optional target project ID to move all imported data to instead of the original project ID.",
+        examples=[42],
+    ),
     current_user: int = Depends(get_current_user),
 ) -> int:
     """
     Start a technical PG dump-like import job for a project archive (.tar.zst)
     from the current user's directory.
 
-    🔒 Admin only.
+    🔒 Admin only (requires ENABLE_TECH_IMPORT to be enabled).
     """
-    with TechnicalImportService(archive_name=archive_name) as sce:
+    with TechnicalImportService(
+        archive_name=archive_name, target_project_id=target_project_id
+    ) as sce:
         with RightsThrower():
             job_id = sce.run(current_user)
     return job_id

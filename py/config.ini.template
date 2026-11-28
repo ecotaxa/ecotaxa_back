@@ -111,3 +111,6 @@ OPENID_METADATA_URL =
 CORS_ALLOWED_ORIGINS = *
 # Regex for apps without a fixed origin, e.g. PlanktoScope UI served by each device.
 #CORS_ALLOWED_ORIGIN_REGEX = ^http://((pkscope|planktoscope)[a-z0-9-]*\.local|home\.pkscope|192\.168\.4\.1)(:\d+)?$
+
+# Enable the /admin/technical_import endpoint (disabled by default to protect production)
+#ENABLE_TECH_IMPORT = False

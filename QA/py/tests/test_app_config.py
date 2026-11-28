@@ -515,6 +515,33 @@ def test_config_app_port_and_no_time_log_defaults(tmp_path, mocker):
     assert cfg.get_app_port() == 8000
     assert cfg.get_no_time_log() is False
     assert cfg.get_unpack_sync_wait() == 80.0
+    assert cfg.get_enable_tech_import() is False
+
+
+@pytest.mark.parametrize(
+    "raw_val,expected",
+    [
+        ("true", True),
+        ("True", True),
+        ("on", True),
+        ("1", True),
+        ("yes", True),
+        ("false", False),
+        ("off", False),
+        ("0", False),
+        ("", False),
+    ],
+)
+def test_config_enable_tech_import(tmp_path, mocker, raw_val, expected):
+    non_existent_config = tmp_path / "nonexistent.ini"
+    mocker.patch.dict(
+        os.environ,
+        {"APP_CONFIG": str(non_existent_config), "ENABLE_TECH_IMPORT": raw_val},
+        clear=True,
+    )
+
+    cfg = Config()
+    assert cfg.get_enable_tech_import() is expected
 
 
 def test_config_validate_unpack_sync_wait_negative(

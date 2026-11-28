@@ -144,3 +144,78 @@ def test_technical_export(fastapi):
     assert f"export__TEK_{prj_id}_" in dl_rsp.headers["content-disposition"]
     assert ".tar.zst" in dl_rsp.headers["content-disposition"]
     _assert_technical_archive(dl_rsp.content, prj_id, expected_log=f"job_{job_id}.log")
+
+
+def test_technical_export_no_idle_in_transaction_during_vault_copy(
+    fastapi, tmp_path, monkeypatch
+):
+    import tarfile
+    import time
+    from sqlalchemy import text
+    from API_operations.exports.Technical import Technical
+    from BO.technical.TechDump import TechnicalDump
+
+    prj_id = do_test_import(fastapi, "Technical export idle timeout project")
+
+    orig_add = tarfile.TarFile.add
+
+    def slow_vault_add(self, name, arcname=None, *args, **kwargs):
+        if arcname and arcname.startswith("vault/"):
+            time.sleep(0.35)
+        return orig_add(self, name, arcname=arcname, *args, **kwargs)
+
+    monkeypatch.setattr(tarfile.TarFile, "add", slow_vault_add)
+
+    with Technical(prj_id) as sce:
+        from DB.helpers.Connection import Connection
+
+        orig_get_raw = Connection.get_raw_psycopg_connection
+        raw_conn_calls = []
+
+        def _get_raw_with_timeout(read_only: bool = False, **kwargs):
+            raw_conn_calls.append((read_only, kwargs.get("isolation_level")))
+            conn = orig_get_raw(read_only=read_only, **kwargs)
+            conn.execute("SET SESSION idle_in_transaction_session_timeout = '200ms'")
+            conn.commit()
+            return conn
+
+        monkeypatch.setattr(
+            Connection,
+            "get_raw_psycopg_connection",
+            staticmethod(_get_raw_with_timeout),
+        )
+        dumper = TechnicalDump(prj_id, sce.config.vault_dir())
+        archive_path = tmp_path / "export.tar.zst"
+        dumper.dump_project(archive_path)
+        assert sce.ro_session.execute(text("SELECT 1")).scalar() == 1
+        # The whole dump (tables, metadata and vault image list) must be read
+        # from a single consistent snapshot.
+        from psycopg import IsolationLevel
+
+        assert raw_conn_calls == [(True, IsolationLevel.REPEATABLE_READ)]
+
+
+def test_technical_export_no_consecutive_duplicate_progress_cb(
+    fastapi, tmp_path, monkeypatch
+):
+    from API_operations.exports.Technical import Technical
+    from BO.technical.TechDump import TechnicalDump
+
+    prj_id = do_test_import(fastapi, "Dedup progress export project")
+    monkeypatch.setattr(TechnicalDump, "IMAGES_REPORT_INTERVAL_SECONDS", 0.0)
+    calls: list[tuple[int, str]] = []
+
+    with Technical(prj_id) as sce:
+        dumper = TechnicalDump(prj_id, sce.config.vault_dir())
+        archive_path = tmp_path / "export.tar.zst"
+        dumper.dump_project(
+            archive_path,
+            progress_start=1,
+            progress_end=99,
+            progress_cb=lambda pct, msg: calls.append((pct, msg)),
+        )
+
+    assert len(calls) > 0
+    for prev, curr in zip(calls, calls[1:]):
+        assert prev != curr
+    assert sum(1 for pct, _ in calls if pct == 99) == 1

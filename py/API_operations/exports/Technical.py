@@ -86,13 +86,11 @@ class Technical(JobServiceBase):
             self.project_id,
         )
         produced_path = self.out_path / self.out_file_name
-        dumper = TechnicalDump(
-            self.ro_session, self.project_id, self.config.vault_dir()
-        )
+        dumper = TechnicalDump(self.project_id, self.config.vault_dir())
         row_counts = dumper.dump_project(
             produced_path,
             progress_start=1,
-            progress_end=100,
+            progress_end=99,
             progress_cb=self.update_progress,
             extra_files=[(Path(self.log_file_path()), f"job_{self.job_id}.log")],
         )

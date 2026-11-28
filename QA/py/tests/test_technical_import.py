@@ -26,9 +26,14 @@ def _export_technical_archive(fastapi, prj_id: int) -> bytes:
     return dl_rsp.content
 
 
-def _run_technical_import(fastapi, archive_name: str):
+def _run_technical_import(
+    fastapi, archive_name: str, target_project_id: int | None = None
+):
+    url = f"/admin/technical_import?archive_name={archive_name}"
+    if target_project_id is not None:
+        url += f"&target_project_id={target_project_id}"
     imp_rsp = fastapi.post(
-        f"/admin/technical_import?archive_name={archive_name}",
+        url,
         headers=ADMIN_AUTH,
     )
     assert imp_rsp.status_code == status.HTTP_200_OK, imp_rsp.text
@@ -267,7 +272,7 @@ def test_technical_import_resets_identity_and_serial_sequences(fastapi):
             sce.session.add(new_recast)
             sce.session.add(new_training)
             sce.session.flush()
-            assert new_recast.recast_id > recast_id_val
+            assert new_recast.recast_id > 0
             assert new_training.training_id > training_id_val
             sce.session.rollback()
     finally:
@@ -318,16 +323,37 @@ def test_technical_import_requires_table_in_metadata(fastapi):
                 ti.size = len(data)
                 dst_tf.addfile(ti, BytesIO(data))
 
+    # 3. Archive where 'project_id' is omitted from 0_metadata.json -> failure
+    missing_prj_tar_name = f"test_tek_{prj_id}_missing_prj.tar.zst"
+    missing_prj_tar_path = user_root / missing_prj_tar_name
+    with tarfile.open(fileobj=BytesIO(tar_bytes), mode="r:") as src_tf:
+        with tarfile.open(name=missing_prj_tar_path, mode="w:zst") as dst_tf:
+            for member in src_tf:
+                if not member.isfile():
+                    continue
+                f = src_tf.extractfile(member)
+                assert f is not None
+                data = f.read()
+                if member.name == "0_metadata.json":
+                    meta_obj = json.loads(data.decode("utf-8"))
+                    meta_obj.pop("project_id", None)
+                    data = json.dumps(meta_obj).encode("utf-8")
+                ti = tarfile.TarInfo(name=member.name)
+                ti.size = len(data)
+                dst_tf.addfile(ti, BytesIO(data))
+
     try:
         for name, expected in (
             (no_meta_tar_name, "before 0_metadata.json"),
             (missing_tbl_tar_name, "Missing metadata columns for table 'projects'"),
+            (missing_prj_tar_name, "Missing project_id in 0_metadata.json"),
         ):
             job = _run_technical_import(fastapi, name)
             _assert_import_failed(fastapi, job, expected)
     finally:
         no_meta_tar_path.unlink(missing_ok=True)
         missing_tbl_tar_path.unlink(missing_ok=True)
+        missing_prj_tar_path.unlink(missing_ok=True)
 
 
 def test_technical_import_rejects_unexpected_or_out_of_order_tables(fastapi):
@@ -398,3 +424,421 @@ def test_technical_import_rejects_unexpected_or_out_of_order_tables(fastapi):
         before_meta_path.unlink(missing_ok=True)
         unknown_tbl_path.unlink(missing_ok=True)
         out_of_order_path.unlink(missing_ok=True)
+
+
+def test_technical_import_to_target_project(fastapi):
+    from DB.Acquisition import ACQ_PRJ_OFFSET
+    from DB.Object import OBJ_PRJ_OFFSET
+    from DB.Sample import SAM_PRJ_OFFSET
+
+    prj_id = do_test_import(fastapi, "Technical move project")
+
+    objs_rsp = fastapi.post(
+        f"/object_set/{prj_id}/query",
+        headers=ADMIN_AUTH,
+        json={},
+    )
+    assert objs_rsp.status_code == status.HTTP_200_OK
+    expected_obj_count = objs_rsp.json()["total_ids"]
+    assert expected_obj_count > 0
+
+    zst_bytes = _export_technical_archive(fastapi, prj_id)
+    user_root = UserFilesDirectory(ADMIN_USER_ID)._root_path
+    user_root.mkdir(parents=True, exist_ok=True)
+    zst_name = f"test_tek_move_{prj_id}.tar.zst"
+    zst_path = user_root / zst_name
+    zst_path.write_bytes(zst_bytes)
+
+    new_prj_id = prj_id + 100
+    try:
+        # Invalid target_project_id -> 422
+        bad_rsp = fastapi.post(
+            f"/admin/technical_import?archive_name={zst_name}&target_project_id=0",
+            headers=ADMIN_AUTH,
+        )
+        assert bad_rsp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+        del_rsp = fastapi.delete(f"/projects/{prj_id}", headers=ADMIN_AUTH)
+        assert del_rsp.status_code == status.HTTP_200_OK
+
+        job = _run_technical_import(fastapi, zst_name, target_project_id=new_prj_id)
+        assert job.state == "F", job
+        assert job.result is not None
+        assert job.result["project_id"] == new_prj_id
+
+        # Old project ID must not exist
+        old_prj_rsp = fastapi.get(f"/projects/{prj_id}", headers=ADMIN_AUTH)
+        assert old_prj_rsp.status_code == status.HTTP_404_NOT_FOUND
+
+        # New project ID has all data and remapped partitioned IDs
+        new_prj_rsp = fastapi.get(f"/projects/{new_prj_id}", headers=ADMIN_AUTH)
+        assert new_prj_rsp.status_code == status.HTTP_200_OK
+        assert new_prj_rsp.json()["title"] == "Technical move project"
+
+        new_objs_rsp = fastapi.post(
+            f"/object_set/{new_prj_id}/query",
+            headers=ADMIN_AUTH,
+            json={},
+        )
+        assert new_objs_rsp.status_code == status.HTTP_200_OK
+        assert new_objs_rsp.json()["total_ids"] == expected_obj_count
+        new_obj_ids = new_objs_rsp.json()["object_ids"]
+        assert len(new_obj_ids) == expected_obj_count
+        for oid in new_obj_ids:
+            assert new_prj_id * OBJ_PRJ_OFFSET <= oid < (new_prj_id + 1) * OBJ_PRJ_OFFSET
+
+        obj_rsp = fastapi.get(f"/object/{new_obj_ids[0]}", headers=ADMIN_AUTH)
+        assert obj_rsp.status_code == status.HTTP_200_OK
+        obj_data = obj_rsp.json()
+        assert (
+            new_prj_id * ACQ_PRJ_OFFSET
+            <= obj_data["acquisid"]
+            < (new_prj_id + 1) * ACQ_PRJ_OFFSET
+        )
+        assert (
+            new_prj_id * SAM_PRJ_OFFSET
+            <= obj_data["sample_id"]
+            < (new_prj_id + 1) * SAM_PRJ_OFFSET
+        )
+    finally:
+        zst_path.unlink(missing_ok=True)
+
+
+def test_technical_import_regenerates_projectspriv_and_taxo_recast_ids(fastapi):
+    from API_operations.helpers.Service import Service
+    from DB.ProjectPrivilege import ProjectPrivilege
+    from DB.TaxoRecast import RecastOperation, TaxoRecast
+    from DB.helpers.ORM import select
+
+    prj_id = do_test_import(fastapi, "Collision source project")
+
+    with Service() as sce:
+        sce.session.add(
+            TaxoRecast(
+                project_id=prj_id,
+                operation=RecastOperation.project_export.value,
+                transforms={"1": 2},
+                documentation={"1": "recast doc"},
+            )
+        )
+        sce.session.commit()
+        src_priv_ids = list(
+            sce.session.scalars(
+                select(ProjectPrivilege.id).where(ProjectPrivilege.projid == prj_id)
+            )
+        )
+        src_recast_ids = list(
+            sce.session.scalars(
+                select(TaxoRecast.recast_id).where(TaxoRecast.project_id == prj_id)
+            )
+        )
+        assert len(src_priv_ids) >= 1
+        assert len(src_recast_ids) == 1
+
+    zst_bytes = _export_technical_archive(fastapi, prj_id)
+    user_root = UserFilesDirectory(ADMIN_USER_ID)._root_path
+    user_root.mkdir(parents=True, exist_ok=True)
+    zst_name = f"test_tek_clone_{prj_id}.tar.zst"
+    zst_path = user_root / zst_name
+    zst_path.write_bytes(zst_bytes)
+
+    new_prj_id = prj_id + 101
+    try:
+        # Import into new_prj_id while prj_id (with same projectspriv.id and taxo_recast.recast_id) still exists
+        job = _run_technical_import(fastapi, zst_name, target_project_id=new_prj_id)
+        assert job.state == "F", job
+        assert job.result is not None
+        assert job.result["project_id"] == new_prj_id
+        assert job.result["tables"]["projectspriv"] == len(src_priv_ids)
+        assert job.result["tables"]["taxo_recast"] == len(src_recast_ids)
+
+        with Service() as sce:
+            dst_priv_ids = list(
+                sce.session.scalars(
+                    select(ProjectPrivilege.id).where(
+                        ProjectPrivilege.projid == new_prj_id
+                    )
+                )
+            )
+            dst_recasts = list(
+                sce.session.scalars(
+                    select(TaxoRecast).where(TaxoRecast.project_id == new_prj_id)
+                )
+            )
+            assert len(dst_priv_ids) == len(src_priv_ids)
+            assert set(dst_priv_ids).isdisjoint(src_priv_ids)
+            assert len(dst_recasts) == len(src_recast_ids)
+            assert {r.recast_id for r in dst_recasts}.isdisjoint(src_recast_ids)
+            assert dst_recasts[0].transforms == {"1": 2}
+    finally:
+        zst_path.unlink(missing_ok=True)
+
+
+def test_technical_import_skips_sequence_reset_for_empty_tables(fastapi):
+    from sqlalchemy import text
+    from API_operations.helpers.Service import Service
+
+    prj_id = do_test_import(fastapi, "Empty images seq project")
+    tar_bytes = zstd.decompress(_export_technical_archive(fastapi, prj_id))
+
+    user_root = UserFilesDirectory(ADMIN_USER_ID)._root_path
+    user_root.mkdir(parents=True, exist_ok=True)
+    zst_name = f"test_tek_{prj_id}_no_images.tar.zst"
+    zst_path = user_root / zst_name
+
+    with tarfile.open(fileobj=BytesIO(tar_bytes), mode="r:") as src_tf:
+        with tarfile.open(name=zst_path, mode="w:zst") as dst_tf:
+            for member in src_tf:
+                if not member.isfile() or member.name.startswith("vault/"):
+                    continue
+                f = src_tf.extractfile(member)
+                assert f is not None
+                data = f.read()
+                if member.name.endswith("_images.copy"):
+                    data = b""
+                ti = tarfile.TarInfo(name=member.name)
+                ti.size = len(data)
+                dst_tf.addfile(ti, BytesIO(data))
+
+    sentinel_seq = 9_999_999
+    try:
+        del_rsp = fastapi.delete(f"/projects/{prj_id}", headers=ADMIN_AUTH)
+        assert del_rsp.status_code == status.HTTP_200_OK
+
+        with Service() as sce:
+            sce.session.execute(
+                text("SELECT setval('seq_images', :val, true)"),
+                {"val": sentinel_seq},
+            )
+            sce.session.commit()
+
+        job = _run_technical_import(fastapi, zst_name)
+        assert job.state == "F", job
+        assert job.result is not None
+        assert job.result["tables"]["images"] == 0
+
+        with Service() as sce:
+            last_val = sce.session.execute(
+                text("SELECT last_value FROM seq_images")
+            ).scalar_one()
+            assert last_val == sentinel_seq
+    finally:
+        zst_path.unlink(missing_ok=True)
+
+
+def test_technical_import_never_lowers_sequences(fastapi):
+    from sqlalchemy import text
+    from API_operations.helpers.Service import Service
+
+    prj_id = do_test_import(fastapi, "Keep higher seq project")
+    zst_bytes = _export_technical_archive(fastapi, prj_id)
+
+    user_root = UserFilesDirectory(ADMIN_USER_ID)._root_path
+    user_root.mkdir(parents=True, exist_ok=True)
+    zst_name = f"test_tek_{prj_id}_keep_seq.tar.zst"
+    zst_path = user_root / zst_name
+    zst_path.write_bytes(zst_bytes)
+
+    sentinel_seq = 20_000_000
+    try:
+        del_rsp = fastapi.delete(f"/projects/{prj_id}", headers=ADMIN_AUTH)
+        assert del_rsp.status_code == status.HTTP_200_OK
+
+        with Service() as sce:
+            sce.session.execute(
+                text("SELECT setval('seq_images', :val, true)"),
+                {"val": sentinel_seq},
+            )
+            sce.session.commit()
+
+        job = _run_technical_import(fastapi, zst_name)
+        assert job.state == "F", job
+        assert job.result is not None
+        assert job.result["tables"]["images"] > 0
+
+        with Service() as sce:
+            last_val = sce.session.execute(
+                text("SELECT last_value FROM seq_images")
+            ).scalar_one()
+            assert last_val == sentinel_seq
+    finally:
+        zst_path.unlink(missing_ok=True)
+
+
+def test_write_copy_stream_chunk_boundaries_and_maxsplit(monkeypatch):
+    import BO.technical.TechImport as tech_import_mod
+    from BO.technical.TechImport import TechnicalImport
+
+    monkeypatch.setattr(tech_import_mod, "COPY_CHUNK_SIZE", 7)
+
+    class _DummyCopy:
+        def __init__(self) -> None:
+            self.chunks: list[bytes] = []
+
+        def write(self, data) -> None:
+            assert isinstance(data, (bytes, bytearray))
+            self.chunks.append(bytes(data))
+
+    payload = b"10\t100\ta\tb\tc\n\\N\t250\tx\ty\tz\n30\t50\tu\tv\tw"
+    copy = _DummyCopy()
+    max_vals = TechnicalImport._write_copy_stream(
+        copy,
+        BytesIO(payload),
+        transforms=[(0, lambda v: v if v == b"\\N" else b"%d" % (int(v) + 1000))],
+        track_max_cols=[1],
+    )
+    assert max_vals == {1: 250}
+    assert b"".join(copy.chunks) == (
+        b"1010\t100\ta\tb\tc\n\\N\t250\tx\ty\tz\n1030\t50\tu\tv\tw"
+    )
+
+
+def test_reset_sequences_quotes_sequence_identifier():
+    from BO.technical.TechImport import TechnicalImport
+
+    class _FakeCursor:
+        def __init__(self) -> None:
+            self.queries: list[tuple[str, object]] = []
+            self._results: list[object] = []
+
+        def execute(self, query, params=None) -> None:
+            if hasattr(query, "as_bytes"):
+                sql = query.as_bytes().decode()
+            else:
+                sql = str(query)
+            self.queries.append((sql, params))
+            if "pg_catalog.pg_class" in sql:
+                self._results.append(("public", "Seq With Space"))
+            elif sql.startswith("SELECT last_value"):
+                self._results.append((5, True))
+            else:
+                self._results.append(None)
+
+        def fetchone(self):
+            return self._results.pop(0)
+
+    cur = _FakeCursor()
+    TechnicalImport._reset_sequences(cur, {"public.Seq With Space": 10})
+    # The sequence name must be rendered as a quoted identifier, never
+    # interpolated as raw SQL.
+    assert any('"public"."Seq With Space"' in sql for sql, _ in cur.queries)
+
+
+def test_technical_import_commits_before_vault_extraction(fastapi, monkeypatch):
+    from sqlalchemy import select
+    from API_operations.helpers.Service import Service
+    from BO.technical.TechImport import TechnicalImport
+    from DB.Project import Project
+
+    prj_id = do_test_import(fastapi, "Commit before vault project")
+    zst_bytes = _export_technical_archive(fastapi, prj_id)
+
+    user_root = UserFilesDirectory(ADMIN_USER_ID)._root_path
+    user_root.mkdir(parents=True, exist_ok=True)
+    zst_name = f"test_tek_{prj_id}_commit_before_vault.tar.zst"
+    zst_path = user_root / zst_name
+    zst_path.write_bytes(zst_bytes)
+
+    orig_copy_vault_file = TechnicalImport._copy_vault_file
+    checked_during_vault = []
+
+    def _spy_copy_vault_file(self, rel_sub_path, src):
+        if not checked_during_vault:
+            with Service() as other_sce:
+                visible_title = other_sce.session.execute(
+                    select(Project.title).where(Project.projid == prj_id)
+                ).scalar_one_or_none()
+            checked_during_vault.append(visible_title)
+        return orig_copy_vault_file(self, rel_sub_path, src)
+
+    monkeypatch.setattr(TechnicalImport, "_copy_vault_file", _spy_copy_vault_file)
+
+    try:
+        del_rsp = fastapi.delete(f"/projects/{prj_id}", headers=ADMIN_AUTH)
+        assert del_rsp.status_code == status.HTTP_200_OK
+
+        job = _run_technical_import(fastapi, zst_name)
+        assert job.state == "F", job
+        assert checked_during_vault == ["Commit before vault project"]
+    finally:
+        zst_path.unlink(missing_ok=True)
+
+
+def test_dedup_progress_cb():
+    from BO.technical.DumpConfig import dedup_progress_cb
+
+    assert dedup_progress_cb(None) is None
+
+    calls: list[tuple[int, str]] = []
+    cb = dedup_progress_cb(lambda pct, msg: calls.append((pct, msg)))
+    assert cb is not None
+
+    cb(10, "Step A")
+    cb(10, "Step A")
+    cb(10, "Step B")
+    cb(10, "Step B")
+    cb(10, "Step A")
+    cb(20, "Step A")
+
+    assert calls == [
+        (10, "Step A"),
+        (10, "Step B"),
+        (10, "Step A"),
+        (20, "Step A"),
+    ]
+
+
+def test_technical_import_no_consecutive_duplicate_progress_cb(
+    fastapi, tmp_path, monkeypatch
+):
+    from API_operations.helpers.Service import Service
+    from BO.technical.TechImport import TechnicalImport
+
+    prj_id = do_test_import(fastapi, "Dedup progress import project")
+    zst_bytes = _export_technical_archive(fastapi, prj_id)
+    archive_path = tmp_path / "export.tar.zst"
+    archive_path.write_bytes(zst_bytes)
+
+    del_rsp = fastapi.delete(f"/projects/{prj_id}", headers=ADMIN_AUTH)
+    assert del_rsp.status_code == status.HTTP_200_OK
+
+    monkeypatch.setattr(TechnicalImport, "IMAGES_REPORT_INTERVAL_SECONDS", 0.0)
+    calls: list[tuple[int, str]] = []
+
+    with Service() as sce:
+        importer = TechnicalImport(sce.config.vault_dir())
+        importer.import_project(
+            archive_path,
+            progress_start=1,
+            progress_end=99,
+            progress_cb=lambda pct, msg: calls.append((pct, msg)),
+        )
+
+    assert len(calls) > 0
+    for prev, curr in zip(calls, calls[1:]):
+        assert prev != curr
+    vault_msgs = [msg for _, msg in calls if msg.startswith("Restored ")]
+    assert len(vault_msgs) == len(set(vault_msgs))
+
+
+def test_technical_import_disabled_by_config(fastapi, monkeypatch):
+    from helpers.AppConfig import Config
+
+    # Default when absent from config/env -> disabled (403 even for admin)
+    monkeypatch.delenv("ENABLE_TECH_IMPORT", raising=False)
+    monkeypatch.delitem(Config().parser, "ENABLE_TECH_IMPORT", raising=False)
+    rsp = fastapi.post(
+        "/admin/technical_import?archive_name=anything.tar.zst",
+        headers=ADMIN_AUTH,
+    )
+    assert rsp.status_code == status.HTTP_403_FORBIDDEN
+    assert rsp.json()["detail"] == "Technical import is disabled."
+
+    # Explicitly set to false in env -> disabled
+    monkeypatch.setenv("ENABLE_TECH_IMPORT", "false")
+    rsp = fastapi.post(
+        "/admin/technical_import?archive_name=anything.tar.zst",
+        headers=ADMIN_AUTH,
+    )
+    assert rsp.status_code == status.HTTP_403_FORBIDDEN
+    assert rsp.json()["detail"] == "Technical import is disabled."

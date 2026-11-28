@@ -679,6 +679,11 @@ class Unpacker(object):
         parts = name.rsplit(".", 2)
         ext = parts[-1] if len(parts) >= 2 else ""
 
+        if filepath.name.startswith("export__TEK_") and filepath.name.endswith(
+            "tar.zst"
+        ):  # Tech export archive
+            return "accepted"
+
         if ext in TEXT_EXTENSIONS:
             return "accepted"
 

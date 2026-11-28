@@ -13,7 +13,6 @@ from fastapi import HTTPException
 from starlette import status
 
 from API_operations.helpers.JobService import ArgsDict, JobServiceBase
-from BO.Job import JobBO
 from BO.Rights import RightsBO
 from BO.technical.TechImport import TechnicalImport
 from DB.Job import JobIDT
@@ -37,20 +36,25 @@ class TechnicalImportService(JobServiceBase):
     def __init__(
         self,
         archive_name: str,
+        target_project_id: Optional[int] = None,
         owner_id: Optional[UserIDT] = None,
     ) -> None:
         super().__init__()
         self.archive_name: str = archive_name
+        self.target_project_id: Optional[int] = target_project_id
         self.owner_id: Optional[UserIDT] = owner_id
 
     def init_args(self, args: ArgsDict) -> ArgsDict:
         args["archive_name"] = self.archive_name
+        args["target_project_id"] = self.target_project_id
         args["owner_id"] = self.owner_id
         return args
 
     @staticmethod
     def deser_args(json_args: ArgsDict) -> None:
         json_args["archive_name"] = str(json_args["archive_name"])
+        if json_args.get("target_project_id") is not None:
+            json_args["target_project_id"] = int(json_args["target_project_id"])
         if json_args.get("owner_id") is not None:
             json_args["owner_id"] = int(json_args["owner_id"])
 
@@ -84,6 +88,16 @@ class TechnicalImportService(JobServiceBase):
 
     def run(self, current_user_id: UserIDT) -> JobIDT:
         RightsBO.user_has_role(self.ro_session, current_user_id, Role.APP_ADMINISTRATOR)
+        if not self.config.get_enable_tech_import():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Technical import is disabled.",
+            )
+        if self.target_project_id is not None and self.target_project_id <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"Invalid target_project_id: {self.target_project_id}",
+            )
         self.owner_id = current_user_id
         self._resolve_archive_path(current_user_id)
         self.create_job(self.JOB_TYPE, current_user_id)
@@ -92,14 +106,6 @@ class TechnicalImportService(JobServiceBase):
     def do_background(self) -> None:
         with LogsSwitcher(self):
             self.do_import()
-
-    def _update_import_progress(self, percent: int, message: str) -> None:
-        # Use a dedicated session so progress commits do not commit the import transaction mid-way.
-        assert self.the_connection is not None
-        with self.the_connection.get_session() as prog_session:
-            with JobBO.get_for_update(prog_session, self.job_id) as job_bo:
-                job_bo.progress_pct = percent
-                job_bo.progress_msg = message
 
     def do_import(self) -> None:
         owner_id = (
@@ -115,13 +121,14 @@ class TechnicalImportService(JobServiceBase):
 
         logger.info("Importing technical archive %s", candidate)
         self.update_progress(1, "Starting TechnicalImport")
-        importer = TechnicalImport(self.session, self.config.vault_dir())
+        importer = TechnicalImport(self.config.vault_dir())
         try:
             summary = importer.import_project(
                 candidate,
                 progress_start=1,
                 progress_end=99,
-                progress_cb=self._update_import_progress,
+                progress_cb=self.update_progress,
+                target_project_id=self.target_project_id,
             )
         except (UnprocessableEntityException, tarfile.TarError, OSError) as e:
             self.session.rollback()

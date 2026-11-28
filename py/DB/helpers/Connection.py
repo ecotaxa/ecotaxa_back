@@ -230,11 +230,19 @@ class Connection(object):
         return self._meta
 
     @staticmethod
-    def get_raw_psycopg_connection(read_only: bool = False) -> psycopg.Connection[Any]:
+    def get_raw_psycopg_connection(
+        read_only: bool = False,
+        isolation_level: Optional[psycopg.IsolationLevel] = None,
+    ) -> psycopg.Connection[Any]:
         """
         Open a standalone raw psycopg Connection independent of SQLAlchemy,
         using the application Config singleton.
         Caller is responsible for closing it (e.g. using a `with` statement).
+
+        :param read_only: Connect to the read-only DB endpoint and force
+            read-only transactions.
+        :param isolation_level: Optional isolation level for the connection's
+            transactions, e.g. `psycopg.IsolationLevel.REPEATABLE_READ`.
         """
         config = Config()
         host, port, db = config.get_db_address(read_only)
@@ -249,6 +257,12 @@ class Connection(object):
             options="-c enable_partitionwise_join=on -c enable_partitionwise_aggregate=on",
             client_encoding="utf8",
         )
-        if read_only:
-            conn.read_only = True
+        try:
+            if read_only:
+                conn.read_only = True
+            if isolation_level is not None:
+                conn.isolation_level = isolation_level
+        except Exception:
+            conn.close()
+            raise
         return conn

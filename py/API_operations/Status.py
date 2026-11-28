@@ -148,6 +148,7 @@ class StatusService(Service):
             (ConfigKey.UNPACK_SYNC_WAIT, self.config.get_unpack_sync_wait),
             (ConfigKey.APP_PORT, self.config.get_app_port),
             (ConfigKey.NO_TIME_LOG, self.config.get_no_time_log),
+            (ConfigKey.ENABLE_TECH_IMPORT, self.config.get_enable_tech_import),
         ]
         for key, getter in single_getters:
             entries.append((key, _safe_call(getter)))

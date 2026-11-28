@@ -11,8 +11,16 @@ import tarfile
 import tempfile
 import time
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Dict, IO, List, Optional, Tuple
 
+from psycopg import IsolationLevel
+
+from BO.technical.DumpConfig import (
+    TABLE_DUMP_CONFIGS,
+    ProgressCallback,
+    dedup_progress_cb,
+)
+from BO.technical.TechMetadata import build_schema_metadata
 from DB.Acquisition import Acquisition
 from DB.CNNFeatureVector import ObjectCNNFeatureVector
 from DB.Collection import Collection, CollectionProject
@@ -30,15 +38,13 @@ from DB.Taxonomy import Taxonomy
 from DB.Training import Training
 from DB.User import Organization, User
 from DB.UserPreferences import UserPreferences
-from DB.helpers import SQL, Session
-from DB.helpers.Direct import text
+from DB.helpers import SQL
+from DB.helpers.Connection import Connection
 from FS.Vault import Vault
 from helpers import DateTime
 from helpers.DynamicLogs import get_logger
 
 logger = get_logger(__name__)
-
-ProgressCallback = Callable[[int, str], None]
 
 
 class _PhasedZstdStream(io.RawIOBase):
@@ -100,11 +106,9 @@ class TechnicalDump:
 
     def __init__(
         self,
-        ro_session: Session,
         project_id: ProjectIDT,
         vault_dir: str,
     ):
-        self.ro_session = ro_session
         self.project_id: ProjectIDT = int(project_id)
         self.vault_dir = vault_dir
         self._log_prefix: str = f"Dumping {self.project_id}: "
@@ -114,34 +118,9 @@ class TechnicalDump:
         now = DateTime.now_time()
         return f"export__TEK_{project_id}_{now.strftime('%Y%m%d_%H%M')}.tar.zst"
 
-    _EXPORT_MODELS: Tuple[Any, ...] = (
-        Instrument,
-        Organization,
-        User,
-        Taxonomy,
-        Collection,
-        Project,
-        ProjectPrivilege,
-        ProjectTaxoStat,
-        ProjectVariables,
-        TaxoRecast,
-        CollectionProject,
-        UserPreferences,
-        Training,
-        Sample,
-        Acquisition,
-        Process,
-        ObjectHeader,
-        ObjectFields,
-        Image,
-        ImageFile,
-        ObjectsClassifHisto,
-        ObjectCNNFeatureVector,
-        Prediction,
-        PredictionHisto,
-    )
+    _EXPORT_MODELS: Tuple[Any, ...] = tuple(cfg.model for cfg in TABLE_DUMP_CONFIGS)
     _MODEL_BY_TABLE: Dict[str, Any] = {
-        m.__tablename__: m for m in _EXPORT_MODELS
+        cfg.table_name: cfg.model for cfg in TABLE_DUMP_CONFIGS
     }
 
     @staticmethod
@@ -347,114 +326,39 @@ class TechnicalDump:
         """
         Collect PostgreSQL schema metadata for all exported tables in dependency order.
         """
-        cur.execute("SELECT version()")
-        pg_version_row = cur.fetchone()
-        pg_version = pg_version_row[0] if pg_version_row else None
+        table_columns = [
+            (table_name, self._model_columns(self._MODEL_BY_TABLE[table_name]))
+            for table_name, _select_sql in queries
+        ]
+        return build_schema_metadata(cur, self.project_id, table_columns)
 
-        alembic_version: Optional[str] = None
-        cur.execute("SELECT to_regclass('alembic_version')")
-        if cur.fetchone()[0] is not None:
-            cur.execute("SELECT version_num FROM alembic_version LIMIT 1")
-            alembic_row = cur.fetchone()
-            if alembic_row is not None:
-                alembic_version = alembic_row[0]
+    def _spool_vault_image_rows(
+        self, raw_conn: Any, image_rows_file: IO[str]
+    ) -> None:
+        """
+        Write the project's image rows to ``image_rows_file`` as JSON lines.
 
-        tables_meta: List[Dict[str, Any]] = []
-        for idx, (table_name, _select_sql) in enumerate(queries, start=1):
-            cur.execute(
-                """
-                SELECT
-                    a.attname,
-                    pg_catalog.format_type(a.atttypid, a.atttypmod),
-                    NOT a.attnotnull,
-                    pg_get_expr(d.adbin, d.adrelid)
-                FROM pg_catalog.pg_attribute a
-                JOIN pg_catalog.pg_class c ON c.oid = a.attrelid
-                JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
-                LEFT JOIN pg_catalog.pg_attrdef d ON d.adrelid = a.attrelid AND d.adnum = a.attnum
-                WHERE n.nspname = 'public'
-                  AND c.relname = %s
-                  AND a.attnum > 0
-                  AND NOT a.attisdropped
-                ORDER BY a.attnum
-                """,
-                (table_name,),
-            )
-            pg_cols_by_name = {
-                col_name: {
-                    "name": col_name,
-                    "type": col_type,
-                    "nullable": bool(nullable),
-                    "default": col_default,
-                }
-                for col_name, col_type, nullable, col_default in cur.fetchall()
-            }
-            model = self._MODEL_BY_TABLE[table_name]
-            columns = [
-                pg_cols_by_name[col_name]
-                for col_name in self._model_columns(model)
-                if col_name in pg_cols_by_name
-            ]
-
-            cur.execute(
-                """
-                SELECT a.attname
-                FROM pg_catalog.pg_index i
-                JOIN pg_catalog.pg_class c ON c.oid = i.indrelid
-                JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
-                JOIN unnest(i.indkey) WITH ORDINALITY AS k(attnum, ord) ON true
-                JOIN pg_catalog.pg_attribute a ON a.attrelid = c.oid AND a.attnum = k.attnum
-                WHERE n.nspname = 'public'
-                  AND c.relname = %s
-                  AND i.indisprimary
-                ORDER BY k.ord
-                """,
-                (table_name,),
-            )
-            primary_key = [row[0] for row in cur.fetchall()]
-
-            cur.execute(
-                """
-                SELECT
-                    con.conname,
-                    pg_get_constraintdef(con.oid)
-                FROM pg_catalog.pg_constraint con
-                JOIN pg_catalog.pg_class c ON c.oid = con.conrelid
-                JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
-                WHERE n.nspname = 'public'
-                  AND c.relname = %s
-                  AND con.contype = 'f'
-                ORDER BY con.conname
-                """,
-                (table_name,),
-            )
-            foreign_keys = [
-                {"name": fk_name, "definition": fk_def}
-                for fk_name, fk_def in cur.fetchall()
-            ]
-
-            tables_meta.append(
-                {
-                    "name": table_name,
-                    "copy_file": f"{idx:02d}_{table_name}.copy",
-                    "columns": columns,
-                    "primary_key": primary_key,
-                    "foreign_keys": foreign_keys,
-                }
-            )
-
-        return {
-            "project_id": self.project_id,
-            "exported_at": DateTime.now_time().isoformat(),
-            "format": "pg_copy_tar_zst",
-            "postgres_version": pg_version,
-            "alembic_version": alembic_version,
-            "tables": tables_meta,
-        }
+        Must be called inside the dump transaction so that the list of vault
+        files matches the exported ``images`` table rows.
+        """
+        sql = (
+            "SELECT img.imgid, img.orig_file_name, img.thumb_height "
+            "FROM images img "
+            "WHERE img.objid <@ obj_in_prj(%s) "
+            "ORDER BY img.imgid"
+        )
+        with raw_conn.cursor(name="vault_images") as cur:
+            cur.itersize = SQL.DB_CHUNK_SIZE * 10
+            cur.execute(sql, (self.project_id,))
+            for imgid, orig_file_name, thumb_height in cur:
+                image_rows_file.write(
+                    json.dumps([imgid, orig_file_name, thumb_height]) + "\n"
+                )
 
     def _copy_vault_images(
         self,
         tfile: tarfile.TarFile,
+        image_rows_file: IO[str],
         progress_start: int = 75,
         progress_end: int = 95,
         progress_cb: Optional[ProgressCallback] = None,
@@ -462,6 +366,9 @@ class TechnicalDump:
     ) -> None:
         """
         Copy project images and thumbnails from the Vault into the tar archive under vault/.
+
+        ``image_rows_file`` is a text stream of JSON lines (imgid, orig_file_name,
+        thumb_height), spooled from the same DB snapshot as the table dump.
         """
         logger.info(
             "%sCopying vault images (%d image rows)",
@@ -471,56 +378,151 @@ class TechnicalDump:
         if progress_cb is not None:
             progress_cb(progress_start, "Copying vault images")
         vault = Vault(self.vault_dir)
-        sql = text(
-            "SELECT img.imgid, img.orig_file_name, img.thumb_height "
-            "FROM images img "
-            "WHERE img.objid <@ obj_in_prj(:prj) "
-            "ORDER BY img.imgid"
-        )
         added = 0
         last_report_at = time.monotonic()
-        with self.ro_session.execute(
-            sql.execution_options(
-                stream_results=True, max_row_buffer=SQL.DB_CHUNK_SIZE * 10
-            ),
-            {"prj": self.project_id},
-        ) as res:
-            for row_idx, (imgid, orig_file_name, thumb_height) in enumerate(
-                res, start=1
-            ):
-                sub_path = Image.img_from_id_and_orig(imgid, orig_file_name)
-                img_path = Path(vault.image_path(sub_path))
-                if img_path.exists():
-                    tfile.add(img_path, arcname=f"vault/{sub_path}")
+        last_reported_pct = -1
+        for row_idx, line in enumerate(image_rows_file, start=1):
+            imgid, orig_file_name, thumb_height = json.loads(line)
+            sub_path = Image.img_from_id_and_orig(imgid, orig_file_name)
+            img_path = Path(vault.image_path(sub_path))
+            if img_path.exists():
+                tfile.add(img_path, arcname=f"vault/{sub_path}")
+                added += 1
+            thumb_sub = Image.thumb_img_from_id_if_there(imgid, thumb_height)
+            if thumb_sub is not None:
+                thumb_path = Path(vault.image_path(thumb_sub))
+                if thumb_path.exists():
+                    tfile.add(thumb_path, arcname=f"vault/{thumb_sub}")
                     added += 1
-                thumb_sub = Image.thumb_img_from_id_if_there(imgid, thumb_height)
-                if thumb_sub is not None:
-                    thumb_path = Path(vault.image_path(thumb_sub))
-                    if thumb_path.exists():
-                        tfile.add(thumb_path, arcname=f"vault/{thumb_sub}")
-                        added += 1
-                now = time.monotonic()
-                if now - last_report_at >= self.IMAGES_REPORT_INTERVAL_SECONDS:
-                    last_report_at = now
-                    if total_image_rows > 0:
-                        msg = (
-                            f"Copied {added} vault files "
-                            f"({row_idx}/{total_image_rows} image rows)"
-                        )
-                        pct = progress_start + int(
-                            (progress_end - progress_start)
-                            * min(row_idx, total_image_rows)
-                            / total_image_rows
-                        )
-                    else:
-                        msg = f"Copied {added} vault files ({row_idx} image rows)"
-                        pct = progress_start
-                    logger.info("%s%s", self._log_prefix, msg)
-                    if progress_cb is not None:
-                        progress_cb(pct, msg)
+            now = time.monotonic()
+            if now - last_report_at >= self.IMAGES_REPORT_INTERVAL_SECONDS:
+                last_report_at = now
+                if total_image_rows > 0:
+                    msg = (
+                        f"Copied {added} vault files "
+                        f"({row_idx}/{total_image_rows} image rows)"
+                    )
+                    pct = progress_start + int(
+                        (progress_end - progress_start)
+                        * min(row_idx, total_image_rows)
+                        / total_image_rows
+                    )
+                else:
+                    msg = f"Copied {added} vault files ({row_idx} image rows)"
+                    pct = progress_start
+                logger.info("%s%s", self._log_prefix, msg)
+                if progress_cb is not None:
+                    progress_cb(pct, msg)
+                    last_reported_pct = pct
         logger.info("%sCopied %d vault files", self._log_prefix, added)
-        if progress_cb is not None:
+        if progress_cb is not None and last_reported_pct != progress_end:
             progress_cb(progress_end, f"Copied {added} vault files")
+
+    @staticmethod
+    def _add_bytes_to_tar(tfile: tarfile.TarFile, name: str, data: bytes) -> None:
+        info = tarfile.TarInfo(name=name)
+        info.size = len(data)
+        tfile.addfile(info, io.BytesIO(data))
+
+    @staticmethod
+    def _dump_single_table(
+        tfile: tarfile.TarFile,
+        cur: Any,
+        copy_filename: str,
+        select_sql: str,
+    ) -> int:
+        rows_in_table = 0
+        with tempfile.SpooledTemporaryFile(max_size=16 * 1024 * 1024) as tmp:
+            with cur.copy(f"COPY ({select_sql}) TO STDOUT") as copy:
+                for chunk in copy:
+                    chunk_bytes = bytes(chunk)
+                    rows_in_table += chunk_bytes.count(b"\n")
+                    tmp.write(chunk_bytes)
+            size = tmp.tell()
+            tmp.seek(0)
+            info = tarfile.TarInfo(name=copy_filename)
+            info.size = size
+            tfile.addfile(info, tmp)
+        return rows_in_table
+
+    def _dump_tables_and_metadata(
+        self,
+        tfile: tarfile.TarFile,
+        queries: List[Tuple[str, str]],
+        progress_start: int,
+        progress_end: int,
+        progress_cb: Optional[ProgressCallback],
+        vault_image_rows: IO[str],
+    ) -> Dict[str, int]:
+        total_tables = len(queries)
+        row_counts: Dict[str, int] = {}
+        restore_lines: List[str] = [
+            f"-- Technical project dump for projid={self.project_id}",
+            "-- Includes referenced rows from instrument, organizations, users, taxonomy, and collection.",
+            "-- Run with: psql -v ON_ERROR_STOP=1 -f restore.sql",
+        ]
+
+        # A single REPEATABLE READ transaction guarantees that all table COPYs,
+        # the schema metadata and the vault image list come from the same
+        # snapshot (i.e. form a consistent archive).
+        with Connection.get_raw_psycopg_connection(
+            read_only=True, isolation_level=IsolationLevel.REPEATABLE_READ
+        ) as raw_conn:
+            try:
+                with raw_conn.cursor() as cur:
+                    metadata = self._collect_schema_metadata(cur, queries)
+                    meta_bytes = (
+                        json.dumps(metadata, indent=2, ensure_ascii=False) + "\n"
+                    ).encode("utf-8")
+                    self._add_bytes_to_tar(tfile, "0_metadata.json", meta_bytes)
+
+                    for idx, (table_name, select_sql) in enumerate(queries, start=1):
+                        if progress_cb is not None:
+                            pct = progress_start + int(
+                                (progress_end - progress_start)
+                                * (idx - 1)
+                                / total_tables
+                            )
+                            progress_cb(pct, f"Dumping table {table_name}")
+                        copy_filename = f"{idx:02d}_{table_name}.copy"
+                        rows_in_table = self._dump_single_table(
+                            tfile, cur, copy_filename, select_sql
+                        )
+                        row_counts[table_name] = rows_in_table
+                        quoted_cols = self._quoted_columns(
+                            self._MODEL_BY_TABLE[table_name]
+                        )
+                        restore_lines.append(
+                            f"\\copy {table_name} ({quoted_cols}) FROM '{copy_filename}'"
+                        )
+                        logger.info(
+                            "%sDumped %d rows from %s into %s",
+                            self._log_prefix,
+                            rows_in_table,
+                            table_name,
+                            copy_filename,
+                        )
+
+                    # Spool the vault image list while still in the snapshot
+                    # transaction, but before the (slow) filesystem copy.
+                    self._spool_vault_image_rows(raw_conn, vault_image_rows)
+            finally:
+                raw_conn.rollback()
+
+        restore_bytes = ("\n".join(restore_lines) + "\n").encode("utf-8")
+        self._add_bytes_to_tar(tfile, "restore.sql", restore_bytes)
+        return row_counts
+
+    @staticmethod
+    def _add_extra_files(
+        tfile: tarfile.TarFile,
+        extra_files: Optional[List[Tuple[Path, str]]],
+    ) -> None:
+        if not extra_files:
+            return
+        for src_path, arcname in extra_files:
+            if src_path.exists():
+                tfile.add(src_path, arcname=arcname)
 
     def dump_project(
         self,
@@ -534,93 +536,44 @@ class TechnicalDump:
         Dump all project-scoped tables via PostgreSQL COPY TO STDOUT and vault images into archive_path (.tar.zst).
         Returns a mapping of table_name -> exported row count.
         """
+        progress_cb = dedup_progress_cb(progress_cb)
         started_at = time.monotonic()
         queries = self._table_queries(self.project_id)
         db_progress_end = progress_end - 20
-        total_tables = len(queries)
-        row_counts: Dict[str, int] = {}
-        restore_lines: List[str] = [
-            f"-- Technical project dump for projid={self.project_id}",
-            "-- Includes referenced rows from instrument, organizations, users, taxonomy, and collection.",
-            "-- Run with: psql -v ON_ERROR_STOP=1 -f restore.sql",
-        ]
 
-        sa_conn = self.ro_session.connection()
-        raw_conn: Any = sa_conn.connection.driver_connection
-        assert raw_conn is not None, "Missing DBAPI driver connection"
+        with (
+            open(archive_path, "wb") as out_stream,
+            _PhasedZstdStream(out_stream, level=self.DB_ZSTD_LEVEL) as zstream,
+            tarfile.open(fileobj=zstream, mode="w|") as tfile,
+            tempfile.SpooledTemporaryFile(
+                max_size=16 * 1024 * 1024, mode="w+", encoding="utf-8"
+            ) as vault_image_rows,
+        ):
+            row_counts = self._dump_tables_and_metadata(
+                tfile,
+                queries,
+                progress_start=progress_start,
+                progress_end=db_progress_end,
+                progress_cb=progress_cb,
+                vault_image_rows=vault_image_rows,
+            )
 
-        with open(archive_path, "wb") as out_stream:
-            with _PhasedZstdStream(out_stream, level=self.DB_ZSTD_LEVEL) as zstream:
-                with tarfile.open(fileobj=zstream, mode="w|") as tfile:
-                    with raw_conn.cursor() as cur:
-                        metadata = self._collect_schema_metadata(cur, queries)
-                        meta_bytes = (
-                            json.dumps(metadata, indent=2, ensure_ascii=False) + "\n"
-                        ).encode("utf-8")
-                        meta_info = tarfile.TarInfo(name="0_metadata.json")
-                        meta_info.size = len(meta_bytes)
-                        tfile.addfile(meta_info, io.BytesIO(meta_bytes))
+            # Switch to fast compression for already-compressed Vault images.
+            zstream.switch_level(self.VAULT_ZSTD_LEVEL)
 
-                        for idx, (table_name, select_sql) in enumerate(
-                            queries, start=1
-                        ):
-                            if progress_cb is not None:
-                                pct = progress_start + int(
-                                    (db_progress_end - progress_start)
-                                    * (idx - 1)
-                                    / total_tables
-                                )
-                                progress_cb(pct, f"Dumping table {table_name}")
-                            copy_filename = f"{idx:02d}_{table_name}.copy"
-                            rows_in_table = 0
-                            with tempfile.SpooledTemporaryFile(
-                                max_size=16 * 1024 * 1024
-                            ) as tmp:
-                                with cur.copy(f"COPY ({select_sql}) TO STDOUT") as copy:
-                                    for chunk in copy:
-                                        chunk_bytes = bytes(chunk)
-                                        rows_in_table += chunk_bytes.count(b"\n")
-                                        tmp.write(chunk_bytes)
-                                size = tmp.tell()
-                                tmp.seek(0)
-                                info = tarfile.TarInfo(name=copy_filename)
-                                info.size = size
-                                tfile.addfile(info, tmp)
-                            row_counts[table_name] = rows_in_table
-                            quoted_cols = self._quoted_columns(
-                                self._MODEL_BY_TABLE[table_name]
-                            )
-                            restore_lines.append(
-                                f"\\copy {table_name} ({quoted_cols}) FROM '{copy_filename}'"
-                            )
-                            logger.info(
-                                "%sDumped %d rows from %s into %s",
-                                self._log_prefix,
-                                rows_in_table,
-                                table_name,
-                                copy_filename,
-                            )
+            # The DB connection is now closed; copy vault files from the
+            # image rows spooled within the dump snapshot.
+            vault_image_rows.seek(0)
+            self._copy_vault_images(
+                tfile,
+                vault_image_rows,
+                progress_start=db_progress_end,
+                progress_end=progress_end,
+                progress_cb=progress_cb,
+                total_image_rows=row_counts.get(Image.__tablename__, 0),
+            )
 
-                    restore_bytes = ("\n".join(restore_lines) + "\n").encode("utf-8")
-                    restore_info = tarfile.TarInfo(name="restore.sql")
-                    restore_info.size = len(restore_bytes)
-                    tfile.addfile(restore_info, io.BytesIO(restore_bytes))
-
-                    # Switch to fast compression for already-compressed Vault images.
-                    zstream.switch_level(self.VAULT_ZSTD_LEVEL)
-
-                    self._copy_vault_images(
-                        tfile,
-                        progress_start=db_progress_end,
-                        progress_end=progress_end,
-                        progress_cb=progress_cb,
-                        total_image_rows=row_counts.get(Image.__tablename__, 0),
-                    )
-
-                    if extra_files:
-                        for src_path, arcname in extra_files:
-                            if src_path.exists():
-                                tfile.add(src_path, arcname=arcname)
+            self._add_extra_files(tfile, extra_files)
 
         logger.info(
             "%sFinished dump (%d total rows in %.1fs)",

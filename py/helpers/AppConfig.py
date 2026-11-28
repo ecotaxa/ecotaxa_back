@@ -121,6 +121,8 @@ class ConfigKey(StrEnum):
     # Server & Logging
     APP_PORT = "APP_PORT"
     NO_TIME_LOG = "NO_TIME_LOG"
+    # Admin features
+    ENABLE_TECH_IMPORT = "ENABLE_TECH_IMPORT"
 
 
 class Config(object):
@@ -355,6 +357,13 @@ class Config(object):
             "on",
         )
 
+    def get_enable_tech_import(self) -> bool:
+        """
+        Whether the technical import endpoint is enabled. Defaults to False to protect production.
+        """
+        val = self._get(ConfigKey.ENABLE_TECH_IMPORT, "false")
+        return (val or "false").strip().lower() in ("on", "true", "1", "yes")
+
     def get_openid_require_verified_email(self) -> bool:
         """
         Whether an OpenID login is refused when the provider did not mark the
@@ -481,6 +490,7 @@ class Config(object):
         self.get_taxoserver_url()
         self.get_openid_config()
         self.get_openid_require_verified_email()
+        self.get_enable_tech_import()
         self.get_cors_allowed_origins()
         cors_origin_regex = self.get_cors_allowed_origin_regex()
         if cors_origin_regex is not None:
