@@ -25,10 +25,12 @@ class ResourceCleaner:
         """
         Run maintenance tasks: connection pool eviction and memory cleanup.
         """
-        if Service.the_connection is not None:
-            Service.the_connection.cleanup_pool()
-        if Service.the_readonly_connection is not None:
-            Service.the_readonly_connection.cleanup_pool()
+        conn = Service.the_connection
+        if conn is not None:
+            conn.cleanup_pool()
+        ro_conn = Service.the_readonly_connection
+        if ro_conn is not None:
+            ro_conn.cleanup_pool()
         regular_mem_cleanup()
 
     @classmethod

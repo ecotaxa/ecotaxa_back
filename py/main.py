@@ -161,6 +161,7 @@ from API_operations.exports.ForProject import (
     SummaryProjectExport,
     BackupProjectExport,
 )
+from API_operations.helpers.Service import Service
 from API_operations.imports.Import import FileImport
 from API_operations.imports.SimpleImport import SimpleImport
 from BG_operations.BackgroundWorker import BackgroundWorker
@@ -4740,6 +4741,7 @@ async def lifespan(app: FastAPI):
             logger.info("BackgroundWorker shutdown complete")
         ResourceCleaner.shutdown()
         logger.info("MaintenanceScheduler shutdown complete")
+        Service.close_connections()
 
 
 app.router.lifespan_context = lifespan
