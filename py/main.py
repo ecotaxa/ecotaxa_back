@@ -53,6 +53,7 @@ from API_models.crud import (
     CreateCollectionReq,
     CollectionReq,
     SampleModel,
+    SampleDetailModel,
     SamplesSearchReq,
     JobModel,
     BulkUpdateReq,
@@ -2374,14 +2375,14 @@ def update_samples(
     "/sample/{sample_id}",
     operation_id="sample_query",
     tags=["samples"],
-    response_model=SampleModel,
+    response_model=SampleDetailModel,
 )
 def sample_query(
     sample_id: int = Path(
         ..., description="Internal, the unique numeric id of this sample.", examples=[1]
     ),
     current_user: Optional[int] = Depends(get_optional_current_user),
-) -> SampleModel:
+) -> SampleDetailModel:
     """
     Returns **information about the sample** corresponding to the given id.
     """
@@ -2390,7 +2391,7 @@ def sample_query(
             ret = sce.query(current_user, sample_id)
         if ret is None:
             raise HTTPException(status_code=404, detail="Sample not found")
-        return SampleModel.model_validate(ret)
+        return SampleDetailModel.model_validate(ret)
 
 
 # ######################## END OF SAMPLE

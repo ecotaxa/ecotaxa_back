@@ -15,6 +15,7 @@ from DB.Object import (
     PREDICTED_CLASSIF_QUAL,
     ObjectHeader,
 )
+from DB.Acquisition import Acquisition
 from DB.Project import ProjectIDListT, Project
 from DB.Sample import Sample, SampleIDT, SampleIDListT
 from DB.helpers import Session, Result
@@ -91,6 +92,20 @@ class SampleBO(MappedEntity):
         """Fallback for 'not found' field after the C getattr() call.
         If we did not enrich a Sample field somehow then return it"""
         return getattr(self.sample, item)
+
+    def read_objcount(self) -> float:
+        """
+        Return the number of objects attached to this sample.
+        """
+        if self.sample is None:
+            return 0.0
+        count = (
+            self._session.query(ObjectHeader.objid)
+            .join(Acquisition, Acquisition.acquisid == ObjectHeader.acquisid)
+            .filter(Acquisition.acq_sample_id == self.sample.sampleid)
+            .count()
+        )
+        return float(count)
 
 
 class DescribedSampleSet(object):
