@@ -2,6 +2,7 @@
 # This file is part of Ecotaxa, see license.md in the application root directory for license informations.
 # Copyright (C) 2015-2020  Picheral, Colin, Irisson (UPMC-CNRS)
 #
+import time
 from typing import Tuple, List, Optional, Set, Any
 
 from API_models.filters import ProjectFiltersDict
@@ -28,6 +29,7 @@ from BO.ReClassifyLog import ReClassificationBO
 from BO.Rights import RightsBO, Action
 from BO.Taxonomy import TaxonomyBO, ClassifSetInfoT
 from BO.Training import TrainingBO, PredictionBO
+from DB.Acquisition import Acquisition, AcquisitionIDT
 from DB.CNNFeatureVector import ObjectCNNFeatureVector
 from DB.Image import IMAGE_VIRTUAL_COLUMNS
 from DB.Object import ObjectIDListT
@@ -39,6 +41,7 @@ from DB.Object import (
     ObjectHeader,
 )
 from DB.Project import ProjectIDT, Project
+from DB.Sample import SampleIDT
 from DB.User import UserIDT
 from DB.helpers import Result, SQL
 from DB.helpers.Direct import text
@@ -51,6 +54,36 @@ from helpers.Timer import CodeTimer
 from .helpers.Service import Service
 
 logger = get_logger(__name__)
+
+# Table aliases which, when joined for returned columns or ordering, can drop objects from the
+# result: images (an object might have none), CNN features, process.
+ROW_DROPPING_JOINS = {"img", "cnn", "prc"}
+
+
+class ObjectSetQueryResult(object):
+    """
+    Result of an object set query, in columns, as the API returns it.
+    """
+
+    __slots__ = (
+        "object_ids",
+        "acquisition_ids",
+        "sample_ids",
+        "details",
+        "total",
+        "sql_ms",
+        "count_ms",
+    )
+
+    def __init__(self) -> None:
+        self.object_ids: ObjectIDListT = []
+        self.acquisition_ids: List[AcquisitionIDT] = []
+        self.sample_ids: List[SampleIDT] = []
+        self.details: List[List[Any]] = []
+        self.total: int = 0
+        # Timings, for logging
+        self.sql_ms: float = 0
+        self.count_ms: float = 0
 
 
 class ObjectManager(Service):
@@ -76,7 +109,42 @@ class ObjectManager(Service):
         img_order: int = 1,
     ) -> Tuple[ObjectIDWithParentsListT, List[List[Any]], int]:
         """
-        Query the given project with given filters, return all IDs.
+        Query the given project with given filters, return all IDs, with parents, in tuples.
+        See query_columns() for the parameters.
+        """
+        res = self.query_columns(
+            current_user_id,
+            proj_id,
+            filters,
+            return_fields,
+            order_field,
+            window_start,
+            window_size,
+            img_order,
+        )
+        ids: ObjectIDWithParentsListT = list(
+            zip(
+                res.object_ids,
+                res.acquisition_ids,
+                res.sample_ids,
+                [proj_id] * len(res.object_ids),
+            )
+        )
+        return ids, res.details, res.total
+
+    def query_columns(
+        self,
+        current_user_id: Optional[UserIDT],
+        proj_id: ProjectIDT,
+        filters: ProjectFiltersDict,
+        return_fields: Optional[List[str]] = None,
+        order_field: Optional[str] = None,
+        window_start: Optional[int] = None,
+        window_size: Optional[int] = None,
+        img_order: int = 1,
+    ) -> "ObjectSetQueryResult":
+        """
+        Query the given project with given filters, return all IDs and parents, in columns.
         If provided order_field, the result is sorted by this field.
         Ambiguity is solved in a stable (over calls) way.
         window_start and window_size allow to select a window of data in the result.
@@ -114,10 +182,10 @@ class ObjectManager(Service):
             order_field, free_columns_mappings, str(return_fields)
         )
 
+        # Only the object id and its acquisition per row, the sample is resolved after,
+        # from the few distinct acquisitions.
         select_clause = SelectClause()
-        select_clause.add_expr("obh.objid").add_expr("acq.acquisid").add_expr(
-            "sam.sampleid"
-        ).add_expr("0", "total")
+        select_clause.add_expr("obh.objid").add_expr("obh.acquisid")
         self.return_fields_to_selects(
             select_clause, return_fields, free_columns_mappings
         )
@@ -134,6 +202,14 @@ class ObjectManager(Service):
             )
             order_clause.add_expression(None, "l2_dist", asc_desc)
 
+        # The COUNT query only joins the tables needed by the filters. If the rows query joins
+        # tables which can drop objects (inner joins on optional rows), its number of rows can
+        # differ from the COUNT, so the total cannot be derived from the rows.
+        rows_match_count = not (
+            ROW_DROPPING_JOINS
+            & (select_clause.table_refs() | order_clause.table_refs(select_clause))
+        )
+
         order_clause.set_window(window_start, window_size)
         from_clause, where_clause, params = object_set.get_sql(
             select_clause, order_clause, img_order=img_order
@@ -145,32 +221,58 @@ class ObjectManager(Service):
         # Add order & window, if empty it's just a \n
         sql += "\n" + order_clause.get_sql()
 
+        ret = ObjectSetQueryResult()
+        before = time.time()
         with CodeTimer("Query: SQL: %s PARAMS: %s: " % (sql, params), logger, 1):
             res: Result = self.ro_session.execute(
                 text(sql).execution_options(
                     stream_results=True,
-                    max_row_buffer=SQL.DB_CHUNK_SIZE * 10,  # 4 columns + extras
+                    max_row_buffer=SQL.DB_CHUNK_SIZE * 10,  # 2 columns + extras
                 ),
                 params,
             )
-        ids = []
-        details = []
-        total = 0
-        objid: int
-        acquisid: int
-        sampleid: int
-        to_apply = IMAGE_VIRTUAL_COLUMNS.get_transformers(res, offset_to_data=4)
-        for objid, acquisid, sampleid, total, *extra in res:
-            ids.append((objid, acquisid, sampleid, proj_id))
-            [fct(extra) for fct in to_apply]
-            details.append(extra)
+            object_ids = ret.object_ids
+            acquisition_ids = ret.acquisition_ids
+            details = ret.details
+            add_obj, add_acq, add_dtl = (
+                object_ids.append,
+                acquisition_ids.append,
+                details.append,
+            )
+            to_apply = IMAGE_VIRTUAL_COLUMNS.get_transformers(res, offset_to_data=2)
+            objid: int
+            acquisid: int
+            if to_apply:
+                for objid, acquisid, *extra in res:
+                    add_obj(objid)
+                    add_acq(acquisid)
+                    for fct in to_apply:
+                        fct(extra)
+                    add_dtl(extra)
+            else:
+                for objid, acquisid, *extra in res:
+                    add_obj(objid)
+                    add_acq(acquisid)
+                    add_dtl(extra)
+        ret.sample_ids = self._samples_for_acquisitions(acquisition_ids)
+        ret.sql_ms = (time.time() - before) * 1000
 
-        if total == 0:
-            # Total was not computed, left to 0, execute again SQL from the same object set, but
+        nb_rows = len(object_ids)
+        if (
+            rows_match_count
+            and (window_size is None or nb_rows < window_size)
+            and (nb_rows > 0 or not window_start)
+        ):
+            # The query returned all rows up to the end of the set, the total is known
+            ret.total = (window_start or 0) + nb_rows
+        else:
+            # Execute again SQL from the same object set, but
             # without columns in select list, and no limit function.
-            total, _nbr_v, _nbr_d, _nbr_p = self._summarize(
+            before = time.time()
+            ret.total, _nbr_v, _nbr_d, _nbr_p = self._summarize(
                 object_set, proj_id=proj_id, only_total=True
             )
+            ret.count_ms = (time.time() - before) * 1000
 
         # If we can, refresh the cache in background, most of the data should be in PG cache
         # if cache.should_refresh():
@@ -178,7 +280,27 @@ class ObjectManager(Service):
         #     assert self.the_readonly_connection
         #     ObjectCacheWriter(cache).bg_fetch_fill(self.the_readonly_connection)
 
-        return ids, details, total
+        return ret
+
+    def _samples_for_acquisitions(
+        self, acquisition_ids: List[AcquisitionIDT]
+    ) -> List[SampleIDT]:
+        """
+        The parent sample of each acquisition, in same order. Rows come mostly grouped
+        by acquisition, so there are only a few distinct ones to look up.
+        """
+        distinct_acq_ids = list(set(acquisition_ids))
+        if len(distinct_acq_ids) == 0:
+            return []
+        res: Result = self.ro_session.execute(
+            text(
+                f"SELECT acquisid, acq_sample_id FROM {Acquisition.__tablename__}"
+                f" WHERE acquisid = ANY(:acq_ids)"
+            ),
+            {"acq_ids": distinct_acq_ids},
+        )
+        sample_of = {acquisid: sampleid for acquisid, sampleid in res}
+        return [sample_of[an_acq_id] for an_acq_id in acquisition_ids]
 
     @staticmethod
     def cook_order_clause(
