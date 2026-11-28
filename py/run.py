@@ -65,6 +65,7 @@ def run_gunicorn(with_bg_worker: bool = False) -> None:
             pass
 
         def __init__(self) -> None:
+            self.background_worker: Optional[BackgroundWorker] = None
             self.options = {
                 "worker_class": StandaloneUvicornWorker,
                 "bind": "%s:%s" % ("0.0.0.0", APP_PORT),
@@ -91,6 +92,9 @@ def run_gunicorn(with_bg_worker: bool = False) -> None:
                 "control_socket_disable": True,
                 # Keep uvicorn loggers
                 "disable_existing_loggers": False,
+                "when_ready": self.when_ready,
+                "post_fork": self.post_fork,
+                "on_exit": self.on_exit,
             }
             self.application = app
             super().__init__()
@@ -107,15 +111,24 @@ def run_gunicorn(with_bg_worker: bool = False) -> None:
         def load(self) -> Any:
             return self.application
 
-    background_worker: Optional[BackgroundWorker] = None
-    if with_bg_worker:
-        background_worker = BackgroundWorker()
+        def when_ready(self, server: Any) -> None:
+            """In master process"""
+            if with_bg_worker:
+                self.background_worker = BackgroundWorker()
 
-    try:
-        EcotaxaApplication().run()
-    finally:
-        if background_worker is not None:
-            background_worker.shutdown()
+        def post_fork(self, server: Any, worker: Any) -> None:
+            from API_operations.helpers.Service import Service
+
+            self.background_worker = None  # Safety
+            Service.close_connections(close=False)
+
+        def on_exit(self, server: Any) -> None:
+            """In master process"""
+            if self.background_worker is not None:
+                self.background_worker.shutdown()
+
+    app = EcotaxaApplication()
+    app.run()
 
 
 def main(argv: Optional[Sequence[str]] = None) -> None:

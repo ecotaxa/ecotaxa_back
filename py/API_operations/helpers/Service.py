@@ -160,6 +160,31 @@ class Service(BaseService, ContextManager):
             ro_session.dirty
         )
 
+    @classmethod
+    def close_connections(cls, close: bool = True) -> None:
+        """
+        Dispose and clear the static DB connections cached on Service.
+        Set close=False after fork to detach inherited sockets without closing them.
+        """
+        conn = cls.the_connection
+        ro_conn = cls.the_readonly_connection
+        cls.the_connection = None
+        cls.the_readonly_connection = None
+        try:
+            if conn is not None:
+                conn.dispose(close=close)
+        finally:
+            if ro_conn is not None:
+                ro_conn.dispose(close=close)
+
+    @classmethod
+    def reset(cls, close: bool = True) -> None:
+        """
+        Dispose static connections and clear cached configuration on Service. Used in test fixtures.
+        """
+        cls.close_connections(close=close)
+        cls.the_config = None
+
     def close_db_sessions(self):
         # Release DB sessions
         if getattr(self, "session", None) is None:

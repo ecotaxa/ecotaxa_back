@@ -25,6 +25,7 @@ from FS.Vault import Vault
 from API_operations.exports.ForProject import ProjectExport
 from API_operations.admin.NightlyJob import NightlyJobService
 from API_operations.Subset import SubsetServiceOnProject
+from API_operations.helpers.Service import Service
 from helpers.AppConfig import Config
 
 
@@ -55,7 +56,9 @@ def config() -> Generator[EcoTaxaConfig, Any, None]:
     # env variable to conf
     os.environ["APP_CONFIG"] = (HERE / "config.ini").as_posix()
     Config.reset()
+    Service.reset()
     yield conf
     # Teardown
     conf.cleanup()
+    Service.reset()
     Config.reset()

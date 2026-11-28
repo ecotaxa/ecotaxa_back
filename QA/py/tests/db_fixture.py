@@ -5,6 +5,7 @@ from typing import Any, Generator
 
 import pytest
 
+from API_operations.helpers.Service import Service
 from tests.prj_utils import sce_check_consistency
 from tools.dbBuildSQL import EcoTaxaDBFrom0, EcoTaxaExistingDB
 
@@ -21,6 +22,7 @@ def database(config) -> Generator[EcoTaxaDBFrom0, Any, None]:
     yield db
     # Teardown
     sce_check_consistency("db fx")
+    Service.close_connections()
     db.cleanup()
 
 

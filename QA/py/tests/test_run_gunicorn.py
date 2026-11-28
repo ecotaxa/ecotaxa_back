@@ -8,6 +8,12 @@ from BG_operations.BackgroundWorker import BackgroundWorker
 import run as run_mod
 
 
+def _simulate_master_lifecycle(app):
+    server = MagicMock()
+    app.cfg.when_ready(server)
+    app.cfg.on_exit(server)
+
+
 def test_run_gunicorn_starts_background_worker_when_enabled():
     mock_worker = MagicMock(spec=BackgroundWorker)
     with (
@@ -16,7 +22,12 @@ def test_run_gunicorn_starts_background_worker_when_enabled():
             "BG_operations.BackgroundWorker.BackgroundWorker",
             return_value=mock_worker,
         ) as mock_worker_cls,
-        patch.object(BaseApplication, "run", return_value=None) as mock_run,
+        patch.object(
+            BaseApplication,
+            "run",
+            autospec=True,
+            side_effect=_simulate_master_lifecycle,
+        ) as mock_run,
     ):
         run_mod.run_gunicorn(with_bg_worker=True)
 
@@ -31,7 +42,12 @@ def test_run_gunicorn_skips_background_worker_by_default():
         patch(
             "BG_operations.BackgroundWorker.BackgroundWorker",
         ) as mock_worker_cls,
-        patch.object(BaseApplication, "run", return_value=None) as mock_run,
+        patch.object(
+            BaseApplication,
+            "run",
+            autospec=True,
+            side_effect=_simulate_master_lifecycle,
+        ) as mock_run,
     ):
         run_mod.run_gunicorn()
 

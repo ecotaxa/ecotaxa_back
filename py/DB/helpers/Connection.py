@@ -4,14 +4,16 @@
 #
 import logging
 import time
-from typing import ClassVar, Optional
+from typing import Any, ClassVar, Optional
 
+import psycopg
 import sqlalchemy
 from sqlalchemy import MetaData
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import QueuePool
 from sqlalchemy.util.queue import Queue
 
+from helpers.AppConfig import Config
 from helpers.CustomException import ServiceUnavailableException
 from helpers.DynamicLogs import get_logger
 
@@ -201,6 +203,13 @@ class Connection(object):
     def cleanup_pool(self) -> int:
         return self.engine.pool._pool.evict()  # type: ignore
 
+    def dispose(self, close: bool = True) -> None:
+        """
+        Dispose the SQLAlchemy engine and its connection pool.
+        Set close=False after fork to detach inherited sockets without closing them.
+        """
+        self.engine.dispose(close=close)
+
     def exec_outside_transaction(self, statement: str) -> None:
         """
         Execute raw SQL outside any transaction (which is created by default by SQLA)
@@ -219,3 +228,27 @@ class Connection(object):
             self._meta = sqlalchemy.MetaData()
             self._meta.reflect(bind=self.engine)
         return self._meta
+
+    @staticmethod
+    def get_raw_psycopg_connection(read_only: bool = False) -> psycopg.Connection[Any]:
+        """
+        Open a standalone raw psycopg Connection independent of SQLAlchemy,
+        using the application Config singleton.
+        Caller is responsible for closing it (e.g. using a `with` statement).
+        """
+        config = Config()
+        host, port, db = config.get_db_address(read_only)
+        user, password = config.get_db_credentials(read_only)
+        conn = psycopg.connect(
+            user=user,
+            password=password,
+            dbname=db,
+            host=host,
+            port=port,
+            application_name=Connection.APP_NAME,
+            options="-c enable_partitionwise_join=on -c enable_partitionwise_aggregate=on",
+            client_encoding="utf8",
+        )
+        if read_only:
+            conn.read_only = True
+        return conn
